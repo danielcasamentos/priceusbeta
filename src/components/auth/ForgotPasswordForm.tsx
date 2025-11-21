@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 import { Alert } from '../ui/Alert';
 import { Mail, ArrowLeft } from 'lucide-react';
 

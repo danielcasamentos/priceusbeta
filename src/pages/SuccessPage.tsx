@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle } from 'lucide-react'
-import { Button } from '../components/ui/button'
+import { Button } from '../components/ui/Button'
 
 export function SuccessPage() {
   return (
