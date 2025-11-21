@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { jsPDF } from 'jspdf';
-import 'jspdf/dist/polyfills.es.js'; // 🔥 CORREÇÃO: Caminho correto para Vite/ES Modules
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -10,7 +8,7 @@ import { replaceContractVariables, type BusinessSettings, type ClientData, type 
 import { CheckCircle, Loader2, FileWarning, Eye } from 'lucide-react';
 
 // Estilos para o container do contrato que será convertido para PDF
-const contractStyles = `
+const contractPrintStyles = `
   .contract-preview-container {
     width: 210mm; /* Largura de uma folha A4 */
     min-height: 297mm; /* Altura de uma folha A4 */
@@ -25,6 +23,11 @@ const contractStyles = `
     color: #000;
     box-sizing: border-box;
     text-align: justify;
+  }
+  @media print {
+    body * { visibility: hidden; }
+    .printable-area, .printable-area * { visibility: visible; }
+    .printable-area { position: absolute; left: 0; top: 0; width: 100%; }
   }
   .contract-preview-container h1, .contract-preview-container h2, .contract-preview-container h3 {
     text-align: center;
@@ -49,6 +52,7 @@ const contractStyles = `
   .signature-line {
     border-bottom: 1px solid #000;
     width: 300px;
+    max-width: 80%;
     margin: 0 auto 5pt auto;
   }
 `;
@@ -60,6 +64,7 @@ interface Contract {
   user_id: string;
   token: string;
   lead_data_json: any;
+  payment_details_json?: any; // Adicionado para detalhes do pagamento
   client_data_json: any;
   user_data_json: any;
   user_signature_base64: string;
@@ -92,13 +97,27 @@ export function ContractPreviewPage() {
   const clientSignatureFromState = location.state?.clientSignature as string | undefined;
   const clientIpFromState = location.state?.clientIp as string | undefined;
 
+  // 🔥 NOVO: Verifica se a página foi aberta com a intenção de imprimir
+  const shouldPrint = location.state?.action === 'print';
+
   useEffect(() => {
-    // Validação: se não houver dados do cliente, o fluxo está quebrado.
-    if (!clientDataFromState || !clientSignatureFromState) {
-      setError('Dados do cliente não encontrados. Por favor, volte e preencha o formulário novamente.');
-      setLoading(false);
-      return;
+    // 🔥 LÓGICA ALTERADA: Agora a página é mais inteligente.
+    // Se os dados do cliente vierem do estado da navegação (fluxo do cliente), usa eles.
+    // Se não, busca os dados do contrato assinado no banco (fluxo do profissional).
+    if (clientDataFromState && clientSignatureFromState) {
+      console.log('✅ [Preview] Dados do cliente encontrados no estado da navegação. Usando-os.');
+      if (shouldPrint) {
+        setTimeout(() => window.print(), 500);
+      }
+    } else {
+      // Se não há dados no estado, significa que o profissional está visualizando.
+      // A função `loadContractForPreview` agora também buscará os dados do cliente.
+      console.log('⚠️ [Preview] Dados do cliente não encontrados no estado. Tentando carregar do banco de dados...');
+      // A impressão será acionada dentro de `loadContractForPreview` após os dados serem carregados.
     }
+
+    // A validação de erro foi movida para dentro de `loadContractForPreview`
+    // para lidar com ambos os cenários.
     loadContractForPreview();
   }, [token]);
 
@@ -137,11 +156,28 @@ export function ContractPreviewPage() {
 
       if (!contractBundle || !contractBundle.contract) {
         setError('Contrato não encontrado ou inválido.');
-        setLoading(false);
         return;
       }
 
       const { contract: contractData, template: templateData, business_settings: businessData } = contractBundle;
+
+      // 🔥 NOVA LÓGICA: Se os dados do cliente não vieram do estado,
+      // preenchemos com os dados do contrato assinado que veio do banco.
+      if (!clientDataFromState && contractData.status === 'signed') {
+        console.log('✅ [Preview] Carregando dados do cliente a partir do contrato assinado no banco.');
+        // Simula o `location.state` com os dados do banco para o resto da página funcionar.
+        location.state = {
+          ...location.state,
+          clientData: contractData.client_data_json,
+          clientSignature: contractData.signature_base64,
+          clientIp: contractData.client_ip,
+        };
+        if (shouldPrint) {
+          setTimeout(() => window.print(), 500);
+        }
+      } else if (!clientDataFromState && contractData.status !== 'signed') {
+        setError('Este contrato ainda não foi assinado, portanto não há dados de cliente para exibir.');
+      }
 
       setContract(contractData);
       setTemplate(templateData);
@@ -150,72 +186,90 @@ export function ContractPreviewPage() {
       console.error('Erro ao carregar dados para preview:', err);
       setError('Ocorreu um erro ao carregar os dados do contrato.');
     } finally {
+      // A validação final de erro acontece aqui, após todas as tentativas de carregamento.
+      if (!location.state?.clientData) setError('Dados do cliente não encontrados. Por favor, volte e preencha o formulário novamente.');
       setLoading(false);
     }
   };
 
-  const generateAndUploadPDF = async (): Promise<string | null> => {
-    if (!contractPreviewRef.current || !contract) {
-      console.error('❌ Referência do contrato ou dados do contrato ausentes.');
-      return null;
+  /**
+   * 🔥 NOVO: Cria as transações financeiras (entrada e parcelas) após a assinatura.
+   */
+  const createFinancialTransactions = async (signedContract: Contract) => {
+    console.log('🏦 Iniciando criação de transações financeiras...');
+    const paymentDetails = signedContract.payment_details_json;
+    const totalValue = signedContract.lead_data_json?.valor_total || 0;
+
+    if (!paymentDetails || totalValue <= 0) {
+      console.log('⚠️ Detalhes de pagamento ou valor total ausentes. Nenhuma transação será criada.');
+      return;
     }
 
-    setGenerating(true);
-    console.log('🚀 [PDF Generation] Iniciando processo de geração e upload de PDF...');
+    const transactionsToInsert = [];
+    const signedDate = new Date();
 
-    try {
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const element = contractPreviewRef.current;
+    // 1. Calcular e preparar a transação de ENTRADA
+    let downPaymentValue = 0;
+    if (paymentDetails.entrada_tipo === 'percentual') {
+      downPaymentValue = (totalValue * paymentDetails.entrada_valor) / 100;
+    } else {
+      downPaymentValue = paymentDetails.entrada_valor;
+    }
 
-      console.log('📄 [PDF DEBUG] Elemento HTML a ser renderizado:', element.outerHTML.substring(0, 500) + '...');
-      console.log(`📐 [PDF DEBUG] Dimensões do contêiner: Largura=${element.scrollWidth}px, Altura=${element.scrollHeight}px`);
-
-      await pdf.html(element, {
-        autoPaging: 'text',
-        html2canvas: {
-          scale: 0.254, // 🔥 CORREÇÃO: Escala mais precisa (210mm / (96dpi * 25.4mm/in))
-          useCORS: true,
-          letterRendering: true,
-        },
-        x: 0,
-        y: 0,
-        width: 210, // A4 width in mm
-        windowWidth: element.scrollWidth, // 🔥 CORREÇÃO: Usa a largura real do elemento
+    if (downPaymentValue > 0) {
+      transactionsToInsert.push({
+        user_id: signedContract.user_id,
+        tipo: 'receita' as const,
+        origem: 'contrato',
+        descricao: `Entrada - Contrato ${signedContract.lead_data_json?.nome_cliente}`,
+        valor: downPaymentValue,
+        data: signedDate.toISOString().split('T')[0],
+        status: 'pendente' as const,
+        forma_pagamento: paymentDetails.nome,
+        contract_id: signedContract.id,
+        is_installment: true,
+        installment_number: 1,
+        total_installments: 1 + (paymentDetails.max_parcelas || 0),
       });
+    }
 
-      const pdfBlob = pdf.output('blob');
-      const filePath = `contracts/${contract.id}.pdf`;
+    // 2. Calcular e preparar as transações de PARCELAS
+    const remainingValue = totalValue - downPaymentValue;
+    const numInstallments = paymentDetails.max_parcelas || 0;
 
-      console.log('☁️ [PDF Generation] Iniciando upload para o Supabase Storage...');
-      const { error: uploadError } = await supabase.storage
-        .from('contract-pdfs')
-        .upload(filePath, pdfBlob, {
-          contentType: 'application/pdf',
-          upsert: true,
+    if (numInstallments > 0 && remainingValue > 0.01) {
+      const installmentValue = remainingValue / numInstallments;
+      for (let i = 1; i <= numInstallments; i++) {
+        const installmentDate = new Date(signedDate);
+        installmentDate.setMonth(installmentDate.getMonth() + i);
+
+        transactionsToInsert.push({
+          user_id: signedContract.user_id,
+          tipo: 'receita' as const,
+          origem: 'contrato',
+          descricao: `Parcela ${i}/${numInstallments} - Contrato ${signedContract.lead_data_json?.nome_cliente}`,
+          valor: installmentValue,
+          data: installmentDate.toISOString().split('T')[0],
+          status: 'pendente' as const,
+          forma_pagamento: paymentDetails.nome,
+          contract_id: signedContract.id,
+          is_installment: true,
+          installment_number: i + 1, // +1 porque a entrada é a 1
+          total_installments: 1 + numInstallments,
         });
-
-      if (uploadError) {
-        console.error('❌ Erro ao fazer upload do PDF:', uploadError);
-        throw new Error('Falha ao fazer upload do PDF.');
       }
+    }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('contract-pdfs')
-        .getPublicUrl(filePath);
-
-      if (!publicUrlData?.publicUrl) {
-        throw new Error('Não foi possível obter a URL pública do PDF.');
+    // 3. Inserir todas as transações no banco de dados
+    if (transactionsToInsert.length > 0) {
+      console.log(`🏦 Inserindo ${transactionsToInsert.length} transações...`, transactionsToInsert);
+      const { error } = await supabase.from('company_transactions').insert(transactionsToInsert);
+      if (error) {
+        console.error('❌ Erro ao criar transações financeiras:', error);
+        // Não bloqueia o fluxo do usuário, apenas loga o erro.
+      } else {
+        console.log('✅ Transações criadas com sucesso!');
       }
-
-      console.log('🔗 [PDF Generation] URL pública do PDF:', publicUrlData.publicUrl);
-      return publicUrlData.publicUrl;
-
-    } catch (error) {
-      console.error('❌ Erro fatal ao gerar ou fazer upload do PDF:', error);
-      setError('Ocorreu um erro crítico ao gerar o PDF. Por favor, tente novamente.');
-      return null;
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -227,55 +281,28 @@ export function ContractPreviewPage() {
 
     setGenerating(true);
     try {
-      // 1. Gera o PDF e força o download para o cliente (lógica do ContractViewerModal)
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const element = contractPreviewRef.current!;
-      const container = document.createElement('div');
-      container.style.width = '210mm';
-      container.style.padding = '20mm';
-      container.style.fontFamily = "'Helvetica', 'Arial', sans-serif";
-      container.style.fontSize = '12pt';
-      container.style.lineHeight = '1.5';
-      container.style.textAlign = 'justify';
-      container.style.wordWrap = 'break-word';
-      container.innerHTML = element.innerHTML;
-
-      await pdf.html(container, {
-        autoPaging: 'text',
-        html2canvas: { scale: 0.254, useCORS: true, letterRendering: true },
-        width: 210,
-        windowWidth: 800,
-      });
-
-      pdf.save(`contrato-${contract.id.substring(0, 8)}.pdf`);
-      console.log('✅ [Cliente] PDF gerado e download iniciado para o cliente.');
-
-      // 2. Tenta salvar no bucket em segundo plano (não bloqueia o cliente)
-      const pdfBlob = pdf.output('blob');
-      const filePath = `contracts/${contract.id}.pdf`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('contract-pdfs').upload(filePath, pdfBlob, { upsert: true });
-
-      let finalPdfUrl: string | null = null;
-      if (uploadError) {
-        console.warn('⚠️ [Bucket] Falha ao salvar PDF no bucket:', uploadError.message);
-      } else {
-        const { data: publicUrlData } = supabase.storage.from('contract-pdfs').getPublicUrl(filePath);
-        finalPdfUrl = publicUrlData?.publicUrl || null;
-        console.log('✅ [Bucket] PDF arquivado com sucesso no bucket.');
-      }
-
-      // 3. Atualiza o banco de dados com o status final
-      await supabase.from('contracts').update({
+      // 🔥 NOVA LÓGICA SIMPLIFICADA
+      // 1. Apenas atualiza o banco de dados. A geração do PDF agora é responsabilidade do cliente.
+      const { data: updatedContract, error: updateError } = await supabase.from('contracts').update({
         client_data_json: clientDataFromState,
         signature_base64: clientSignatureFromState,
         client_ip: clientIpFromState,
-        pdf_url: finalPdfUrl,
+        pdf_url: null, // Não salvamos mais a URL do PDF aqui
         status: 'signed',
         signed_at: new Date().toISOString(),
-      }).eq('id', contract.id);
+      }).eq('id', contract.id).select().single();
+
+      if (updateError) throw updateError;
+
+      // 2. 🔥 CHAMA A FUNÇÃO PARA CRIAR TRANSAÇÕES FINANCEIRAS
+      // Faz isso em segundo plano para não atrasar o usuário.
+      if (updatedContract) {
+        createFinancialTransactions(updatedContract);
+      }
 
       console.log('✅ [DB] Contrato finalizado no banco de dados.');
       navigate(`/contrato/${token}/completo`);
+      // A página /completo agora instruirá o usuário a imprimir/salvar.
 
     } catch (err: any) {
       console.error('❌ [Finalize] Erro fatal durante o processo de finalização:', err);
@@ -300,8 +327,11 @@ export function ContractPreviewPage() {
   }
 
   return (
-    <div className="bg-gray-100 py-10">
-      <style>{contractStyles}</style>
+    // 🔥 NOVO: Adiciona uma classe 'printable-area' para controlar a impressão
+    <div className={`bg-gray-100 py-10 printable-area ${shouldPrint ? 'bg-white' : ''}`}>
+      <style>{contractPrintStyles}</style>
+
+      {/* 🔥 NOVO: Oculta os botões se a intenção for apenas imprimir */}
       <div className="max-w-5xl mx-auto">
         <div className="bg-white shadow-lg p-8 rounded-lg mb-8">
           <div className="flex items-center gap-3 mb-4">
@@ -311,16 +341,18 @@ export function ContractPreviewPage() {
           <p className="text-center text-gray-600 mb-6">
             Confira todos os dados e a formatação do contrato abaixo. Este é o documento final. Se tudo estiver correto, aprove para gerar o PDF oficial e concluir a assinatura.
           </p>
-          <div className="flex justify-center">
-            <button
-              onClick={handleApproveAndFinalize} // A função agora faz tudo
-              disabled={generating}
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {generating ? <Loader2 className="animate-spin" /> : <CheckCircle />}
-              {generating ? 'Finalizando...' : 'Aprovar e Finalizar'}
-            </button>
-          </div>
+          {!shouldPrint && (
+            <div className="flex justify-center">
+              <button
+                onClick={handleApproveAndFinalize} // A função agora faz tudo
+                disabled={generating}
+                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {generating ? <Loader2 className="animate-spin" /> : <CheckCircle />}
+                {generating ? 'Finalizando...' : 'Aprovar e Finalizar'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* O container que será impresso em PDF (movido para dentro do div principal) */}

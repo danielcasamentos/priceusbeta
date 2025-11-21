@@ -115,6 +115,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       const orcamentoDetalhe = lead.orcamento_detalhe || {};
       const selectedProdutos = orcamentoDetalhe.selecoes?.produtos || orcamentoDetalhe.selectedProdutos || {};
       const selectedFormaPagamento = orcamentoDetalhe.selecoes?.paymentMethod || orcamentoDetalhe.selectedFormaPagamento;
+      const formaPagamentoCompleta = orcamentoDetalhe.formasPagamento?.find((fp: any) => fp.id === selectedFormaPagamento);
 
       let ocultarValoresIntermediarios = false;
       if (lead.template_id) {
@@ -157,6 +158,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       let produtos: any[] = [];
       let formaPagamentoNome = '';
       const priceBreakdown = orcamentoDetalhe.priceBreakdown || {};
+      
 
       if (Object.keys(selectedProdutos).length > 0) {
         const produtoIds = Object.keys(selectedProdutos);
@@ -210,6 +212,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         ajuste_sazonal: priceBreakdown.ajusteSazonal || 0,
         ajuste_geografico: priceBreakdown.ajusteGeografico?.percentual || 0,
         forma_pagamento: formaPagamentoNome,
+        forma_pagamento_detalhes: formaPagamentoCompleta || null, // Salva o objeto completo
         ocultar_valores_intermediarios: ocultarValoresIntermediarios,
       };
 
@@ -250,6 +253,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           user_id: userId,
           lead_data_json: leadData,
           user_data_json: userData,
+          payment_details_json: formaPagamentoCompleta || null, // 🔥 Salva em uma coluna dedicada
           user_signature_base64: businessSettings.signature_base64,
           status: 'pending', // Status inicial do contrato
           expires_at: expiresAt.toISOString(),

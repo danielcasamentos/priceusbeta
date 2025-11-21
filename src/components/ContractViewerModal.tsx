@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, FileText, User, Calendar, DollarSign, ExternalLink, Download, Loader2, Fingerprint } from 'lucide-react';
+import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Fingerprint } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { jsPDF } from 'jspdf';
-import 'jspdf/dist/polyfills.es.js';
 import { QRCodeCanvas } from 'qrcode.react';
 import { replaceContractVariables, type BusinessSettings, type ClientData, type LeadData } from '../lib/contractVariables';
 
@@ -69,7 +67,6 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
   const [processedContent, setProcessedContent] = useState('');
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({});
-  const [generatingPdf, setGeneratingPdf] = useState(false);
   const contractContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -121,44 +118,18 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
     }
   };
 
-  const handleGenerateAndDownloadPdf = async () => {
-    if (!contractContentRef.current) return;
+  // 🔥 NOVA FUNÇÃO: Abre a página de preview em modo de impressão
+  const handleViewAndPrint = () => {
+    const url = `/contrato/${contract.token}/preview`;
+    const state = {
+      clientData: contract.client_data_json,
+      clientSignature: contract.signature_base64,
+      action: 'print', // Sinaliza para a página de preview acionar a impressão
+    };
 
-    setGeneratingPdf(true);
-    try {
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const element = contractContentRef.current;
-
-      // Adiciona um contêiner com estilos para garantir a formatação correta
-      const container = document.createElement('div');
-      container.style.width = '210mm';
-      container.style.padding = '20mm';
-      container.style.fontFamily = "'Helvetica', 'Arial', sans-serif";
-      container.style.fontSize = '12pt';
-      container.style.lineHeight = '1.5';
-      container.style.textAlign = 'justify';
-      container.style.wordWrap = 'break-word';
-      container.innerHTML = element.innerHTML;
-
-      await pdf.html(container, {
-        autoPaging: 'text',
-        html2canvas: {
-          scale: 0.254,
-          useCORS: true,
-          letterRendering: true,
-        },
-        width: 210,
-        windowWidth: 800, // Largura de renderização
-      });
-
-      pdf.save(`contrato-${contract.lead_data_json.nome_cliente.replace(/\s/g, '_')}-${contract.id.substring(0, 8)}.pdf`);
-
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Ocorreu um erro ao gerar o PDF. Tente novamente.");
-    } finally {
-      setGeneratingPdf(false);
-    }
+    // Abre em uma nova aba e passa o estado
+    const newWindow = window.open(url, '_blank');
+    if (newWindow) newWindow.history.replaceState(state, '');
   };
 
   // Componente para renderizar o conteúdo do contrato (usado para o PDF)
@@ -292,13 +263,14 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
         <div className="p-4 bg-gray-50 border-t text-right">
           <div className="flex justify-end items-center gap-3">
             <button onClick={onClose} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Fechar</button>
+            {/* 🔥 BOTÃO ALTERADO */}
             <button
-              onClick={handleGenerateAndDownloadPdf}
-              disabled={loadingDetails || generatingPdf}
+              onClick={handleViewAndPrint}
+              disabled={loadingDetails}
               className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400"
             >
-              {generatingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-              {generatingPdf ? 'Gerando...' : 'Gerar e Baixar PDF'}
+              <Printer className="w-5 h-5" />
+              Visualizar e Imprimir
             </button>
           </div>
         </div>

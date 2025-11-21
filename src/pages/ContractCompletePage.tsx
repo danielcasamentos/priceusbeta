@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { CheckCircle, FileText, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -26,10 +26,11 @@ interface ContractTemplate {
 
 export function ContractCompletePage() {
   const { token } = useParams<{ token: string }>();
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [contractData, setContractData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+  const [retryCount, setRetryCount] = useState(0); // Mantido para robustez
 
   useEffect(() => {
     if (token) {
@@ -37,6 +38,7 @@ export function ContractCompletePage() {
     }
   }, [token, retryCount]);
 
+  // 🔥 LÓGICA ALTERADA: Apenas verifica se o contrato está assinado.
   const loadContractUrl = async () => {
     if (!token) return;
 
@@ -44,43 +46,43 @@ export function ContractCompletePage() {
     setError(null);
 
     try {
-      const { data: contractBundle, error: rpcError } = await supabase
-        .rpc('get_public_contract_data', { p_token: token })
+      const { data, error: fetchError } = await supabase
+        .from('contracts')
+        .select('id, status, client_data_json, signature_base64') // Pega os dados necessários para a página de impressão
+        .eq('token', token)
         .single();
 
-      if (rpcError) throw rpcError;
+      if (fetchError) throw fetchError;
 
-      const contractData = contractBundle?.contract;
-
-      // 🔥 CORREÇÃO: A verificação principal agora é apenas o status.
-      // A URL do PDF é opcional, pois o cliente pode ter baixado o arquivo
-      // diretamente no passo anterior se o bucket não estiver configurado.
-      if (contractData?.status !== 'signed') {
+      if (data?.status !== 'signed') {
         if (retryCount < 5) {
           console.warn(`[CompletePage] Contrato não está pronto. Tentativa ${retryCount + 1}/5...`);
           setTimeout(() => setRetryCount(prev => prev + 1), 2000); // Espera 2s e tenta de novo
           return;
         } else {
-          throw new Error('Não foi possível carregar o PDF do contrato após várias tentativas.');
+          throw new Error('O contrato ainda não foi finalizado. Tente novamente em alguns instantes.');
         }
       }
 
-      // Define a URL do PDF se ela existir. Se não, o botão de download ficará desabilitado,
-      // mas a página mostrará a mensagem de sucesso.
-      setPdfUrl(contractData.pdf_url || null);
+      setContractData(data);
 
     } catch (err) {
       console.error('Erro ao carregar contrato completo:', err);
-      setError('Não foi possível encontrar o contrato finalizado.');
+      setError('Não foi possível encontrar os dados do contrato finalizado.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = () => {
-    if (pdfUrl) {
-      window.open(pdfUrl, '_blank');
-    }
+  // 🔥 NOVA FUNÇÃO: Navega para a página de preview com a intenção de imprimir.
+  const handlePrint = () => {
+    navigate(`/contrato/${token}/preview`, {
+      state: {
+        clientData: contractData.client_data_json,
+        clientSignature: contractData.signature_base64,
+        action: 'print', // Sinaliza para a página de preview acionar a impressão
+      },
+    });
   };
 
   return (
@@ -112,16 +114,12 @@ export function ContractCompletePage() {
               Seu contrato foi finalizado. Clique no botão abaixo para baixar sua cópia em PDF.
             </p>
             <button
-              onClick={handleDownload}
-              disabled={!pdfUrl}
+              onClick={handlePrint}
               className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               <FileText className="w-6 h-6" />
-              {pdfUrl ? 'Baixar Contrato em PDF' : 'PDF não arquivado'}
+              Baixar / Imprimir Contrato
             </button>
-            {!pdfUrl && (
-              <p className="text-xs text-gray-500 mt-2">O contrato é válido, mas o PDF não foi salvo no servidor. O cliente já deve ter baixado sua cópia.</p>
-            )}
           </>
         )}
       </div>

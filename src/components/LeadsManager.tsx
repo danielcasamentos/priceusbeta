@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'; // Re-confirmando importação explícita de React
-import { supabase, Lead, LeadStatus } from '../lib/supabase'; // Importando LeadStatus para tipagem
+import React, { useState, useEffect, useMemo } from 'react'; // Re-confirmando importação explícita de React
+import { supabase, Lead, LeadStatus } from '../lib/supabase'; // Importando LeadStatus para tipagem e Lead
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
 import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -76,6 +76,8 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [whatsappMessageBody, setWhatsappMessageBody] = useState<string>('');
   const [disponibilidadeLead, setDisponibilidadeLead] = useState<AvailabilityResult | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const planLimits = usePlanLimits(); // useMemo was removed from import, but usePlanLimits is used
   const { solicitarAvaliacao } = useReviewRequest();
 
@@ -375,6 +377,40 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0 || !confirm(`Tem certeza que deseja excluir ${selectedIds.length} lead(s) permanentemente? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from('leads').delete().in('id', selectedIds);
+      if (error) throw error;
+
+      alert(`✅ ${selectedIds.length} lead(s) excluído(s) com sucesso!`);
+      setSelectedIds([]);
+      await loadLeads();
+    } catch (error) {
+      console.error('Erro ao excluir leads:', error);
+      alert('❌ Erro ao excluir leads.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const filteredLeads = useMemo(() => {
+    if (filter === 'all') return leads;
+    return leads.filter(lead => lead.status === filter);
+  }, [leads, filter]);
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredLeads.map(l => l.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
   const sendWhatsAppMessage = async (lead: Lead) => {
     if (!lead.telefone_cliente) {
       alert('❌ Este lead não possui telefone cadastrado');
@@ -604,6 +640,20 @@ export function LeadsManager({ userId }: { userId: string }) {
             {status === 'em_negociacao' ? 'Em Negociação' : status === 'fazer_followup' ? 'Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
           </button>
         ))}
+        {selectedIds.length > 0 && (
+          <button
+            onClick={handleDeleteSelected}
+            disabled={isDeleting}
+            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
+          >
+            {isDeleting ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+            Excluir ({selectedIds.length})
+          </button>
+        )}
       </div>
 
       {/* Lista de Leads */}
@@ -617,6 +667,14 @@ export function LeadsManager({ userId }: { userId: string }) {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="p-4">
+                    <input
+                      type="checkbox"
+                      onChange={handleSelectAll}
+                      checked={selectedIds.length > 0 && selectedIds.length === filteredLeads.length}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Cliente
                   </th>
@@ -645,8 +703,16 @@ export function LeadsManager({ userId }: { userId: string }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {leads.map((lead: LeadWithReview) => (
-                  <tr key={lead.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  <tr key={lead.id} className={`hover:bg-gray-50 ${selectedIds.includes(lead.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="p-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(lead.id)}
+                        onChange={() => setSelectedIds(prev => prev.includes(lead.id) ? prev.filter(id => id !== lead.id) : [...prev, lead.id])}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap flex items-center">
                       <div className="text-sm font-medium text-gray-900">
                         {lead.nome_cliente || 'Não informado'}
                       </div>
