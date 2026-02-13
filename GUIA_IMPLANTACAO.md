@@ -75,8 +75,8 @@ npm install
 2. Substitua os valores pelas suas credenciais do Supabase:
 
 ```env
-VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
-VITE_SUPABASE_ANON_KEY=sua_chave_anon_aqui
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anonima-aqui
 
 # Session tracking
 VITE_SESSION_TIMEOUT=1800000

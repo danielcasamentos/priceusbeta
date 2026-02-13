@@ -87,8 +87,8 @@ No `App.tsx`:
 ### **PASSO 1: Variáveis de Ambiente (Bolt.new)**
 
 ```env
-VITE_SUPABASE_URL=https://akgkueojnsjxvbubeojr.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrZ2t1ZW9qbnNqeHZidWJlb2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1OTQzNjcsImV4cCI6MjA3NjE3MDM2N30.jizII-3_hmHXw6LahDHFSGsmCIFIRLNNrUPGdN09x2s
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anonima-aqui
 VITE_SESSION_TIMEOUT=1800000
 ```
 
