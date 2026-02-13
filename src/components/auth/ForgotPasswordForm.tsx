@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Mail, ArrowLeft } from 'lucide-react';
-import { Alert } from '../ui/alert';
+import { Alert } from '../ui/Alert';
 
 interface ForgotPasswordFormProps {
   onBackToLogin?: () => void;

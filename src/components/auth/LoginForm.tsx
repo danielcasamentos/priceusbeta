@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Button } from '../ui/button'
-import { Alert } from '../ui/alert'
+import { Alert } from '../ui/Alert'
 import { Eye, EyeOff } from 'lucide-react'
 
 interface LoginFormProps {
