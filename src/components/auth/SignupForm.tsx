@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Button } from '../ui/button'
-import { Alert } from '../ui/Alert'
+import { Alert } from '../ui/alert'
 import { TermsCheckbox } from '../legal/TermsCheckbox'
 import { TermsModal } from '../legal/TermsModal'
 import { TERMS_VERSION } from '../../constants/terms'
