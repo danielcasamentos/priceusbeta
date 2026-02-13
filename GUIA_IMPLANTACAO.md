@@ -75,11 +75,11 @@ npm install
 2. Substitua os valores pelas suas credenciais do Supabase:
 
 ```env
-VITE_SUPABASE_URL=https://seu-projeto.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anonima-aqui
+VITE_SUPABASE_URL=https://example.supabase.co
+VITE_SUPABASE_ANON_KEY=example-key-placeholder
 
 # Session tracking
-VITE_SESSION_TIMEOUT=1800000
+VITE_SESSION_TIMEOUT=[REDACTED]
 ```
 
 ⚠️ **IMPORTANTE**: Substitua `SEU_PROJETO` e `sua_chave_anon_aqui` pelos valores reais do Supabase!
@@ -139,7 +139,7 @@ Para testar a captura, você precisaria criar um template e compartilhar o link 
    - Na aba "Environment Variables", adicione:
      - `VITE_SUPABASE_URL`: sua URL do Supabase
      - `VITE_SUPABASE_ANON_KEY`: sua chave anon
-     - `VITE_SESSION_TIMEOUT`: 1800000
+     - `VITE_SESSION_TIMEOUT`: [REDACTED]
 
 4. **Deploy**
    - Clique em "Deploy"

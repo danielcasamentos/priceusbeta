@@ -89,7 +89,7 @@ No `App.tsx`:
 ```env
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anonima-aqui
-VITE_SESSION_TIMEOUT=1800000
+VITE_SESSION_TIMEOUT=[REDACTED]
 ```
 
 ### **PASSO 2: Upload da Pasta `dist/`**

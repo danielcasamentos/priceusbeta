@@ -38,9 +38,9 @@ dist/assets/index-B8H3k-iP.js   511.84 kB
 O projeto precisa das seguintes variáveis de ambiente no **Bolt.new**:
 
 ```env
-VITE_SUPABASE_URL=https://seu-projeto.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anonima-aqui
-VITE_SESSION_TIMEOUT=1800000
+VITE_SUPABASE_URL=https://example.supabase.co
+VITE_SUPABASE_ANON_KEY=example-key-placeholder
+VITE_SESSION_TIMEOUT=[REDACTED]
 ```
 
 **Como adicionar no Bolt.new:**
@@ -229,7 +229,7 @@ Install Command: npm install
 ```env
 VITE_SUPABASE_URL=https://akgkueojnsjxvbubeojr.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-VITE_SESSION_TIMEOUT=1800000
+VITE_SESSION_TIMEOUT=[REDACTED]
 ```
 
 ### **Redirects:**
