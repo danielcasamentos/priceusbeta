@@ -8,7 +8,13 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 console.log(`Init: Supabase URL is ${supabaseUrl ? 'present' : 'MISSING'}`);
 console.log(`Init: Service Role Key is ${supabaseServiceKey ? 'present' : 'MISSING'}`);
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
+});
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 console.log('Stripe secret key loaded:', !!stripeSecret, 'Length:', stripeSecret?.length);
 const stripe = new Stripe(stripeSecret, {
@@ -70,13 +76,21 @@ Deno.serve(async (req) => {
     if (!authHeader) {
       return corsResponse({ error: 'Missing Authorization header' }, 401);
     }
-    const token = authHeader.replace('Bearer ', '');
+    
+    // Robust token extraction
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    
     const {
       data: { user },
       error: getUserError,
     } = await supabase.auth.getUser(token);
 
     if (getUserError) {
+      // Debug: Check if Service Role Key is actually working by trying an admin action
+      const { error: adminError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
+      if (adminError) {
+        console.error('CRITICAL: Service Role Key seems invalid or expired:', adminError);
+      }
       console.error('Auth Error Details:', getUserError);
       return corsResponse({ error: 'Failed to authenticate user', details: getUserError.message }, 401);
     }
