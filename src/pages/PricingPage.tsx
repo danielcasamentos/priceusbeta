@@ -35,6 +35,8 @@ export function PricingPage() {
         return
       }
 
+      console.log('Sending token to function:', session.access_token);
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
         method: 'POST',
         headers: {
