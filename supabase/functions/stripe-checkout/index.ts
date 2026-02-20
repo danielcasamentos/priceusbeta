@@ -2,7 +2,13 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
-const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+console.log(`Init: Supabase URL is ${supabaseUrl ? 'present' : 'MISSING'}`);
+console.log(`Init: Service Role Key is ${supabaseServiceKey ? 'present' : 'MISSING'}`);
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 console.log('Stripe secret key loaded:', !!stripeSecret, 'Length:', stripeSecret?.length);
 const stripe = new Stripe(stripeSecret, {
@@ -71,7 +77,8 @@ Deno.serve(async (req) => {
     } = await supabase.auth.getUser(token);
 
     if (getUserError) {
-      return corsResponse({ error: 'Failed to authenticate user' }, 401);
+      console.error('Auth Error Details:', getUserError);
+      return corsResponse({ error: 'Failed to authenticate user', details: getUserError.message }, 401);
     }
 
     if (!user) {
