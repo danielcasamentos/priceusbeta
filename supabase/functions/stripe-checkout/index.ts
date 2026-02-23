@@ -1,245 +1,108 @@
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import Stripe from 'npm:stripe@17.7.0';
-import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@12.12.0?target=deno";
 
-// Use a custom env var for the service key to ensure it's the correct, most recent one.
-// The default SUPABASE_SERVICE_ROLE_KEY can sometimes be stale after key rotation.
-const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-const supabaseServiceKey = Deno.env.get('CUSTOM_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+// Headers CORS para permitir que seu frontend acesse a função.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-console.log(`Init: Supabase URL is ${supabaseUrl ? 'present' : 'MISSING'}`);
-console.log(`Init: Service Role Key is ${supabaseServiceKey ? 'present' : 'MISSING'}`);
-if (supabaseServiceKey) console.log(`Init: Key length: ${supabaseServiceKey.length}, Last 5 chars: ${supabaseServiceKey.slice(-5)}`);
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
-});
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
-console.log('Stripe secret key loaded:', !!stripeSecret, 'Length:', stripeSecret?.length);
-const stripe = new Stripe(stripeSecret, {
-  appInfo: {
-    name: 'Bolt Integration',
-    version: '1.0.0',
-  },
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
+  apiVersion: "2022-11-15",
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
-// Helper function to create responses with CORS headers
-function corsResponse(body: string | object | null, status = 200) {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, x-client-info, apikey, Content-Type',
-  };
-
-  // For 204 No Content, don't include Content-Type or body
-  if (status === 204) {
-    return new Response(null, { status, headers });
-  }
-
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json',
-    },
-  });
-}
-
-Deno.serve(async (req) => {
-  console.log(`[${req.method}] Request received for: ${req.url}`);
-
-  // Explicitly handle OPTIONS pre-flight request
-  if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS pre-flight request.');
-    return corsResponse(null, 204);
+serve(async (req) => {
+  // O browser envia uma requisição OPTIONS (preflight) para verificar as políticas de CORS.
+  // Respondemos 'ok' para permitir a requisição principal.
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    console.log('Entered main try block.');
-
-    if (req.method !== 'POST') {
-      console.log(`Disallowed method: ${req.method}`);
-      return corsResponse({ error: 'Method not allowed' }, 405);
+    // --- 1. Validação do Usuário (JWT) ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("🚨 401 - Cabeçalho de Autorização ausente.");
+      return new Response(JSON.stringify({ error: "Authorization header is missing" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    console.log("🔍 JWT recebido. Validando...");
 
-    let body;
-    try {
-      body = await req.json();
-      console.log('Request body parsed successfully:', body);
-    } catch (e: any) {
-      console.error('Failed to parse request body as JSON:', e.message);
-      return corsResponse({ error: 'Invalid JSON format' }, 400);
-    }
-
-    const { price_id, success_url, cancel_url, mode } = body;
-
-    const validationError = validateParameters(
-      { price_id, success_url, cancel_url, mode },
+    // Para validar o usuário, criamos um novo cliente Supabase usando o token
+    // que o frontend enviou no header 'Authorization'.
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
       {
-        cancel_url: 'string',
-        price_id: 'string',
-        success_url: 'string',
-        mode: { values: ['payment', 'subscription'] },
-      },
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      }
     );
 
-    if (validationError) {
-      console.error('Parameter validation failed:', validationError);
-      return corsResponse({ error: validationError }, 400);
-    }
-    console.log('Parameters validated successfully.');
+    // `getUser()` usa o token para obter os dados do usuário.
+    // Se o token for inválido ou expirado, retornará um erro.
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('Missing Authorization header.');
-      return corsResponse({ error: 'Missing Authorization header' }, 401);
-    }
-    
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim().replace(/^"|"$/g, '');
-    console.log('Attempting to get user from token...');
-    
-    const {
-      data: { user },
-      error: getUserError,
-    } = await supabase.auth.getUser(token);
-
-    if (getUserError) {
-      console.error('Supabase auth.getUser failed:', getUserError.message);
-      return corsResponse({ error: 'Failed to authenticate user', details: getUserError.message }, 401);
-    }
-
-    if (!user) {
-      console.error('User not found for the provided token.');
-      return corsResponse({ error: 'User not found' }, 404);
-    }
-    console.log(`User authenticated: ${user.id}`);
-
-    console.log('Checking for existing Stripe customer...');
-    const { data: customer, error: getCustomerError } = await supabase
-      .from('stripe_customers')
-      .select('customer_id')
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (getCustomerError) {
-      console.error('Failed to query stripe_customers table:', getCustomerError.message);
-      return corsResponse({ error: 'Failed to fetch customer information' }, 500);
-    }
-
-    let customerId;
-
-    if (!customer || !customer.customer_id) {
-      console.log(`No existing customer found for user ${user.id}. Creating a new one.`);
-      const newCustomer = await stripe.customers.create({
-        email: user.email,
-        metadata: {
-          userId: user.id,
-        },
+    // Se houver um erro na validação, o usuário não está autenticado.
+    if (userError || !user) {
+      console.error("🚨 401 - Erro de autenticação:", userError);
+      return new Response(JSON.stringify({ error: "Token inválido ou expirado", details: userError?.message }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      customerId = newCustomer.id;
-      console.log(`Created new Stripe customer ${customerId} for user ${user.id}`);
-
-      console.log('Saving new customer mapping to stripe_customers table...');
-      const { error: createCustomerError } = await supabase.from('stripe_customers').insert({
-        user_id: user.id,
-        customer_id: newCustomer.id,
-      });
-
-      if (createCustomerError) {
-        console.error('Failed to save new customer mapping:', createCustomerError.message);
-        // Attempt to clean up Stripe customer if DB insert fails
-        await stripe.customers.del(newCustomer.id).catch(delErr => console.error('Cleanup failed: Could not delete Stripe customer', delErr));
-        return corsResponse({ error: 'Failed to create customer mapping' }, 500);
-      }
-      console.log('New customer mapping saved.');
-
-    } else {
-      customerId = customer.customer_id;
-      console.log(`Found existing Stripe customer: ${customerId}`);
     }
 
-    // Special handling for subscriptions
-    if (mode === 'subscription') {
-      console.log('Subscription mode detected. Verifying/creating subscription record...');
-      const { data: subscription, error: getSubscriptionError } = await supabase
-        .from('stripe_subscriptions')
-        .select('status')
-        .eq('customer_id', customerId)
-        .maybeSingle();
+    console.log(`✅ Usuário autenticado: ${user.email} (ID: ${user.id})`);
 
-      if (getSubscriptionError) {
-        console.error('Failed to query stripe_subscriptions table:', getSubscriptionError.message);
-        return corsResponse({ error: 'Failed to fetch subscription information' }, 500);
-      }
+    // --- 2. Criação da Sessão de Checkout do Stripe ---
+    // Extrai os dados enviados pelo frontend.
+    const { priceId } = await req.json();
 
-      if (!subscription) {
-        console.log('No subscription record found. Creating one.');
-        const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
-          customer_id: customerId,
-          status: 'not_started',
-        });
-
-        if (createSubscriptionError) {
-          console.error('Failed to create new subscription record:', createSubscriptionError.message);
-          return corsResponse({ error: 'Unable to save the subscription in the database' }, 500);
-        }
-        console.log('Subscription record created.');
-      } else {
-        console.log(`Existing subscription record found with status: ${subscription.status}`);
-      }
-    }
-
-
-    console.log(`Creating Stripe Checkout session for customer ${customerId}...`);
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [
+    // Valida se todos os parâmetros necessários foram recebidos.
+    if (!priceId) {
+      return new Response(
+        JSON.stringify({
+          error: "Parâmetro obrigatório ausente: priceId",
+        }),
         {
-          price: price_id,
-          quantity: 1,
-        },
-      ],
-      mode,
-      success_url,
-      cancel_url,
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Constrói as URLs de redirecionamento no backend para maior segurança.
+    const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('origin') || 'http://localhost:5173';
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: "subscription", // ou 'payment' para pagamentos únicos
+      success_url: `${frontendUrl}/sucesso?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontendUrl}/cancelado`,
+      customer_email: user.email,
+      client_reference_id: user.id,
+      metadata: {
+        user_id: user.id,
+      },
     });
 
-    console.log(`Stripe Checkout session created: ${session.id}`);
+    console.log(`💰 Sessão Stripe criada com sucesso: ${session.id}`);
 
-    return corsResponse({ sessionId: session.id, url: session.url });
-  } catch (error: any) {
-    console.error(`[FATAL] Unhandled error in main try block: ${error.message}`, error.stack);
-    return corsResponse({ error: 'An unexpected error occurred.', details: error.message }, 500);
+    // --- 3. Retorno do ID da Sessão para o Frontend ---
+    return new Response(JSON.stringify({ sessionId: session.id }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("🚨 500 - Erro Interno na Edge Function:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
-
-type ExpectedType = 'string' | { values: string[] };
-type Expectations<T> = { [K in keyof T]: ExpectedType };
-
-function validateParameters<T extends Record<string, any>>(values: T, expected: Expectations<T>): string | undefined {
-  for (const parameter in values) {
-    const expectation = expected[parameter];
-    const value = values[parameter];
-
-    if (expectation === 'string') {
-      if (value == null) {
-        return `Missing required parameter ${parameter}`;
-      }
-      if (typeof value !== 'string') {
-        return `Expected parameter ${parameter} to be a string got ${JSON.stringify(value)}`;
-      }
-    } else {
-      if (!expectation.values.includes(value)) {
-        return `Expected parameter ${parameter} to be one of ${expectation.values.join(', ')}`;
-      }
-    }
-  }
-
-  return undefined;
-}

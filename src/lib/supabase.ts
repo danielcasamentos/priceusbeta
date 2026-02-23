@@ -3,9 +3,26 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+// --- DEBUG E VALIDAÇÃO DE AMBIENTE ---
 if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('🚨 ERRO CRÍTICO: Variáveis de ambiente do Supabase não encontradas.')
   throw new Error('Missing Supabase environment variables')
 }
+
+console.log('🔌 Inicializando Supabase Client...')
+console.log('📍 URL do Projeto:', supabaseUrl)
+
+// Validação específica para garantir que estamos no projeto correto
+const PROJECT_ID_CORRETO = 'qrqcnrmaatthvyngwfkb'
+if (!supabaseUrl.includes(PROJECT_ID_CORRETO)) {
+  console.error(`❌ ERRO DE CONFIGURAÇÃO: O frontend está conectado ao projeto errado!`)
+  console.error(`   Atual: ${supabaseUrl}`)
+  console.error(`   Esperado: https://${PROJECT_ID_CORRETO}.supabase.co`)
+  console.warn('⚠️ Verifique as variáveis de ambiente no Netlify (VITE_SUPABASE_URL)')
+} else {
+  console.log('✅ Conectado ao projeto Supabase correto:', PROJECT_ID_CORRETO)
+}
+// -------------------------------------
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
