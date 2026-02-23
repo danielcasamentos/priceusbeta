@@ -4,9 +4,24 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // --- DEBUG E VALIDAÇÃO DE AMBIENTE ---
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('🚨 ERRO CRÍTICO: Variáveis de ambiente do Supabase não encontradas.')
-  throw new Error('Missing Supabase environment variables')
+if (!supabaseUrl || typeof supabaseUrl !== 'string' || supabaseUrl.trim() === '') {
+  console.error('🚨 ERRO CRÍTICO: A variável de ambiente VITE_SUPABASE_URL não está definida ou está vazia.')
+  console.error('   -> Verifique as configurações no painel do Netlify (ou no seu arquivo .env local).')
+  throw new Error('VITE_SUPABASE_URL is not configured. Check your environment variables.')
+}
+if (!supabaseAnonKey || typeof supabaseAnonKey !== 'string' || supabaseAnonKey.trim() === '') {
+  console.error('🚨 ERRO CRÍTICO: A variável de ambiente VITE_SUPABASE_ANON_KEY não está definida ou está vazia.')
+  console.error('   -> Verifique as configurações no painel do Netlify (ou no seu arquivo .env local).')
+  throw new Error('VITE_SUPABASE_ANON_KEY is not configured. Check your environment variables.')
+}
+
+// Validação extra para garantir que a URL é válida antes de passar para o Supabase
+try {
+  new URL(supabaseUrl)
+} catch (error) {
+  console.error(`🚨 ERRO CRÍTICO: A VITE_SUPABASE_URL fornecida ("${supabaseUrl}") não é uma URL válida.`)
+  console.error('   -> Exemplo de URL válida: https://seuid.supabase.co')
+  throw new Error(`Invalid VITE_SUPABASE_URL: "${supabaseUrl}". It must be a valid HTTP or HTTPS URL.`)
 }
 
 console.log('🔌 Inicializando Supabase Client...')
@@ -21,6 +36,24 @@ if (!supabaseUrl.includes(PROJECT_ID_CORRETO)) {
   console.warn('⚠️ Verifique as variáveis de ambiente no Netlify (VITE_SUPABASE_URL)')
 } else {
   console.log('✅ Conectado ao projeto Supabase correto:', PROJECT_ID_CORRETO)
+}
+
+// Validação cruzada: garantir que a URL e a Chave Anon pertencem ao mesmo projeto.
+try {
+  const jwtPayload = JSON.parse(atob(supabaseAnonKey.split('.')[1]));
+  const projectRefFromKey = jwtPayload.ref;
+
+  if (projectRefFromKey !== PROJECT_ID_CORRETO) {
+    console.error(`❌ ERRO DE INCONSISTÊNCIA: A chave (ANON_KEY) pertence a um projeto diferente!`);
+    console.error(`   ID do Projeto na URL: ${PROJECT_ID_CORRETO}`);
+    console.error(`   ID do Projeto na Chave: ${projectRefFromKey}`);
+    console.warn('⚠️ Atualize a variável VITE_SUPABASE_ANON_KEY no Netlify com a chave correta para o projeto.');
+    throw new Error('Supabase URL and Anon Key project mismatch.');
+  } else {
+    console.log('✅ Chave Anon (ANON_KEY) validada para o projeto correto.');
+  }
+} catch (error) {
+  console.error('🚨 ERRO CRÍTICO: Não foi possível decodificar ou validar a VITE_SUPABASE_ANON_KEY. Verifique se a chave está completa e correta.');
 }
 // -------------------------------------
 
