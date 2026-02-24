@@ -8,10 +8,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2022-11-15",
-  httpClient: Stripe.createFetchHttpClient(),
-});
+// Inicialização segura do Stripe
+const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+let stripe: Stripe | null = null;
+
+if (stripeKey) {
+  stripe = new Stripe(stripeKey, {
+    apiVersion: "2022-11-15",
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+} else {
+  console.error("🚨 ERRO: STRIPE_SECRET_KEY não encontrada no ambiente.");
+}
 
 serve(async (req) => {
   // O browser envia uma requisição OPTIONS (preflight) para verificar as políticas de CORS.
@@ -21,6 +29,13 @@ serve(async (req) => {
   }
 
   try {
+    if (!stripe) {
+      return new Response(JSON.stringify({ error: "Servidor mal configurado: Stripe Key ausente" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // --- 1. Validação do Usuário (JWT) ---
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -32,14 +47,27 @@ serve(async (req) => {
     }
     console.log("🔍 JWT recebido. Validando...");
 
+    // DEBUG: Confirmar qual projeto a função está usando
+    const sbUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const sbAnon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    console.log(`🔌 Edge Function conectada em: ${sbUrl}`);
+
+    if (!sbUrl || !sbAnon) {
+      console.error("🚨 Variáveis do Supabase não injetadas corretamente.");
+      throw new Error("Supabase environment variables missing");
+    }
+
     // Para validar o usuário, criamos um novo cliente Supabase usando o token
     // que o frontend enviou no header 'Authorization'.
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      sbUrl,
+      sbAnon,
       {
         global: {
           headers: { Authorization: authHeader },
+        },
+        auth: {
+          persistSession: false, // IMPORTANTE: Desabilita persistência em ambiente serverless
         },
       }
     );
@@ -51,7 +79,11 @@ serve(async (req) => {
     // Se houver um erro na validação, o usuário não está autenticado.
     if (userError || !user) {
       console.error("🚨 401 - Erro de autenticação:", userError);
-      return new Response(JSON.stringify({ error: "Token inválido ou expirado", details: userError?.message }), {
+      return new Response(JSON.stringify({ 
+        error: "Token inválido ou expirado", 
+        details: userError,
+        hint: "Verifique se o usuário está logado no projeto correto."
+      }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
