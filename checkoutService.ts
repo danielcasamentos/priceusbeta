@@ -1,5 +1,5 @@
-import { supabase } from '../lib/supabase';
-import { stripePromise } from '../lib/stripe';
+import { supabase } from './src/lib/supabase';
+import { stripePromise } from './src/lib/stripe';
 
 export async function handleCheckout(priceId: string) {
   console.log('🚀 Iniciando processo de checkout...');
