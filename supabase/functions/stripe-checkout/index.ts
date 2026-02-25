@@ -49,10 +49,12 @@ serve(async (req) => {
 
     // DEBUG: Confirmar qual projeto a função está usando
     const sbUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const sbAnon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    // USO DE SERVICE_ROLE_KEY: Recomendado para backend. Garante permissões totais para a função.
+    // Fallback para ANON_KEY caso a SERVICE_ROLE não esteja disponível.
+    const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     console.log(`🔌 Edge Function conectada em: ${sbUrl}`);
 
-    if (!sbUrl || !sbAnon) {
+    if (!sbUrl || !sbKey) {
       console.error("🚨 Variáveis do Supabase não injetadas corretamente.");
       throw new Error("Supabase environment variables missing");
     }
@@ -61,7 +63,7 @@ serve(async (req) => {
     // que o frontend enviou no header 'Authorization'.
     const supabaseClient = createClient(
       sbUrl,
-      sbAnon,
+      sbKey,
       {
         global: {
           headers: { Authorization: authHeader },
