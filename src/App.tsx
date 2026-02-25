@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
@@ -17,10 +17,15 @@ import { ContractPreviewPage } from './pages/ContractPreviewPage' // Adicionado
 import { ReviewPage } from './pages/ReviewPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
+import { checkEnvVariables } from './lib/debug';
 
 
 function App() {
   useTawkTo(); // Inicializa o Tawk.to e esconde o widget
+
+  useEffect(() => {
+    checkEnvVariables();
+  }, []);
 
   return (
     <Router>
