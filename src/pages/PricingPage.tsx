@@ -7,7 +7,7 @@ import { useTrialStatus } from '../hooks/useTrialStatus'
 import { Alert } from '../components/ui/Alert'
 import { AlertCircle } from 'lucide-react'
 import { TawkToChat } from '../components/TawkToChat'
-import { handleCheckout } from '../services/checkoutService'
+import { handleCheckout } from '../checkoutService'
 
 export function PricingPage() {
   const navigate = useNavigate()
