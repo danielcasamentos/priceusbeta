@@ -64,3 +64,29 @@ export function showMobileLogs() {
 if (typeof window !== 'undefined') {
   (window as any).showMobileLogs = showMobileLogs;
 }
+
+/**
+ * Checks for the presence of critical environment variables and logs their status.
+ * This should be called once when the application initializes (e.g., in your main layout component).
+ */
+export function checkEnvVariables() {
+  console.group("🕵️ Verificação de Variáveis de Ambiente (Produção)");
+
+  const variables = [
+    'VITE_SUPABASE_URL',
+    'VITE_SUPABASE_ANON_KEY',
+    'VITE_STRIPE_PUBLIC_KEY',
+    'VITE_STRIPE_PRICE_ID', // Adicionado para debug
+  ];
+
+  variables.forEach(varName => {
+    const value = (import.meta.env as any)[varName];
+    if (value) {
+      console.log(`✅ ${varName}: Encontrada.`);
+    } else {
+      console.error(`❌ ${varName}: NÃO ENCONTRADA! Este é o motivo do erro.`);
+    }
+  });
+
+  console.groupEnd();
+}

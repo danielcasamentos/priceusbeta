@@ -95,13 +95,15 @@ serve(async (req) => {
 
     // --- 2. Criação da Sessão de Checkout do Stripe ---
     // Extrai os dados enviados pelo frontend.
-    const { priceId } = await req.json();
+    const body = await req.json();
+    const { priceId } = body;
 
     // Valida se todos os parâmetros necessários foram recebidos.
     if (!priceId) {
+      console.error("🚨 Erro 400: priceId ausente. Body recebido:", JSON.stringify(body));
       return new Response(
         JSON.stringify({
-          error: "Parâmetro obrigatório ausente: priceId",
+          error: "Parâmetro obrigatório ausente: priceId. Verifique se o frontend está enviando o valor correto.",
         }),
         {
           status: 400,
