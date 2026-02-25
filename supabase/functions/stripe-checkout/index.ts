@@ -131,7 +131,7 @@ serve(async (req) => {
     console.log(`💰 Sessão Stripe criada com sucesso: ${session.id}`);
 
     // --- 3. Retorno do ID da Sessão para o Frontend ---
-    return new Response(JSON.stringify({ sessionId: session.id }), {
+    return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

@@ -9,13 +9,21 @@ export interface StripeProduct {
 
 export const stripeProducts: StripeProduct[] = [
   {
+    priceId: 'price_1S3KA0JwpG82WWRaH9JjeAEM',
+    name: 'Plano Mensal',
+    description: 'Acesso completo com flexibilidade mensal.',
+    mode: 'subscription',
+    price: 97.00,
+    currency: 'BRL'
+  },
+  {
     priceId: 'price_1SnYpRJwpG82WWRabkukFNvc',
     name: 'Plano Anual',
     description: 'Garanta 1 ano de PriceU$ com um desconto incrível',
     mode: 'subscription',
     price: 1000.00,
     currency: 'BRL'
-  }
+  },
 ];
 
 export const getProductByPriceId = (priceId: string): StripeProduct | undefined => {

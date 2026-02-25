@@ -7,7 +7,7 @@ import { useTrialStatus } from '../hooks/useTrialStatus'
 import { Alert } from '../components/ui/Alert'
 import { AlertCircle } from 'lucide-react'
 import { TawkToChat } from '../components/TawkToChat'
-import { handleCheckout } from '../../checkoutService'
+import { handleCheckout } from '../services/checkoutService'
 
 export function PricingPage() {
   const navigate = useNavigate()
@@ -43,10 +43,10 @@ export function PricingPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-            Plano Anual PriceU$
+            Planos Simples e Transparentes
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            Acesso completo por um ano com um valor especial.
+            Escolha o plano ideal para você e comece a criar orçamentos incríveis.
           </p>
         </div>
 
@@ -91,22 +91,31 @@ export function PricingPage() {
           </div>
         )}
 
-        <div className="mt-12 max-w-lg mx-auto">
+        <div className="mt-12 max-w-4xl mx-auto grid gap-8 lg:grid-cols-2 items-start">
           {stripeProducts.map((product) => (
-            <div key={product.priceId} className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-green-600">
+            <div 
+              key={product.priceId} 
+              className={`bg-white rounded-2xl shadow-xl p-8 border-2 ${
+                product.name.includes('Anual') ? 'border-green-600' : 'border-gray-200'
+              }`}
+            >
               <div className="text-center mb-8">
-                <div className="inline-block bg-green-600 text-white px-6 py-2 rounded-full text-sm font-semibold mb-4">
-                  ⭐ Mais Escolhido
-                </div>
+                {product.name.includes('Anual') && (
+                  <div className="inline-block bg-green-600 text-white px-6 py-2 rounded-full text-sm font-semibold mb-4">
+                    ⭐ Mais Escolhido
+                  </div>
+                )}
                 <h3 className="text-3xl font-bold text-gray-900 mb-2">
                   {product.name}
                 </h3>
                 <p className="text-gray-600 mb-6">{product.description}</p>
                 <div className="flex items-end justify-center gap-2 mb-2">
-                  <span className="text-5xl font-bold text-green-600">
+                  <span className={`text-5xl font-bold ${
+                    product.name.includes('Anual') ? 'text-green-600' : 'text-gray-800'
+                  }`}>
                     R$ {product.price.toFixed(2).replace('.', ',')}
                   </span>
-                  <span className="text-2xl text-gray-600 mb-2">/ano</span>
+                  <span className="text-2xl text-gray-600 mb-2">/{product.name.includes('Anual') ? 'ano' : 'mês'}</span>
                 </div>
                 <p className="text-sm text-green-600 font-medium">
                   🎉 14 dias grátis para testar tudo
@@ -166,7 +175,7 @@ export function PricingPage() {
 
               <button
                 onClick={() => onSubscribeClick(product.priceId)}
-                disabled={!!loading || subscription?.price_id === product.priceId}
+                disabled={loading === product.priceId || subscription?.price_id === product.priceId}
                 className="w-full py-4 rounded-lg font-semibold text-lg bg-green-600 text-white hover:bg-green-700 transition shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading === product.priceId ? 'Processando...' :
