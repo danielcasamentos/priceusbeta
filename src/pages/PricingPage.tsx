@@ -1,14 +1,13 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { stripeProducts } from '../stripe-config'
-import { SubscriptionCard } from '../components/subscription/SubscriptionCard'
 import { useAuth } from '../hooks/useAuth'
 import { useSubscription } from '../hooks/useSubscription'
 import { useTrialStatus } from '../hooks/useTrialStatus'
-import { supabase } from '../lib/supabase'
 import { Alert } from '../components/ui/Alert'
 import { AlertCircle } from 'lucide-react'
 import { TawkToChat } from '../components/TawkToChat'
+import { handleCheckout } from '../../checkoutService'
 
 export function PricingPage() {
   const navigate = useNavigate()
@@ -18,51 +17,21 @@ export function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
 
-  const handleSubscribe = async (priceId: string) => {
+  const onSubscribeClick = async (priceId: string) => {
     if (!user) {
       navigate('/login')
       return
     }
-
     setLoading(priceId)
     setError('')
-
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        navigate('/login')
-        return
-      }
-
-      console.log('Sending token to function:', session.access_token);
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          price_id: priceId,
-          success_url: `${window.location.origin}/success`,
-          cancel_url: `${window.location.origin}/pricing`,
-          mode: 'subscription'
-        })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session')
-      }
-
-      if (data.url) {
-        window.location.href = data.url
-      }
+      // Usa a função centralizada do checkoutService, que já trata erros e redirecionamento.
+      await handleCheckout(priceId);
     } catch (err) {
-      console.error('Checkout error:', err)
-      setError(err instanceof Error ? err.message : 'An error occurred during checkout')
+      // O handleCheckout já mostra alerts, mas podemos logar o erro aqui também.
+      const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro inesperado.';
+      console.error('Erro capturado na PricingPage:', err);
+      setError(errorMessage);
     } finally {
       setLoading(null)
     }
@@ -196,7 +165,7 @@ export function PricingPage() {
               </ul>
 
               <button
-                onClick={() => handleSubscribe(product.priceId)}
+                onClick={() => onSubscribeClick(product.priceId)}
                 disabled={!!loading || subscription?.price_id === product.priceId}
                 className="w-full py-4 rounded-lg font-semibold text-lg bg-green-600 text-white hover:bg-green-700 transition shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
