@@ -43,10 +43,10 @@ export function PricingPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-            Plano Simples e Transparente
+            Plano Anual PriceU$
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            Teste grátis por 14 dias, depois apenas R$ 97/mês
+            Acesso completo por um ano com um valor especial.
           </p>
         </div>
 
@@ -103,10 +103,10 @@ export function PricingPage() {
                 </h3>
                 <p className="text-gray-600 mb-6">{product.description}</p>
                 <div className="flex items-end justify-center gap-2 mb-2">
-                  <span className="text-6xl font-bold text-green-600">
+                  <span className="text-5xl font-bold text-green-600">
                     R$ {product.price.toFixed(2).replace('.', ',')}
                   </span>
-                  <span className="text-2xl text-gray-600 mb-3">/mês</span>
+                  <span className="text-2xl text-gray-600 mb-2">/ano</span>
                 </div>
                 <p className="text-sm text-green-600 font-medium">
                   🎉 14 dias grátis para testar tudo
