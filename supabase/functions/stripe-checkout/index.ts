@@ -123,6 +123,7 @@ serve(async (req) => {
       cancel_url: `${frontendUrl}/cancelado`,
       customer_email: user.email,
       client_reference_id: user.id,
+      allow_promotion_codes: true, // <-- Habilita o campo de cupom de desconto
       metadata: {
         user_id: user.id,
       },
