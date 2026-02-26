@@ -130,9 +130,15 @@ serve(async (req) => {
 
     console.log(`💰 Sessão Stripe criada com sucesso: ${session.id}`);
 
-    // --- 3. Retorno do ID da Sessão para o Frontend ---
+    if (!session.url) {
+      console.error("🚨 ERRO CRÍTICO: A sessão do Stripe foi criada, mas não retornou uma URL.");
+      throw new Error("A sessão de checkout do Stripe não retornou uma URL válida.");
+    }
+
+    // --- 3. Retorno do ID e URL da Sessão para o Frontend ---
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
     });
   } catch (error) {
     console.error("🚨 500 - Erro Interno na Edge Function:", error);
