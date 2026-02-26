@@ -40,7 +40,7 @@ interface ProductEditorProps {
  * - Feedback visual detalhado
  * - Auto-save no banco de dados
  */
-export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId, templateId, onImageUploadSuccess }: ProductEditorProps) {
+export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId, templateId, onImageUploadSuccess, onProductSaved }: ProductEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [saving, setSaving] = useState(false);
