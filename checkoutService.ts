@@ -49,24 +49,15 @@ export async function handleCheckout(priceId: string) {
       throw new Error(responseData.error || 'Falha ao criar a sessão de checkout.');
     }
 
-    const { sessionId } = responseData;
+    const { url } = responseData;
 
-    if (!sessionId) {
-      throw new Error('ID da sessão do Stripe não foi recebido do backend.');
+    if (!url) {
+      throw new Error('URL de checkout do Stripe não foi recebida do backend.');
     }
 
     // 5. Redirecionar para o Stripe
-    const stripe = await stripePromise;
-    if (!stripe) {
-      throw new Error('Stripe.js não conseguiu carregar.');
-    }
-
-    const { error: stripeError } = await stripe.redirectToCheckout({ sessionId });
-
-    if (stripeError) {
-      console.error('Erro ao redirecionar para o Stripe:', stripeError);
-      alert(stripeError.message);
-    }
+    // Com a remoção de `redirectToCheckout`, redirecionamos manualmente para a URL da sessão.
+    window.location.href = url;
 
   } catch (error) {
     console.error('❌ Erro geral no fluxo de checkout:', error);
