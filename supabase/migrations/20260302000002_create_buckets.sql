@@ -16,9 +16,10 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('images', 'images', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Políticas para bucket 'images'
+-- Políticas para bucket 'images' (usar DROP IF EXISTS para evitar erros)
 
 -- Upload (INSERT) - usuários autenticados podem fazer upload
+DROP POLICY IF EXISTS "images_allow_uploads" ON storage.objects;
 CREATE POLICY "images_allow_uploads"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -28,6 +29,7 @@ WITH CHECK (
 );
 
 -- Update - usuários autenticados podem atualizar
+DROP POLICY IF EXISTS "images_allow_updates" ON storage.objects;
 CREATE POLICY "images_allow_updates"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -35,6 +37,7 @@ USING (bucket_id = 'images')
 WITH CHECK (bucket_id = 'images');
 
 -- Delete - usuários autenticados podem deletar
+DROP POLICY IF EXISTS "images_allow_deletes" ON storage.objects;
 CREATE POLICY "images_allow_deletes"
 ON storage.objects FOR DELETE
 TO authenticated
@@ -44,6 +47,7 @@ USING (
 );
 
 -- Select - todos podem ler (público)
+DROP POLICY IF EXISTS "images_public_read" ON storage.objects;
 CREATE POLICY "images_public_read"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'images');
@@ -60,18 +64,21 @@ ON CONFLICT (id) DO NOTHING;
 -- Políticas para bucket 'contract-pdfs'
 
 -- Upload - usuários autenticados e públicos podem fazer upload
+DROP POLICY IF EXISTS "contract_pdfs_allow_uploads" ON storage.objects;
 CREATE POLICY "contract_pdfs_allow_uploads"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'contract-pdfs');
 
 -- Upload público para clientes que assinam
+DROP POLICY IF EXISTS "contract_pdfs_public_uploads" ON storage.objects;
 CREATE POLICY "contract_pdfs_public_uploads"
 ON storage.objects FOR INSERT
 TO public
 WITH CHECK (bucket_id = 'contract-pdfs');
 
 -- Update
+DROP POLICY IF EXISTS "contract_pdfs_allow_updates" ON storage.objects;
 CREATE POLICY "contract_pdfs_allow_updates"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -79,6 +86,7 @@ USING (bucket_id = 'contract-pdfs')
 WITH CHECK (bucket_id = 'contract-pdfs');
 
 -- Delete - apenas dono pode deletar
+DROP POLICY IF EXISTS "contract_pdfs_allow_deletes" ON storage.objects;
 CREATE POLICY "contract_pdfs_allow_deletes"
 ON storage.objects FOR DELETE
 TO authenticated
@@ -88,6 +96,7 @@ USING (
 );
 
 -- Select público
+DROP POLICY IF EXISTS "contract_pdfs_public_read" ON storage.objects;
 CREATE POLICY "contract_pdfs_public_read"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'contract-pdfs');
@@ -104,6 +113,7 @@ ON CONFLICT (id) DO NOTHING;
 -- Políticas para bucket 'profile_images'
 
 -- Upload
+DROP POLICY IF EXISTS "profile_images_allow_uploads" ON storage.objects;
 CREATE POLICY "profile_images_allow_uploads"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -113,6 +123,7 @@ WITH CHECK (
 );
 
 -- Update
+DROP POLICY IF EXISTS "profile_images_allow_updates" ON storage.objects;
 CREATE POLICY "profile_images_allow_updates"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -126,6 +137,7 @@ WITH CHECK (
 );
 
 -- Delete
+DROP POLICY IF EXISTS "profile_images_allow_deletes" ON storage.objects;
 CREATE POLICY "profile_images_allow_deletes"
 ON storage.objects FOR DELETE
 TO authenticated
@@ -135,6 +147,7 @@ USING (
 );
 
 -- Select público
+DROP POLICY IF EXISTS "profile_images_public_read" ON storage.objects;
 CREATE POLICY "profile_images_public_read"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'profile_images');

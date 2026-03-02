@@ -23,6 +23,7 @@ DROP POLICY IF EXISTS "images_public_read" ON storage.objects;
 
 -- 4. Criar políticas atualizadas para o bucket 'images'
 -- Política: Qualquer usuário autenticado pode fazer upload
+DROP POLICY IF EXISTS "images_allow_uploads" ON storage.objects;
 CREATE POLICY "images_allow_uploads"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -32,6 +33,7 @@ WITH CHECK (
 );
 
 -- Política: Qualquer usuário autenticado pode atualizar
+DROP POLICY IF EXISTS "images_allow_updates" ON storage.objects;
 CREATE POLICY "images_allow_updates"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -39,6 +41,7 @@ USING (bucket_id = 'images')
 WITH CHECK (bucket_id = 'images');
 
 -- Política: Qualquer usuário autenticado pode deletar
+DROP POLICY IF EXISTS "images_allow_deletes" ON storage.objects;
 CREATE POLICY "images_allow_deletes"
 ON storage.objects FOR DELETE
 TO authenticated
@@ -48,6 +51,7 @@ USING (
 );
 
 -- Política: Todos podem ler (público)
+DROP POLICY IF EXISTS "images_public_read" ON storage.objects;
 CREATE POLICY "images_public_read"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'images');
@@ -55,7 +59,7 @@ USING (bucket_id = 'images');
 -- 5. Forçar recarregamento de políticas
 NOTIFY storage_objects, 'reload';
 
--- 6. Testar upload - listar objetos no bucket (sem coluna size)
+-- 6. Testar upload - listar objetos no bucket
 SELECT id, bucket_id, name, created_at 
 FROM storage.objects 
 WHERE bucket_id = 'images' 
@@ -67,11 +71,10 @@ SELECT id, bucket_id, name, created_at
 FROM storage.objects 
 WHERE bucket_id NOT IN (SELECT id FROM storage.buckets);
 
--- 8. Verificar tamanho total do storage
+-- 8. Contar arquivos por bucket
 SELECT 
   bucket_id,
-  COUNT(*) as file_count,
-  pg_size_pretty(SUM(size)) as total_size
+  COUNT(*) as file_count
 FROM storage.objects 
 GROUP BY bucket_id;
 
