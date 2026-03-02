@@ -5,6 +5,17 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_URL,VITE_SESSION_TIMEOUT,VITE_DEV_USER_ID"
 
+# Service Worker - deve ser servido como JavaScript, não como HTML
+[[redirects]]
+  from = "/pwabuilder-adv-sw.js"
+  to = "/pwabuilder-adv-sw.js"
+  status = 200
+
+[[redirects]]
+  from = "/pwabuilder-sw.js"
+  to = "/pwabuilder-sw.js"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

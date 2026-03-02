@@ -312,6 +312,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
           texto_whatsapp: templateToDuplicate.texto_whatsapp,
           sistema_geografico_ativo: templateToDuplicate.sistema_geografico_ativo,
           tema: (templateToDuplicate as any).tema,
+          texto_botao_envio: (templateToDuplicate as any).texto_botao_envio,
         })
         .select()
         .single();

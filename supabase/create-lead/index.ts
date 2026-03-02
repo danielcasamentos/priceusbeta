@@ -31,10 +31,36 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ✅ MAPEAMENTO CORRETO: Converter campos do frontend para o schema do banco de dados
+    const leadData = {
+      template_id: leadPayload.template_id,
+      user_id: leadPayload.user_id,
+      // Mapeamento de nomes de campos do frontend para o banco
+      client_name: leadPayload.nome_cliente || leadPayload.nomeCliente || null,
+      client_email: leadPayload.email_cliente || leadPayload.emailCliente || null,
+      client_phone: leadPayload.telefone_cliente || leadPayload.telefoneCliente || null,
+      tipo_evento: leadPayload.tipo_evento || leadPayload.tipoEvento || null,
+      data_evento: leadPayload.data_evento || leadPayload.dataEvento || null,
+      cidade_evento: leadPayload.cidade_evento || leadPayload.cidadeEvento || null,
+      // total_value (banco) <- valor_total (frontend)
+      total_value: leadPayload.valor_total || leadPayload.valorTotal || 0,
+      // orcamento_detalhes (banco) <- orcamento_detalhe (frontend)
+      orcamento_detalhes: leadPayload.orcamento_detalhe || leadPayload.orcamentoDetalhe || {},
+      url_origem: leadPayload.url_origem || null,
+      origem: leadPayload.origem || 'web',
+      session_id: leadPayload.session_id || null,
+      user_agent: leadPayload.user_agent || null,
+      tempo_preenchimento_segundos: leadPayload.tempo_preenchimento_segundos || null,
+      status: leadPayload.status || 'novo',
+      // Campos LGPD
+      lgpd_consent_timestamp: leadPayload.lgpd_consent_timestamp || null,
+      lgpd_consent_text: leadPayload.lgpd_consent_text || null,
+    };
+
     // Inserir os dados na tabela 'leads'
     const { data, error } = await supabaseAdmin
       .from('leads')
-      .insert(leadPayload) // O payload já contém o user_id do fotógrafo
+      .insert(leadData)
       .select()
       .single();
 
@@ -49,7 +75,7 @@ serve(async (req) => {
       const notificationPayload = {
         user_id: leadPayload.user_id, // O ID do fotógrafo
         type: 'new_lead',
-        message: `Você recebeu um novo lead de ${leadPayload.nome_cliente || 'um cliente'}!`,
+        message: `Você recebeu um novo lead de ${leadPayload.nome_cliente || leadPayload.nomeCliente || 'um cliente'}!`,
         related_id: data.id, // ID do lead recém-criado
         link: '/dashboard/leads', // Link para a página de leads
       };

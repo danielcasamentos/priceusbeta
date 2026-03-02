@@ -10,6 +10,7 @@ interface FloatingTotalPanelProps {
   ocultarValoresIntermediarios: boolean;
   produtosSectionRef: React.RefObject<HTMLElement>;
   totalSectionRef: React.RefObject<HTMLElement>;
+  tema?: any;
 }
 
 export function FloatingTotalPanel({
@@ -18,6 +19,7 @@ export function FloatingTotalPanel({
   ocultarValoresIntermediarios,
   produtosSectionRef,
   totalSectionRef,
+  tema,
 }: FloatingTotalPanelProps) {
   const total = calculateTotal();
   const totalItems = useMemo(() => {
@@ -28,9 +30,9 @@ export function FloatingTotalPanel({
   const [hasEnteredProductsSection, setHasEnteredProductsSection] = useState(false);
 
   // Observa a seção de produtos. Quando ela entra na tela, ativa o estado `hasEnteredProductsSection`.
-  const isProdutosSectionOnScreen = useIntersectionObserver(produtosSectionRef, { threshold: 0.1 });
+  const isProdutosSectionOnScreen = useIntersectionObserver(produtosSectionRef, { threshold: 0 });
   // Observa a seção de total no final da página.
-  const isTotalSectionOnScreen = useIntersectionObserver(totalSectionRef, { threshold: 0.1 });
+  const isTotalSectionOnScreen = useIntersectionObserver(totalSectionRef, { threshold: 0 });
 
   useEffect(() => {
     if (isProdutosSectionOnScreen) {
@@ -41,7 +43,7 @@ export function FloatingTotalPanel({
   // A condição para mostrar o painel é:
   // 1. O usuário JÁ ENTROU na seção de produtos.
   // 2. A seção de total final AINDA NÃO está na tela.
-  const shouldShow = hasEnteredProductsSection && !isTotalSectionOnScreen && !ocultarValoresIntermediarios && totalItems > 0;
+  const shouldShow = hasEnteredProductsSection && !isTotalSectionOnScreen && totalItems > 0;
 
   // Estado para controlar a montagem/desmontagem com animação
   const [isMounted, setIsMounted] = useState(false);
