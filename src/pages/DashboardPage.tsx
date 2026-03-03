@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useTrialStatus } from '../hooks/useTrialStatus';
+import { useNavigate, useParams } from 'react-router-dom';
 import { TrialBanner } from '../components/TrialBanner';
 import { FreePlanBanner } from '../components/FreePlanBanner';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -27,12 +28,24 @@ import { TawkToChat } from '../components/TawkToChat';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const params = useParams();
   const trialStatus = useTrialStatus(user?.id);
   const planLimits = usePlanLimits();
-  const [currentPage, setCurrentPage] = useState<string>('templates');
+  
+  // Captura a página da URL ou usa 'templates' como padrão
+  const urlPage = params.page;
+  const [currentPage, setCurrentPage] = useState<string>(urlPage || 'templates');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [contractTab, setContractTab] = useState<'templates' | 'manager'>('templates');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Sincroniza o estado com a URL quando a página mudar
+  useEffect(() => {
+    if (urlPage) {
+      setCurrentPage(urlPage);
+    }
+  }, [urlPage]);
 
   // A verificação do usuário deve vir DEPOIS de todos os hooks.
   if (!user) {
@@ -42,6 +55,8 @@ export function DashboardPage() {
   const handlePageChange = (page: string) => {
     setCurrentPage(page);
     setEditingTemplateId(null);
+    // Navega para a URL correspondente
+    navigate(`/dashboard/${page}`);
   };
 
   const getPageTitle = () => {

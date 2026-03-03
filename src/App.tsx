@@ -39,6 +39,24 @@ function App() {
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/success" element={<SuccessPage />} />
           <Route path="/orcamento/:templateUuid" element={<QuotePage />} />
+          {/* Rotas do Dashboard DEVEM vir antes das rotas dinâmicas com :slugUsuario */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/:page"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Rotas públicas com slug (perfil público e template) */}
           <Route path="/:slugUsuario" element={<PublicProfilePage />} />
           <Route path="/:slugUsuario/:slugTemplate" element={<QuotePage />} />
           <Route path="/avaliar/:token" element={<ReviewPage />} />

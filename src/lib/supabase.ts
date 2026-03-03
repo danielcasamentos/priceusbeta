@@ -121,4 +121,5 @@ export interface Notification {
   created_at: string;
   updated_at: string;
   data?: any;
+  link?: string;
 }

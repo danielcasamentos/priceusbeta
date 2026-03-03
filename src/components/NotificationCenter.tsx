@@ -68,8 +68,12 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
       markAsRead(notification.id);
     }
     if (notification.link) {
-      // Verifica se é um link interno do dashboard
-      if (notification.link.startsWith('/dashboard?page=')) {
+      // Verifica se é um link interno do dashboard (novo formato: /dashboard/leads)
+      if (notification.link.startsWith('/dashboard/')) {
+        const page = notification.link.split('/dashboard/')[1];
+        onNavigate(page);
+      } else if (notification.link.startsWith('/dashboard?page=')) {
+        // Mantém compatibilidade com formato antigo: /dashboard?page=leads
         const page = notification.link.split('=')[1];
         onNavigate(page);
       } else {
