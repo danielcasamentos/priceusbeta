@@ -206,6 +206,10 @@ export function QuotePage() {
           paymentMethod: formasPagamento.find(f => f.id === selectedFormaPagamento),
           formasPagamento: formasPagamento,
           priceBreakdown: getPriceBreakdown(),
+          // Campos necessários para o LeadsManager reconstruir a mensagem
+          sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
+          sistema_geografico_ativo: template?.sistema_geografico_ativo,
+          ocultar_valores_intermediarios: template?.ocultar_valores_intermediarios,
         },
         valorTotal: calculateTotal(),
       });
@@ -1287,7 +1291,10 @@ export function QuotePage() {
               produtos: produtos, 
               formasPagamento: formasPagamento,
               paymentMethod: formasPagamento.find(f => f.id === selectedFormaPagamento), 
-              priceBreakdown: getPriceBreakdown() 
+              priceBreakdown: getPriceBreakdown(),
+              sistema_sazonal_ativo: templateRef.current?.sistema_sazonal_ativo,
+              sistema_geografico_ativo: templateRef.current?.sistema_geografico_ativo,
+              ocultar_valores_intermediarios: templateRef.current?.ocultar_valores_intermediarios,
             },
             valorTotal: calculateTotal(),
           });
