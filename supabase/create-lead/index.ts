@@ -42,8 +42,8 @@ serve(async (req) => {
       tipo_evento: leadPayload.tipo_evento || leadPayload.tipoEvento || null,
       data_evento: leadPayload.data_evento || leadPayload.dataEvento || null,
       cidade_evento: leadPayload.cidade_evento || leadPayload.cidadeEvento || null,
-      // total_value (banco) <- valor_total (frontend)
-      total_value: leadPayload.valor_total || leadPayload.valorTotal || 0,
+      // valor_total (banco) <- valor_total (frontend)
+      valor_total: leadPayload.valor_total || leadPayload.valorTotal || 0,
       // orcamento_detalhes (banco) <- orcamento_detalhe (frontend)
       orcamento_detalhes: leadPayload.orcamento_detalhe || leadPayload.orcamentoDetalhe || {},
       url_origem: leadPayload.url_origem || null,
