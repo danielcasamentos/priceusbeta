@@ -36,9 +36,9 @@ serve(async (req) => {
       template_id: leadPayload.template_id,
       user_id: leadPayload.user_id,
       // Mapeamento de nomes de campos do frontend para o banco
-      client_name: leadPayload.nome_cliente || leadPayload.nomeCliente || null,
-      client_email: leadPayload.email_cliente || leadPayload.emailCliente || null,
-      client_phone: leadPayload.telefone_cliente || leadPayload.telefoneCliente || null,
+      nome_cliente: leadPayload.nome_cliente || leadPayload.nomeCliente || null,
+      email_cliente: leadPayload.email_cliente || leadPayload.emailCliente || null,
+      telefone_cliente: leadPayload.telefone_cliente || leadPayload.telefoneCliente || null,
       tipo_evento: leadPayload.tipo_evento || leadPayload.tipoEvento || null,
       data_evento: leadPayload.data_evento || leadPayload.dataEvento || null,
       cidade_evento: leadPayload.cidade_evento || leadPayload.cidadeEvento || null,
@@ -52,9 +52,10 @@ serve(async (req) => {
       user_agent: leadPayload.user_agent || null,
       tempo_preenchimento_segundos: leadPayload.tempo_preenchimento_segundos || null,
       status: leadPayload.status || 'novo',
-      // Campos LGPD
-      lgpd_consent_timestamp: leadPayload.lgpd_consent_timestamp || null,
-      lgpd_consent_text: leadPayload.lgpd_consent_text || null,
+      // Campos LGPD - Removidos pois não estão no schema da tabela 'leads' fornecido.
+      // Se existirem na sua tabela real, adicione-os de volta e mapeie corretamente.
+      // lgpd_consent_timestamp: leadPayload.lgpd_consent_timestamp || null,
+      // lgpd_consent_text: leadPayload.lgpd_consent_text || null,
     };
 
     // Inserir os dados na tabela 'leads'
@@ -73,16 +74,18 @@ serve(async (req) => {
     // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
     if (data) {
       const notificationPayload = {
-        user_id: leadPayload.user_id, // O ID do fotógrafo
-        type: 'new_lead',
+        user_id: leadPayload.user_id,
+        title: 'Novo Lead Recebido!', // Adicionado para consistência com a interface Notification
         message: `Você recebeu um novo lead de ${leadPayload.nome_cliente || leadPayload.nomeCliente || 'um cliente'}!`,
-        related_id: data.id, // ID do lead recém-criado
+        type: 'info', // Alterado para um tipo válido da interface Notification
+        is_read: false, // Adicionado para consistência com a interface Notification
+        data: { lead_id: data.id }, // Usando o campo 'data' para informações relacionadas
         link: '/dashboard/leads', // Link para a página de leads
       };
 
       const { error: notificationError } = await supabaseAdmin
         .from('notifications')
-        .insert(notificationPayload);
+        .insert(notificationPayload as any); // 'as any' para evitar erro de tipo temporariamente, idealmente a interface Notification seria atualizada para incluir 'new_lead' ou 'data' seria mais genérico.
 
       if (notificationError) {
         // Log do erro de notificação, mas não interrompe o fluxo.
