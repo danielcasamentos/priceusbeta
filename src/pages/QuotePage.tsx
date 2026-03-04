@@ -2018,6 +2018,7 @@ export function QuotePage() {
               className={`w-full flex items-center justify-center gap-2 sm:gap-3 bg-green-600 hover:bg-green-700 active:opacity-90 text-white px-6 py-4 sm:py-5 ${tema.estilos.borderRadius} font-semibold text-base sm:text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${tema.estilos.shadow} ${tema.estilos.shadowHover} min-h-[56px] touch-manipulation`}
               disabled={
                 isSubmitting ||
+                !profile?.whatsapp_principal ||
                 !fieldsValidation.canUseWhatsApp ||
                 (disponibilidade?.modo_aviso === 'restritivo' &&
                  (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada'))
@@ -2025,6 +2026,8 @@ export function QuotePage() {
               title={
                 isSubmitting
                   ? 'Salvando...'
+                  : !profile?.whatsapp_principal
+                  ? 'O fotógrafo não configurou um número para negociação via WhatsApp.'
                   : !fieldsValidation.canUseWhatsApp
                   ? 'Preencha todos os campos obrigatórios primeiro'
                   : (disponibilidade?.modo_aviso === 'restritivo' &&
