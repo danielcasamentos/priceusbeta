@@ -77,7 +77,7 @@ export function useLeadCapture() {
 
       if (error) {
         // O erro pode ser de rede ou um erro retornado pela própria função.
-        throw error;
+        throw error || new Error('Erro desconhecido na Edge Function');
       }
 
       console.log('✅ Lead salvo com sucesso via Edge Function:', status);
@@ -92,7 +92,8 @@ export function useLeadCapture() {
         );
       }
 
-      return null; // Retorna nulo em caso de erro
+      // 🔥 IMPORTANTE: Relançar o erro para que quem chamou (saveFinalLead) saiba que falhou
+      throw error;
     }
   };
 
@@ -125,10 +126,11 @@ export function useLeadCapture() {
     try {
       const lead = await autoSaveLead(data, 'novo'); // Aguarda o resultado do autoSaveLead
       lastSaveRef.current = ''; // Reseta para permitir novas capturas
-      return { lead, error: null }; // Retorna o lead salvo
+      return { lead, error: null };
     } catch (error) {
       console.error('❌ Erro crítico ao salvar lead final:', error);
-      return { lead: null, error };
+      // Retorna o erro explicitamente
+      return { lead: null, error: error || new Error('Falha ao salvar lead') };
     }
   };
 

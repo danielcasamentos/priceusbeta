@@ -1284,13 +1284,12 @@ export function QuotePage() {
             userId: templateRef.current.user_id,
             formData: { ...formData, ...camposExtrasData, data_evento: dataEvento || null, cidade_evento: cidadeSelecionada || null, tipo_evento: templateRef.current.nome_template || null },
             orcamentoDetalhe: { 
-              selectedProdutos, 
-              selectedFormaPagamento, 
-              // Garantindo que a estrutura de dados salva aqui seja completa
-              // e consistente com o que o LeadsManager espera.
-              produtos: produtos, 
-              formasPagamento: formasPagamento,
-              paymentMethod: formasPagamento.find(f => f.id === selectedFormaPagamento), 
+              // 🔥 CORREÇÃO: Converter objeto de produtos para Array [{produto_id, quantidade}]
+              produtos: Object.entries(selectedProdutos).map(([id, qtd]) => ({
+                produto_id: id,
+                quantidade: qtd
+              })),
+              forma_pagamento_id: selectedFormaPagamento,
               priceBreakdown: getPriceBreakdown(),
               sistema_sazonal_ativo: templateRef.current?.sistema_sazonal_ativo,
               sistema_geografico_ativo: templateRef.current?.sistema_geografico_ativo,
@@ -1299,7 +1298,8 @@ export function QuotePage() {
             valorTotal: calculateTotal(),
           });
 
-          if (error) {
+          // 🔥 CORREÇÃO: Verificar se leadData é válido
+          if (error || !leadData) {
             console.error('❌ [setTimeout] Erro ao salvar lead em segundo plano:', error);
             // Não notificamos o usuário com um alert() para não ser intrusivo.
             // O erro já foi logado para depuração.
@@ -1309,7 +1309,7 @@ export function QuotePage() {
           console.log('✅ [setTimeout] Lead salvo com sucesso:', leadData);
           
           // 🔥 CORREÇÃO: O ID do lead retornado pela função `saveFinalLead` está dentro de um array.
-          const leadId = leadData && leadData.length > 0 ? leadData[0].id : null;
+          const leadId = leadData.id || (Array.isArray(leadData) && leadData[0]?.id);
           
           if (leadId) { // A notificação só será criada se o leadId for encontrado.
             console.log('🔔 [QuotePage] Tentando criar notificação para o lead ID:', leadId);
