@@ -1,13 +1,37 @@
 // supabase/functions/create-lead/index.ts
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.23.4/mod.ts'
 
 // Headers para permitir requisições de qualquer origem (CORS)
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// ✅ PASSO 1: Definir o schema de validação com Zod.
+// Este schema deve espelhar EXATAMENTE o payload enviado pelo frontend.
+const leadPayloadSchema = z.object({
+  templateId: z.string().uuid(),
+  userId: z.string().uuid(),
+  formData: z.record(z.any()).pipe(z.object({
+    nome_cliente: z.string().min(1, { message: "Nome do cliente é obrigatório" }),
+    email_cliente: z.string().email({ message: "Email do cliente inválido" }),
+    telefone_cliente: z.string().optional().nullable(),
+  }).passthrough()),
+  orcamentoDetalhe: z.object({
+    // 🔥 PONTO CRÍTICO: Espera um ARRAY de produtos, não um objeto.
+    produtos: z.array(z.object({
+      produto_id: z.string().uuid(),
+      quantidade: z.number().int().min(1),
+    })).min(1, { message: "Pelo menos um produto deve ser selecionado" }),
+    forma_pagamento_id: z.string().uuid().optional().nullable(),
+    priceBreakdown: z.record(z.any()).optional(), // Aceita o breakdown, mas não valida profundamente
+  }).passthrough(),
+  valorTotal: z.number(),
+});
+
 
 serve(async (req) => {
   // Tratar requisição OPTIONS (pre-flight) para CORS
@@ -16,67 +40,57 @@ serve(async (req) => {
   }
 
   try {
-    const leadPayload = await req.json();
+    const payload = await req.json();
 
-    // Validação básica para garantir que os dados essenciais estão presentes
-    if (!leadPayload.user_id || !leadPayload.template_id) {
-      throw new Error('user_id e template_id são obrigatórios.');
+    // ✅ PASSO 2: Validar o payload recebido.
+    const validationResult = leadPayloadSchema.safeParse(payload);
+
+    if (!validationResult.success) {
+      console.error("Erro de Validação Zod:", validationResult.error.flatten());
+      return new Response(JSON.stringify({ error: 'Payload inválido', details: validationResult.error.flatten() }), {
+        status: 400, // Retorna 400 Bad Request
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
+    // Se a validação passou, usamos os dados seguros.
+    const { templateId, userId, formData, orcamentoDetalhe, valorTotal } = validationResult.data;
+
     // 🔒 PONTO CRÍTICO: Criar um cliente Supabase com a service_role.
-    // Isso ignora as políticas de RLS para a inserção, permitindo que
-    // a função salve o lead em nome do visitante anônimo.
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // ✅ MAPEAMENTO CORRETO: Converter campos do frontend para o schema do banco de dados
+    // ✅ PASSO 3: Preparar o objeto para ser inserido na tabela 'leads'
     const leadData = {
-      template_id: leadPayload.template_id,
-      user_id: leadPayload.user_id,
-      // Mapeamento de nomes de campos do frontend para o banco
-      client_name: leadPayload.nome_cliente || leadPayload.nomeCliente || null,
-      client_email: leadPayload.email_cliente || leadPayload.emailCliente || null,
-      client_phone: leadPayload.telefone_cliente || leadPayload.telefoneCliente || null,
-      tipo_evento: leadPayload.tipo_evento || leadPayload.tipoEvento || null,
-      data_evento: leadPayload.data_evento || leadPayload.dataEvento || null,
-      cidade_evento: leadPayload.cidade_evento || leadPayload.cidadeEvento || null,
-      // total_value (banco) <- valor_total (frontend)
-      total_value: leadPayload.valor_total || leadPayload.valorTotal || 0,
-      // orcamento_detalhes (banco) <- orcamento_detalhe (frontend)
-      orcamento_detalhes: leadPayload.orcamento_detalhe || leadPayload.orcamentoDetalhe || {},
-      url_origem: leadPayload.url_origem || null,
-      origem: leadPayload.origem || 'web',
-      session_id: leadPayload.session_id || null,
-      user_agent: leadPayload.user_agent || null,
-      tempo_preenchimento_segundos: leadPayload.tempo_preenchimento_segundos || null,
-      status: leadPayload.status || 'novo',
-      // Campos LGPD
-      lgpd_consent_timestamp: leadPayload.lgpd_consent_timestamp || null,
-      lgpd_consent_text: leadPayload.lgpd_consent_text || null,
+      template_id: templateId,
+      user_id: userId,
+      nome_cliente: formData.nome_cliente,
+      email_cliente: formData.email_cliente,
+      telefone_cliente: formData.telefone_cliente,
+      dados_formulario: formData,
+      orcamento_detalhe: orcamentoDetalhe,
+      valor_total: valorTotal,
+      status: 'novo',
     };
 
     // Inserir os dados na tabela 'leads'
-    const { data, error } = await supabaseAdmin
+    const { data: newLead, error: insertError } = await supabaseAdmin
       .from('leads')
       .insert(leadData)
       .select()
       .single();
 
-    if (error) {
-      // Se houver um erro no banco de dados (ex: tipo de dado errado), ele será lançado aqui.
-      console.error('Erro do Supabase Admin ao criar lead:', error);
-      throw error;
-    }
+    if (insertError) throw insertError;
 
     // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
-    if (data) {
+    if (newLead) {
       const notificationPayload = {
-        user_id: leadPayload.user_id, // O ID do fotógrafo
+        user_id: userId, // O ID do fotógrafo
         type: 'new_lead',
-        message: `Você recebeu um novo lead de ${leadPayload.nome_cliente || leadPayload.nomeCliente || 'um cliente'}!`,
-        related_id: data.id, // ID do lead recém-criado
+        message: `Você recebeu um novo lead de ${formData.nome_cliente || 'um cliente'}!`,
+        related_id: newLead.id, // ID do lead recém-criado
         link: '/dashboard/leads', // Link para a página de leads
       };
 
@@ -84,17 +98,13 @@ serve(async (req) => {
         .from('notifications')
         .insert(notificationPayload);
 
-      if (notificationError) {
-        // Log do erro de notificação, mas não interrompe o fluxo.
-        // O lead foi criado, que é o mais importante.
-        console.error('Erro ao criar notificação:', notificationError);
-      }
+      if (notificationError) console.error('Erro ao criar notificação (não fatal):', notificationError);
     }
 
     // Retornar os dados do lead salvo com sucesso
-    return new Response(JSON.stringify({ lead: data }), {
+    return new Response(JSON.stringify(newLead), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
+      status: 201, // 201 Created
     });
 
   } catch (err) {
@@ -102,7 +112,7 @@ serve(async (req) => {
     console.error('Erro na Edge Function:', err);
     return new Response(String(err?.message ?? err), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     });
   }
 });

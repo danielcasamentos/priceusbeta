@@ -1272,45 +1272,44 @@ export function QuotePage() {
       // dando tempo para a UI (modal) renderizar sem ser bloqueada.
       setTimeout(async () => {
         // Limpa o orçamento salvo no navegador após o envio bem-sucedido
-        if (storageKey) {
-          localStorage.removeItem(storageKey);
-          console.log('✅ [setTimeout] Orçamento salvo no navegador foi limpo.');
-        }
-
         try {
           console.log('🚀 [setTimeout] Iniciando salvamento do lead em segundo plano...');
-          const { data: leadData, error } = await saveFinalLead({
+
+          // 🔥 CORREÇÃO CRÍTICA DO PAYLOAD
+          const payload = {
             templateId: templateRef.current.id,
             userId: templateRef.current.user_id,
             formData: { ...formData, ...camposExtrasData, data_evento: dataEvento || null, cidade_evento: cidadeSelecionada || null, tipo_evento: templateRef.current.nome_template || null },
-            orcamentoDetalhe: { 
-              // 🔥 CORREÇÃO: Converter objeto de produtos para Array [{produto_id, quantidade}]
-              produtos: Object.entries(selectedProdutos).map(([id, qtd]) => ({
-                produto_id: id,
-                quantidade: qtd
+            orcamentoDetalhe: {
+              // O objeto 'selectedProdutos' é convertido para um array, que é o que a Edge Function espera.
+              produtos: Object.entries(selectedProdutos).map(([produto_id, quantidade]) => ({
+                produto_id,
+                quantidade,
               })),
               forma_pagamento_id: selectedFormaPagamento,
               priceBreakdown: getPriceBreakdown(),
-              sistema_sazonal_ativo: templateRef.current?.sistema_sazonal_ativo,
-              sistema_geografico_ativo: templateRef.current?.sistema_geografico_ativo,
-              ocultar_valores_intermediarios: templateRef.current?.ocultar_valores_intermediarios,
             },
             valorTotal: calculateTotal(),
-          });
+          };
 
-          // 🔥 CORREÇÃO: Verificar se leadData é válido
+          const { lead: leadData, error } = await saveFinalLead(payload);
+
+          // O hook agora retorna um objeto { lead, error }.
           if (error || !leadData) {
-            console.error('❌ [setTimeout] Erro ao salvar lead em segundo plano:', error);
-            // Não notificamos o usuário com um alert() para não ser intrusivo.
-            // O erro já foi logado para depuração.
+            console.error('❌ [setTimeout] Falha ao salvar o lead. A resposta foi vazia ou continha um erro. Erro retornado:', error);
             return;
           }
 
           console.log('✅ [setTimeout] Lead salvo com sucesso:', leadData);
-          
-          // 🔥 CORREÇÃO: O ID do lead retornado pela função `saveFinalLead` está dentro de um array.
-          const leadId = leadData.id || (Array.isArray(leadData) && leadData[0]?.id);
-          
+
+          // Limpa o orçamento do navegador APENAS se o lead foi salvo com sucesso.
+          if (storageKey) {
+            localStorage.removeItem(storageKey);
+            console.log('✅ [setTimeout] Orçamento salvo no navegador foi limpo.');
+          }
+
+          const leadId = leadData.id;
+
           if (leadId) { // A notificação só será criada se o leadId for encontrado.
             console.log('🔔 [QuotePage] Tentando criar notificação para o lead ID:', leadId);
             // Tenta criar a notificação após salvar o lead
@@ -1329,7 +1328,7 @@ export function QuotePage() {
           }
         } catch (err) {
           // Captura erros da chamada `saveFinalLead` ou da notificação
-          console.error('❌ [setTimeout] Erro inesperado no processo de salvamento em segundo plano:', err);
+          console.error('❌ [setTimeout] Erro capturado no bloco CATCH da QuotePage:', err);
         }
       }, 500); // Delay de 500ms para garantir a renderização do modal
 

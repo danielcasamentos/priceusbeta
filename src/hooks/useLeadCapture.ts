@@ -124,7 +124,17 @@ export function useLeadCapture() {
       clearTimeout(saveTimeoutRef.current);
     }
     try {
-      const lead = await autoSaveLead(data, 'novo'); // Aguarda o resultado do autoSaveLead
+      // 🔥 CORREÇÃO: Invoca a Edge Function diretamente com o payload aninhado correto.
+      // Isso evita a re-mapeamento incorreto que acontecia dentro de `autoSaveLead`.
+      console.log('🚀 Invocando a Edge Function "create-lead" para lead final...');
+      const { data: lead, error: invokeError } = await supabase.functions.invoke('create-lead', {
+        body: data, // 'data' já é o payload completo e correto vindo da QuotePage
+      });
+
+      if (invokeError) {
+        throw invokeError;
+      }
+
       lastSaveRef.current = ''; // Reseta para permitir novas capturas
       return { lead, error: null };
     } catch (error) {
