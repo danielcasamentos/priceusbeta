@@ -67,7 +67,8 @@ export function useLeadsManager(userId: string) {
     }
   }, [userId, fetchLeads]);
 
-  // Real-time subscription for new leads
+  // 🔥 MELHORIA: Inscrição em tempo real para QUALQUER mudança nos leads.
+  // Isso garante que a UI reflita inserções, atualizações (ex: mudança de status) e exclusões.
   useEffect(() => {
     if (!userId) return;
 
@@ -76,28 +77,16 @@ export function useLeadsManager(userId: string) {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // Ouve todos os eventos: INSERT, UPDATE, DELETE
           schema: 'public',
           table: 'leads',
           filter: `user_id=eq.${userId}`,
         },
-        async (payload) => {
-          console.log('Real-time: Novo lead recebido!', payload.new);
-          // The payload contains the new lead, but not the joined `templates.nome_template`.
-          // We need to fetch the full lead details to display it correctly.
-          const { data: newLeadDetails, error: fetchError } = await supabase
-            .from('leads')
-            .select(
-              `id, created_at, nome_cliente, telefone_cliente, email_cliente, valor_total, status, template_id, templates (nome_template)`
-            )
-            .eq('id', payload.new.id)
-            .single();
-
-          if (fetchError) {
-            console.error('Erro ao buscar detalhes do novo lead em tempo real:', fetchError);
-          } else if (newLeadDetails) {
-            setLeads((prevLeads) => [newLeadDetails, ...prevLeads]);
-          }
+        (payload) => {
+          console.log('Real-time: Mudança nos leads detectada!', payload);
+          // A abordagem mais simples e robusta é recarregar a lista.
+          // Isso garante que os filtros e a ordenação sejam reaplicados corretamente.
+          fetchLeads();
         }
       )
       .subscribe();
@@ -105,7 +94,7 @@ export function useLeadsManager(userId: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, fetchLeads]); // Adicionado fetchLeads ao array de dependências
 
   const deleteLeads = async (ids: string[]): Promise<boolean> => {
     if (ids.length === 0) return false;
