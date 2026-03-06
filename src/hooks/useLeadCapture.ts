@@ -124,11 +124,29 @@ export function useLeadCapture() {
       clearTimeout(saveTimeoutRef.current);
     }
     try {
-      // 🔥 CORREÇÃO: Invoca a Edge Function diretamente com o payload aninhado correto.
-      // Isso evita a re-mapeamento incorreto que acontecia dentro de `autoSaveLead`.
+      // 🔥 CORREÇÃO: O payload deve ser "achatado" (flat) para corresponder à Edge Function existente.
+      // A função `autoSaveLead` já tem uma lógica parecida, vamos adaptá-la aqui para o lead final.
       console.log('🚀 Invocando a Edge Function "create-lead" para lead final...');
+      
+      const tempoPreenchimento = Math.floor((Date.now() - startTime) / 1000);
+      const flatPayload = {
+        template_id: data.templateId,
+        user_id: data.userId,
+        nome_cliente: data.formData?.nome_cliente,
+        email_cliente: data.formData?.email_cliente,
+        telefone_cliente: data.formData?.telefone_cliente,
+        valor_total: data.valorTotal,
+        orcamento_detalhe: data.orcamentoDetalhe,
+        status: 'novo', // Status final para um lead completo
+        // Campos de tracking que a função antiga também pode usar
+        url_origem: window.location.href,
+        session_id: sessionId,
+        user_agent: navigator.userAgent,
+        tempo_preenchimento_segundos: tempoPreenchimento,
+      };
+
       const { data: lead, error: invokeError } = await supabase.functions.invoke('create-lead', {
-        body: data, // 'data' já é o payload completo e correto vindo da QuotePage
+        body: flatPayload,
       });
 
       if (invokeError) {
