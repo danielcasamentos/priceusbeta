@@ -46,26 +46,18 @@ export function useLeadCapture() {
 
     const tempoPreenchimento = Math.floor((Date.now() - startTime) / 1000);
 
+    // 🔥 CORREÇÃO: Payload ajustado para bater com o Zod Schema da Edge Function (camelCase e aninhado)
     const leadPayload = {
-      template_id: data.templateId,
-      user_id: data.userId,
-      nome_cliente: data.formData?.nome_cliente || data.formData?.nomeCliente || null,
-      email_cliente: data.formData?.email_cliente || data.formData?.emailCliente || null,
-      telefone_cliente: data.formData?.telefone_cliente || data.formData?.telefoneCliente || null,
-      tipo_evento: data.formData?.tipo_evento || data.formData?.tipoEvento || null,
-      data_evento: data.formData?.data_evento || data.formData?.dataEvento || null,
-      cidade_evento: data.formData?.cidade_evento || data.formData?.cidadeEvento || null,
-      valor_total: data.valorTotal || 0,
-      orcamento_detalhe: data.orcamentoDetalhe || data,
-      url_origem: window.location.href,
+      templateId: data.templateId,
+      userId: data.userId,
+      formData: data.formData || {},
+      orcamentoDetalhe: data.orcamentoDetalhe || {},
+      valorTotal: data.valorTotal || 0,
       status: status,
-      origem: 'web',
-      session_id: sessionId,
-      user_agent: navigator.userAgent,
-      tempo_preenchimento_segundos: tempoPreenchimento,
-      // 🔒 Dados de consentimento LGPD
-      lgpd_consent_timestamp: data.lgpdConsent?.lgpd_consent_timestamp || null,
-      lgpd_consent_text: data.lgpdConsent?.lgpd_consent_text || null,
+      sessionId: sessionId,
+      urlOrigem: window.location.href,
+      userAgent: navigator.userAgent,
+      tempoPreenchimento: tempoPreenchimento,
     };
 
     try {
@@ -124,29 +116,26 @@ export function useLeadCapture() {
       clearTimeout(saveTimeoutRef.current);
     }
     try {
-      // 🔥 CORREÇÃO: O payload deve ser "achatado" (flat) para corresponder à Edge Function existente.
-      // A função `autoSaveLead` já tem uma lógica parecida, vamos adaptá-la aqui para o lead final.
       console.log('🚀 Invocando a Edge Function "create-lead" para lead final...');
       
       const tempoPreenchimento = Math.floor((Date.now() - startTime) / 1000);
-      const flatPayload = {
-        template_id: data.templateId,
-        user_id: data.userId,
-        nome_cliente: data.formData?.nome_cliente,
-        email_cliente: data.formData?.email_cliente,
-        telefone_cliente: data.formData?.telefone_cliente,
-        valor_total: data.valorTotal,
-        orcamento_detalhe: data.orcamentoDetalhe,
-        status: 'novo', // Status final para um lead completo
-        // Campos de tracking que a função antiga também pode usar
-        url_origem: window.location.href,
-        session_id: sessionId,
-        user_agent: navigator.userAgent,
-        tempo_preenchimento_segundos: tempoPreenchimento,
+      
+      // 🔥 CORREÇÃO: Enviando payload aninhado correto (camelCase)
+      const payload = {
+        templateId: data.templateId,
+        userId: data.userId,
+        formData: data.formData,
+        orcamentoDetalhe: data.orcamentoDetalhe,
+        valorTotal: data.valorTotal,
+        status: 'novo',
+        sessionId: sessionId,
+        urlOrigem: window.location.href,
+        userAgent: navigator.userAgent,
+        tempoPreenchimento: tempoPreenchimento,
       };
 
       const { data: lead, error: invokeError } = await supabase.functions.invoke('create-lead', {
-        body: flatPayload,
+        body: payload,
       });
 
       if (invokeError) {

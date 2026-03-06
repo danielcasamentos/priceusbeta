@@ -40,6 +40,12 @@ const leadPayloadSchema = z.object({
     priceBreakdown: z.record(z.any()).optional(), // Aceita o breakdown, mas não valida profundamente
   }).passthrough(),
   valorTotal: z.number(),
+  // ✅ Novos campos opcionais para rastreamento e status
+  status: z.string().optional(),
+  sessionId: z.string().optional(),
+  urlOrigem: z.string().optional(),
+  userAgent: z.string().optional(),
+  tempoPreenchimento: z.number().optional(),
 })
 
 serve(async (req) => {
@@ -63,7 +69,7 @@ serve(async (req) => {
     }
 
     // Se a validação passou, usamos os dados seguros.
-    const { templateId, userId, formData, orcamentoDetalhe, valorTotal } = validationResult.data
+    const { templateId, userId, formData, orcamentoDetalhe, valorTotal, status, sessionId, urlOrigem, userAgent, tempoPreenchimento } = validationResult.data
 
     // 🔒 PONTO CRÍTICO: Criar um cliente Supabase com a service_role.
     const supabaseAdmin = createClient(
@@ -81,7 +87,11 @@ serve(async (req) => {
       dados_formulario: formData,
       orcamento_detalhe: orcamentoDetalhe,
       valor_total: valorTotal,
-      status: 'novo',
+      status: status || 'novo', // Usa o status enviado ou 'novo' como padrão
+      session_id: sessionId,
+      url_origem: urlOrigem,
+      user_agent: userAgent,
+      tempo_preenchimento_segundos: tempoPreenchimento,
     }
 
     // Inserir os dados na tabela 'leads'
