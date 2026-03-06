@@ -67,6 +67,46 @@ export function useLeadsManager(userId: string) {
     }
   }, [userId, fetchLeads]);
 
+  // Real-time subscription for new leads
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`leads-updates-for-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'leads',
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          console.log('Real-time: Novo lead recebido!', payload.new);
+          // The payload contains the new lead, but not the joined `templates.nome_template`.
+          // We need to fetch the full lead details to display it correctly.
+          const { data: newLeadDetails, error: fetchError } = await supabase
+            .from('leads')
+            .select(
+              `id, created_at, nome_cliente, telefone_cliente, email_cliente, valor_total, status, template_id, templates (nome_template)`
+            )
+            .eq('id', payload.new.id)
+            .single();
+
+          if (fetchError) {
+            console.error('Erro ao buscar detalhes do novo lead em tempo real:', fetchError);
+          } else if (newLeadDetails) {
+            setLeads((prevLeads) => [newLeadDetails, ...prevLeads]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const deleteLeads = async (ids: string[]): Promise<boolean> => {
     if (ids.length === 0) return false;
 
