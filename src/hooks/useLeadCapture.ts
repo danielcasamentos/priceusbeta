@@ -46,11 +46,20 @@ export function useLeadCapture() {
 
     const tempoPreenchimento = Math.floor((Date.now() - startTime) / 1000);
 
-    // 🔥 CORREÇÃO: Payload ajustado para bater com o Zod Schema da Edge Function (camelCase e aninhado)
+    // 🔥 CORREÇÃO: Payload ajustado para bater com o Zod Schema da Edge Function
+    // Garante que os dados do formulário estejam corretamente formatados
     const leadPayload = {
       templateId: data.templateId,
       userId: data.userId,
-      formData: data.formData || {},
+      formData: {
+        nome_cliente: data.formData?.nome_cliente || data.formData?.nomeCliente || '',
+        email_cliente: data.formData?.email_cliente || data.formData?.emailCliente || '',
+        telefone_cliente: data.formData?.telefone_cliente || data.formData?.telefoneCliente || '',
+        data_evento: data.formData?.data_evento || data.formData?.dataEvento || null,
+        cidade_evento: data.formData?.cidade_evento || data.formData?.cidadeEvento || null,
+        tipo_evento: data.formData?.tipo_evento || data.formData?.tipoEvento || null,
+        ...data.formData,
+      },
       orcamentoDetalhe: data.orcamentoDetalhe || {},
       valorTotal: data.valorTotal || 0,
       status: status,
@@ -120,11 +129,19 @@ export function useLeadCapture() {
       
       const tempoPreenchimento = Math.floor((Date.now() - startTime) / 1000);
       
-      // 🔥 CORREÇÃO: Enviando payload aninhado correto (camelCase)
+      // 🔥 CORREÇÃO: Enviando payload corretamente formatado para a Edge Function
       const payload = {
         templateId: data.templateId,
         userId: data.userId,
-        formData: data.formData,
+        formData: {
+          nome_cliente: data.formData?.nome_cliente || data.formData?.nomeCliente || '',
+          email_cliente: data.formData?.email_cliente || data.formData?.emailCliente || '',
+          telefone_cliente: data.formData?.telefone_cliente || data.formData?.telefoneCliente || '',
+          data_evento: data.formData?.data_evento || data.formData?.dataEvento || null,
+          cidade_evento: data.formData?.cidade_evento || data.formData?.cidadeEvento || null,
+          tipo_evento: data.formData?.tipo_evento || data.formData?.tipoEvento || null,
+          ...data.formData,
+        },
         orcamentoDetalhe: data.orcamentoDetalhe,
         valorTotal: data.valorTotal,
         status: 'novo',

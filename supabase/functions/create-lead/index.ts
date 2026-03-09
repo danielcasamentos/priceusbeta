@@ -10,24 +10,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// ✅ PASSO 1: Definir o schema de validação com Zod.
-// Este schema deve espelhar EXATAMENTE o payload enviado pelo frontend.
-const leadPayloadSchema = z.object({
+// ✅ Schema para validação de AUTO-SAVE (produtos opcionais)
+const leadPayloadSchemaAutoSave = z.object({
   templateId: z.string().uuid(),
   userId: z.string().uuid(),
-  formData: z
-    .record(z.any())
-    .pipe(
-      z
-        .object({
-          nome_cliente: z.string().min(1, { message: 'Nome do cliente é obrigatório' }),
-          email_cliente: z.string().email({ message: 'Email do cliente inválido' }),
-          telefone_cliente: z.string().optional().nullable(),
-        })
-        .passthrough()
-    ),
+  formData: z.record(z.any()).optional().default({}),
+  orcamentoDetalhe: z.record(z.any()).optional().default({}),
+  valorTotal: z.number().optional().default(0),
+  status: z.string().optional().default('abandonado'),
+  sessionId: z.string().optional(),
+  urlOrigem: z.string().optional(),
+  userAgent: z.string().optional(),
+  tempoPreenchimento: z.number().optional(),
+})
+
+// ✅ Schema para validação FINAL (produtos obrigatórios)
+const leadPayloadSchemaFinal = z.object({
+  templateId: z.string().uuid(),
+  userId: z.string().uuid(),
+  formData: z.record(z.any()),
   orcamentoDetalhe: z.object({
-    // 🔥 PONTO CRÍTICO: Espera um ARRAY de produtos, não um objeto.
     produtos: z
       .array(
         z.object({
@@ -37,10 +39,9 @@ const leadPayloadSchema = z.object({
       )
       .min(1, { message: 'Pelo menos um produto deve ser selecionado' }),
     forma_pagamento_id: z.string().uuid().optional().nullable(),
-    priceBreakdown: z.record(z.any()).optional(), // Aceita o breakdown, mas não valida profundamente
-  }).passthrough(),
+    priceBreakdown: z.record(z.any()).optional(),
+  }),
   valorTotal: z.number(),
-  // ✅ Novos campos opcionais para rastreamento e status
   status: z.string().optional(),
   sessionId: z.string().optional(),
   urlOrigem: z.string().optional(),
@@ -56,18 +57,38 @@ serve(async (req) => {
 
   try {
     const payload = await req.json()
+    
+    // 📝 Log do payload recebido para debug
+    console.log('📥 Payload recebido:', JSON.stringify(payload, null, 2))
 
-    // ✅ PASSO 2: Validar o payload recebido.
-    const validationResult = leadPayloadSchema.safeParse(payload)
+    // ✅ Detectar se é auto-save ou save final
+    // Auto-save tem status 'abandonado' ou não tem produtos preenchidos
+    const isAutoSave = payload.status === 'abandonado' || !payload.orcamentoDetalhe?.produtos || payload.orcamentoDetalhe.produtos.length === 0
+    
+    // ✅ PASSO 2: Validar o payload recebido usando o schema apropriado
+    let validationResult
+    if (isAutoSave) {
+      console.log('🔄 Usando schema de AUTO-SAVE (produtos opcionais)')
+      validationResult = leadPayloadSchemaAutoSave.safeParse(payload)
+    } else {
+      console.log('🔄 Usando schema FINAL (produtos obrigatórios)')
+      validationResult = leadPayloadSchemaFinal.safeParse(payload)
+    }
 
     if (!validationResult.success) {
-      console.error('Erro de Validação Zod:', validationResult.error.flatten())
-      return new Response(JSON.stringify({ error: 'Payload inválido', details: validationResult.error.flatten() }), {
+      console.error('❌ Erro de Validação Zod:', JSON.stringify(validationResult.error.flatten(), null, 2))
+      return new Response(JSON.stringify({ 
+        error: 'Payload inválido', 
+        details: validationResult.error.flatten(),
+        isAutoSave 
+      }), {
         status: 400, // Retorna 400 Bad Request
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
+    console.log('✅ Payload validado com sucesso')
+    
     // Se a validação passou, usamos os dados seguros.
     const { templateId, userId, formData, orcamentoDetalhe, valorTotal, status, sessionId, urlOrigem, userAgent, tempoPreenchimento } = validationResult.data
 
@@ -78,12 +99,20 @@ serve(async (req) => {
     )
 
     // ✅ PASSO 3: Preparar o objeto para ser inserido na tabela 'leads'
+    // Normalizar os dados do formulário para usar os nomes corretos dos campos
+    const nomeCliente = formData?.nome_cliente || formData?.nomeCliente || formData?.name || ''
+    const emailCliente = formData?.email_cliente || formData?.emailCliente || formData?.email || ''
+    const telefoneCliente = formData?.telefone_cliente || formData?.telefoneCliente || formData?.phone || ''
+    const dataEvento = formData?.data_evento || formData?.dataEvento || null
+    const cidadeEvento = formData?.cidade_evento || formData?.cidadeEvento || formData?.city || ''
+    const tipoEvento = formData?.tipo_evento || formData?.tipoEvento || ''
+
     const leadData = {
       template_id: templateId,
       user_id: userId,
-      nome_cliente: formData.nome_cliente,
-      email_cliente: formData.email_cliente,
-      telefone_cliente: formData.telefone_cliente,
+      nome_cliente: nomeCliente,
+      email_cliente: emailCliente,
+      telefone_cliente: telefoneCliente,
       dados_formulario: formData,
       orcamento_detalhe: orcamentoDetalhe,
       valor_total: valorTotal,
@@ -92,12 +121,67 @@ serve(async (req) => {
       url_origem: urlOrigem,
       user_agent: userAgent,
       tempo_preenchimento_segundos: tempoPreenchimento,
+      data_evento: dataEvento,
+      cidade_evento: cidadeEvento,
+      tipo_evento: tipoEvento,
     }
 
-    // Inserir os dados na tabela 'leads'
-    const { data: newLead, error: insertError } = await supabaseAdmin.from('leads').insert(leadData).select().single()
+    console.log('📤 Preparando dados do lead:', JSON.stringify(leadData, null, 2))
 
-    if (insertError) throw insertError
+    // Verificar se já existe um lead com o mesmo session_id para evitar duplicatas
+    let newLead = null
+    let insertError = null
+    
+    if (sessionId) {
+      // Primeiro tenta encontrar um lead existente com o mesmo session_id
+      const { data: existingLead } = await supabaseAdmin
+        .from('leads')
+        .select('id')
+        .eq('session_id', sessionId)
+        .maybeSingle()
+      
+      if (existingLead) {
+        console.log('🔄 Lead existente encontrado, atualizando...')
+        // Atualiza o lead existente
+        const { data: updatedLead, error: updateError } = await supabaseAdmin
+          .from('leads')
+          .update(leadData)
+          .eq('id', existingLead.id)
+          .select()
+          .single()
+        
+        newLead = updatedLead
+        insertError = updateError
+      } else {
+        // Insere um novo lead
+        console.log('🆕 Criando novo lead...')
+        const { data: insertedLead, error: insertErr } = await supabaseAdmin
+          .from('leads')
+          .insert(leadData)
+          .select()
+          .single()
+        
+        newLead = insertedLead
+        insertError = insertErr
+      }
+    } else {
+      // Se não tem session_id, insere normalmente
+      const { data: insertedLead, error: insertErr } = await supabaseAdmin
+        .from('leads')
+        .insert(leadData)
+        .select()
+        .single()
+      
+      newLead = insertedLead
+      insertError = insertErr
+    }
+
+    if (insertError) {
+      console.error('❌ Erro ao salvar lead:', JSON.stringify(insertError, null, 2))
+      throw insertError
+    }
+    
+    console.log('✅ Lead salvo com sucesso:', newLead?.id)
 
     // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
     if (newLead) {
