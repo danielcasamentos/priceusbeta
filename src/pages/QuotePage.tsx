@@ -1284,7 +1284,7 @@ export function QuotePage() {
               // O objeto 'selectedProdutos' é convertido para um array, que é o que a Edge Function espera.
               produtos: Object.entries(selectedProdutos).map(([produto_id, quantidade]) => ({
                 produto_id,
-                quantidade,
+                quantidade: Number(quantidade),
               })),
               forma_pagamento_id: selectedFormaPagamento,
               priceBreakdown: getPriceBreakdown(),

@@ -10,9 +10,9 @@ export interface Lead {
   valor_total: number;
   status: 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado';
   template_id: string;
-  templates: {
+  templates?: {
     nome_template: string;
-  };
+  } | null;
 }
 
 export function useLeadsManager(userId: string) {

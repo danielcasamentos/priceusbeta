@@ -122,9 +122,16 @@ serve(async (req) => {
   } catch (err) {
     // Capturar qualquer outro erro e retornar uma resposta de erro
     console.error('Erro na Edge Function:', err)
-    return new Response(String(err?.message ?? err), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    })
+    return new Response(
+      JSON.stringify({
+        message: String(err?.message ?? err),
+        stack: err?.stack,
+        error: err,
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      }
+    )
   }
 })
