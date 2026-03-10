@@ -25,6 +25,7 @@ export function useNotifications(user: User | null) {
     if (!userId) return;
     setLoading(true);
     try {
+      // Buscar notificações - tenta usar is_read, se não existir usa read
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -33,7 +34,21 @@ export function useNotifications(user: User | null) {
         .limit(50);
 
       if (error) throw error;
-      setNotifications(data || []);
+      
+      // Normalizar os dados: garantir que is_read e link existam
+      const normalizedNotifications = (data || []).map(n => ({
+        ...n,
+        // Se is_read não existir, usa read (compatibilidade com banco antigo)
+        is_read: n.is_read ?? n.read ?? false,
+        // Garantir que link exista
+        link: n.link || null,
+        // Garantir que related_id exista
+        related_id: n.related_id || null,
+        // Se title não existir, usa message como título
+        title: n.title || n.message || '',
+      }));
+      
+      setNotifications(normalizedNotifications);
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
     } finally {
@@ -98,7 +113,20 @@ export function useNotifications(user: User | null) {
   const markAsRead = useCallback(async (id: string) => {
     if (id === 'trial-reminder' || !userId) return;
     try {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      // Tenta atualizar is_read, se não funcionar tenta read (compatibilidade)
+      const { error: errorIsRead } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', id);
+      
+      if (errorIsRead) {
+        // Se is_read não existir, tenta usar read
+        console.log('is_read não encontrado, tentando usar read...');
+        await supabase
+          .from('notifications')
+          .update({ read: true })
+          .eq('id', id);
+      }
       // A UI será atualizada pelo listener do Supabase
     } catch (error) {
       console.error('Erro ao marcar como lida:', error);
@@ -108,7 +136,22 @@ export function useNotifications(user: User | null) {
   const markAllAsRead = useCallback(async () => {
     if (!userId) return;
     try {
-      await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
+      // Tenta atualizar is_read, se não funcionar tenta read (compatibilidade)
+      const { error: errorIsRead } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', userId)
+        .eq('is_read', false);
+      
+      if (errorIsRead) {
+        // Se is_read não existir, tenta usar read
+        console.log('is_read não encontrado, tentando usar read...');
+        await supabase
+          .from('notifications')
+          .update({ read: true })
+          .eq('user_id', userId)
+          .eq('read', false);
+      }
       // A UI será atualizada pelo listener do Supabase
     } catch (error) {
       console.error('Erro ao marcar todas como lidas:', error);

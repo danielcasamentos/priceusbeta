@@ -183,21 +183,10 @@ serve(async (req) => {
     
     console.log('✅ Lead salvo com sucesso:', newLead?.id)
 
-    // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
-    if (newLead) {
-      const notificationPayload = {
-        user_id: userId, // O ID do fotógrafo
-        type: 'new_lead',
-        message: `Você recebeu um novo lead de ${formData.nome_cliente || 'um cliente'}!`,
-        related_id: newLead.id, // ID do lead recém-criado
-        link: '/dashboard/leads', // Link para a página de leads
-      }
-
-      const { error: notificationError } = await supabaseAdmin.from('notifications').insert(notificationPayload)
-
-      if (notificationError) console.error('Erro ao criar notificação (não fatal):', notificationError)
-    }
-
+    // ✅ ETAPA 2: Retornar os dados do lead salvo com sucesso
+    // NOTIFICAÇÃO REMOVIDA: Agora é criada pelo frontend (LeadsManager) via realtime
+    // Isso evita duplicação e garante que a notificação seja criada apenas uma vez
+    
     // Retornar os dados do lead salvo com sucesso
     return new Response(JSON.stringify(newLead), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

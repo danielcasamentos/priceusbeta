@@ -25,6 +25,8 @@ import { CompanyInsights } from '../components/company/CompanyInsights'; // Adic
 import { BusinessSettingsEditor } from '../components/BusinessSettingsEditor'; // Adicionado
 import NotificationCenter from '../components/NotificationCenter'; // Import NotificationCenter
 import { TawkToChat } from '../components/TawkToChat';
+import { BottomNavigation } from '../components/BottomNavigation';
+import { useDeviceType } from '../hooks/useDeviceType';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -32,6 +34,9 @@ export function DashboardPage() {
   const params = useParams();
   const trialStatus = useTrialStatus(user?.id);
   const planLimits = usePlanLimits();
+  const { isMobile } = useDeviceType();
+  
+  console.log('[DashboardPage] Tipo de dispositivo:', { isMobile });
   
   // Captura a página da URL ou usa 'templates' como padrão
   const urlPage = params.page;
@@ -126,13 +131,17 @@ export function DashboardPage() {
       <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
         <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <div className="lg:hidden flex items-center gap-3">
+            {/* Botão hamburger só aparece em desktop (não em mobile) */}
+            {!isMobile && (
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+            )}
+            {/* Logo e título - visível em todos os tamanhos */}
+            <div className="flex items-center gap-3">
               <img
                 src="/Logo Price Us.png"
                 alt="Price Us"
@@ -167,19 +176,23 @@ export function DashboardPage() {
         currentPage={currentPage}
         onPageChange={handlePageChange}
         userEmail={user.email}
-        isMobile={true}
+        // Sidebar mobile só aparece quando NÃO é mobile (para não conflitar com BottomNavigation)
+        isMobile={!isMobile}
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
       />
 
       <div className="flex">
-        <Sidebar
-          currentPage={currentPage}
-          onPageChange={handlePageChange}
-          userEmail={user.email}
-        />
+        {/* Sidebar desktop - só aparece em desktop */}
+        {!isMobile && (
+          <Sidebar
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            userEmail={user.email}
+          />
+        )}
 
-        <main className="flex-1 overflow-y-auto">
+        <main className={`flex-1 overflow-y-auto ${isMobile ? 'pb-4' : ''}`}>
           {/* Renderiza o Tawk.to condicionalmente */}
           {showTawkTo && <TawkToChat />}
 
@@ -308,7 +321,15 @@ export function DashboardPage() {
         </main>
       </div> {/* Esta div fecha o <div className="flex"> */}
 
-      <footer className="bg-white border-t border-gray-200">
+      {/* Menu inferior para dispositivos móveis */}
+      {isMobile && (
+        <BottomNavigation 
+          currentPage={currentPage} 
+          onPageChange={handlePageChange} 
+        />
+      )}
+
+      <footer className={`bg-white border-t border-gray-200 ${isMobile ? 'hidden' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-gray-500">
           <p>© 2025 Price Us. Sistema de Orçamentos Inteligente.</p>
         </div>

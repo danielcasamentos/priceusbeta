@@ -220,7 +220,7 @@ export function LeadsManager({ userId }: { userId: string }) {
             .insert({
               user_id: userId,
               type: 'new_lead',
-              message: `Você recebeu um novo lead de ${newLead.nome_cliente || 'um cliente'}.`,
+              message: `Você recebeu um novo lead de ${newLead.nome_cliente || 'um cliente'}!`,
               link: '/dashboard?page=leads',
               related_id: newLead.id,
             })
@@ -236,7 +236,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, filter]);
+  }, [userId]); // Removido 'filter' das dependências para evitar recriação do canal realtime
 
   const loadCities = async () => {
     try {
