@@ -140,20 +140,22 @@ export function DashboardPage() {
                 <Menu className="w-6 h-6" />
               </button>
             )}
-            {/* Logo e título - visível em todos os tamanhos */}
-            <div className="flex items-center gap-3">
-              <img
-                src="/Logo Price Us.png"
-                alt="Price Us"
-                className="h-10 w-auto"
-              />
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Price Us</h1>
-                <p className="text-xs text-gray-600 hidden sm:block">
-                  {user?.email?.split('@')[0]}
-                </p>
+            {/* Logo e título - oculto em desktop (aparece na sidebar) */}
+            {isMobile && (
+              <div className="flex items-center gap-3">
+                <img
+                  src="/Logo Price Us.png"
+                  alt="Price Us"
+                  className="h-10 w-auto"
+                />
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Price Us</h1>
+                  <p className="text-xs text-gray-600 hidden sm:block">
+                    {user?.email?.split('@')[0]}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
