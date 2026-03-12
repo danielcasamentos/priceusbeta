@@ -71,12 +71,6 @@ export function ContractSignPage() {
       const leadData: LeadData = contract.lead_data_json || {};
       const currentClientData: ClientData = clientData;
 
-      console.log('=== DEBUG CONTRACT SIGN PAGE ===');
-      console.log('Lead Data:', leadData);
-      console.log('Client Data:', currentClientData);
-      console.log('Business Settings:', businessSettings);
-      console.log('Template Content:', template.content_text.substring(0, 200));
-
       const processed = replaceContractVariables(
         template.content_text,
         businessSettings,
@@ -84,7 +78,6 @@ export function ContractSignPage() {
         leadData
       );
 
-      console.log('Processed Content:', processed.substring(0, 500));
       setProcessedContent(processed);
     }
   }, [template, contract, businessSettings, clientData]);
