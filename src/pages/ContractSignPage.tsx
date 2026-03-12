@@ -66,27 +66,11 @@ export function ContractSignPage() {
     setIsInApp(isInAppBrowser());
   }, [token]);
 
+  // Removido useEffect processedContent temporariamente para debug
   useEffect(() => {
-    console.log('🔄 ContractSignPage useEffect processedContent disparado');
-    console.log('template:', !!template);
-    console.log('contract:', !!contract);
-    if (template && contract) {
-      const leadData = contract.lead_data_json || {};
-      const currentClientData = { ...clientData };
-
-      const processed = replaceContractVariables(
-        template.content_text,
-        businessSettings,
-        currentClientData,
-        leadData
-      );
-
-      console.log('✅ processedContent atualizado');
-      setProcessedContent(processed);
-    } else {
-      console.log('⏳ Aguardando template ou contract');
-    }
-  }, [template?.content_text, contract?.lead_data_json, businessSettings, clientData.nome_completo, clientData.documento]);
+    console.log('🔄 ContractSignPage load disparado');
+    loadContract();
+  }, [token]);
 
   const loadContract = async () => {
     if (!token) {
