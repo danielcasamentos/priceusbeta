@@ -377,7 +377,7 @@ export function ContractPreviewPage() {
               )}
               <div className="signature-line"></div>
               <p className="text-sm">{clientDataFromState?.nome_completo || 'Contratante'}</p>
-              <p className="text-sm">CPF: {clientDataFromState?.cpf}</p>
+              <p className="text-sm">{clientDataFromState?.cpf ? `CPF: ${clientDataFromState.cpf}` : clientDataFromState?.documento ? (cleanDocument(clientDataFromState.documento).length === 11 ? `CPF: ${clientDataFromState.documento}` : `CNPJ: ${clientDataFromState.documento}`) : 'Documento'}</p>
             </div>
           </div>
 
@@ -394,7 +394,9 @@ export function ContractPreviewPage() {
                 <p><strong>Endereço IP do Assinante:</strong> {clientIpFromState || 'Não registrado'}</p>
                 <p>
                   <strong>Assinado por:</strong> {clientDataFromState?.nome_completo || 'Contratante'}
-                  {clientDataFromState?.cpf && ` (CPF: ${clientDataFromState.cpf})`}
+{(clientDataFromState?.cpf || clientDataFromState?.documento) && ` (${
+  cleanDocument(clientDataFromState?.cpf || clientDataFromState?.documento as string).length === 11 ? 'CPF' : 'CNPJ'
+}: ${clientDataFromState?.cpf || clientDataFromState?.documento})`}
                 </p>
                 <p style={{ marginTop: '10pt', fontStyle: 'italic' }}>Este documento foi assinado eletronicamente através da plataforma PriceUs.</p>
               </div>
