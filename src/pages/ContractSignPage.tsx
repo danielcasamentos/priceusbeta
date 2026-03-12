@@ -67,6 +67,9 @@ export function ContractSignPage() {
   }, [token]);
 
   useEffect(() => {
+    console.log('🔄 ContractSignPage useEffect processedContent disparado');
+    console.log('template:', !!template);
+    console.log('contract:', !!contract);
     if (template && contract) {
       const leadData = contract.lead_data_json || {};
       const currentClientData = { ...clientData };
@@ -78,7 +81,10 @@ export function ContractSignPage() {
         leadData
       );
 
+      console.log('✅ processedContent atualizado');
       setProcessedContent(processed);
+    } else {
+      console.log('⏳ Aguardando template ou contract');
     }
   }, [template?.content_text, contract?.lead_data_json, businessSettings, clientData.nome_completo, clientData.documento]);
 
@@ -219,6 +225,7 @@ export function ContractSignPage() {
 
   const isCpf = (value: string) => cleanDocument(value).length === 11;
 
+  // Detecta tipo documento para mostrar/esconder RG
   // Detecta tipo documento para mostrar/esconder RG
   useEffect(() => {
     const cleaned = cleanDocument(clientData.documento);
