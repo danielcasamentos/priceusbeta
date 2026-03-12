@@ -68,8 +68,8 @@ export function ContractSignPage() {
 
   useEffect(() => {
     if (template && contract) {
-      const leadData: LeadData = contract.lead_data_json || {};
-      const currentClientData: ClientData = clientData;
+      const leadData = contract.lead_data_json || {};
+      const currentClientData = { ...clientData };
 
       const processed = replaceContractVariables(
         template.content_text,
@@ -80,7 +80,7 @@ export function ContractSignPage() {
 
       setProcessedContent(processed);
     }
-  }, [template, contract, businessSettings, clientData]);
+  }, [template?.content_text, contract?.lead_data_json, businessSettings, clientData.nome_completo, clientData.documento]);
 
   const loadContract = async () => {
     if (!token) {
