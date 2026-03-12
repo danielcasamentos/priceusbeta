@@ -36,7 +36,9 @@ export function ContractsManager({ userId }: { userId:string }) {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
+const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingIds, setDeletingIds] = useState(new Set<string>());
+
   const [statusFilter, setStatusFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState(0); // 0 representa "Todos os Anos"
@@ -99,6 +101,30 @@ export function ContractsManager({ userId }: { userId:string }) {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
+  };
+
+  const handleDeleteSingle = async (contractId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este contrato?')) {
+      return;
+    }
+
+    setDeletingIds(prev => new Set([...prev, contractId]));
+    try {
+      const { error } = await supabase.from('contracts').delete().eq('id', contractId);
+      if (error) throw error;
+      
+      setSelectedIds([]);
+      await loadContracts();
+    } catch (error) {
+      console.error('Erro ao excluir contrato:', error);
+      alert('Erro ao excluir contrato.');
+    } finally {
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(contractId);
+        return newSet;
+      });
+    }
   };
 
   const handleDeleteSelected = async () => {
@@ -183,11 +209,11 @@ export function ContractsManager({ userId }: { userId:string }) {
             {availableYears.map(y => <option key={y} value={y!}>{y}</option>)}
           </select>
           {selectedIds.length > 0 && (
-            <button
-              onClick={handleDeleteSelected}
-              disabled={isDeleting}
-              className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
-            >
+              <button
+                onClick={handleDeleteSelected}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
+              >
               {isDeleting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
@@ -276,10 +302,10 @@ export function ContractsManager({ userId }: { userId:string }) {
                       </button>
                       
                       <button
-                        title="Excluir"
-                        onClick={() => !isDeleting && handleDeleteSelected([contract.id])}
-                        className="text-red-600 hover:text-red-800"
-                        disabled={isDeleting}
+                        title="Excluir contrato"
+                        onClick={() => handleDeleteSingle(contract.id)}
+                        className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={deletingIds.has(contract.id)}
                       >
                         <Trash2 size={16} />
                       </button>
