@@ -5,7 +5,6 @@ import { ContractCanvas } from '../components/ContractCanvas';
 import { FileSignature, AlertTriangle, CheckCircle, Clock, ExternalLink, Smartphone } from 'lucide-react';
 import { replaceContractVariables, type BusinessSettings, type ClientData, type LeadData } from '../lib/contractVariables';
 import { isInAppBrowser } from '../lib/browserDetection';
-import { cleanDocument, formatDocument, isValidDocument, isCpf } from '../lib/documentUtils';
 
 interface Contract {
   id: string;
@@ -44,10 +43,10 @@ export function ContractSignPage() {
   const [signing, setSigning] = useState(false);
   const [isInApp, setIsInApp] = useState(false);
 
-  const [documentType, setDocumentType] = useState<'cpf' | 'cnpj'>('cpf');
   const [clientData, setClientData] = useState({
     nome_completo: '',
     documento: '',
+    rg: '',
     endereco_completo: '',
     cep: '',
     data_evento: '',
@@ -57,6 +56,7 @@ export function ContractSignPage() {
     horario_inicio: '',
     observacoes: '',
   });
+  const [showRg, setShowRg] = useState(false);
 
   const [signature, setSignature] = useState<string | null>(null);
   const [userSignature, setUserSignature] = useState<string | null>(null);
@@ -66,11 +66,28 @@ export function ContractSignPage() {
     setIsInApp(isInAppBrowser());
   }, [token]);
 
-  // Removido useEffect processedContent temporariamente para debug
   useEffect(() => {
-    console.log('🔄 ContractSignPage carregando contrato, token:', token);
-    loadContract();
-  }, [token]);
+    if (template && contract) {
+      const leadData: LeadData = contract.lead_data_json || {};
+      const currentClientData: ClientData = clientData;
+
+      console.log('=== DEBUG CONTRACT SIGN PAGE ===');
+      console.log('Lead Data:', leadData);
+      console.log('Client Data:', currentClientData);
+      console.log('Business Settings:', businessSettings);
+      console.log('Template Content:', template.content_text.substring(0, 200));
+
+      const processed = replaceContractVariables(
+        template.content_text,
+        businessSettings,
+        currentClientData,
+        leadData
+      );
+
+      console.log('Processed Content:', processed.substring(0, 500));
+      setProcessedContent(processed);
+    }
+  }, [template, contract, businessSettings, clientData]);
 
   const loadContract = async () => {
     if (!token) {
@@ -157,9 +174,58 @@ export function ContractSignPage() {
     );
   }
 
+  // Funções de validação CPF/CNPJ
+  const cleanDocument = (value: string) => value.replace(/\D/g, '');
 
+  const formatDocument = (value: string) => {
+    const cleaned = cleanDocument(value);
+    if (cleaned.length <= 11) {
+      // CPF: 000.000.000-00
+      return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    } else {
+      // CNPJ: 00.000.000/0000-00
+      return cleaned.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+  };
 
-  // Detecta tipo documento para mostrar/esconder RG
+  const isValidCpf = (str: string) => {
+    const cpf = cleanDocument(str);
+    if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+    let sum = 0, remainder;
+    for (let i = 0; i < 9; i++) sum += parseInt(cpf.charAt(i)) * (10 - i);
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cpf.charAt(9))) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(cpf.charAt(i)) * (11 - i);
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    return remainder === parseInt(cpf.charAt(10));
+  };
+
+  const isValidCnpj = (str: string) => {
+    const cnpj = cleanDocument(str);
+    if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+    const weights1 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    const weights2 = [5,4,3,2,9,8,7,6,5,4,3,2,1];
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += parseInt(cnpj.charAt(i)) * weights1[i];
+    let remainder = sum % 11;
+    let digit1 = remainder < 2 ? 0 : 11 - remainder;
+    sum = 0;
+    for (let i = 0; i < 13; i++) sum += parseInt(cnpj.charAt(i)) * weights2[i];
+    remainder = sum % 11;
+    let digit2 = remainder < 2 ? 0 : 11 - remainder;
+    return parseInt(cnpj.charAt(12)) === digit1 && parseInt(cnpj.charAt(13)) === digit2;
+  };
+
+  const isValidDocument = (value: string) => {
+    const cleaned = cleanDocument(value);
+    return cleaned.length === 11 ? isValidCpf(value) : cleaned.length === 14 ? isValidCnpj(value) : false;
+  };
+
+  const isCpf = (value: string) => cleanDocument(value).length === 11;
+
   // Detecta tipo documento para mostrar/esconder RG
   useEffect(() => {
     const cleaned = cleanDocument(clientData.documento);
@@ -173,8 +239,8 @@ export function ContractSignPage() {
       return;
     }
 
-    if (!clientData.nome_completo || !clientData.documento) {
-      alert('Preencha nome e documento');
+    if (!clientData.nome_completo || !clientData.documento || !isValidDocument(clientData.documento)) {
+      alert('Preencha nome, documento válido (CPF/CNPJ)');
       return;
     }
 
@@ -247,13 +313,13 @@ export function ContractSignPage() {
             </div>
 
             <div className="border rounded-lg p-6 bg-gray-50 max-h-96 overflow-y-auto">
-      <div
-        className="prose prose-sm max-w-none"
-        dangerouslySetInnerHTML={{
-          __html: template?.content_text || '',
-        }}
-      >
-      </div>
+              <div
+                className="prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{
+                  __html: processedContent || template?.content_text || '',
+                }}
+              >
+              </div>
             </div>
 
             {userSignature && (
@@ -296,31 +362,32 @@ export function ContractSignPage() {
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de documento *</label>
-                  <select 
-                    value={documentType}
-                    onChange={(e) => setDocumentType(e.target.value as 'cpf' | 'cnpj')}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="cpf">CPF</option>
-                    <option value="cnpj">CNPJ</option>
-                  </select>
-                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {documentType.toUpperCase()} * ({documentType === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'})
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CPF ou CNPJ *</label>
                   <input
                     type="tel"
-                    value={clientData.documento}
+                    value={formatDocument(clientData.documento)}
                     onChange={(e) => setClientData({ ...clientData, documento: e.target.value })}
-                    maxLength={documentType === 'cpf' ? 14 : 18}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    className={`w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-blue-500 transition-all ${
+                      clientData.documento && !isValidDocument(clientData.documento)
+                        ? 'border-red-300 focus:ring-red-500 bg-red-50'
+                        : 'border-gray-300 focus:ring-blue-500 hover:border-gray-400'
+                    }`}
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
                   />
                 </div>
 
-
+                {showRg && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">RG</label>
+                    <input
+                      type="text"
+                      value={clientData.rg}
+                      onChange={(e) => setClientData({ ...clientData, rg: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Data do Evento</label>
@@ -419,7 +486,7 @@ export function ContractSignPage() {
 
             <button
               onClick={handleSign}
-              disabled={signing || !signature || !clientData.nome_completo || !clientData.documento}
+              disabled={signing || !signature || !clientData.nome_completo || !clientData.documento || !isValidDocument(clientData.documento)}
               className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-blue-600 hover:bg-blue-700 active:opacity-90 text-white px-6 py-4 sm:py-5 rounded-lg font-semibold text-base sm:text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl min-h-[56px] touch-manipulation"
             >
               {signing ? 'Processando...' : 'Revisar e Assinar Contrato'}
