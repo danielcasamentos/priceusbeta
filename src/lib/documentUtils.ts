@@ -27,21 +27,55 @@ export const isValidCpf = (str: string) => {
   return remainder === parseInt(cpf.charAt(10));
 };
 
-export const isValidCnpj = (str: string) => {
-  const cnpj = cleanDocument(str);
-  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
-  const weights1 = [5,4,3,2,9,8,7,6,5,4,3,2];
-  const weights2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+export const isValidCnpj = (cnpj: string): boolean => {
+  const cleanedCnpj = cleanDocument(cnpj);
+
+  if (cleanedCnpj.length !== 14) {
+    return false;
+  }
+
+  if (/^(\d)\1+$/.test(cleanedCnpj)) {
+    return false;
+  }
+
+  let size = cleanedCnpj.length - 2;
+  let numbers = cleanedCnpj.substring(0, size);
+  const digits = cleanedCnpj.substring(size);
   let sum = 0;
-  for (let i = 0; i < 12; i++) sum += parseInt(cnpj.charAt(i)) * weights1[i];
-  let remainder = sum % 11;
-  let digit1 = remainder < 2 ? 0 : 11 - remainder;
-  if (parseInt(cnpj.charAt(12)) !== digit1) return false;
+  let pos = size - 7;
+
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i), 10) * pos--;
+    if (pos < 2) {
+      pos = 9;
+    }
+  }
+
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+
+  if (result !== parseInt(digits.charAt(0), 10)) {
+    return false;
+  }
+
+  size = size + 1;
+  numbers = cleanedCnpj.substring(0, size);
   sum = 0;
-  for (let i = 0; i < 13; i++) sum += parseInt(cnpj.charAt(i)) * weights2[i];
-  remainder = sum % 11;
-  let digit2 = remainder < 2 ? 0 : 11 - remainder;
-  return parseInt(cnpj.charAt(13)) === digit2;
+  pos = size - 7;
+
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i), 10) * pos--;
+    if (pos < 2) {
+      pos = 9;
+    }
+  }
+
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+
+  if (result !== parseInt(digits.charAt(1), 10)) {
+    return false;
+  }
+
+  return true;
 };
 
 export const isValidDocument = (value: string) => {
