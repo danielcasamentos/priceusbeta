@@ -5,7 +5,6 @@ import { ContractCanvas } from '../components/ContractCanvas';
 import { FileSignature, AlertTriangle, CheckCircle, Clock, ExternalLink, Smartphone } from 'lucide-react';
 import { replaceContractVariables, type BusinessSettings, type ClientData, type LeadData } from '../lib/contractVariables';
 import { isInAppBrowser } from '../lib/browserDetection';
-import { cleanDocument, formatDocument, isValidDocument, isCpf } from '../lib/documentUtils';
 
 interface Contract {
   id: string;
