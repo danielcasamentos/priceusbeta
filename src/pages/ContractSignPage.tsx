@@ -49,31 +49,46 @@ const isValidCpf = (str: string) => {
   const cpf = cleanDocument(str);
   if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
   let sum = 0, remainder;
-  for (let i = 0; i < 9; i++) sum += parseInt(cpf.charAt(i)) * (10 - i);
+  for (let i = 1; i <= 9; i++) sum += parseInt(cpf.substring(i - 1, i)) * (11 - i);
   remainder = (sum * 10) % 11;
   if (remainder === 10 || remainder === 11) remainder = 0;
-  if (remainder !== parseInt(cpf.charAt(9))) return false;
+  if (remainder !== parseInt(cpf.substring(9, 10))) return false;
   sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(cpf.charAt(i)) * (11 - i);
+  for (let i = 1; i <= 10; i++) sum += parseInt(cpf.substring(i - 1, i)) * (12 - i);
   remainder = (sum * 10) % 11;
   if (remainder === 10 || remainder === 11) remainder = 0;
-  return remainder === parseInt(cpf.charAt(10));
+  if (remainder !== parseInt(cpf.substring(10, 11))) return false;
+  return true;
 };
 
 const isValidCnpj = (str: string) => {
   const cnpj = cleanDocument(str);
   if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
-  const weights1 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
-  const weights2 = [5,4,3,2,9,8,7,6,5,4,3,2,1];
-  let sum = 0;
-  for (let i = 0; i < 12; i++) sum += parseInt(cnpj.charAt(i)) * weights1[i];
-  let remainder = sum % 11;
-  let digit1 = remainder < 2 ? 0 : 11 - remainder;
-  sum = 0;
-  for (let i = 0; i < 13; i++) sum += parseInt(cnpj.charAt(i)) * weights2[i];
-  remainder = sum % 11;
-  let digit2 = remainder < 2 ? 0 : 11 - remainder;
-  return parseInt(cnpj.charAt(12)) === digit1 && parseInt(cnpj.charAt(13)) === digit2;
+  
+  let tamanho = cnpj.length - 2;
+  let numeros = cnpj.substring(0, tamanho);
+  let digitos = cnpj.substring(tamanho);
+  let soma = 0;
+  let pos = tamanho - 7;
+  for (let i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if (resultado !== parseInt(digitos.charAt(0))) return false;
+
+  tamanho = tamanho + 1;
+  numeros = cnpj.substring(0, tamanho);
+  soma = 0;
+  pos = tamanho - 7;
+  for (let i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if (resultado !== parseInt(digitos.charAt(1))) return false;
+
+  return true;
 };
 
 const isValidDocument = (value: string) => {
@@ -486,7 +501,7 @@ export function ContractSignPage() {
 
             <button
               onClick={handleSign}
-              disabled={signing || !signature || !clientData.nome_completo || !clientData.documento || !isValidDocument(clientData.documento)}
+              disabled={signing}
               className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-blue-600 hover:bg-blue-700 active:opacity-90 text-white px-6 py-4 sm:py-5 rounded-lg font-semibold text-base sm:text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl min-h-[56px] touch-manipulation"
             >
               {signing ? 'Processando...' : 'Revisar e Assinar Contrato'}
