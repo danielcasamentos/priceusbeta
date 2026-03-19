@@ -3,6 +3,7 @@ import { supabase, Template } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
+import { TemplateAnalyticsSummary } from './TemplateAnalyticsSummary';
 import {
   DndContext,
   closestCenter,
@@ -115,15 +116,15 @@ function SortableTemplateCard({
         </div>
 
         {/* Container de Ações */}
-        <div className="flex items-center justify-between gap-2">
-          {/* Ações visíveis em telas maiores (desktop) */}
-          <div className="hidden md:flex items-center gap-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mt-4">
+          {/* Ações visíveis sempre, quebram linha no celular */}
+          <div className="flex flex-wrap items-center gap-2 justify-start">
             <button
               onClick={onCopyUrl}
               className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
               title="Copiar link do orçamento"
             >
-              <Copy className="w-4 h-4" /> Copiar Link
+              <Copy className="w-4 h-4" /> <span className="hidden sm:inline">Copiar</span>
             </button>
             <button
               onClick={onViewTemplate}
@@ -151,12 +152,15 @@ function SortableTemplateCard({
           {/* Botão de Edição Principal (sempre visível) */}
           <button
             onClick={onEdit}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
+            className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm"
           >
             <Edit2 className="w-4 h-4" />
             Editar
           </button>
         </div>
+
+        {/* Analytics Section */}
+        <TemplateAnalyticsSummary templateId={template.id} />
       </div>
     </div>
   );
