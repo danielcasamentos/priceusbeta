@@ -79,6 +79,8 @@ interface ContractTemplate {
   content_text: string;
 }
 
+const cleanDocument = (value: string) => value.replace(/\D/g, '');
+
 export function ContractPreviewPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
