@@ -232,12 +232,6 @@ export function ContractSignPage() {
     );
   }
 
-  // Detecta tipo documento para mostrar/esconder RG
-  useEffect(() => {
-    const cleaned = cleanDocument(clientData.documento);
-    setShowRg(cleaned.length === 11);
-  }, [clientData.documento]);
-
   // 🔥 handleSign atualizado
   const handleSign = async () => {
     if (!signature) {
