@@ -75,11 +75,27 @@ export function useNotifications(user: User | null) {
     const channel = supabase
       .channel(`notifications-for-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
-        setNotifications(prev => [payload.new as Notification, ...prev]);
+        const newNotif = payload.new as any;
+        const normalized: Notification = {
+          ...newNotif,
+          is_read: newNotif.is_read ?? newNotif.read ?? false,
+          link: newNotif.link || null,
+          related_id: newNotif.related_id || null,
+          title: newNotif.title || newNotif.message || '',
+        };
+        setNotifications(prev => [normalized, ...prev]);
         playNotificationSound(); // Toca o som quando uma nova notificação chega
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
-        setNotifications(prev => prev.map(n => n.id === payload.old.id ? { ...(payload.new as Notification) } : n));
+        const newNotif = payload.new as any;
+        const normalized: Notification = {
+          ...newNotif,
+          is_read: newNotif.is_read ?? newNotif.read ?? false,
+          link: newNotif.link || null,
+          related_id: newNotif.related_id || null,
+          title: newNotif.title || newNotif.message || '',
+        };
+        setNotifications(prev => prev.map(n => n.id === payload.old.id ? normalized : n));
       })
       .subscribe();
 
@@ -96,11 +112,13 @@ export function useNotifications(user: User | null) {
         id: 'trial-reminder',
         user_id: userId!,
         type: 'trial', // Corrigido para corresponder ao tipo definido no banco de dados
+        title: 'Aviso Importante',
         message: `Seu período de teste termina em ${trialStatus.daysRemaining} dia(s)! Assine para não perder acesso.`,
         link: '/pricing',
         is_read: false,
         created_at: new Date().toISOString(),
-        related_id: null,
+        updated_at: new Date().toISOString(),
+        related_id: undefined,
       };
       allNotifications.unshift(trialNotification);
     }

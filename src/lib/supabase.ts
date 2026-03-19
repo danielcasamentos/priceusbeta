@@ -116,10 +116,11 @@ export interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'info' | 'warning' | 'success' | 'error' | 'trial';
+  type: 'info' | 'warning' | 'success' | 'error' | 'trial' | string;
   is_read: boolean; // Mantido como is_read para consistência com o banco de dados
   created_at: string;
   updated_at: string;
   data?: any;
   link?: string;
+  related_id?: string;
 }

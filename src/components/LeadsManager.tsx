@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'; // Re-confirmando importação explícita de React
-import { supabase, Lead, LeadStatus } from '../lib/supabase'; // Importando LeadStatus para tipagem e Lead
+import { supabase, Lead } from '../lib/supabase'; // Importando LeadStatus para tipagem e Lead
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
 import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -27,6 +27,7 @@ interface CustomFieldDetail {
 interface LeadOrcamentoDetalhe {
   selectedProdutos: Record<string, number>; // { productId: quantity }
   selectedFormaPagamento?: string; // ID da forma de pagamento
+  forma_pagamento_id?: string; // ID da forma de pagamento (novo formato)
   produtos: Product[]; // Full list of products from the template
   paymentMethod?: PaymentMethod; // Full payment method object
   customFields: CustomField[]; // Full list of custom fields from the template
@@ -51,11 +52,7 @@ interface TemplateFromDB {
   ocultar_valores_intermediarios: boolean;
 }
 
-interface OrcamentoDetalhado {
-  produtos: ProductDetail[];
-  formaPagamento?: PaymentMethod; // Use the imported PaymentMethod interface
-  camposPersonalizados: CustomFieldDetail[];
-}
+
 
 interface LeadWithReview extends Lead {
   avaliacao_id?: string | null;
@@ -107,14 +104,54 @@ export function LeadsManager({ userId }: { userId: string }) {
     // Directly use the saved orcamento_detalhe as it contains all necessary info
     const savedOrcamentoDetalhe: LeadOrcamentoDetalhe = lead.orcamento_detalhe as LeadOrcamentoDetalhe;
 
-    if (updateState) {
-      setDetalhesOrcamento(savedOrcamentoDetalhe);
-      setLoadingDetalhes(false);
-      // Agora, geramos a prévia da mensagem do WhatsApp
-      generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, true);
+    let produtosCompletos: Product[] = [];
+    const selectedProdutosDict: Record<string, number> = {};
+    const produtosRaw = savedOrcamentoDetalhe.produtos || [];
+
+    if (produtosRaw.length > 0 && typeof produtosRaw[0] === 'object' && ('produto_id' in produtosRaw[0])) {
+      const ids = produtosRaw.map((p: any) => p.produto_id || p.id);
+      const { data: fetchProdutos } = await supabase.from('produtos').select('*').in('id', ids);
+      if (fetchProdutos) {
+        produtosCompletos = fetchProdutos;
+        produtosRaw.forEach((p: any) => {
+          selectedProdutosDict[p.produto_id || p.id] = p.quantidade;
+        });
+      }
+    } else if (savedOrcamentoDetalhe.selectedProdutos) {
+      Object.assign(selectedProdutosDict, savedOrcamentoDetalhe.selectedProdutos);
+      const ids = Object.keys(selectedProdutosDict);
+      const { data: fetchProdutos } = await supabase.from('produtos').select('*').in('id', ids);
+      if (fetchProdutos) {
+        produtosCompletos = fetchProdutos;
+      }
+    } else {
+      produtosCompletos = savedOrcamentoDetalhe.produtos || [];
     }
 
-    return savedOrcamentoDetalhe;
+    let formaPagamentoCompleta = savedOrcamentoDetalhe.paymentMethod;
+    const pagamentoId = savedOrcamentoDetalhe.selectedFormaPagamento || savedOrcamentoDetalhe.forma_pagamento_id || (savedOrcamentoDetalhe as any).selecoes?.paymentMethod;
+    if (pagamentoId && !formaPagamentoCompleta) {
+      const { data: fetchPagamento } = await supabase.from('formas_pagamento').select('*').eq('id', pagamentoId).maybeSingle();
+      if (fetchPagamento) {
+        formaPagamentoCompleta = fetchPagamento;
+      }
+    }
+
+    const orcamentoEnriquecido: LeadOrcamentoDetalhe = {
+      ...savedOrcamentoDetalhe,
+      produtos: produtosCompletos,
+      selectedProdutos: selectedProdutosDict,
+      paymentMethod: formaPagamentoCompleta
+    };
+
+    if (updateState) {
+      setDetalhesOrcamento(orcamentoEnriquecido);
+      setLoadingDetalhes(false);
+      // Agora, geramos a prévia da mensagem do WhatsApp
+      generateAndSetWhatsappMessage(lead, orcamentoEnriquecido, true);
+    }
+
+    return orcamentoEnriquecido;
   };
 
   // Função para gerar e armazenar o corpo da mensagem do WhatsApp
@@ -126,23 +163,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       .eq('id', userId)
       .single();
 
-    // Reconstruct selected products with quantities for display in modal
-    const produtosDetalhes: ProductDetail[] = Object.keys(savedOrcamentoDetalhe.selectedProdutos || {})
-      .map(productId => {
-        const productInfo = savedOrcamentoDetalhe.produtos?.find(p => p.id === productId);
-        if (productInfo) {
-          return {
-            id: productId,
-            nome: productInfo.nome,
-            valor: productInfo.valor,
-            quantidade: savedOrcamentoDetalhe.selectedProdutos[productId],
-          };
-        }
-        return null;
-      })
-      .filter(Boolean) as ProductDetail[];
-
-    const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento;
+    const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || undefined;
 
     const mensagem = generateWhatsAppMessage({
       clientName: lead.nome_cliente || '', // Corrected: Ensure clientName is always a string
@@ -173,7 +194,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         total: lead.valor_total,
       },
       eventDate: lead.data_evento || undefined,
-      eventCity: cityName, 
+      eventCity: cityName || undefined, 
       availabilityStatus: disponibilidadeLead?.status, // Passa o status da disponibilidade
 
       customFields: savedOrcamentoDetalhe.customFields || [],
@@ -209,26 +230,15 @@ export function LeadsManager({ userId }: { userId: string }) {
           const newLead = payload.new as LeadWithReview;
           
           // Adiciona o novo lead no início da lista
-          setLeads((prevLeads) => [newLead, ...prevLeads]);
+          setLeads((prevLeads) => {
+            if (prevLeads.some(l => l.id === newLead.id)) return prevLeads;
+            return [newLead, ...prevLeads];
+          });
 
           // Dispara a notificação
-          new Audio('/notification.mp3').play();
+          new Audio('/notification.mp3').play().catch(() => {});
           
-          // Adiciona notificação na central de notificações
-          supabase
-            .from('notifications')
-            .insert({
-              user_id: userId,
-              type: 'new_lead',
-              message: `Você recebeu um novo lead de ${newLead.nome_cliente || 'um cliente'}!`,
-              link: '/dashboard?page=leads',
-              related_id: newLead.id,
-            })
-            .then(({ error }) => {
-              if (error) {
-                console.error('Erro ao criar notificação de novo lead:', error);
-              }
-            });
+          // NOTA: A criação da notificação não é feita aqui pois QuotePage já o realiza, evitando duplicadas.
         }
       )
       .subscribe();
@@ -425,6 +435,23 @@ export function LeadsManager({ userId }: { userId: string }) {
         return;
       }
 
+      let ocultarExtras = false;
+      const tId = lead.template_id;
+      const tp = templates[tId];
+      if (tp && (tp.sistema_sazonal_ativo || tp.sistema_geografico_ativo)) {
+        if (savedOrcamentoDetalhe.priceBreakdown && (
+            savedOrcamentoDetalhe.priceBreakdown.ajusteSazonal !== 0 ||
+            savedOrcamentoDetalhe.priceBreakdown.ajusteGeografico?.taxa > 0 ||
+            savedOrcamentoDetalhe.priceBreakdown.ajusteGeografico?.percentual > 0
+        )) {
+            ocultarExtras = window.confirm('Este orçamento possui acréscimos adicionais de Localidade ou Sazonalidade.\n\nDeseja OCULTAR esses valores adicionais no corpo da mensagem do WhatsApp e agrupá-los no total?\n\n[OK] para Ocultar\n[Cancelar] para Mostrar detalhado');
+        }
+      }
+
+      if (ocultarExtras) {
+        savedOrcamentoDetalhe.ocultar_valores_intermediarios = true;
+      }
+
       // 2. Gerar a mensagem com os detalhes carregados
       const disponibilidade = lead.data_evento ? await checkAvailability(userId, lead.data_evento) : null;
       const mensagem = await generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, false);
@@ -484,7 +511,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
 
   const getStatusBadge = (status: Lead['status']) => {
-    const badges: Record<LeadStatus, string> = {
+    const badges: Record<Lead['status'], string> = {
       novo: 'bg-blue-100 text-blue-800',
       contatado: 'bg-yellow-100 text-yellow-800',
       convertido: 'bg-green-100 text-green-800',
@@ -717,7 +744,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                         {lead.nome_cliente || 'Não informado'}
                       </div>
                       {contracts[lead.id] && (
-                        <CheckSquare className="w-4 h-4 text-purple-600 ml-2" title="Contrato gerado para este lead" />
+                        <span title="Contrato gerado para este lead"><CheckSquare className="w-4 h-4 text-purple-600 ml-2" /></span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
