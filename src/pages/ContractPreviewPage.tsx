@@ -262,13 +262,17 @@ export function ContractPreviewPage() {
       }
     }
 
-    // 3. Inserir todas as transações no banco de dados
+    // 3. Inserir todas as transações no banco de dados via RPC para contornar o RLS (uso anônimo)
     if (transactionsToInsert.length > 0) {
-      console.log(`🏦 Inserindo ${transactionsToInsert.length} transações...`, transactionsToInsert);
-      const { error } = await supabase.from('company_transactions').insert(transactionsToInsert);
+      console.log(`🏦 Inserindo ${transactionsToInsert.length} transações via RPC...`, transactionsToInsert);
+      
+      const { error } = await supabase.rpc('insert_public_transactions', {
+        p_token: token,
+        p_transactions: transactionsToInsert
+      });
+      
       if (error) {
-        console.error('❌ Erro ao criar transações financeiras:', error);
-        // Não bloqueia o fluxo do usuário, apenas loga o erro.
+        console.error('❌ Erro ao criar transações financeiras (RPC):', error);
       } else {
         console.log('✅ Transações criadas com sucesso!');
       }
