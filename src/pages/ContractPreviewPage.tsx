@@ -379,7 +379,7 @@ export function ContractPreviewPage() {
               )}
               <div className="signature-line"></div>
               <p className="text-sm">{clientDataFromState?.nome_completo || 'Contratante'}</p>
-              <p className="text-sm">{clientDataFromState?.cpf ? `CPF: ${clientDataFromState.cpf}` : clientDataFromState?.documento ? (cleanDocument(clientDataFromState.documento).length === 11 ? `CPF: ${clientDataFromState.documento}` : `CNPJ: ${clientDataFromState.documento}`) : 'Documento'}</p>
+              <p className="text-sm">{(clientDataFromState?.cpf || clientDataFromState?.documento) ? (cleanDocument(clientDataFromState?.cpf || clientDataFromState?.documento as string).length === 11 ? `CPF: ${clientDataFromState?.cpf || clientDataFromState?.documento}` : `CNPJ: ${clientDataFromState?.cpf || clientDataFromState?.documento}`) : 'Documento'}</p>
             </div>
           </div>
 
