@@ -11,17 +11,6 @@ import { checkAvailability, AvailabilityResult } from '../services/availabilityS
 import { useReviewRequest } from '../hooks/useReviewRequest';
 
 // Define interfaces for better type safety
-interface ProductDetail {
-  id: string;
-  nome: string;
-  valor: number;
-  quantidade: number;
-}
-
-interface CustomFieldDetail {
-  label: string;
-  valor: string;
-}
 
 // New interface to match what's saved in lead.orcamento_detalhe by QuotePage
 interface LeadOrcamentoDetalhe {
@@ -77,6 +66,17 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const planLimits = usePlanLimits(); // useMemo was removed from import, but usePlanLimits is used
   const { solicitarAvaliacao } = useReviewRequest();
+
+  // Estado para Modal de opções extras WhatsApp
+  const [whatsappLeadConfig, setWhatsappLeadConfig] = useState<{
+    lead: Lead | null;
+    savedOrcamentoDetalhe: LeadOrcamentoDetalhe | null;
+    isOpen: boolean;
+  }>({
+    lead: null,
+    savedOrcamentoDetalhe: null,
+    isOpen: false,
+  });
 
   // Efeito para carregar detalhes do orçamento quando um lead é selecionado
   useEffect(() => {
@@ -435,7 +435,6 @@ export function LeadsManager({ userId }: { userId: string }) {
         return;
       }
 
-      let ocultarExtras = false;
       const tId = lead.template_id;
       const tp = templates[tId];
       if (tp && (tp.sistema_sazonal_ativo || tp.sistema_geografico_ativo)) {
@@ -444,26 +443,40 @@ export function LeadsManager({ userId }: { userId: string }) {
             savedOrcamentoDetalhe.priceBreakdown.ajusteGeografico?.taxa > 0 ||
             savedOrcamentoDetalhe.priceBreakdown.ajusteGeografico?.percentual > 0
         )) {
-            ocultarExtras = window.confirm('Este orçamento possui acréscimos adicionais de Localidade ou Sazonalidade.\n\nDeseja OCULTAR esses valores adicionais no corpo da mensagem do WhatsApp e agrupá-los no total?\n\n[OK] para Ocultar\n[Cancelar] para Mostrar detalhado');
+            // Mostra o Modal ao invés do Confirm
+            setWhatsappLeadConfig({ lead, savedOrcamentoDetalhe, isOpen: true });
+            return; // Espera a decisão do usuário
         }
       }
 
+      // 2. Transmite a mensagem direto, sem extras para ocultar
+      await executeWhatsAppMessage(lead, savedOrcamentoDetalhe, false);
+    } catch (error) {
+      console.error("Erro ao gerar mensagem do WhatsApp:", error);
+      alert("❌ Ocorreu um erro ao gerar a mensagem. Verifique os dados do lead e tente novamente.");
+    }
+  };
+
+  const executeWhatsAppMessage = async (lead: Lead, savedOrcamentoDetalhe: LeadOrcamentoDetalhe, ocultarExtras: boolean) => {
+    try {
       if (ocultarExtras) {
         savedOrcamentoDetalhe.ocultar_valores_intermediarios = true;
       }
 
-      // 2. Gerar a mensagem com os detalhes carregados
-      const disponibilidade = lead.data_evento ? await checkAvailability(userId, lead.data_evento) : null;
+      await checkAvailability(userId, lead.data_evento || ''); // Só chamando p consistência (status é passado como prop?)
       const mensagem = await generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, false);
 
       // 🔥 GERAR LINK WA.ME
       const waLink = generateWaLinkToClient(lead.telefone_cliente, mensagem);
-      window.open(waLink, '_blank'); // Usar window.open para compatibilidade
+      window.open(waLink, '_blank'); 
 
       updateLeadStatus(lead.id, 'contatado');
     } catch (error) {
-      console.error("Erro ao gerar mensagem do WhatsApp:", error);
-      alert("❌ Ocorreu um erro ao tentar gerar a mensagem. Verifique os dados do lead e tente novamente.");
+      console.error("Erro na execução da mensagem:", error);
+      alert("❌ Ocorreu um erro ao enviar a mensagem final.");
+    } finally {
+      // Fecha o modal garantidamente
+      setWhatsappLeadConfig({ lead: null, savedOrcamentoDetalhe: null, isOpen: false });
     }
   };
 
@@ -1023,6 +1036,63 @@ export function LeadsManager({ userId }: { userId: string }) {
           onSuccess={() => loadLeads()}
         />
       )}
+      {/* Modal de Confirmação para WhatsApp */}
+      {whatsappLeadConfig.isOpen && whatsappLeadConfig.lead && whatsappLeadConfig.savedOrcamentoDetalhe && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4 mx-auto">
+                <FileSignature className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                Valores Adicionais
+              </h3>
+              <p className="text-gray-600 text-center text-sm mb-6">
+                Este orçamento possui taxas extras de <strong className="text-gray-800">Localidade</strong> ou <strong className="text-gray-800">Sazonalidade</strong>.<br/>
+                Como você gostaria de apresentar esses valores na mensagem para o cliente?
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => executeWhatsAppMessage(whatsappLeadConfig.lead!, whatsappLeadConfig.savedOrcamentoDetalhe!, true)}
+                  className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-blue-50 to-blue-100/50 hover:border-blue-500 rounded-xl transition-all duration-200 text-left"
+                >
+                  <p className="font-semibold text-blue-900 flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                    Ocultar discriminação
+                  </p>
+                  <p className="text-xs text-blue-800/80 mt-1 pl-4">
+                    As taxas não serão listadas separadamente. Elas serão embutidas discretamente no valor sublimado final.
+                  </p>
+                </button>
+
+                <button
+                   onClick={() => executeWhatsAppMessage(whatsappLeadConfig.lead!, whatsappLeadConfig.savedOrcamentoDetalhe!, false)}
+                   className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-gray-50 to-gray-100/50 hover:border-gray-500 rounded-xl transition-all duration-200 text-left"
+                >
+                  <p className="font-semibold text-gray-700 flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>
+                    Mostrar detalhado
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1 pl-4">
+                    Mantém transparente as listagens de custos extras que geraram acréscimo de valor na mensagem (ex: "Taxa de deslocamento").
+                  </p>
+                </button>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 px-6 py-4 flex justify-end">
+              <button
+                onClick={() => setWhatsappLeadConfig({ lead: null, savedOrcamentoDetalhe: null, isOpen: false })}
+                className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
+              >
+                Cancelar envio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

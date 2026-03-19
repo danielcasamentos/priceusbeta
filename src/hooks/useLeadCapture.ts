@@ -11,7 +11,7 @@ interface LeadData {
 
 export function useLeadCapture() {
   const [startTime] = useState(Date.now());
-  const [sessionId] = useState(() => {
+  const [sessionId, setSessionId] = useState(() => {
     let sid = sessionStorage.getItem('priceus_session_id');
     if (!sid) {
       sid = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -87,7 +87,8 @@ export function useLeadCapture() {
       console.error('❌ Erro ao invocar a Edge Function "create-lead":', error);
 
       // Tratamento específico para erro de RLS ou autenticação, comum em in-app browsers
-      if (error.message?.includes('RLS') || error.message?.includes('JWT')) {
+      const errMsg = (error as any)?.message || '';
+      if (errMsg.includes('RLS') || errMsg.includes('JWT')) {
         alert(
           '❌ Erro de permissão. Isso pode acontecer em navegadores de aplicativos (como Instagram). Por favor, abra o link em um navegador externo (Chrome, Safari) e tente novamente.'
         );
@@ -160,6 +161,12 @@ export function useLeadCapture() {
       }
 
       lastSaveRef.current = ''; // Reseta para permitir novas capturas
+      
+      // ✅ FIX: Reset session ID so that if the user submits another lead without reloading the page, it does not overwrite the finalized lead.
+      const newSid = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem('priceus_session_id', newSid);
+      setSessionId(newSid);
+      
       return { lead, error: null };
     } catch (error) {
       console.error('❌ Erro crítico ao salvar lead final:', error);
