@@ -475,7 +475,13 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       // 🔥 GERAR LINK WA.ME
       const waLink = generateWaLinkToClient(lead.telefone_cliente, mensagem);
-      window.open(waLink, '_blank'); 
+      
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        window.location.href = waLink;
+      } else {
+        window.open(waLink, '_blank'); 
+      }
 
       updateLeadStatus(lead.id, 'contatado');
     } catch (error) {
@@ -501,7 +507,12 @@ export function LeadsManager({ userId }: { userId: string }) {
     const result = await solicitarAvaliacao(lead.id);
 
     if (result.success && result.token) {
-      window.open(result.token, '_blank');
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        setTimeout(() => { window.location.href = result.token as string; }, 500);
+      } else {
+        window.open(result.token, '_blank');
+      }
       alert('✅ Link de avaliação gerado! A mensagem será aberta no WhatsApp.');
       loadLeads();
     } else {
