@@ -477,13 +477,22 @@ export function LeadsManager({ userId }: { userId: string }) {
       const waLink = generateWaLinkToClient(lead.telefone_cliente, mensagem);
       
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if (isMobile) {
-        window.location.href = waLink;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+      updateLeadStatus(lead.id, 'contatado');
+
+      if (isMobile || isSafari) {
+         // Fallback via âncora invisivel (simula clique nativo)
+         const a = document.createElement('a');
+         a.href = waLink;
+         a.target = '_blank';
+         a.rel = 'noopener noreferrer';
+         document.body.appendChild(a);
+         a.click();
+         document.body.removeChild(a);
       } else {
         window.open(waLink, '_blank'); 
       }
-
-      updateLeadStatus(lead.id, 'contatado');
     } catch (error) {
       console.error("Erro na execução da mensagem:", error);
       alert("❌ Ocorreu um erro ao enviar a mensagem final.");
