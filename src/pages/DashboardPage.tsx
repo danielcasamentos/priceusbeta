@@ -24,6 +24,7 @@ import { CompanyAnalytics } from '../components/company/CompanyAnalytics'; // Ad
 import { CompanyInsights } from '../components/company/CompanyInsights'; // Adicionado
 import { BusinessSettingsEditor } from '../components/BusinessSettingsEditor'; // Adicionado
 import NotificationCenter from '../components/NotificationCenter'; // Import NotificationCenter
+import { AppInstallBanner } from '../components/AppInstallBanner';
 import { TawkToChat } from '../components/TawkToChat';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceType } from '../hooks/useDeviceType';
@@ -200,6 +201,10 @@ export function DashboardPage() {
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <Breadcrumbs items={getBreadcrumbs()} />
+
+            <div className="mb-6">
+              <AppInstallBanner variant="mini" />
+            </div>
 
             {editingTemplateId ? (
 

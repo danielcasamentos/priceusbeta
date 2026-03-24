@@ -217,8 +217,9 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header/Navbar */}
-      <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-sm shadow-sm z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-sm shadow-sm z-50 flex flex-col">
+        <AppInstallBanner variant="topbar" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <img
@@ -313,7 +314,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 bg-gradient-to-br from-green-50 via-blue-50 to-white">
+      <section className="pt-40 pb-20 px-4 bg-gradient-to-br from-green-50 via-blue-50 to-white">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -369,10 +370,6 @@ export default function LandingPage() {
                   </p>
                 </div>
               </div>
-            </div>
-            
-            <div className="mt-8">
-              <AppInstallBanner />
             </div>
           </div>
         </div>
