@@ -134,10 +134,12 @@ serve(async (req) => {
     
     if (sessionId) {
       // Primeiro tenta encontrar um lead existente com o mesmo session_id
+      // 🔥 CORREÇÃO: Só deve atualizar se o status for 'abandonado'
       const { data: existingLead } = await supabaseAdmin
         .from('leads')
         .select('id')
         .eq('session_id', sessionId)
+        .eq('status', 'abandonado')
         .maybeSingle()
       
       if (existingLead) {
@@ -183,9 +185,20 @@ serve(async (req) => {
     
     console.log('✅ Lead salvo com sucesso:', newLead?.id)
 
-    // ✅ ETAPA 2: Retornar os dados do lead salvo com sucesso
-    // NOTIFICAÇÃO REMOVIDA: Agora é criada pelo frontend (LeadsManager) via realtime
-    // Isso evita duplicação e garante que a notificação seja criada apenas uma vez
+    // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
+    // Isso garante que a notificação é criada apenas uma vez, de forma atômica no backend.
+    if (newLead) {
+      const notificationPayload = {
+        user_id: userId,
+        type: 'new_lead',
+        message: `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`,
+        related_id: newLead.id,
+        link: '/dashboard?page=leads',
+      }
+      
+      const { error: notificationError } = await supabaseAdmin.from('notifications').insert(notificationPayload)
+      if (notificationError) console.error('Erro ao criar notificação (não fatal):', notificationError)
+    }
     
     // Retornar os dados do lead salvo com sucesso
     return new Response(JSON.stringify(newLead), {

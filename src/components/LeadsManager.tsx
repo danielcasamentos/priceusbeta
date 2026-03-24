@@ -235,10 +235,9 @@ export function LeadsManager({ userId }: { userId: string }) {
             return [newLead, ...prevLeads];
           });
 
-          // Dispara a notificação
-          new Audio('/notification.mp3').play().catch(() => {});
-          
-          // NOTA: A criação da notificação não é feita aqui pois QuotePage já o realiza, evitando duplicadas.
+          // NOTA: A notificação real (do banco) é criada no QuotePage e o som é gerado pelo hook useNotifications.
+          // Comentado para evitar som e alerta duplicado:
+          // new Audio('/notification.mp3').play().catch(() => {});
         }
       )
       .subscribe();

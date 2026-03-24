@@ -134,6 +134,7 @@ export function QuotePage() {
   // Estado para o contador de redirecionamento automático
   const [countdown, setCountdown] = useState(5);
   const [autoRedirectActive, setAutoRedirectActive] = useState(true);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // 📅 Sistema de Verificação de Disponibilidade
   const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
@@ -184,6 +185,76 @@ export function QuotePage() {
       loadTemplateData();
     }
   }, [templateUuid, slugUsuario, slugTemplate]);
+
+  // Hook para carregar dados de um lead existente se estiver em modo de edição
+  useEffect(() => {
+    const loadEditLeadData = async () => {
+      const editLeadId = new URLSearchParams(window.location.search).get('editLead');
+      if (!editLeadId || !template || loading) return;
+      
+      try {
+        const { data: leadData, error } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('id', editLeadId)
+          .maybeSingle();
+
+        if (error || !leadData) {
+          console.error("Erro ao carregar o lead para edição", error);
+          return;
+        }
+
+        // Populando dados do formulário principal
+        setFormData(prev => ({
+          ...prev,
+          nome_cliente: leadData.nome_cliente || prev.nome_cliente,
+          email_cliente: leadData.email_cliente || prev.email_cliente,
+          telefone_cliente: leadData.telefone_cliente || prev.telefone_cliente,
+        }));
+
+        // Recuperar opções do orcamento_detalhe
+        const detalhes = leadData.orcamento_detalhe || {};
+        
+        if (detalhes.selectedProdutos && Object.keys(detalhes.selectedProdutos).length > 0) {
+          setSelectedProdutos(detalhes.selectedProdutos);
+        } else if (detalhes.produtos && Array.isArray(detalhes.produtos)) {
+          const preSelected: Record<string, number> = {};
+          detalhes.produtos.forEach((p: any) => {
+            preSelected[p.produto_id || p.id] = p.quantidade || 1;
+          });
+          if (Object.keys(preSelected).length > 0) setSelectedProdutos(preSelected);
+        }
+
+        if (detalhes.customFieldsData) {
+          setCamposExtrasData(detalhes.customFieldsData);
+        }
+
+        if (detalhes.selectedFormaPagamento || detalhes.forma_pagamento_id || detalhes.paymentMethod?.id) {
+          setSelectedFormaPagamento(detalhes.selectedFormaPagamento || detalhes.forma_pagamento_id || detalhes.paymentMethod?.id);
+        }
+
+        if (leadData.data_evento) setDataEvento(leadData.data_evento);
+
+        if (leadData.cidade_evento) {
+           const cidadeId = leadData.cidade_evento;
+           setCidadeSelecionada(cidadeId);
+           const cidadeObj = cidades.find(c => c.id === cidadeId || c.nome === cidadeId);
+           if (cidadeObj) {
+             setCidadeSelecionada(cidadeObj.id);
+             setSelectedEstado(cidadeObj.estado_id);
+             const estadoObj = estados.find(e => e.id === cidadeObj.estado_id);
+             if (estadoObj) {
+               setSelectedPais(estadoObj.pais_id);
+             }
+           }
+        }
+      } catch (err) {
+        console.error("Erro no loadEditLeadData", err);
+      }
+    };
+
+    loadEditLeadData();
+  }, [template, loading, cidades, estados]);
 
   useEffect(() => {
     if (template && produtos.length > 0) {
@@ -1197,7 +1268,10 @@ export function QuotePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || hasSubmitted) return;
+    
     setIsSubmitting(true);
+    setHasSubmitted(true);
     console.log('🚀 [handleSubmit] Botão clicado. Priorizando abertura do modal...');
 
     try {
@@ -1310,21 +1384,8 @@ export function QuotePage() {
 
           const leadId = leadData.id;
 
-          if (leadId) { // A notificação só será criada se o leadId for encontrado.
-            console.log('🔔 [QuotePage] Tentando criar notificação para o lead ID:', leadId);
-            // Tenta criar a notificação após salvar o lead
-            const { error: notificationError } = await supabase.from('notifications').insert({
-              user_id: templateRef.current.user_id,
-              type: 'new_lead',
-              message: `Novo orçamento recebido de ${formData.nome_cliente || 'um cliente'}.`,
-              link: '/dashboard?page=leads',
-              related_id: leadId,
-            });
-            if (notificationError) {
-              console.error('❌ [QuotePage] Erro ao criar notificação:', notificationError);
-            } else {
-              console.log('✅ [QuotePage] Notificação criada com sucesso no banco de dados.');
-            }
+          if (leadId) {
+            console.log('✅ [QuotePage] Lead salvo com id. (A notificação correspondente será criada pelo Backend para evitar duplicação).', leadId);
           }
         } catch (err) {
           // Captura erros da chamada `saveFinalLead` ou da notificação
@@ -1337,6 +1398,7 @@ export function QuotePage() {
       // Este bloco captura erros na preparação síncrona dos dados do modal.
       console.error('❌ [handleSubmit] Erro crítico ao preparar o resumo do orçamento:', error);
       alert('Ocorreu um erro ao preparar seu orçamento. Por favor, tente novamente.');
+      setHasSubmitted(false); // Libera o clique se deu erro sincrono apenas
     } finally {
       // 4. REATIVAR O BOTÃO
       // O botão é reativado rapidamente, pois a UI não está mais bloqueada.
