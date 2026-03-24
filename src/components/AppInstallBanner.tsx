@@ -109,23 +109,20 @@ export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps)
   // Renderização Default (Página de Login)
   return (
     <>
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg rounded-2xl p-4 md:p-6 my-6 flex flex-col md:flex-row items-center justify-between border border-blue-500/30">
-        <div className="flex items-center space-x-4 mb-4 md:mb-0 text-center md:text-left">
-          <div className="bg-white/20 p-3 rounded-full hidden sm:block">
-            <Download className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-100">Instale o App PriceU$</h3>
-            <p className="text-blue-100 text-sm mt-1 max-w-md">Tenha orçamentos, contratos e leads na palma da sua mão com nosso aplicativo nativo e rápido.</p>
-          </div>
-        </div>
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-xl rounded-2xl p-6 text-center border border-blue-500/30 w-full relative overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-blue-400 opacity-20 blur-3xl rounded-full"></div>
+        
+        <h3 className="text-2xl font-bold text-white mb-2 relative z-10">Instale o App PriceU$</h3>
+        <p className="text-blue-100 text-[15px] mb-6 relative z-10 leading-relaxed max-w-sm mx-auto">
+          Tenha orçamentos, contratos e leads na palma da sua mão com nosso aplicativo nativo e rápido.
+        </p>
 
-        <div className="flex space-x-3 w-full md:w-auto">
+        <div className="flex flex-col gap-3 relative z-10">
           {(device === 'android' || device === 'desktop') && (
             <a
               href="/priceus-android.apk"
               download
-              className="flex-1 md:flex-none flex items-center justify-center space-x-2 bg-white text-blue-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-50 transition-all shadow-md active:scale-95"
+              className="w-full flex items-center justify-center space-x-2 bg-white text-blue-700 font-bold px-5 py-3.5 rounded-xl hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <Download className="w-5 h-5" />
               <span>Baixar para Android</span>
@@ -135,7 +132,7 @@ export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps)
           {(device === 'ios' || device === 'desktop') && (
             <button
               onClick={() => setShowIosModal(true)}
-              className="flex-1 md:flex-none flex items-center justify-center space-x-2 bg-black text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-gray-800 transition-all shadow-md active:scale-95 border border-gray-700"
+              className="w-full flex items-center justify-center space-x-2 bg-black text-white font-bold px-5 py-3.5 rounded-xl hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] border border-gray-700/50"
             >
               <Share className="w-5 h-5" />
               <span>Instalar no iPhone</span>
@@ -143,8 +140,7 @@ export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps)
           )}
         </div>
       </div>
-
-        {showIosModal && <IosModal onClose={() => setShowIosModal(false)} />}
+      {showIosModal && <IosModal onClose={() => setShowIosModal(false)} />}
     </>
   );
 }
