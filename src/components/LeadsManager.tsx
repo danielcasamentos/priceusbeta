@@ -215,6 +215,12 @@ export function LeadsManager({ userId }: { userId: string }) {
     loadCities();
     loadContractsForLeads();
 
+    // Loop de atualização silenciosa a cada 60 segundos (1 min)
+    const refreshInterval = setInterval(() => {
+      loadLeads(true);
+      loadContractsForLeads();
+    }, 60000);
+
     const channel = supabase
       .channel('realtime-leads')
       .on<Lead>(
@@ -244,8 +250,9 @@ export function LeadsManager({ userId }: { userId: string }) {
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(refreshInterval);
     };
-  }, [userId]); // Removido 'filter' das dependências para evitar recriação do canal realtime
+  }, [userId]);
 
   const loadCities = async () => {
     try {
@@ -302,8 +309,8 @@ export function LeadsManager({ userId }: { userId: string }) {
       setContracts(contractMap);
     } catch (error) { console.error('Erro ao carregar contratos dos leads:', error); }
   };
-  const loadLeads = async () => {
-    setLoading(true);
+  const loadLeads = async (silent: boolean = false) => {
+    if (!silent) setLoading(true);
     try {
       let query = supabase
         .from('leads')
@@ -320,11 +327,12 @@ export function LeadsManager({ userId }: { userId: string }) {
       setLeads(data || []);
     } catch (error) {
       const netError = error as Error;
-      console.error('Erro ao carregar leads:', netError);
-      // Adicionando um alerta para o usuário sobre a falha de rede.
-      alert(`Falha ao carregar os leads. Verifique sua conexão com a internet. Detalhe: ${netError.message}`);
+      if (!silent) {
+        console.error('Erro ao carregar leads:', netError);
+        alert(`Falha ao carregar os leads. Verifique sua conexão com a internet. Detalhe: ${netError.message}`);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

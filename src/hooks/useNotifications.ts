@@ -21,9 +21,9 @@ export function useNotifications(user: User | null) {
   const trialStatus = useTrialStatus(user);
   const userId = user?.id;
 
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = useCallback(async (silent: boolean = false) => {
     if (!userId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       // Buscar notificações - tenta usar is_read, se não existir usa read
       const { data, error } = await supabase
@@ -52,7 +52,7 @@ export function useNotifications(user: User | null) {
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [userId]);
 
@@ -99,10 +99,16 @@ export function useNotifications(user: User | null) {
       })
       .subscribe();
 
+    // Auto-refresh silencioso a cada 60 segundos
+    const refreshInterval = setInterval(() => {
+      loadNotifications(true);
+    }, 60000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(refreshInterval);
     };
-  }, [userId]);
+  }, [userId, loadNotifications]);
 
   const notificationsWithTrial = useMemo(() => {
     const allNotifications = [...notifications];
