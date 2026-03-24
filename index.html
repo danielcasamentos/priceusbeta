@@ -37,25 +37,11 @@
     <meta name="twitter:image" content="https://priceus.com.br/Logo Price Us.png" />
 
     <link rel="canonical" href="https://priceus.com.br" />
-    <link rel="manifest" href="/manifest.json" />
-
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="apple-touch-icon" href="/Logo_Price_Us_192x192.png" />
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          // O caminho AGORA usa a barra inicial, garantindo que o arquivo seja encontrado na raiz
-          navigator.serviceWorker.register('/pwabuilder-adv-sw.js')
-            .then(registration => {
-              console.log('Service Worker Registrado com sucesso! Scope:', registration.scope);
-            })
-            .catch(error => {
-              console.log('Falha no registro do Service Worker:', error);
-            });
-        });
-      }
-    </script>
 
     <script type="module" src="/src/main.tsx"></script>
   

@@ -1,0 +1,39 @@
+
+> vite-react-typescript-starter@0.0.0 build
+> vite build
+
+vite v6.4.1 building for production...
+transforming...
+✓ 3384 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/registerSW.js                           0.13 kB
+dist/manifest.webmanifest                    0.46 kB
+dist/index.html                              3.40 kB │ gzip:   1.24 kB
+dist/assets/index-C2PU811E.css             124.04 kB │ gzip:  17.53 kB
+dist/assets/purify.es-B6FQ9oRL.js           22.57 kB │ gzip:   8.74 kB
+dist/assets/index.es-DlwcejHx.js           159.36 kB │ gzip:  53.40 kB
+dist/assets/html2canvas.esm-QH1iLAAe.js    202.38 kB │ gzip:  48.04 kB
+dist/assets/index-C_nJn8xo.js            2,231.48 kB │ gzip: 621.99 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.38s
+error during build:
+Error: 
+  Configure "workbox.maximumFileSizeToCacheInBytes" to change the limit: the default value is 2 MiB.
+  Check https://vite-pwa-org.netlify.app/guide/faq.html#missing-assets-from-sw-precache-manifest for more information.
+  Assets exceeding the limit:
+  - assets/index-C_nJn8xo.js is 2.23 MB, and won't be precached.
+
+    at logWorkboxResult (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite-plugin-pwa/dist/chunk-G4TAN34B.js:44:13)
+    at generateServiceWorker (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite-plugin-pwa/dist/index.js:209:3)
+    at async _generateSW (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite-plugin-pwa/dist/index.js:234:5)
+    at async Object.handler (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite-plugin-pwa/dist/index.js:427:13)
+    at async PluginDriver.hookParallel (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/rollup/dist/es/shared/node-entry.js:22355:17)
+    at async Object.close (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/rollup/dist/es/shared/node-entry.js:23374:13)
+    at async buildEnvironment (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:46258:17)
+    at async Object.defaultBuildApp [as buildApp] (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:46713:5)
+    at async CAC.<anonymous> (file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/node_modules/vite/dist/node/cli.js:863:7)
