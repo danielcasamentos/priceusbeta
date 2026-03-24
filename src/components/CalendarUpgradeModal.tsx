@@ -137,7 +137,7 @@ export function CalendarUpgradeModal({ onClose, currentLimit, currentUsed }: Cal
         <div className="border-t border-gray-200 pt-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm text-gray-600">Plano Gratuito (Trial 14 dias)</p>
+              <p className="text-sm text-gray-600">Plano Gratuito (Trial 30 dias)</p>
               <p className="text-2xl font-bold text-gray-900">Até 20 eventos manuais</p>
             </div>
             <div className="text-right">

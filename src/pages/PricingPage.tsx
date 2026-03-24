@@ -118,7 +118,7 @@ export function PricingPage() {
                   <span className="text-2xl text-gray-600 mb-2">/{product.name.includes('Anual') ? 'ano' : 'mês'}</span>
                 </div>
                 <p className="text-sm text-green-600 font-medium">
-                  🎉 14 dias grátis para testar tudo
+                  🎉 30 dias grátis para testar tudo
                 </p>
               </div>
 
@@ -127,7 +127,7 @@ export function PricingPage() {
                   <svg className="text-green-600 flex-shrink-0 mt-0.5" width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
                   </svg>
-                  <span className="text-gray-700">Teste grátis por 14 dias</span>
+                  <span className="text-gray-700">Teste grátis por 30 dias</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <svg className="text-green-600 flex-shrink-0 mt-0.5" width="20" height="20" fill="currentColor" viewBox="0 0 20 20">

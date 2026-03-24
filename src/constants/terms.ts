@@ -232,7 +232,7 @@ A PriceUs oferece diferentes planos de assinatura com recursos e limitações es
 
 ### 11.2 Período de Teste (Trial)
 
-Novos Assinantes podem receber um período de teste gratuito de 14 dias. Após o período de teste, a assinatura será automaticamente convertida para o plano pago escolhido, a menos que seja cancelada.
+Novos Assinantes podem receber um período de teste gratuito de 30 dias. Após o período de teste, a assinatura será automaticamente convertida para o plano pago escolhido, a menos que seja cancelada.
 
 ### 11.3 Renovação e Cancelamento
 

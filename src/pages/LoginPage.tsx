@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { LoginForm } from '../components/auth/LoginForm';
 import { SignupForm } from '../components/auth/SignupForm';
+import { AppInstallBanner } from '../components/AppInstallBanner';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export function LoginPage() {
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900">{isLogin ? 'Bem-vindo de volta!' : 'Crie sua conta'}</h2>
             <p className="text-gray-600">
-              {isLogin ? 'Acesse sua conta para continuar.' : 'Comece seu teste gratuito de 14 dias.'}
+              {isLogin ? 'Acesse sua conta para continuar.' : 'Comece seu teste gratuito de 30 dias.'}
             </p>
           </div>
           {isLogin ? (
@@ -46,6 +47,9 @@ export function LoginPage() {
               {isLogin ? 'Cadastre-se' : 'Faça login'}
             </button>
           </p>
+        </div>
+        <div className="mt-6">
+          <AppInstallBanner />
         </div>
       </div>
     </div>

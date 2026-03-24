@@ -5,7 +5,7 @@ import {
   Image, Sparkles, BarChart3, Globe, Smartphone
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { BlackFridayBanner } from '../components/BlackFridayBanner'; // Importa o componente do banner
+import { AppInstallBanner } from '../components/AppInstallBanner';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -87,7 +87,7 @@ export default function LandingPage() {
     {
       icon: Clock,
       title: 'Economize Tempo',
-      description: 'Automatize tarefas repetitivas e foque no que realmente importa: fotografar.',
+      description: 'Automatize tarefas repetitivas e foque no que realmente importa: o seu negócio.',
     },
     {
       icon: Shield,
@@ -107,7 +107,7 @@ export default function LandingPage() {
     period: '/mês',
     description: 'Plataforma completa para gestão do seu negócio',
     features: [
-      'Teste grátis por 14 dias',
+      'Teste grátis por 30 dias',
       'Orçamentos ilimitados',
       'Contratos digitais com assinatura eletrônica',
       'Agenda sincronizada com Google Calendar',
@@ -328,7 +328,7 @@ export default function LandingPage() {
 
             <p className="text-xl md:text-2xl text-gray-600 mb-8 leading-relaxed">
               Orçamentos inteligentes, contratos digitais, agenda sincronizada,
-              sistema de avaliações e muito mais. A plataforma completa para fotógrafos profissionais.
+              sistema de avaliações e muito mais. A plataforma completa para empreendedores e prestadores de serviço.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -348,7 +348,7 @@ export default function LandingPage() {
             </div>
 
             <p className="text-gray-500 mt-6 text-sm">
-              ✓ 14 dias grátis • Sem cartão • Contratos digitais • Agenda inteligente
+              ✓ 30 dias grátis • Sem cartão • Contratos digitais • Agenda inteligente
             </p>
           </div>
 
@@ -370,6 +370,10 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            
+            <div className="mt-8">
+              <AppInstallBanner />
+            </div>
           </div>
         </div>
       </section>
@@ -382,7 +386,7 @@ export default function LandingPage() {
               Funcionalidades que transformam seu negócio
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Recursos premium desenvolvidos especialmente para fotógrafos profissionais que querem crescer
+              Recursos premium desenvolvidos especialmente para profissionais que querem crescer
             </p>
           </div>
 
@@ -525,7 +529,7 @@ export default function LandingPage() {
               Um plano, todas as funcionalidades
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Acesso completo a todos os recursos. Teste grátis por 14 dias, depois apenas R$ 97/mês
+              Acesso completo a todos os recursos. Teste grátis por 30 dias, depois apenas R$ 97/mês
             </p>
           </div>
 
@@ -549,7 +553,7 @@ export default function LandingPage() {
                   <span className="text-2xl text-gray-600 mb-3">{plan.period}</span>
                 </div>
                 <p className="text-sm text-green-600 font-medium">
-                  14 dias grátis para testar todas as funcionalidades
+                  30 dias grátis para testar todas as funcionalidades
                 </p>
               </div>
 
@@ -566,7 +570,7 @@ export default function LandingPage() {
                 onClick={() => navigate('/login')}
                 className="w-full py-4 rounded-lg font-semibold text-lg bg-green-600 text-white hover:bg-green-700 transition shadow-lg hover:shadow-xl"
               >
-                Começar Teste Grátis de 14 Dias
+                Começar Teste Grátis de 30 Dias
               </button>
 
               <p className="text-center text-sm text-gray-500 mt-4">
@@ -648,7 +652,7 @@ export default function LandingPage() {
                 onClick={() => navigate('/login')}
                 className="bg-green-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-green-700 transition shadow-lg hover:shadow-xl"
               >
-                Experimentar Grátis por 14 Dias
+                Experimentar Grátis por 30 Dias
               </button>
             </div>
 
@@ -673,13 +677,13 @@ export default function LandingPage() {
             Pronto para transformar seu negócio?
           </h2>
           <p className="text-xl text-green-50 mb-8 leading-relaxed">
-            Junte-se a milhares de fotógrafos que já automatizaram seus processos e aumentaram suas vendas
+            Junte-se a milhares de profissionais que já automatizaram seus processos e aumentaram suas vendas
           </p>
           <button
             onClick={() => navigate('/login')}
             className="bg-white text-green-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-50 transition shadow-xl inline-flex items-center gap-2"
           >
-            Começar Agora - É Grátis por 14 Dias
+            Começar Agora - 30 Dias Grátis
             <ArrowRight size={20} />
           </button>
           <p className="text-green-50 mt-6">
@@ -699,7 +703,7 @@ export default function LandingPage() {
                 className="h-12 w-auto mb-4 brightness-0 invert"
               />
               <p className="text-sm text-gray-400">
-                Plataforma completa all-in-one para fotógrafos profissionais: orçamentos, contratos, agenda e avaliações.
+                Plataforma completa all-in-one para profissionais: orçamentos, contratos, agenda e avaliações.
               </p>
             </div>
 
@@ -749,9 +753,6 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-
-      {/* Adiciona o banner da Black Friday aqui */}
-      <BlackFridayBanner />
     </div>
   );
 }
