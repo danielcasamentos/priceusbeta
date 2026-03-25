@@ -737,60 +737,83 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </button>
               </div>
 
-              <div className="grid grid-cols-7 gap-2">
-                {weekDays.map((day) => (
-                  <div
-                    key={day}
-                    className="text-center font-semibold text-gray-700 py-2 text-sm"
-                  >
-                    {day}
-                  </div>
-                ))}
-
-                {getDaysInMonth(currentMonth).map((date, index) => {
-                  if (!date) {
-                    return <div key={`empty-${index}`} className="aspect-square" />;
-                  }
-
-                  const dayStatus = getDayStatus(date);
-                  const isToday =
-                    date.toDateString() === new Date().toDateString();
-                  const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
-
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => handleDateClick(date)}
-                      disabled={isPast}
-                      className={`aspect-square border rounded-lg p-2 transition-all ${
-                        dayStatus.color
-                      } ${
-                        isToday ? 'ring-2 ring-green-500' : ''
-                      } ${
-                        isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
-                      } relative`}
+              <div className="overflow-x-auto pb-4">
+                <div className="min-w-[700px] grid grid-cols-7 gap-2">
+                  {weekDays.map((day) => (
+                    <div
+                      key={day}
+                      className="text-center font-semibold text-gray-700 py-2 text-sm"
                     >
-                      <div className="text-sm font-medium text-gray-900">
-                        {date.getDate()}
-                      </div>
-                      {dayStatus.feriado && (
-                        <div className="absolute top-1 left-1" title={dayStatus.feriado.name || dayStatus.feriado.nome}>
-                          <span>🚩</span>
+                      {day}
+                    </div>
+                  ))}
+
+                  {getDaysInMonth(currentMonth).map((date, index) => {
+                    if (!date) {
+                      return <div key={`empty-${index}`} className="min-h-[100px]" />;
+                    }
+
+                    const dayStatus = getDayStatus(date);
+                    const isToday =
+                      date.toDateString() === new Date().toDateString();
+                    const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
+                    
+                    const eventosDoDia = eventos.filter(e => {
+                      const dataLocal = new Date(e.data_evento + 'T00:00:00');
+                      return dataLocal.toDateString() === date.toDateString();
+                    });
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => handleDateClick(date)}
+                        disabled={isPast}
+                        className={`min-h-[100px] flex flex-col items-start border rounded-lg p-2 transition-all ${
+                          dayStatus.color
+                        } ${
+                          isToday ? 'ring-2 ring-green-500' : ''
+                        } ${
+                          isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
+                        } relative overflow-hidden`}
+                      >
+                        <div className="flex w-full justify-between items-start mb-1">
+                          <span className="text-sm font-medium text-gray-900">
+                            {date.getDate()}
+                          </span>
+                          {dayStatus.feriado && (
+                            <span title={dayStatus.feriado.name || dayStatus.feriado.nome}>🚩</span>
+                          )}
                         </div>
-                      )}
-                      {dayStatus.count > 0 && (
-                        <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                          {dayStatus.count}
+                        
+                        <div className="flex-1 w-full flex flex-col gap-1 overflow-y-auto hidden-scrollbar">
+                           {eventosDoDia.slice(0, 3).map(evento => (
+                             <div 
+                               key={evento.id} 
+                               className={`w-full text-left truncate text-[10px] leading-tight px-1.5 py-1 rounded border ${
+                                  evento.status === 'confirmado' ? 'bg-green-100 border-green-200 text-green-800' :
+                                  evento.status === 'pendente' ? 'bg-yellow-100 border-yellow-200 text-yellow-800' :
+                                  'bg-gray-100 border-gray-200 text-gray-800'
+                               }`}
+                             >
+                               {evento.cliente_nome || 'Evento'}
+                             </div>
+                           ))}
+                           {eventosDoDia.length > 3 && (
+                              <div className="text-[10px] text-gray-500 font-medium pl-1">
+                                +{eventosDoDia.length - 3} mais
+                              </div>
+                           )}
                         </div>
-                      )}
-                      {dayStatus.status === 'bloqueada' && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-6 h-0.5 bg-gray-500 rotate-45"></div>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+
+                        {dayStatus.status === 'bloqueada' && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50">
+                            <div className="w-10 h-0.5 bg-gray-500 rotate-45"></div>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-center gap-6 mt-6 text-sm">
