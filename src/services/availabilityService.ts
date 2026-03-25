@@ -17,6 +17,9 @@ export interface ConfiguracaoAgenda {
   eventos_max_por_dia: number;
   modo_aviso: 'informativo' | 'sugestivo' | 'restritivo';
   agenda_ativa: boolean;
+  calendar_ics_url?: string;
+  last_calendar_sync?: string;
+  auto_sync_enabled?: boolean;
 }
 
 export interface EventoAgenda {
@@ -504,5 +507,18 @@ export async function getPeriodosBloqueados(userId: string) {
   } catch (error) {
     console.error('Erro ao buscar períodos bloqueados:', error);
     return [];
+  }
+}
+
+export async function triggerCalendarSync(): Promise<{success: boolean, message: string}> {
+  try {
+     const { data, error } = await supabase.functions.invoke('sync-calendar', {
+        body: {},
+     });
+     if (error) throw error;
+     return { success: true, message: `Google/Apple Calendar sincronizado. ${data.adicionados || 0} novos eventos adicionados.`};
+  } catch (error: any) {
+     console.error('Erro na sincronização:', error);
+     return { success: false, message: error.message || 'Erro desconhecido ao sincronizar.' };
   }
 }

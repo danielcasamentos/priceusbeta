@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, CalendarOff, Flag, PartyPopper, Loader2, Plane } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, CalendarOff, Flag, PartyPopper, Loader2, Plane, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { CalendarImportModal } from './CalendarImportModal';
@@ -19,6 +19,7 @@ import {
   getHistoricoImportacoes,
   rollbackImportacao,
   contarEventosAtivos,
+  triggerCalendarSync,
   type EventoAgenda,
   type ConfiguracaoAgenda,
   type HistoricoImportacao,
@@ -62,6 +63,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     bloquear_feriados: true, // Ativado por padrão
     regra_par_impar: 'nenhum' as 'nenhum' | 'pares' | 'impares',    regra_semanal: 'nenhum' as 'nenhum' | 'trabalha_pares' | 'trabalha_impares',
     regra_semanal_inicio: null as string | null,
+    calendar_ics_url: '',
+    auto_sync_enabled: false,
+    last_calendar_sync: null as string | null,
   });
 
   const [importStatus, setImportStatus] = useState<{
@@ -107,6 +111,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
           regra_par_impar: configData.regra_par_impar || 'nenhum',
           regra_semanal: configData.regra_semanal || 'nenhum',
           regra_semanal_inicio: configData.regra_semanal_inicio,
+          calendar_ics_url: configData.calendar_ics_url || '',
+          auto_sync_enabled: configData.auto_sync_enabled || false,
+          last_calendar_sync: configData.last_calendar_sync || null,
         });
       }
 
@@ -219,9 +226,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
     try {
       const { error } = await supabase
-        .from('agenda_config') // CORREÇÃO: Nome da tabela ajustado para o correto.
+        .from('configuracao_agenda')
         .update(configEdit)
-        .eq('user_id', userId); // CORREÇÃO: Usar user_id para garantir que o registro correto seja atualizado.
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -231,6 +238,29 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       console.error('Erro ao salvar configurações:', error);
       alert('Erro ao salvar configurações');
     }
+  };
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    setImportStatus({ show: true, type: 'info', message: 'Sincronizando calendário externo...' });
+    
+    // Salvar a URL antes de sincronizar caso tenha sido alterada
+    try {
+       await supabase.from('configuracao_agenda').update({ 
+         calendar_ics_url: configEdit.calendar_ics_url,
+         auto_sync_enabled: configEdit.auto_sync_enabled
+       }).eq('user_id', userId);
+    } catch(e) { console.error('Erro ao salvar a url: ', e) }
+
+    const result = await triggerCalendarSync();
+    if (result.success) {
+      setImportStatus({ show: true, type: 'success', message: result.message });
+      await loadData(); // Recarregar para pegar a data de ultima sync
+    } else {
+      setImportStatus({ show: true, type: 'error', message: 'Erro na sincronização', details: [result.message] });
+    }
+    setIsSyncing(false);
   };
 
   const handleDiasSemanaChange = (dia: number) => {
@@ -1118,8 +1148,86 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                 >
                   <Trash className="w-5 h-5" />
-                  Limpar Eventos do Calendário
                 </button>
+              </div>
+
+              {/* Sincronização Externa */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                <div className="flex items-start gap-3 mb-4">
+                  <RefreshCw className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900 mb-1">Integração Automática Externa</h3>
+                    <p className="text-sm text-gray-600">
+                      Cole o Link Público/Secreto (formato .ics) do seu Google Calendar ou Apple Calendar para que seus compromissos pessoais sejam sincronizados aqui e bloqueiem seus horários.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 ml-8">
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">URL do Calendário (.ics)</label>
+                     <input
+                       type="url"
+                       placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                       value={configEdit.calendar_ics_url || ''}
+                       onChange={(e) => setConfigEdit({ ...configEdit, calendar_ics_url: e.target.value })}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                     />
+                   </div>
+
+                   <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-lg flex items-start gap-2">
+                     <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                     <p>Os eventos importados desta forma sempre entrarão como "Confirmado" e alocarão o seu horário. O sistema irá sincronizar e apenas adicionar os eventos novos.</p>
+                   </div>
+
+                   <div className="flex items-center gap-3">
+                     <button
+                       onClick={handleSyncNow}
+                       disabled={isSyncing || !configEdit.calendar_ics_url}
+                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+                     >
+                       {isSyncing ? (
+                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                       ) : (
+                         <RefreshCw className="w-4 h-4" />
+                       )}
+                       {isSyncing ? 'Sincronizando...' : 'Salvar URL e Sincronizar Agora'}
+                     </button>
+                     
+                     {configEdit.last_calendar_sync && (
+                        <p className="text-xs text-gray-500">
+                           Última sincronização: {new Date(configEdit.last_calendar_sync).toLocaleString('pt-BR')}
+                        </p>
+                     )}
+                   </div>
+
+                   <details className="text-sm text-gray-600 mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                     <summary className="cursor-pointer font-medium text-blue-600 hover:text-blue-800">
+                       Como encontrar meu Link do Calendário (Google/Apple)?
+                     </summary>
+                     <div className="pl-4 mt-3 space-y-4 pb-2 text-xs">
+                       <div>
+                         <p className="font-bold text-gray-800 mb-1">Passo a passo - Google Calendar:</p>
+                         <ol className="list-decimal pl-4 space-y-1 text-gray-700">
+                           <li>Acesse <strong>calendar.google.com</strong> no seu computador.</li>
+                           <li>Clique no ícone de Engrenagem ⚙️ e vá em "Configurações".</li>
+                           <li>Na aba esquerda, procure por "Configurações das minhas agendas" e clique no seu e-mail.</li>
+                           <li>Role a tela até a seção <strong>Integrar agenda</strong>.</li>
+                           <li>Copie o <strong>Endereço secreto no formato iCal</strong> e cole-o no campo acima.</li>
+                         </ol>
+                       </div>
+                       <div>
+                         <p className="font-bold text-gray-800 mb-1">Passo a passo - Apple Calendar (iCloud):</p>
+                         <ol className="list-decimal pl-4 space-y-1 text-gray-700">
+                           <li>Abra o aplicativo Calendário no Mac, iPhone ou em <strong>icloud.com/calendar</strong>.</li>
+                           <li>Clique no ícone redondo de "compartilhamento" ao lado do nome do calendário na barra lateral.</li>
+                           <li>Marque a opção "Calendário Público" (apenas quem tiver o link longo gerado terá acesso).</li>
+                           <li>Copie o link que aparecer, volte aqui e cole-o no campo acima.</li>
+                         </ol>
+                       </div>
+                     </div>
+                   </details>
+                </div>
               </div>
 
               {/* Bloqueio de Feriados */}
