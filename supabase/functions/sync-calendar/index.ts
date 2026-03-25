@@ -84,8 +84,12 @@ serve(async (req) => {
        return new Response(JSON.stringify({ error: 'Nenhuma URL de calendário configurada' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 })
     }
 
-    const url = config.calendar_ics_url;
-    console.log(`Buscando calendário da URL para o usuário ${user.id}`);
+    let url = config.calendar_ics_url;
+    if (url.startsWith('webcal://')) {
+      url = url.replace(/^webcal:\/\//i, 'https://');
+    }
+    
+    console.log(`Buscando calendário da URL para o usuário ${user.id}: ${url}`);
     
     // We append a random query param or use headers to avoid cached responses
     const response = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
@@ -117,6 +121,7 @@ serve(async (req) => {
                data_evento: evento.data_evento,
                cliente_nome: evento.cliente_nome,
                tipo_evento: evento.tipo_evento || 'evento',
+               cidade: '', // required field
                status: 'confirmado',
                origem: 'ics_sync',
                observacoes: 'Importado automaticamente do calendário externo',
