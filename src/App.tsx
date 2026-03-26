@@ -18,13 +18,24 @@ import { ReviewPage } from './pages/ReviewPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
-
+import { supabase } from './lib/supabase';
 
 function App() {
   useTawkTo(); // Inicializa o Tawk.to e esconde o widget
 
   useEffect(() => {
     checkEnvVariables();
+    
+    // Escuta o evento de recuperação de senha e redireciona imediatamente
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        window.location.href = '/reset-password';
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
