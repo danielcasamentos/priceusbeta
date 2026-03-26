@@ -19,7 +19,7 @@ import {
   getHistoricoImportacoes,
   rollbackImportacao,
   contarEventosAtivos,
-  triggerCalendarSync,
+  uploadICSFile,
   type EventoAgenda,
   type ConfiguracaoAgenda,
   type HistoricoImportacao,
@@ -241,26 +241,31 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   };
 
   const [isSyncing, setIsSyncing] = useState(false);
-  const handleSyncNow = async () => {
-    setIsSyncing(true);
-    setImportStatus({ show: true, type: 'info', message: 'Sincronizando calendário externo...' });
-    
-    // Salvar a URL antes de sincronizar caso tenha sido alterada
-    try {
-       await supabase.from('configuracao_agenda').update({ 
-         calendar_ics_url: configEdit.calendar_ics_url,
-         auto_sync_enabled: configEdit.auto_sync_enabled
-       }).eq('user_id', userId);
-    } catch(e) { console.error('Erro ao salvar a url: ', e) }
+  const handleICSFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    const result = await triggerCalendarSync();
-    if (result.success) {
-      setImportStatus({ show: true, type: 'success', message: result.message });
-      await loadData(); // Recarregar para pegar a data de ultima sync
-    } else {
-      setImportStatus({ show: true, type: 'error', message: 'Erro na sincronização', details: [result.message] });
+    setIsSyncing(true);
+    setImportStatus({ show: true, type: 'info', message: 'Importando calendário externo...' });
+    
+    try {
+      const text = await file.text();
+      const result = await uploadICSFile(text, userId);
+      
+      if (result.success) {
+        setImportStatus({ show: true, type: 'success', message: result.message });
+        await loadData(); // Recarregar para pegar a data de ultima sync
+      } else {
+        setImportStatus({ show: true, type: 'error', message: 'Erro na importação', details: [result.message] });
+      }
+    } catch (error: any) {
+      setImportStatus({ show: true, type: 'error', message: 'Erro ao ler arquivo', details: [error.message] });
+    } finally {
+      setIsSyncing(false);
+      if (event.target) {
+        event.target.value = '';
+      }
     }
-    setIsSyncing(false);
   };
 
   const handleDiasSemanaChange = (dia: number) => {
@@ -1174,78 +1179,75 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </button>
               </div>
 
-              {/* Sincronização Externa */}
+              {/* Sincronização Externa (Agora via Upload Manual) */}
               <div className="border border-gray-200 rounded-lg p-4 bg-white">
                 <div className="flex items-start gap-3 mb-4">
                   <RefreshCw className="w-5 h-5 text-blue-600 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 mb-1">Integração Automática Externa</h3>
+                    <h3 className="font-medium text-gray-900 mb-1">Importação de Calendário (Apple/Google)</h3>
                     <p className="text-sm text-gray-600">
-                      Cole o Link Público/Secreto (formato .ics) do seu Google Calendar ou Apple Calendar para que seus compromissos pessoais sejam sincronizados aqui e bloqueiem seus horários.
+                      Faça o upload do arquivo .ics do seu Google Calendar ou Apple Calendar para que seus compromissos pessoais sejam sincronizados aqui e bloqueiem seus horários.
                     </p>
                   </div>
                 </div>
                 
                 <div className="space-y-4 ml-8">
                    <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">URL do Calendário (.ics)</label>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Selecionar Arquivo de Calendário (.ics)</label>
                      <input
-                       type="url"
-                       placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
-                       value={configEdit.calendar_ics_url || ''}
-                       onChange={(e) => setConfigEdit({ ...configEdit, calendar_ics_url: e.target.value })}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                       type="file"
+                       accept=".ics,text/calendar"
+                       onChange={handleICSFileUpload}
+                       disabled={isSyncing}
+                       className="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-md file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100 disabled:opacity-50"
                      />
                    </div>
+
+                   {isSyncing && (
+                     <div className="flex items-center gap-2 text-sm text-blue-600">
+                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                       Importando eventos...
+                     </div>
+                   )}
 
                    <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-lg flex items-start gap-2">
                      <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                      <p>Os eventos importados desta forma sempre entrarão como "Confirmado" e alocarão o seu horário. O sistema irá sincronizar e apenas adicionar os eventos novos.</p>
                    </div>
-
-                   <div className="flex items-center gap-3">
-                     <button
-                       onClick={handleSyncNow}
-                       disabled={isSyncing || !configEdit.calendar_ics_url}
-                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
-                     >
-                       {isSyncing ? (
-                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                       ) : (
-                         <RefreshCw className="w-4 h-4" />
-                       )}
-                       {isSyncing ? 'Sincronizando...' : 'Salvar URL e Sincronizar Agora'}
-                     </button>
-                     
-                     {configEdit.last_calendar_sync && (
-                        <p className="text-xs text-gray-500">
-                           Última sincronização: {new Date(configEdit.last_calendar_sync).toLocaleString('pt-BR')}
-                        </p>
-                     )}
-                   </div>
+                   
+                   {configEdit.last_calendar_sync && (
+                      <p className="text-xs text-gray-500 font-medium mt-2">
+                         Última importação de calendário concluída em: {new Date(configEdit.last_calendar_sync).toLocaleString('pt-BR')}
+                      </p>
+                   )}
 
                    <details className="text-sm text-gray-600 mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
                      <summary className="cursor-pointer font-medium text-blue-600 hover:text-blue-800">
-                       Como encontrar meu Link do Calendário (Google/Apple)?
+                       Como exportar meu Calendário (Google/Apple) para arquivo .ics?
                      </summary>
                      <div className="pl-4 mt-3 space-y-4 pb-2 text-xs">
                        <div>
                          <p className="font-bold text-gray-800 mb-1">Passo a passo - Google Calendar:</p>
                          <ol className="list-decimal pl-4 space-y-1 text-gray-700">
-                           <li>Acesse <strong>calendar.google.com</strong> no seu computador.</li>
-                           <li>Clique no ícone de Engrenagem ⚙️ e vá em "Configurações".</li>
-                           <li>Na aba esquerda, procure por "Configurações das minhas agendas" e clique no seu e-mail.</li>
-                           <li>Role a tela até a seção <strong>Integrar agenda</strong>.</li>
-                           <li>Copie o <strong>Endereço secreto no formato iCal</strong> e cole-o no campo acima.</li>
+                           <li>Acesse <strong>calendar.google.com</strong> no seu Mac/PC.</li>
+                           <li>Clique na Engrenagem ⚙️ e vá em "Configurações".</li>
+                           <li>No menu à esquerda, procure <strong>Importar e exportar</strong>.</li>
+                           <li>Clique em <strong>Exportar</strong>. Um arquivo ZIP será baixado.</li>
+                           <li>Extraia o ZIP para encontrar o seu arquivo <strong>.ics</strong> e faça o upload aqui.</li>
                          </ol>
                        </div>
                        <div>
-                         <p className="font-bold text-gray-800 mb-1">Passo a passo - Apple Calendar (iCloud):</p>
+                         <p className="font-bold text-gray-800 mb-1">Passo a passo - Apple Calendar (Mac):</p>
                          <ol className="list-decimal pl-4 space-y-1 text-gray-700">
-                           <li>Abra o aplicativo Calendário no Mac, iPhone ou em <strong>icloud.com/calendar</strong>.</li>
-                           <li>Clique no ícone redondo de "compartilhamento" ao lado do nome do calendário na barra lateral.</li>
-                           <li>Marque a opção "Calendário Público" (apenas quem tiver o link longo gerado terá acesso).</li>
-                           <li>Copie o link que aparecer, volte aqui e cole-o no campo acima.</li>
+                           <li>Abra o aplicativo Calendário no seu Mac.</li>
+                           <li>Selecione o calendário que deseja exportar na barra lateral esquerda.</li>
+                           <li>No menu superior, vá em <strong>Arquivo {'>'} Exportar {'>'} Exportar...</strong></li>
+                           <li>Salve o arquivo no formato padrão <strong>(.ics)</strong> e faça o upload aqui.</li>
                          </ol>
                        </div>
                      </div>

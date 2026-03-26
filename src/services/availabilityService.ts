@@ -510,15 +510,100 @@ export async function getPeriodosBloqueados(userId: string) {
   }
 }
 
-export async function triggerCalendarSync(): Promise<{success: boolean, message: string}> {
+const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string }> => {
+  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string }> = [];
+  const lines = text.split('\n');
+
+  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string } = {};
+  let inEvent = false;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    if (trimmedLine === 'BEGIN:VEVENT') {
+      inEvent = true;
+      currentEvent = { tipo_evento: 'evento' };
+    } else if (trimmedLine === 'END:VEVENT') {
+      if (currentEvent.data_evento && currentEvent.cliente_nome) {
+        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string });
+      }
+      inEvent = false;
+      currentEvent = {};
+    } else if (inEvent) {
+      if (trimmedLine.startsWith('DTSTART')) {
+        const dateMatch = trimmedLine.match(/(\d{4})(\d{2})(\d{2})/);
+        if (dateMatch) {
+          currentEvent.data_evento = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+        }
+      } else if (trimmedLine.startsWith('SUMMARY:')) {
+        currentEvent.cliente_nome = trimmedLine.substring(8).trim() || 'Evento de Calendário';
+      } else if (trimmedLine.startsWith('DESCRIPTION:')) {
+        currentEvent.tipo_evento = trimmedLine.substring(12).trim() || 'evento';
+      } else if (trimmedLine.startsWith('LOCATION:')) {
+        if (!currentEvent.tipo_evento || currentEvent.tipo_evento === 'evento') {
+          currentEvent.tipo_evento = trimmedLine.substring(9).trim() || 'evento';
+        }
+      }
+    }
+  }
+
+  return eventos;
+};
+
+export async function uploadICSFile(icsText: string, userId: string): Promise<{success: boolean, message: string}> {
   try {
-     const { data, error } = await supabase.functions.invoke('sync-calendar', {
-        body: {},
-     });
-     if (error) throw error;
-     return { success: true, message: `Google/Apple Calendar sincronizado. ${data.adicionados || 0} novos eventos adicionados.`};
+    const parsedEventos = parseICS(icsText);
+    let adicionados = 0;
+    
+    if (parsedEventos.length === 0) {
+       return { success: false, message: 'Nenhum evento encontrado no arquivo.' };
+    }
+
+    const { data: existentes, error: queryError } = await supabase
+       .from('eventos_agenda')
+       .select('cliente_nome, data_evento')
+       .eq('user_id', userId);
+
+    if (queryError) throw queryError;
+    
+    const setExistentes = new Set(existentes?.map(e => `${e.cliente_nome}-${e.data_evento}`));
+    const novosEventos = [];
+    const dataHoraAtual = new Date().toISOString();
+    
+    for (const evento of parsedEventos) {
+       const chave = `${evento.cliente_nome}-${evento.data_evento}`;
+       if (!setExistentes.has(chave)) {
+          novosEventos.push({
+             user_id: userId,
+             data_evento: evento.data_evento,
+             cliente_nome: evento.cliente_nome,
+             tipo_evento: evento.tipo_evento || 'evento',
+             cidade: '', // required field
+             status: 'confirmado',
+             origem: 'ics_sync',
+             observacoes: 'Importado manualmente do calendário externo',
+             created_at: dataHoraAtual
+          });
+          adicionados++;
+       }
+    }
+    
+    if (novosEventos.length > 0) {
+       const { error: insertError } = await supabase
+          .from('eventos_agenda')
+          .insert(novosEventos);
+          
+       if (insertError) throw insertError;
+    }
+    
+    await supabase
+       .from('configuracao_agenda')
+       .update({ last_calendar_sync: new Date().toISOString() })
+       .eq('user_id', userId);
+
+    return { success: true, message: `Calendário importado. ${adicionados} novos eventos adicionados de ${parsedEventos.length} lidos.`};
   } catch (error: any) {
-     console.error('Erro na sincronização:', error);
-     return { success: false, message: error.message || 'Erro desconhecido ao sincronizar.' };
+    console.error('Erro na sincronização importada:', error);
+    return { success: false, message: error.message || 'Erro desconhecido ao importar arquivo ICS.' };
   }
 }
