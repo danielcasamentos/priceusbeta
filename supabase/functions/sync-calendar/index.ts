@@ -68,8 +68,10 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } } 
     })
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     if (userError || !user) {
+      console.error('Erro no getUser:', userError);
       throw new Error('Usuário não autenticado')
     }
 
@@ -91,8 +93,15 @@ serve(async (req) => {
     
     console.log(`Buscando calendário da URL para o usuário ${user.id}: ${url}`);
     
-    // We append a random query param or use headers to avoid cached responses
-    const response = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
+    // We use headers to avoid cached responses and simulate a standard browser agent
+    // to prevent some providers (like iCloud) from blocking our servers.
+    const response = await fetch(url, { 
+      headers: { 
+        'Cache-Control': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/calendar, text/plain, */*'
+      } 
+    });
     if (!response.ok) {
        throw new Error(`Falha ao buscar URL: ${response.statusText}`);
     }
