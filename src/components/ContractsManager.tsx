@@ -22,8 +22,8 @@ interface Contract {
     data_evento?: string;
     valor_total?: number;
   };
-  client_data_json?: any; // Adicionado
-  user_data_json?: any; // Adicionado
+  client_data_json: any; // Adicionado
+  user_data_json: any; // Adicionado
   user_signature_base64: string; // Adicionado
   signature_base64?: string; // Adicionado
   contract_templates: {
@@ -44,6 +44,8 @@ const [isDeleting, setIsDeleting] = useState(false);
   const [yearFilter, setYearFilter] = useState(0); // 0 representa "Todos os Anos"
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [viewingContract, setViewingContract] = useState<Contract | null>(null);
+  const [deleteConfirmSingle, setDeleteConfirmSingle] = useState<string | null>(null);
+  const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
 
   useEffect(() => {
     loadContracts();
@@ -104,11 +106,11 @@ const [isDeleting, setIsDeleting] = useState(false);
   };
 
   const handleDeleteSingle = async (contractId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este contrato?')) {
-      return;
-    }
-
-    setDeletingIds(prev => new Set([...prev, contractId]));
+    setDeletingIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(contractId);
+      return newSet;
+    });
     try {
       const { error } = await supabase.from('contracts').delete().eq('id', contractId);
       if (error) throw error;
@@ -124,14 +126,11 @@ const [isDeleting, setIsDeleting] = useState(false);
         newSet.delete(contractId);
         return newSet;
       });
+      setDeleteConfirmSingle(null);
     }
   };
 
   const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0 || !confirm(`Tem certeza que deseja excluir ${selectedIds.length} contrato(s)?`)) {
-      return;
-    }
-
     setIsDeleting(true);
     try {
       const { error } = await supabase.from('contracts').delete().in('id', selectedIds);
@@ -144,6 +143,7 @@ const [isDeleting, setIsDeleting] = useState(false);
       alert('Erro ao excluir contratos.');
     } finally {
       setIsDeleting(false);
+      setDeleteConfirmMultiple(false);
     }
   };
 
@@ -166,7 +166,7 @@ const [isDeleting, setIsDeleting] = useState(false);
     return Array.from(years).filter(Boolean).sort((a, b) => b! - a!);
   }, [contracts]);
 
-  const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: ptBR.localize?.month(i) }));
+  const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: ptBR.localize?.month(i as any) }));
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
@@ -211,7 +211,7 @@ const [isDeleting, setIsDeleting] = useState(false);
           {selectedIds.length > 0 && (
               <button
                 type="button"
-                onClick={(e) => { e.preventDefault(); handleDeleteSelected(); }}
+                onClick={(e) => { e.preventDefault(); setDeleteConfirmMultiple(true); }}
                 disabled={isDeleting}
                 className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
               >
@@ -305,7 +305,7 @@ const [isDeleting, setIsDeleting] = useState(false);
                       <button
                         type="button"
                         title="Excluir contrato"
-                        onClick={(e) => { e.preventDefault(); handleDeleteSingle(contract.id); }}
+                        onClick={(e) => { e.preventDefault(); setDeleteConfirmSingle(contract.id); }}
                         className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
                         disabled={deletingIds.has(contract.id)}
                       >
@@ -325,6 +325,44 @@ const [isDeleting, setIsDeleting] = useState(false);
           contract={viewingContract} 
           onClose={() => setViewingContract(null)} 
         />
+      )}
+
+      {/* Modal Exclusão Única */}
+      {deleteConfirmSingle && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <AlertCircle className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir Contrato</h3>
+            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir este contrato permanentemente? Essa ação não pode ser desfeita.</p>
+            <div className="flex justify-center gap-3">
+              <button onClick={() => setDeleteConfirmSingle(null)} className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors">Cancelar</button>
+              <button disabled={deletingIds.has(deleteConfirmSingle)} onClick={() => handleDeleteSingle(deleteConfirmSingle)} className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2">
+                {deletingIds.has(deleteConfirmSingle) ? 'Excluindo...' : 'Sim, Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Exclusão Múltipla */}
+      {deleteConfirmMultiple && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <AlertCircle className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir {selectedIds.length} Contratos</h3>
+            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir estes contratos permanentemente? Essa ação não pode ser desfeita.</p>
+            <div className="flex justify-center gap-3">
+              <button onClick={() => setDeleteConfirmMultiple(false)} disabled={isDeleting} className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors">Cancelar</button>
+              <button disabled={isDeleting} onClick={handleDeleteSelected} className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2">
+                {isDeleting ? 'Excluindo...' : 'Sim, Excluir Todos'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

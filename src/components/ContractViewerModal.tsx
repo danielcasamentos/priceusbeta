@@ -9,8 +9,10 @@ import { replaceContractVariables, type BusinessSettings, type ClientData, type 
 
 interface Contract {
   id: string;
+  template_id?: string;
   status: 'pending' | 'signed' | 'expired';
   created_at: string;
+  client_ip?: string;
   token: string;
   signed_at: string | null;
   user_id: string; // Adicionado para buscar dados do usuário

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, Tag, CheckCircle } from 'lucide-react';
 import { CompanyTransaction, CompanyCategory } from '../hooks/useCompanyTransactions';
 

@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
-import { useCompanyTransactions, CompanyTransaction } from '../../hooks/useCompanyTransactions';
+import { useCompanyTransactions, CompanyTransaction, CompanyCategory } from '../../hooks/useCompanyTransactions';
 import { TransactionFormModal } from '../TransactionFormModal';
 
 interface CompanyTransactionsProps {
@@ -29,6 +29,8 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<CompanyTransaction | null>(null);
+  const [isDeletingTx, setIsDeletingTx] = useState(false);
 
   const filteredTransactions = transactions.filter((t: CompanyTransaction) => {
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
@@ -75,25 +77,24 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const transaction = transactions.find((t: CompanyTransaction) => t.id === id);
+  const handleDeleteConfirm = async () => {
+    if (!transactionToDelete) return;
+    setIsDeletingTx(true);
 
-    let confirmMessage = 'Tem certeza que deseja excluir esta transação?';
-
-    if (transaction?.is_installment && transaction?.parent_transaction_id) {
+    if (transactionToDelete.is_installment && transactionToDelete.parent_transaction_id) {
       const relatedInstallments = transactions.filter(
-        t => t.parent_transaction_id === transaction.parent_transaction_id
+        (t: CompanyTransaction) => t.parent_transaction_id === transactionToDelete.parent_transaction_id
       );
-      confirmMessage = `Esta é uma parcela de um total de ${relatedInstallments.length}. Deseja excluir TODAS as parcelas relacionadas?`;
 
-      if (window.confirm(confirmMessage)) {
-        for (const installment of relatedInstallments) {
-          await deleteTransaction(installment.id);
-        }
+      for (const installment of relatedInstallments) {
+        await deleteTransaction(installment.id);
       }
-    } else if (window.confirm(confirmMessage)) {
-      await deleteTransaction(id);
+    } else {
+      await deleteTransaction(transactionToDelete.id);
     }
+    
+    setIsDeletingTx(false);
+    setTransactionToDelete(null);
   };
 
   const handleNewTransaction = (tipo: 'receita' | 'despesa' = 'receita') => {
@@ -424,7 +425,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => { e.preventDefault(); handleDelete(transaction.id); }}
+                          onClick={(e) => { e.preventDefault(); setTransactionToDelete(transaction); }}
                           className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
                           title="Excluir"
                         >
@@ -461,6 +462,29 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
         categories={categories}
         transaction={editingTransaction}
       />
+
+      {/* Modal de Exclusão */}
+      {transactionToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <Trash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir Transação</h3>
+            <p className="text-gray-600 mb-6 font-medium">
+              {transactionToDelete.is_installment && transactionToDelete.parent_transaction_id 
+                ? `Esta é uma parcela de um total de ${transactions.filter((t: CompanyTransaction) => t.parent_transaction_id === transactionToDelete.parent_transaction_id).length}. Deseja excluir TODAS as parcelas relacionadas?`
+                : 'Tem certeza que deseja excluir esta transação? Essa ação não pode ser desfeita.'}
+            </p>
+            <div className="flex justify-center gap-3">
+              <button disabled={isDeletingTx} onClick={() => setTransactionToDelete(null)} className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors">Cancelar</button>
+              <button disabled={isDeletingTx} onClick={handleDeleteConfirm} className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2">
+                {isDeletingTx ? 'Excluindo...' : 'Sim, Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
