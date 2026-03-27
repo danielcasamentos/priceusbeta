@@ -423,7 +423,8 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(transaction.id)}
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); handleDelete(transaction.id); }}
                           className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
                           title="Excluir"
                         >

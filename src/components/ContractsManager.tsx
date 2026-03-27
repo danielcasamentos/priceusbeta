@@ -210,7 +210,8 @@ const [isDeleting, setIsDeleting] = useState(false);
           </select>
           {selectedIds.length > 0 && (
               <button
-                onClick={handleDeleteSelected}
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleDeleteSelected(); }}
                 disabled={isDeleting}
                 className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
               >
@@ -302,8 +303,9 @@ const [isDeleting, setIsDeleting] = useState(false);
                       </button>
                       
                       <button
+                        type="button"
                         title="Excluir contrato"
-                        onClick={() => handleDeleteSingle(contract.id)}
+                        onClick={(e) => { e.preventDefault(); handleDeleteSingle(contract.id); }}
                         className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
                         disabled={deletingIds.has(contract.id)}
                       >
