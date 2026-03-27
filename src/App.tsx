@@ -25,11 +25,15 @@ function App() {
 
   useEffect(() => {
     checkEnvVariables();
-    
+    // Fallback: Verifica manualmente se há type=recovery no hash no carregamento
+    if (window.location.hash && window.location.hash.includes('type=recovery')) {
+      window.location.href = '/reset-password' + window.location.hash;
+    }
+
     // Escuta o evento de recuperação de senha e redireciona imediatamente
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
-        window.location.href = '/reset-password';
+        window.location.href = '/reset-password' + window.location.hash;
       }
     });
 
