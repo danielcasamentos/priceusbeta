@@ -453,22 +453,9 @@ export function LeadsManager({ userId }: { userId: string }) {
         return;
       }
 
-      const tId = lead.template_id;
-      const tp = templates[tId];
-      if (tp && (tp.sistema_sazonal_ativo || tp.sistema_geografico_ativo)) {
-        if (savedOrcamentoDetalhe.priceBreakdown && (
-            savedOrcamentoDetalhe.priceBreakdown.ajusteSazonal !== 0 ||
-            savedOrcamentoDetalhe.priceBreakdown.ajusteGeografico?.taxa > 0 ||
-            savedOrcamentoDetalhe.priceBreakdown.ajusteGeografico?.percentual > 0
-        )) {
-            // Mostra o Modal ao invés do Confirm
-            setWhatsappLeadConfig({ lead, savedOrcamentoDetalhe, isOpen: true });
-            return; // Espera a decisão do usuário
-        }
-      }
-
-      // 2. Transmite a mensagem direto, sem extras para ocultar
-      await executeWhatsAppMessage(lead, savedOrcamentoDetalhe, false);
+      // Sempre mostra as opções de apresentação dos valores para o usuário decidir
+      setWhatsappLeadConfig({ lead, savedOrcamentoDetalhe, isOpen: true });
+      return; // Espera a decisão do usuário
     } catch (error) {
       console.error("Erro ao gerar mensagem do WhatsApp:", error);
       alert("❌ Ocorreu um erro ao gerar a mensagem. Verifique os dados do lead e tente novamente.");
@@ -1082,11 +1069,10 @@ export function LeadsManager({ userId }: { userId: string }) {
                 <FileSignature className="w-6 h-6 text-blue-600" />
               </div>
               <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
-                Valores Adicionais
+                Apresentação de Valores
               </h3>
               <p className="text-gray-600 text-center text-sm mb-6">
-                Este orçamento possui taxas extras de <strong className="text-gray-800">Localidade</strong> ou <strong className="text-gray-800">Sazonalidade</strong>.<br/>
-                Como você gostaria de apresentar esses valores na mensagem para o cliente?
+                Como você gostaria de apresentar os valores na mensagem de follow-up para o cliente?
               </p>
 
               <div className="space-y-3">
@@ -1096,10 +1082,10 @@ export function LeadsManager({ userId }: { userId: string }) {
                 >
                   <p className="font-semibold text-blue-900 flex items-center">
                     <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
-                    Ocultar discriminação
+                    Ocultar valores intermediários
                   </p>
                   <p className="text-xs text-blue-800/80 mt-1 pl-4">
-                    As taxas não serão listadas separadamente. Elas serão embutidas discretamente no valor sublimado final.
+                    Os produtos e eventuais taxas extras não terão seus preços listados separadamente. Apenas o valor total da proposta será exibido.
                   </p>
                 </button>
 
@@ -1112,7 +1098,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                     Mostrar detalhado
                   </p>
                   <p className="text-xs text-gray-500 mt-1 pl-4">
-                    Mantém transparente as listagens de custos extras que geraram acréscimo de valor na mensagem (ex: "Taxa de deslocamento").
+                    Mantém transparente a listagem de preços individuais por produto/serviço e exibe eventuais custos extras do orçamento.
                   </p>
                 </button>
               </div>
