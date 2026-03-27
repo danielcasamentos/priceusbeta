@@ -15,6 +15,7 @@ export interface Product {
   id: string;
   nome: string;
   valor: number;
+  permite_multiplos?: boolean;
 }
 
 export interface PaymentMethod {

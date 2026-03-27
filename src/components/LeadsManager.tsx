@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react'; // Re-confirmando importação explícita de React
-import { supabase, Lead } from '../lib/supabase'; // Importando LeadStatus para tipagem e Lead
+import { EditLeadQuoteModal } from './EditLeadQuoteModal';
+import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3 } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
@@ -13,7 +14,7 @@ import { useReviewRequest } from '../hooks/useReviewRequest';
 // Define interfaces for better type safety
 
 // New interface to match what's saved in lead.orcamento_detalhe by QuotePage
-interface LeadOrcamentoDetalhe {
+export interface LeadOrcamentoDetalhe {
   selectedProdutos: Record<string, number>; // { productId: quantity }
   selectedFormaPagamento?: string; // ID da forma de pagamento
   forma_pagamento_id?: string; // ID da forma de pagamento (novo formato)
@@ -61,6 +62,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [loadingDetalhes, setLoadingDetalhes] = useState(false);
   const [whatsappMessageBody, setWhatsappMessageBody] = useState<string>('');
   const [disponibilidadeLead, setDisponibilidadeLead] = useState<AvailabilityResult | null>(null);
+  const [editingLeadQuote, setEditingLeadQuote] = useState<{lead: Lead | null, detalhes: LeadOrcamentoDetalhe | null}>({lead: null, detalhes: null});
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -198,7 +200,6 @@ export function LeadsManager({ userId }: { userId: string }) {
       priceBreakdown: savedOrcamentoDetalhe.priceBreakdown || { // Use priceBreakdown from details
         subtotal: lead.valor_total,
         ajusteSazonal: 0,
-        taxaDeslocamento: 0,
         ajusteGeografico: { percentual: 0, taxa: 0 },
         descontoCupom: 0,
         acrescimoFormaPagamento: 0,
@@ -911,8 +912,20 @@ export function LeadsManager({ userId }: { userId: string }) {
 
                 <div>
                   <h3 className="font-semibold text-gray-700">Orçamento</h3>
-                  <div className="mt-2">
-                    <p><strong>Valor Total:</strong> {formatCurrency(selectedLead.valor_total)}</p>
+                  <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-200 mt-2">
+                    <div>
+                      <p className="text-sm text-gray-500">Valor Total Negociado</p>
+                      <p className="text-xl font-bold text-blue-700">{formatCurrency(selectedLead.valor_total)}</p>
+                    </div>
+                    {detalhesOrcamento && !loadingDetalhes && (
+                      <button
+                        onClick={() => setEditingLeadQuote({lead: selectedLead, detalhes: detalhesOrcamento})}
+                        className="px-4 py-2 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Editar Pacote
+                      </button>
+                    )}
                   </div>
                   {loadingDetalhes ? (
                     <div className="text-center py-4">
@@ -1060,6 +1073,23 @@ export function LeadsManager({ userId }: { userId: string }) {
           onSuccess={() => loadLeads()}
         />
       )}
+      {/* Modal de Edição de Orçamento */}
+      {editingLeadQuote.lead && editingLeadQuote.detalhes && (
+        <EditLeadQuoteModal
+          lead={editingLeadQuote.lead}
+          savedOrcamentoDetalhe={editingLeadQuote.detalhes}
+          onClose={() => setEditingLeadQuote({lead: null, detalhes: null})}
+          onSave={() => {
+             // Esconde o modal
+             setEditingLeadQuote({lead: null, detalhes: null});
+             // Recarrega detalhes instantaneamente na UI e o Whatsapp novo
+             loadDetalhesOrcamento(editingLeadQuote.lead!, true);
+             // Recarrega a listagem de leads p atualizar Valor Total global
+             loadLeads();
+          }}
+        />
+      )}
+
       {/* Modal de Confirmação para WhatsApp */}
       {whatsappLeadConfig.isOpen && whatsappLeadConfig.lead && whatsappLeadConfig.savedOrcamentoDetalhe && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
