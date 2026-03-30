@@ -66,6 +66,9 @@ export function LeadsManager({ userId }: { userId: string }) {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingIds, setDeletingIds] = useState(new Set<string>());
+  const [deleteConfirmSingle, setDeleteConfirmSingle] = useState<string | null>(null);
+  const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
   const planLimits = usePlanLimits(); // useMemo was removed from import, but usePlanLimits is used
   const { solicitarAvaliacao } = useReviewRequest();
 
@@ -407,16 +410,11 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
 
   const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0 || !confirm(`Tem certeza que deseja excluir ${selectedIds.length} lead(s) permanentemente? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
-
     setIsDeleting(true);
     try {
       const { error } = await supabase.from('leads').delete().in('id', selectedIds);
       if (error) throw error;
 
-      alert(`✅ ${selectedIds.length} lead(s) excluído(s) com sucesso!`);
       setSelectedIds([]);
       await loadLeads();
     } catch (error) {
@@ -424,6 +422,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       alert('❌ Erro ao excluir leads.');
     } finally {
       setIsDeleting(false);
+      setDeleteConfirmMultiple(false);
     }
   };
 
@@ -528,10 +527,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
 
   const deleteLead = async (leadId: string) => {
-    if (!confirm('⚠️ Tem certeza que deseja excluir este lead permanentemente? Esta ação não pode ser desfeita.')) {
-      return;
-    }
-
+    setDeletingIds(prev => { const s = new Set(prev); s.add(leadId); return s; });
     try {
       const { error } = await supabase
         .from('leads')
@@ -540,11 +536,13 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       if (error) throw error;
 
-      alert('✅ Lead excluído com sucesso!');
       await loadLeads();
     } catch (error) {
       console.error('Erro ao excluir lead:', error);
       alert('❌ Erro ao excluir lead');
+    } finally {
+      setDeletingIds(prev => { const s = new Set(prev); s.delete(leadId); return s; });
+      setDeleteConfirmSingle(null);
     }
   };
 
@@ -707,7 +705,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         ))}
         {selectedIds.length > 0 && (
           <button
-            onClick={handleDeleteSelected}
+            onClick={() => setDeleteConfirmMultiple(true)}
             disabled={isDeleting}
             className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
           >
@@ -846,9 +844,10 @@ export function LeadsManager({ userId }: { userId: string }) {
                         👁️
                       </button>
                       <button
-                        onClick={() => deleteLead(lead.id)}
-                        className="text-red-600 hover:text-red-900"
+                        onClick={() => setDeleteConfirmSingle(lead.id)}
+                        className={`text-red-600 hover:text-red-900 ${deletingIds.has(lead.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
                         title="Excluir lead"
+                        disabled={deletingIds.has(lead.id)}
                       >
                         <Trash2 className="w-4 h-4 inline" />
                       </button>
@@ -1176,6 +1175,64 @@ export function LeadsManager({ userId }: { userId: string }) {
                 className="w-full px-4 py-2 text-gray-500 hover:text-gray-800 font-medium cursor-pointer"
               >
                 Cancelar Envio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmação Exclusão Única */}
+      {deleteConfirmSingle && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <Trash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir Lead</h3>
+            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir este lead permanentemente? Essa ação não pode ser desfeita.</p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => setDeleteConfirmSingle(null)}
+                disabled={deletingIds.has(deleteConfirmSingle)}
+                className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => deleteLead(deleteConfirmSingle)}
+                disabled={deletingIds.has(deleteConfirmSingle)}
+                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2"
+              >
+                {deletingIds.has(deleteConfirmSingle) ? 'Excluindo...' : 'Sim, Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmação Exclusão Múltipla */}
+      {deleteConfirmMultiple && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <Trash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir {selectedIds.length} Leads</h3>
+            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir esses leads permanentemente? Essa ação não pode ser desfeita.</p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => setDeleteConfirmMultiple(false)}
+                disabled={isDeleting}
+                className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={isDeleting}
+                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2"
+              >
+                {isDeleting ? 'Excluindo...' : 'Sim, Excluir Todos'}
               </button>
             </div>
           </div>
