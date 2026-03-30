@@ -61,20 +61,44 @@ export function useNotifications(user: User | null) {
 
     loadNotifications();
 
+    // 🔄 Reload ao retornar para a aba (captura eventos perdidos enquanto tab estava em segundo plano)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔔 Tab voltou ao foco — recarregando notificações silenciosamente...');
+        loadNotifications(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Auto-refresh silencioso a cada 30 segundos (reduzido de 60s)
+    const refreshInterval = setInterval(() => {
+      loadNotifications(true);
+    }, 30000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(refreshInterval);
+    };
+  }, [userId, loadNotifications]);
+
+  // Canal Realtime isolado — só recria quando userId muda
+  useEffect(() => {
+    if (!userId) return;
+
     // Função para tocar o som de notificação
     const playNotificationSound = () => {
-      const audio = new Audio('/notification.mp3'); // Caminho para o arquivo na pasta /public
-      audio.volume = 0.5; // Define o volume para 50% (0.0 a 1.0)
+      const audio = new Audio('/notification.mp3');
+      audio.volume = 0.5;
       audio.play().catch(error => {
-        // O erro "play() failed because the user didn't interact with the document first" é comum.
-        // O navegador bloqueia a reprodução automática de som até que o usuário clique em algo.
-        console.log("Tentativa de tocar som de notificação bloqueada pelo navegador:", error.message);
+        console.log('Tentativa de tocar som de notificação bloqueada pelo navegador:', error.message);
       });
     };
 
+    console.log('📡 Conectando ao canal Realtime de notificações...');
     const channel = supabase
       .channel(`notifications-for-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
+        console.log('🔔 [Realtime] Nova notificação recebida via WebSocket:', payload.new);
         const newNotif = payload.new as any;
         const normalized: Notification = {
           ...newNotif,
@@ -83,8 +107,12 @@ export function useNotifications(user: User | null) {
           related_id: newNotif.related_id || null,
           title: newNotif.title || newNotif.message || '',
         };
-        setNotifications(prev => [normalized, ...prev]);
-        playNotificationSound(); // Toca o som quando uma nova notificação chega
+        setNotifications(prev => {
+          // Evitar duplicatas no estado local caso já exista
+          if (prev.find(n => n.id === normalized.id)) return prev;
+          return [normalized, ...prev];
+        });
+        playNotificationSound();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
         const newNotif = payload.new as any;
@@ -97,18 +125,19 @@ export function useNotifications(user: User | null) {
         };
         setNotifications(prev => prev.map(n => n.id === payload.old.id ? normalized : n));
       })
-      .subscribe();
-
-    // Auto-refresh silencioso a cada 60 segundos
-    const refreshInterval = setInterval(() => {
-      loadNotifications(true);
-    }, 60000);
+      .subscribe((status) => {
+        console.log('📡 [Realtime] Status do canal de notificações:', status);
+        // Quando a conexão for estabelecida, recarregar para pegar eventos perdidos durante a conexão
+        if (status === 'SUBSCRIBED') {
+          loadNotifications(true);
+        }
+      });
 
     return () => {
+      console.log('📡 [Realtime] Desconectando canal de notificações...');
       supabase.removeChannel(channel);
-      clearInterval(refreshInterval);
     };
-  }, [userId, loadNotifications]);
+  }, [userId]); // ✅ Só userId — sem loadNotifications para evitar recriação do canal em re-renders
 
   const notificationsWithTrial = useMemo(() => {
     const allNotifications = [...notifications];
