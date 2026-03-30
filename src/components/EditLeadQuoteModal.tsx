@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, Lead } from '../lib/supabase';
 import { LeadOrcamentoDetalhe } from './LeadsManager';
 import { X, Save, RefreshCw, AlertCircle, ShoppingBag } from 'lucide-react';
@@ -24,7 +24,14 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
   const [selectedForma, setSelectedForma] = useState<string>(savedOrcamentoDetalhe.forma_pagamento_id || '');
   
   // Realtime calc
-  const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown>(savedOrcamentoDetalhe.priceBreakdown!);
+  const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown>(savedOrcamentoDetalhe.priceBreakdown || {
+    subtotal: 0,
+    ajusteSazonal: 0,
+    ajusteGeografico: { percentual: 0, taxa: 0 },
+    acrescimoFormaPagamento: 0,
+    descontoCupom: 0,
+    total: 0
+  });
 
   useEffect(() => {
     fetchInitialData();
@@ -44,9 +51,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
       const { data: formataData } = await supabase
         .from('formas_pagamento')
         .select('*')
-        .eq('template_id', lead.template_id)
-        .eq('ativo', true)
-        .order('ordem', { ascending: true });
+        .eq('template_id', lead.template_id);
         
       if (formataData) setFormasPagamento(formataData);
 
@@ -62,11 +67,19 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
   }, [selectedProducts, selectedForma, allProducts, formasPagamento]);
 
   const recalculateValues = () => {
-    const ob = savedOrcamentoDetalhe.priceBreakdown!;
+    // Safety check: if priceBreakdown is missing, use defaults
+    const ob = savedOrcamentoDetalhe.priceBreakdown || {
+      subtotal: lead.valor_total || 0,
+      ajusteSazonal: 0,
+      ajusteGeografico: { percentual: 0, taxa: 0 },
+      acrescimoFormaPagamento: 0,
+      descontoCupom: 0,
+      total: lead.valor_total || 0
+    };
     
     // Ratios from the original quote
-    const seasonalRatio = ob.subtotal > 0 ? ob.ajusteSazonal / ob.subtotal : 0;
-    const baseForGeo = ob.subtotal + ob.ajusteSazonal;
+    const seasonalRatio = ob.subtotal > 0 ? (ob.ajusteSazonal || 0) / ob.subtotal : 0;
+    const baseForGeo = ob.subtotal + (ob.ajusteSazonal || 0);
     const geoPercentageRatio = baseForGeo > 0 ? (ob.ajusteGeografico?.percentual || 0) / baseForGeo : 0;
     
     // 1. Calculate new Subtotal
@@ -84,14 +97,14 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     const totalAntesFormaPagamento = newSubtotal + newAjusteSazonal + newGeoPercentual + geoTaxaFixed;
     
     const paymentMethodObj = formasPagamento.find(f => f.id === selectedForma);
-    const acrescimoRatio = paymentMethodObj ? paymentMethodObj.acrescimo / 100 : 0;
+    const acrescimoRatio = paymentMethodObj ? (paymentMethodObj.acrescimo || 0) / 100 : 0;
     const newAcrescimoFormaPagamento = totalAntesFormaPagamento * acrescimoRatio;
     
     // 4. Coupon
     const totalAntesCupom = totalAntesFormaPagamento + newAcrescimoFormaPagamento;
     // Discover the original coupon percentage
-    const originalTotalAntesCupom = ob.subtotal + ob.ajusteSazonal + (ob.ajusteGeografico?.percentual || 0) + (ob.ajusteGeografico?.taxa || 0) + ob.acrescimoFormaPagamento;
-    const cupomRatio = originalTotalAntesCupom > 0 ? ob.descontoCupom / originalTotalAntesCupom : 0;
+    const originalTotalAntesCupom = ob.subtotal + (ob.ajusteSazonal || 0) + (ob.ajusteGeografico?.percentual || 0) + (ob.ajusteGeografico?.taxa || 0) + (ob.acrescimoFormaPagamento || 0);
+    const cupomRatio = originalTotalAntesCupom > 0 ? (ob.descontoCupom || 0) / originalTotalAntesCupom : 0;
     
     const newDescontoCupom = totalAntesCupom * cupomRatio;
     
@@ -131,12 +144,15 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         ...savedOrcamentoDetalhe,
         selectedProdutos: selectedProducts,
         forma_pagamento_id: selectedForma,
-        priceBreakdown: priceBreakdown
+        priceBreakdown: priceBreakdown,
+        // Update enriched data too for immediate consistency
+        produtos: allProducts,
+        paymentMethod: formasPagamento.find(f => f.id === selectedForma)
       };
 
       const { error } = await supabase
         .from('leads')
-        .update({ detalhes_orcamento: novosDetalhes })
+        .update({ orcamento_detalhe: novosDetalhes })
         .eq('id', lead.id);
 
       if (error) throw error;
