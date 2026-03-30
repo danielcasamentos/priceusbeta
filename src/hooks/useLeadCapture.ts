@@ -22,11 +22,15 @@ export function useLeadCapture() {
 
   const lastSaveRef = useRef<string>('');
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const isFinalSubmitRef = useRef<boolean>(false); // 🔒 Bloqueia auto-saves após submit final
 
   // Auto-save otimizado - apenas quando há dados significativos
   const autoSaveLead = async (data: Partial<LeadData>, status: string = 'abandonado') => {
-    // 🔥 OTIMIZAÇÃO: Validar que há dados mínimos antes de salvar
-    if (!data.formData || Object.keys(data.formData).length === 0) return;
+    // 🔒 Se o submit final já foi iniciado, não executar mais auto-saves
+    if (isFinalSubmitRef.current) {
+      console.log('🚫 Auto-save bloqueado: submit final em andamento.');
+      return;
+    }
 
     // Verificar se tem pelo menos nome OU email OU telefone preenchido
     const hasMinimumData =
@@ -121,6 +125,9 @@ export function useLeadCapture() {
 
   // Salva o lead com status "completo"
   const saveFinalLead = async (data: LeadData): Promise<{ lead: any; error: any }> => {
+    // 🔒 Marcar que o submit final está em andamento, para bloquear qualquer auto-save pendente
+    isFinalSubmitRef.current = true;
+    
     // Limpa o timeout de auto-save para evitar condições de corrida
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -167,9 +174,14 @@ export function useLeadCapture() {
       sessionStorage.setItem('priceus_session_id', newSid);
       setSessionId(newSid);
       
+      // Reset da flag após conclusão bem-sucedida
+      isFinalSubmitRef.current = false;
+      
       return { lead, error: null };
     } catch (error) {
       console.error('❌ Erro crítico ao salvar lead final:', error);
+      // Reset da flag em caso de erro também
+      isFinalSubmitRef.current = false;
       // Retorna o erro explicitamente
       return { lead: null, error: error || new Error('Falha ao salvar lead') };
     }

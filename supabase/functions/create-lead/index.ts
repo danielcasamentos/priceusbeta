@@ -186,18 +186,39 @@ serve(async (req) => {
     console.log('✅ Lead salvo com sucesso:', newLead?.id)
 
     // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
-    // Isso garante que a notificação é criada apenas uma vez, de forma atômica no backend.
-    if (newLead) {
-      const notificationPayload = {
-        user_id: userId,
-        type: 'new_lead',
-        message: `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`,
-        related_id: newLead.id,
-        link: '/dashboard?page=leads',
-      }
+    // REGRA 1: Só criar notificação se for um submit FINAL (não um auto-save com status 'abandonado')
+    // REGRA 2: Verificar deduplicação — se já existe uma notificação para este lead, não criar outra
+    if (newLead && !isAutoSave) {
+      console.log('🔔 Lead final detectado, verificando deduplicação antes de criar notificação...')
       
-      const { error: notificationError } = await supabaseAdmin.from('notifications').insert(notificationPayload)
-      if (notificationError) console.error('Erro ao criar notificação (não fatal):', notificationError)
+      // Verificar se já existe uma notificação do tipo 'new_lead' para este lead específico
+      const { data: existingNotification } = await supabaseAdmin
+        .from('notifications')
+        .select('id')
+        .eq('related_id', newLead.id)
+        .eq('type', 'new_lead')
+        .maybeSingle()
+      
+      if (existingNotification) {
+        console.log('⚠️ Notificação já existe para este lead, pulando criação duplicada:', existingNotification.id)
+      } else {
+        const notificationPayload = {
+          user_id: userId,
+          type: 'new_lead',
+          message: `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`,
+          related_id: newLead.id,
+          link: '/dashboard?page=leads',
+        }
+        
+        const { error: notificationError } = await supabaseAdmin.from('notifications').insert(notificationPayload)
+        if (notificationError) {
+          console.error('Erro ao criar notificação (não fatal):', notificationError)
+        } else {
+          console.log('✅ Notificação de novo lead criada com sucesso para:', nomeCliente)
+        }
+      }
+    } else if (isAutoSave) {
+      console.log('🔄 Auto-save detectado — notificação NÃO será criada para evitar duplicatas.')
     }
     
     // Retornar os dados do lead salvo com sucesso
