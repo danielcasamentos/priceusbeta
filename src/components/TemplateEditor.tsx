@@ -56,6 +56,7 @@ interface Template {
   tamanho_imagem_grid: 'pequeno' | 'medio' | 'grande';
   texto_botao_envio: string;
   ocultar_valores_intermediarios: boolean;
+  forma_pagamento_obrigatoria: boolean;
   exibir_no_perfil: boolean;
 }
 
@@ -894,6 +895,25 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     </div>
                     <div className="text-sm text-gray-500">
                       Mostra apenas o valor total final
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={template?.forma_pagamento_obrigatoria || false}
+                    onChange={(e) =>
+                      handleUpdateTemplateConfig('forma_pagamento_obrigatoria', e.target.checked)
+                    }
+                    className="w-5 h-5 text-blue-600 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      💳 Forma de pagamento obrigatória
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      O cliente precisa escolher uma forma de pagamento antes de enviar o orçamento
                     </div>
                   </div>
                 </label>

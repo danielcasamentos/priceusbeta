@@ -1283,8 +1283,8 @@ export function QuotePage() {
         return;
       }
 
-      // Validação de forma de pagamento: se o template tem formas configuradas, exige seleção
-      if (formasPagamento.length > 0 && !selectedFormaPagamento) {
+      // Validação de forma de pagamento: só bloqueia se o fotógrafo ativou a opção no template
+      if (formasPagamento.length > 0 && template?.forma_pagamento_obrigatoria && !selectedFormaPagamento) {
         alert('⚠️ Por favor, selecione uma forma de pagamento antes de enviar o orçamento.');
         setIsSubmitting(false);
         setHasSubmitted(false);
