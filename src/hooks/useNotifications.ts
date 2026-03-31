@@ -123,7 +123,7 @@ export function useNotifications(user: User | null) {
           related_id: newNotif.related_id || null,
           title: newNotif.title || newNotif.message || '',
         };
-        setNotifications(prev => prev.map(n => n.id === payload.old.id ? normalized : n));
+        setNotifications(prev => prev.map(n => n.id === (payload.new as any).id ? normalized : n));
       })
       .subscribe((status) => {
         console.log('📡 [Realtime] Status do canal de notificações:', status);
@@ -165,51 +165,46 @@ export function useNotifications(user: User | null) {
 
   const markAsRead = useCallback(async (id: string) => {
     if (id === 'trial-reminder' || !userId) return;
+    // ✅ Otimistic update: marca como lida IMEDIATAMENTE na UI sem esperar o Realtime
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     try {
-      // Tenta atualizar is_read, se não funcionar tenta read (compatibilidade)
-      const { error: errorIsRead } = await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('id', id);
       
-      if (errorIsRead) {
-        // Se is_read não existir, tenta usar read
-        console.log('is_read não encontrado, tentando usar read...');
-        await supabase
-          .from('notifications')
-          .update({ read: true })
-          .eq('id', id);
+      if (error) {
+        // Reverte o estado local se a atualização falhar
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: false } : n));
+        console.error('Erro ao marcar como lida:', error);
       }
-      // A UI será atualizada pelo listener do Supabase
     } catch (error) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: false } : n));
       console.error('Erro ao marcar como lida:', error);
     }
   }, [userId]);
 
   const markAllAsRead = useCallback(async () => {
     if (!userId) return;
+    // ✅ Otimistic update: marca todas como lidas IMEDIATAMENTE na UI
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     try {
-      // Tenta atualizar is_read, se não funcionar tenta read (compatibilidade)
-      const { error: errorIsRead } = await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', userId)
         .eq('is_read', false);
       
-      if (errorIsRead) {
-        // Se is_read não existir, tenta usar read
-        console.log('is_read não encontrado, tentando usar read...');
-        await supabase
-          .from('notifications')
-          .update({ read: true })
-          .eq('user_id', userId)
-          .eq('read', false);
+      if (error) {
+        // Se falhar, recarrega do banco de dados para sincronizar
+        console.error('Erro ao marcar todas como lidas:', error);
+        loadNotifications(true);
       }
-      // A UI será atualizada pelo listener do Supabase
     } catch (error) {
       console.error('Erro ao marcar todas como lidas:', error);
+      loadNotifications(true);
     }
-  }, [userId]);
+  }, [userId, loadNotifications]);
 
   return {
     notifications: notificationsWithTrial,

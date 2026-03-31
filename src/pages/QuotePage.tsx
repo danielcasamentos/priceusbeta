@@ -1279,8 +1279,18 @@ export function QuotePage() {
       if (!fieldsValidation.canUseWhatsApp) {
         alert(fieldsValidation.validationMessage);
         setIsSubmitting(false); // Reativa se a validação falhar
+        setHasSubmitted(false);
         return;
       }
+
+      // Validação de forma de pagamento: se o template tem formas configuradas, exige seleção
+      if (formasPagamento.length > 0 && !selectedFormaPagamento) {
+        alert('⚠️ Por favor, selecione uma forma de pagamento antes de enviar o orçamento.');
+        setIsSubmitting(false);
+        setHasSubmitted(false);
+        return;
+      }
+
 
       analytics?.trackStage('tentativa_envio');
 

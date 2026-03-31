@@ -21,7 +21,12 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
   // Ediatble state
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>(savedOrcamentoDetalhe.selectedProdutos || {});
-  const [selectedForma, setSelectedForma] = useState<string>(savedOrcamentoDetalhe.forma_pagamento_id || '');
+  // Bug fix: check all possible payment ID fields for compatibility with old and new lead formats
+  const initialForma = (savedOrcamentoDetalhe as any).selectedFormaPagamento 
+    || savedOrcamentoDetalhe.forma_pagamento_id 
+    || savedOrcamentoDetalhe.paymentMethod?.id 
+    || '';
+  const [selectedForma, setSelectedForma] = useState<string>(initialForma);
   
   // Realtime calc
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown>(savedOrcamentoDetalhe.priceBreakdown || {

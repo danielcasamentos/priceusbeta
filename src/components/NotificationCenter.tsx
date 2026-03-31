@@ -58,8 +58,6 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
   const handleNotificationClick = (notification: Notification) => {
     // A notificação de trial sempre navega para a página de preços
     if (notification.id === 'trial-reminder' || notification.type === 'trial') {
-      // A rota '/pricing' não é uma "page" do dashboard, então navegamos diretamente.
-      // Idealmente, o onNavigate poderia lidar com isso, mas para simplificar:
       window.location.href = '/pricing';
       setShowDropdown(false);
       return;
@@ -67,21 +65,26 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
     if (!notification.is_read) {
       markAsRead(notification.id);
     }
+    setShowDropdown(false);
     if (notification.link) {
-      // Verifica se é um link interno do dashboard (novo formato: /dashboard/leads)
+      console.log('[NotificationCenter] Navegando para:', notification.link);
+      // Novo formato: /dashboard/leads
       if (notification.link.startsWith('/dashboard/')) {
         const page = notification.link.split('/dashboard/')[1];
+        console.log('[NotificationCenter] Página extraida:', page);
         onNavigate(page);
       } else if (notification.link.startsWith('/dashboard?page=')) {
-        // Mantém compatibilidade com formato antigo: /dashboard?page=leads
+        // Compatibilidade com formato antigo: /dashboard?page=leads
         const page = notification.link.split('=')[1];
+        console.log('[NotificationCenter] Página extraida (formato antigo):', page);
         onNavigate(page);
+      } else if (notification.link === '/dashboard') {
+        onNavigate('leads');
       } else {
-        // Fallback para links externos ou rotas completas
+        // Fallback para links externos
         window.location.href = notification.link;
       }
     }
-    setShowDropdown(false);
   };
 
   useEffect(() => {

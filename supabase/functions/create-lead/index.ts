@@ -207,7 +207,7 @@ serve(async (req) => {
           type: 'new_lead',
           message: `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`,
           related_id: newLead.id,
-          link: '/dashboard?page=leads',
+          link: '/dashboard/leads',
         }
         
         const { error: notificationError } = await supabaseAdmin.from('notifications').insert(notificationPayload)
