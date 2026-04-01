@@ -412,13 +412,17 @@ export function LeadsManager({ userId }: { userId: string }) {
   const handleDeleteSelected = async () => {
     setIsDeleting(true);
     try {
-      const { error } = await supabase.from('leads').delete().in('id', selectedIds);
-      if (error) throw error;
-
+      console.log('[handleDeleteSelected] Tentando excluir leads:', selectedIds);
+      const { error, count } = await supabase.from('leads').delete().in('id', selectedIds).select();
+      if (error) {
+        console.error('[handleDeleteSelected] Erro Supabase:', { code: error.code, message: error.message, details: error.details, hint: error.hint });
+        throw error;
+      }
+      console.log('[handleDeleteSelected] Leads excluídos com sucesso. count:', count);
       setSelectedIds([]);
       await loadLeads();
     } catch (error) {
-      console.error('Erro ao excluir leads:', error);
+      console.error('[handleDeleteSelected] Erro:', error);
       alert('❌ Erro ao excluir leads.');
     } finally {
       setIsDeleting(false);
@@ -529,17 +533,22 @@ export function LeadsManager({ userId }: { userId: string }) {
   const deleteLead = async (leadId: string) => {
     setDeletingIds(prev => { const s = new Set(prev); s.add(leadId); return s; });
     try {
-      const { error } = await supabase
+      console.log('[deleteLead] Tentando excluir lead:', leadId);
+      const { error, count } = await supabase
         .from('leads')
         .delete()
-        .eq('id', leadId);
+        .eq('id', leadId)
+        .select();
 
-      if (error) throw error;
-
+      if (error) {
+        console.error('[deleteLead] Erro Supabase:', { code: error.code, message: error.message, details: error.details, hint: error.hint });
+        throw error;
+      }
+      console.log('[deleteLead] Lead excluído com sucesso. count:', count);
       await loadLeads();
     } catch (error) {
-      console.error('Erro ao excluir lead:', error);
-      alert('❌ Erro ao excluir lead');
+      console.error('[deleteLead] Erro ao excluir lead:', error);
+      alert('❌ Erro ao excluir lead. Veja o console para detalhes.');
     } finally {
       setDeletingIds(prev => { const s = new Set(prev); s.delete(leadId); return s; });
       setDeleteConfirmSingle(null);
