@@ -9,7 +9,7 @@ interface EditLeadQuoteModalProps {
   lead: Lead;
   savedOrcamentoDetalhe: LeadOrcamentoDetalhe;
   onClose: () => void;
-  onSave: () => void; // call to refresh parent Data
+  onSave: (updatedData: Partial<Lead>) => void; // call to refresh parent Data
 }
 
 export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSave }: EditLeadQuoteModalProps) {
@@ -18,6 +18,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
+  const [cidadesAjuste, setCidadesAjuste] = useState<any[]>([]);
 
   // ── Dados básicos do lead ────────────────────────────────────────────────
   const [nomeCliente, setNomeCliente] = useState(lead.nome_cliente || '');
@@ -74,6 +75,15 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         .select('*')
         .eq('template_id', lead.template_id);
       if (formataData) setFormasPagamento(formataData);
+
+      // Carregar cidades do sistema geográfico do usuário
+      const { data: cidData } = await supabase
+        .from('cidades_ajuste')
+        .select('*')
+        .eq('user_id', lead.user_id)
+        .eq('ativo', true)
+        .order('nome');
+      if (cidData) setCidadesAjuste(cidData);
     } catch (error) {
       console.error(error);
     } finally {
@@ -164,24 +174,23 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         customFieldsData: customFieldsData,
       };
 
+      const updatedLeadData: Partial<Lead> = {
+        nome_cliente: nomeCliente || null,
+        telefone_cliente: telefoneCliente || null,
+        data_evento: dataEvento || null,
+        cidade_evento: cidadeEvento || null,
+        valor_total: priceBreakdown.total,
+        orcamento_detalhe: novosDetalhes,
+      };
+
       const { error } = await supabase
         .from('leads')
-        .update({
-          // ── Dados básicos do cliente ──
-          nome_cliente: nomeCliente || null,
-          telefone_cliente: telefoneCliente || null,
-          data_evento: dataEvento || null,
-          cidade_evento: cidadeEvento || null,
-          // ── Valor total atualizado na raiz (corrige resumos e listagens) ──
-          valor_total: priceBreakdown.total,
-          // ── JSON detalhado do orçamento ──
-          orcamento_detalhe: novosDetalhes,
-        })
+        .update(updatedLeadData)
         .eq('id', lead.id);
 
       if (error) throw error;
 
-      onSave(); // Dispara reload + fecha modal no componente pai
+      onSave(updatedLeadData); // Dispara reload + update instantâneo no componente pai
     } catch (err) {
       console.error(err);
       alert('Erro ao salvar as edições do lead.');
@@ -291,13 +300,28 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                 </label>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={cidadeEvento}
-                    onChange={(e) => setCidadeEvento(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Ex: São Paulo - SP"
-                  />
+                  {cidadesAjuste.length > 0 ? (
+                    <select
+                      value={cidadeEvento}
+                      onChange={(e) => setCidadeEvento(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white"
+                    >
+                      <option value="">Selecione uma cidade livre ou padronizada...</option>
+                      {cidadesAjuste.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome} {c.taxa_deslocamento > 0 ? `(+ Exclusividade de R$${c.taxa_deslocamento})` : ''} 
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={cidadeEvento}
+                      onChange={(e) => setCidadeEvento(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Ex: São Paulo - SP"
+                    />
+                  )}
                 </div>
               </div>
             </div>

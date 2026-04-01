@@ -1087,12 +1087,18 @@ export function LeadsManager({ userId }: { userId: string }) {
           lead={editingLeadQuote.lead}
           savedOrcamentoDetalhe={editingLeadQuote.detalhes}
           onClose={() => setEditingLeadQuote({lead: null, detalhes: null})}
-          onSave={() => {
+          onSave={(updatedData: Partial<Lead>) => {
              // Esconde o modal
              setEditingLeadQuote({lead: null, detalhes: null});
+             // Atualiza o lead selecionado p/ UI refletir imediatamente (como o valor total e cidade)
+             if (editingLeadQuote.lead && selectedLead?.id === editingLeadQuote.lead.id) {
+               setSelectedLead(prev => prev ? { ...prev, ...updatedData } : prev);
+             }
              // Recarrega detalhes instantaneamente na UI e o Whatsapp novo
-             loadDetalhesOrcamento(editingLeadQuote.lead!, true);
-             // Recarrega a listagem de leads p atualizar Valor Total global
+             // passando o lead atualizado
+             const locallyUpdatedLead = { ...editingLeadQuote.lead!, ...updatedData };
+             loadDetalhesOrcamento(locallyUpdatedLead, true);
+             // Recarrega a listagem de leads para atualizar Valor Total global
              loadLeads();
           }}
         />
