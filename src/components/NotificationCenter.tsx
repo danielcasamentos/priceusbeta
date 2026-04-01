@@ -69,6 +69,13 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
     }
     setShowDropdown(false);
 
+    // Hardcode: Qualquer notificação de lead leva direto para a página 'leads'
+    if (notification.type && notification.type.includes('lead')) {
+      console.log('[NotificationCenter] Navegação direta forçada para leads:', notification.type);
+      onNavigate('leads');
+      return;
+    }
+
     if (notification.link) {
       console.log('[NotificationCenter] Navegando para:', notification.link);
       
