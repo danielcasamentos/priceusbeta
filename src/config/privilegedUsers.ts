@@ -5,7 +5,8 @@
 export const PRIVILEGED_EMAILS = [
   'odanielfotografo@icloud.com',
   'danielazevedofotografia@gmail.com',
-  'lorrane.jaibe@icloud.com'
+  'lorrane.jaibe@icloud.com',
+  'daniel@danielazevedofotografia.com'
 ] as const;
 
 export const isPrivilegedUser = (email: string | undefined): boolean => {
