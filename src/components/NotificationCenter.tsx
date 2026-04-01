@@ -56,7 +56,6 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications(user);
 
   const handleNotificationClick = (notification: Notification) => {
-    // A notificação de trial sempre navega para a página de preços
     if (notification.id === 'trial-reminder' || notification.type === 'trial') {
       window.location.href = '/pricing';
       setShowDropdown(false);
@@ -68,24 +67,34 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
     setShowDropdown(false);
     if (notification.link) {
       console.log('[NotificationCenter] Navegando para:', notification.link);
-      // Novo formato: /dashboard/leads
-      if (notification.link.startsWith('/dashboard/')) {
-        const page = notification.link.split('/dashboard/')[1];
-        console.log('[NotificationCenter] Página extraida:', page);
-        onNavigate(page);
-      } else if (notification.link.startsWith('/dashboard?page=')) {
-        // Compatibilidade com formato antigo: /dashboard?page=leads
-        const page = notification.link.split('=')[1];
-        console.log('[NotificationCenter] Página extraida (formato antigo):', page);
-        onNavigate(page);
-      } else if (notification.link === '/dashboard') {
+      try {
+        // Usa URL para parse seguro independente do formato
+        const url = new URL(notification.link, window.location.origin);
+        const pathname = url.pathname; // ex: /dashboard/leads ou /dashboard
+
+        if (pathname.startsWith('/dashboard/')) {
+          // Formato novo: /dashboard/leads (ignora qualquer ?query após)
+          const page = pathname.split('/dashboard/')[1].split('/')[0];
+          console.log('[NotificationCenter] Página extraída:', page);
+          if (page) onNavigate(page);
+        } else if (pathname === '/dashboard' || pathname === '/dashboard/') {
+          // Formato antigo: /dashboard?page=leads ou /dashboard?page=leads&id=XXX
+          const page = url.searchParams.get('page');
+          console.log('[NotificationCenter] Página extraída (query param):', page);
+          if (page) onNavigate(page);
+          else onNavigate('leads'); // fallback para leads se não tiver ?page=
+        } else {
+          // Links externos ou outras rotas
+          window.location.href = notification.link;
+        }
+      } catch (e) {
+        // Link inválido — fallback
+        console.warn('[NotificationCenter] Link inválido, navegando para leads:', notification.link);
         onNavigate('leads');
-      } else {
-        // Fallback para links externos
-        window.location.href = notification.link;
       }
     }
   };
+
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
