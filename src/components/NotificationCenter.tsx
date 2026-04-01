@@ -78,9 +78,12 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
         let targetPage: string | null = null;
 
         // Formato novo: /dashboard/leads, /dashboard/contratos, etc.
+        // Também limpa links malformados como /dashboard/leads&id=XXX 
+        // onde &query foi grudado no path em vez de usar ?query
         if (pathname.startsWith('/dashboard/')) {
-          const segments = pathname.replace('/dashboard/', '').split('/');
-          targetPage = segments[0] || null;
+          const rawSegment = pathname.replace('/dashboard/', '').split('/')[0];
+          // Limpar qualquer &param ou ?param colado no nome da página
+          targetPage = rawSegment.split(/[&?]/)[0] || null;
         }
         
         // Formato antigo: /dashboard?page=leads ou /dashboard?page=contratos&id=XXX

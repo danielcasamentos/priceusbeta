@@ -40,18 +40,25 @@ export function DashboardPage() {
   console.log('[DashboardPage] Tipo de dispositivo:', { isMobile });
   
   // Captura a página da URL ou usa 'templates' como padrão
-  const urlPage = params.page;
+  // Sanitiza: remove query params colados no path (ex: leads&id → leads)
+  const rawUrlPage = params.page;
+  const urlPage = rawUrlPage ? rawUrlPage.split(/[&?]/)[0] : undefined;
   const [currentPage, setCurrentPage] = useState<string>(urlPage || 'templates');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [contractTab, setContractTab] = useState<'templates' | 'manager'>('templates');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Sincroniza o estado com a URL quando a página mudar
+  // Se a URL tiver params malformados, corrige automaticamente
   useEffect(() => {
     if (urlPage) {
       setCurrentPage(urlPage);
+      // Se a URL original era malformada (ex: /dashboard/leads&id), corrige a URL
+      if (rawUrlPage && rawUrlPage !== urlPage) {
+        navigate(`/dashboard/${urlPage}`, { replace: true });
+      }
     }
-  }, [urlPage]);
+  }, [urlPage, rawUrlPage]);
 
   // A verificação do usuário deve vir DEPOIS de todos os hooks.
   if (!user) {
