@@ -56,35 +56,47 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications(user);
 
   const handleNotificationClick = (notification: Notification) => {
+    // Trial notifications → redirect direto
     if (notification.id === 'trial-reminder' || notification.type === 'trial') {
       window.location.href = '/pricing';
       setShowDropdown(false);
       return;
     }
+
+    // Marca como lida (otimistic)
     if (!notification.is_read) {
       markAsRead(notification.id);
     }
     setShowDropdown(false);
+
     if (notification.link) {
       console.log('[NotificationCenter] Navegando para:', notification.link);
+      
       try {
-        // Usa URL para parse seguro independente do formato
         const url = new URL(notification.link, window.location.origin);
         const pathname = url.pathname; // ex: /dashboard/leads ou /dashboard
+        let targetPage: string | null = null;
 
+        // Formato novo: /dashboard/leads, /dashboard/contratos, etc.
         if (pathname.startsWith('/dashboard/')) {
-          // Formato novo: /dashboard/leads (ignora qualquer ?query após)
-          const page = pathname.split('/dashboard/')[1].split('/')[0];
-          console.log('[NotificationCenter] Página extraída:', page);
-          if (page) onNavigate(page);
-        } else if (pathname === '/dashboard' || pathname === '/dashboard/') {
-          // Formato antigo: /dashboard?page=leads ou /dashboard?page=leads&id=XXX
-          const page = url.searchParams.get('page');
-          console.log('[NotificationCenter] Página extraída (query param):', page);
-          if (page) onNavigate(page);
-          else onNavigate('leads'); // fallback para leads se não tiver ?page=
+          const segments = pathname.replace('/dashboard/', '').split('/');
+          targetPage = segments[0] || null;
+        }
+        
+        // Formato antigo: /dashboard?page=leads ou /dashboard?page=contratos&id=XXX
+        if (!targetPage && (pathname === '/dashboard' || pathname === '/dashboard/')) {
+          targetPage = url.searchParams.get('page');
+        }
+
+        console.log('[NotificationCenter] Página extraída:', targetPage);
+
+        if (targetPage) {
+          onNavigate(targetPage);
+        } else if (pathname.startsWith('/dashboard')) {
+          // Dashboard sem página → fallback para leads
+          onNavigate('leads');
         } else {
-          // Links externos ou outras rotas
+          // Links externos ou outras rotas (ex: /pricing, /contrato/...)
           window.location.href = notification.link;
         }
       } catch (e) {
@@ -94,6 +106,7 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
       }
     }
   };
+
 
 
   useEffect(() => {

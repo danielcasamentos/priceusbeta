@@ -304,7 +304,7 @@ export function LeadsManager({ userId }: { userId: string }) {
             user_id: userId,
             type: 'lead_converted',
             message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido.`,
-            link: `/dashboard?page=leads`,
+            link: `/dashboard/leads`,
             related_id: leadId,
           });
         } catch (notificationError) {

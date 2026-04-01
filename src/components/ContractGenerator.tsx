@@ -269,7 +269,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           user_id: userId,
           type: 'contract_generated',
           message: `Contrato gerado para ${leadData.nome_cliente}. Aguardando assinatura.`,
-          link: '/dashboard?page=contratos',
+          link: '/dashboard/contratos',
           related_id: data.id,
         });
       } catch (notificationError) {
