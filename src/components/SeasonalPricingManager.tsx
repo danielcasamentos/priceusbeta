@@ -32,7 +32,8 @@ interface Temporada {
   nome: string;
   data_inicio: string;
   data_fim: string;
-  ajuste_percentual: number;
+  ajuste_percentual?: number;
+  multiplicador?: number;
   ativo: boolean;
 }
 
@@ -1025,10 +1026,11 @@ export function SeasonalPricingManager({
                               <div>
                                 <label className="text-xs text-gray-600">Ajuste (%)</label>
                                 <input
+                                  key={`ajuste-${cidade.ajuste_percentual}`}
                                   type="number"
                                   step="0.1"
-                                  value={cidade.ajuste_percentual}
-                                  onChange={(e) =>
+                                  defaultValue={cidade.ajuste_percentual}
+                                  onBlur={(e) =>
                                     handleUpdateCidade(
                                       cidade.id,
                                       'ajuste_percentual',
@@ -1042,10 +1044,11 @@ export function SeasonalPricingManager({
                               <div>
                                 <label className="text-xs text-gray-600">Taxa (R$)</label>
                                 <input
+                                  key={`taxa-${cidade.taxa_deslocamento}`}
                                   type="number"
                                   step="0.01"
-                                  value={cidade.taxa_deslocamento}
-                                  onChange={(e) =>
+                                  defaultValue={cidade.taxa_deslocamento}
+                                  onBlur={(e) =>
                                     handleUpdateCidade(
                                       cidade.id,
                                       'taxa_deslocamento',
@@ -1107,9 +1110,10 @@ export function SeasonalPricingManager({
                           <div>
                             <label className="text-xs text-gray-600">Data Início</label>
                             <input
+                              key={`ini-${temporada.data_inicio}`}
                               type="date"
-                              value={temporada.data_inicio}
-                              onChange={(e) =>
+                              defaultValue={temporada.data_inicio}
+                              onBlur={(e) =>
                                 handleUpdateTemporada(temporada.id, 'data_inicio', e.target.value)
                               }
                               className="w-full px-2 py-1 text-sm border rounded"
@@ -1119,9 +1123,10 @@ export function SeasonalPricingManager({
                           <div>
                             <label className="text-xs text-gray-600">Data Fim</label>
                             <input
+                              key={`fim-${temporada.data_fim}`}
                               type="date"
-                              value={temporada.data_fim}
-                              onChange={(e) =>
+                              defaultValue={temporada.data_fim}
+                              onBlur={(e) =>
                                 handleUpdateTemporada(temporada.id, 'data_fim', e.target.value)
                               }
                               className="w-full px-2 py-1 text-sm border rounded"
@@ -1131,10 +1136,11 @@ export function SeasonalPricingManager({
                           <div>
                             <label className="text-xs text-gray-600">Ajuste (%)</label>
                             <input
+                              key={`mtp-${temporada.multiplicador}`}
                               type="number"
                               step="0.1"
-                              value={temporada.multiplicador ? ((temporada.multiplicador - 1) * 100).toFixed(1) : '0'}
-                              onChange={(e) =>
+                              defaultValue={temporada.multiplicador ? ((temporada.multiplicador - 1) * 100).toFixed(1) : '0'}
+                              onBlur={(e) =>
                                 handleUpdateTemporada(
                                   temporada.id,
                                   'ajuste_percentual',
