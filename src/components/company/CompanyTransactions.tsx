@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download } from 'lucide-react';
+import { ExportModal } from '../ExportModal';
 import { formatCurrency } from '../../lib/utils';
 import { useCompanyTransactions, CompanyTransaction, CompanyCategory } from '../../hooks/useCompanyTransactions';
 import { TransactionFormModal } from '../TransactionFormModal';
@@ -28,6 +29,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
   const [filterInstallment, setFilterInstallment] = useState<'all' | 'installment' | 'single'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<CompanyTransaction | null>(null);
   const [isDeletingTx, setIsDeletingTx] = useState(false);
@@ -462,6 +464,16 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
         categories={categories}
         transaction={editingTransaction}
       />
+
+      {/* Export Modal */}
+      {exportModalOpen && (
+        <ExportModal
+          isOpen={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+          transactions={transactions}
+          getCategoryName={getCategoryName}
+        />
+      )}
 
       {/* Modal de Exclusão */}
       {transactionToDelete && (
