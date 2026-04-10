@@ -82,8 +82,11 @@ export function FloatingTotalPanel({
         `}
         aria-label={`Ver total do orçamento: ${formatCurrency(total)}`}
       >
-        <ShoppingCart className="w-6 h-6 sm:w-7 sm:h-7" />
-        <span className="font-bold text-sm sm:text-base mt-1">
+        <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
+        <span className="text-[9px] sm:text-[10px] font-medium opacity-80 leading-none mt-1 tracking-tight">
+          a partir de:
+        </span>
+        <span className="font-bold text-xs sm:text-sm leading-tight">
           {formatCurrency(total)}
         </span>
       </a>

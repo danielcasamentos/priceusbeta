@@ -1,18 +1,27 @@
 import React, { useState, useMemo } from 'react';
-import { useCompanyTransactions, CompanyTransaction } from '../hooks/useCompanyTransactions';
+import { useCompanyTransactions } from '../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../hooks/useCompanyMetrics';
 import { useAuth } from '../hooks/useAuth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, ChevronDown, AlertCircle, Loader2, ArrowUpRight, ArrowDownRight, Scale } from 'lucide-react';
+import { ChevronDown, AlertCircle, Loader2, ArrowUpRight, ArrowDownRight, Scale, Download } from 'lucide-react';
+import { ExportModal } from '../components/ExportModal';
 
 export function CompanyTransactions() {
   const { user } = useAuth();
-  const { transactions, loading, updateMultipleTransactionStatus } = useCompanyTransactions(user?.id || '');
+  const { transactions, categories, loading, updateMultipleTransactionStatus } = useCompanyTransactions(user?.id || '');
   const { monthlyMetrics, pendingReceivables } = useCompanyMetrics(transactions);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  /** Resolve o nome da categoria a partir do ID ou retorna o valor passado diretamente */
+  const getCategoryName = (categoryIdOrName?: string): string => {
+    if (!categoryIdOrName) return '';
+    const found = categories.find(c => c.id === categoryIdOrName);
+    return found ? found.nome : categoryIdOrName;
+  };
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
@@ -70,9 +79,28 @@ export function CompanyTransactions() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Transações</h1>
-        <p className="text-gray-600 mt-1">Gerencie suas receitas e despesas.</p>
+      {/* Modal de exportação CSV */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        transactions={transactions as any[]}
+        getCategoryName={getCategoryName}
+      />
+
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Transações</h1>
+          <p className="text-gray-600 mt-1">Gerencie suas receitas e despesas.</p>
+        </div>
+        <button
+          id="btn-export-csv"
+          onClick={() => setShowExportModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-sm whitespace-nowrap"
+          title="Exportar dados financeiros em CSV para fins fiscais"
+        >
+          <Download className="w-4 h-4" />
+          Exportar CSV
+        </button>
       </div>
 
       {/* Painel de Métricas Mensais */}
