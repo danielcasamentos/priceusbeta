@@ -19,6 +19,7 @@ export interface BusinessSettings {
 export interface ClientData {
   nome_completo?: string;
   cpf?: string;
+  documento?: string; // campo real do formulário de assinatura (CPF ou CNPJ)
   rg?: string;
   endereco_completo?: string;
   cep?: string;
@@ -98,7 +99,7 @@ export function replaceContractVariables(
     '{{TELEFONE_CLIENTE}}': leadData.telefone || clientData.telefone || '',
 
     '{{NOME_COMPLETO_CLIENTE}}': clientData.nome_completo || leadData.nome_cliente || '',
-    '{{CPF_CLIENTE}}': clientData.cpf || '',
+    '{{CPF_CLIENTE}}': clientData.cpf || clientData.documento || '', // fallback para `documento` (campo real do formulário)
     '{{RG_CLIENTE}}': clientData.rg || '',
     '{{ENDERECO_COMPLETO_CLIENTE}}': clientData.endereco_completo || '',
     '{{CEP_CLIENTE}}': clientData.cep || '',

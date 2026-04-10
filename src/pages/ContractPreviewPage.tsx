@@ -188,94 +188,213 @@ export function ContractPreviewPage() {
       console.error('Erro ao carregar dados para preview:', err);
       setError('Ocorreu um erro ao carregar os dados do contrato.');
     } finally {
-      // A validação final de erro acontece aqui, após todas as tentativas de carregamento.
-      if (!location.state?.clientData) setError('Dados do cliente não encontrados. Por favor, volte e preencha o formulário novamente.');
+      // Não validar aqui: quando os dados vêm do banco (contrato assinado),
+      // location.state é mutado dentro do try e o useEffect cuida do resto.
+      // Erros reais já foram tratados nos blocos if/else-if acima.
       setLoading(false);
     }
   };
 
   /**
-   * 🔥 NOVO: Cria as transações financeiras (entrada e parcelas) após a assinatura.
+   * Cria as transações financeiras (entrada e parcelas) após a assinatura.
+   * Respeita integralmente a configuração da forma de pagamento escolhida.
    */
   const createFinancialTransactions = async (signedContract: Contract) => {
     console.log('🏦 Iniciando criação de transações financeiras...');
     const paymentDetails = signedContract.payment_details_json;
     const totalValue = signedContract.lead_data_json?.valor_total || 0;
+    const clientName = signedContract.lead_data_json?.nome_cliente || 'Cliente';
 
-    if (!paymentDetails || totalValue <= 0) {
-      console.log('⚠️ Detalhes de pagamento ou valor total ausentes. Nenhuma transação será criada.');
+    if (totalValue <= 0) {
+      console.log('⚠️ Valor total zero. Nenhuma transação será criada.');
       return;
     }
 
-    const transactionsToInsert = [];
-    const signedDate = new Date();
-
-    // 1. Calcular e preparar a transação de ENTRADA
-    let downPaymentValue = 0;
-    if (paymentDetails.entrada_tipo === 'percentual') {
-      downPaymentValue = (totalValue * paymentDetails.entrada_valor) / 100;
-    } else {
-      downPaymentValue = paymentDetails.entrada_valor;
+    // Fallback: sem detalhes de pagamento → receita única à vista
+    if (!paymentDetails) {
+      console.warn('⚠️ payment_details_json ausente. Criando receita única à vista como fallback.');
+      const { error } = await supabase.rpc('insert_public_transactions', {
+        p_token: token,
+        p_transactions: [{
+          user_id: signedContract.user_id,
+          tipo: 'receita',
+          origem: 'contrato',
+          descricao: `Contrato - ${clientName}`,
+          valor: totalValue,
+          data: new Date().toISOString().split('T')[0],
+          status: 'pendente',
+          forma_pagamento: 'Não especificado',
+          contract_id: signedContract.id,
+          is_installment: false,
+          installment_number: 1,
+          total_installments: 1,
+        }],
+      });
+      if (error) console.error('❌ Erro ao criar transação fallback:', error);
+      else console.log('✅ Transação fallback criada com sucesso.');
+      return;
     }
 
-    if (downPaymentValue > 0) {
+    const transactionsToInsert: any[] = [];
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const nomePagamento = paymentDetails.nome || 'Não informado';
+    const maxParcelas = paymentDetails.max_parcelas || 0;
+
+    // ─────────────────────────────────────────────────────
+    // CENÁRIO 1: À vista (sem parcelamento)
+    // max_parcelas = 0 ou 1, e entrada_valor = 0 ou = total
+    // ─────────────────────────────────────────────────────
+    if (maxParcelas <= 1) {
+      // Calcular o valor da entrada
+      let entradaValor = 0;
+      if (paymentDetails.entrada_tipo === 'percentual') {
+        const pct = paymentDetails.entrada_percentual ?? paymentDetails.entrada_valor ?? 0;
+        entradaValor = (totalValue * pct) / 100;
+      } else {
+        entradaValor = paymentDetails.entrada_valor || 0;
+      }
+
+      // Se não há entrada configurada ou a entrada cobre o total → pagamento único
+      const valorUnico = entradaValor > 0 ? entradaValor : totalValue;
+      const valorRestante = totalValue - valorUnico;
+
       transactionsToInsert.push({
         user_id: signedContract.user_id,
-        tipo: 'receita' as const,
+        tipo: 'receita',
         origem: 'contrato',
-        descricao: `Entrada - Contrato ${signedContract.lead_data_json?.nome_cliente}`,
-        valor: downPaymentValue,
-        data: signedDate.toISOString().split('T')[0],
-        status: 'pendente' as const,
-        forma_pagamento: paymentDetails.nome,
+        descricao: maxParcelas <= 0
+          ? `Pagamento à vista - Contrato ${clientName}`
+          : `Entrada - Contrato ${clientName}`,
+        valor: valorUnico,
+        data: todayStr,
+        status: 'pendente',
+        forma_pagamento: nomePagamento,
         contract_id: signedContract.id,
-        is_installment: true,
+        is_installment: false,
         installment_number: 1,
-        total_installments: 1 + (paymentDetails.max_parcelas || 0),
+        total_installments: 1,
       });
-    }
 
-    // 2. Calcular e preparar as transações de PARCELAS
-    const remainingValue = totalValue - downPaymentValue;
-    const numInstallments = paymentDetails.max_parcelas || 0;
-
-    if (numInstallments > 0 && remainingValue > 0.01) {
-      const installmentValue = remainingValue / numInstallments;
-      for (let i = 1; i <= numInstallments; i++) {
-        const installmentDate = new Date(signedDate);
-        installmentDate.setMonth(installmentDate.getMonth() + i);
-
+      // Se havia entrada menor que o total e max_parcelas = 1, adicionar o restante
+      if (maxParcelas === 1 && valorRestante > 0.01) {
+        const dataRestante = new Date(today);
+        dataRestante.setMonth(dataRestante.getMonth() + 1);
         transactionsToInsert.push({
           user_id: signedContract.user_id,
-          tipo: 'receita' as const,
+          tipo: 'receita',
           origem: 'contrato',
-          descricao: `Parcela ${i}/${numInstallments} - Contrato ${signedContract.lead_data_json?.nome_cliente}`,
-          valor: installmentValue,
-          data: installmentDate.toISOString().split('T')[0],
-          status: 'pendente' as const,
-          forma_pagamento: paymentDetails.nome,
+          descricao: `Parcela 1/1 - Contrato ${clientName}`,
+          valor: valorRestante,
+          data: dataRestante.toISOString().split('T')[0],
+          status: 'pendente',
+          forma_pagamento: nomePagamento,
           contract_id: signedContract.id,
           is_installment: true,
-          installment_number: i + 1, // +1 porque a entrada é a 1
-          total_installments: 1 + numInstallments,
+          installment_number: 2,
+          total_installments: 2,
         });
       }
     }
 
-    // 3. Inserir todas as transações no banco de dados via RPC para contornar o RLS (uso anônimo)
+    // ─────────────────────────────────────────────────────
+    // CENÁRIO 2: Parcelado (max_parcelas >= 2)
+    // ─────────────────────────────────────────────────────
+    else {
+      // 2a. Calcular entrada
+      let downPaymentValue = 0;
+      if (paymentDetails.entrada_tipo === 'percentual') {
+        const pct = paymentDetails.entrada_percentual ?? paymentDetails.entrada_valor ?? 0;
+        downPaymentValue = (totalValue * pct) / 100;
+      } else {
+        downPaymentValue = paymentDetails.entrada_valor || 0;
+      }
+
+      const totalInstallments = maxParcelas + (downPaymentValue > 0 ? 1 : 0);
+
+      // Entrada (se houver)
+      if (downPaymentValue > 0) {
+        transactionsToInsert.push({
+          user_id: signedContract.user_id,
+          tipo: 'receita',
+          origem: 'contrato',
+          descricao: `Entrada - Contrato ${clientName}`,
+          valor: parseFloat(downPaymentValue.toFixed(2)),
+          data: todayStr,
+          status: 'pendente',
+          forma_pagamento: nomePagamento,
+          contract_id: signedContract.id,
+          is_installment: true,
+          installment_number: 1,
+          total_installments: totalInstallments,
+        });
+      }
+
+      const remainingValue = totalValue - downPaymentValue;
+
+      // 2b. Usar parcelas_detalhadas se configuradas
+      const parcelasDetalhadas: any[] = paymentDetails.parcelas_detalhadas || [];
+
+      if (parcelasDetalhadas.length > 0) {
+        // Fotógrafo configurou datas e valores específicos por parcela
+        parcelasDetalhadas.forEach((parcela: any, idx: number) => {
+          transactionsToInsert.push({
+            user_id: signedContract.user_id,
+            tipo: 'receita',
+            origem: 'contrato',
+            descricao: `Parcela ${idx + 1}/${parcelasDetalhadas.length} - Contrato ${clientName}`,
+            valor: parseFloat((parcela.valor || (remainingValue / parcelasDetalhadas.length)).toFixed(2)),
+            data: parcela.data || (() => {
+              const d = new Date(today);
+              d.setMonth(d.getMonth() + idx + 1);
+              return d.toISOString().split('T')[0];
+            })(),
+            status: 'pendente',
+            forma_pagamento: nomePagamento,
+            contract_id: signedContract.id,
+            is_installment: true,
+            installment_number: (downPaymentValue > 0 ? 2 : 1) + idx,
+            total_installments: totalInstallments,
+          });
+        });
+      } else {
+        // 2c. Parcelas iguais com datas mensais sequenciais
+        if (maxParcelas > 0 && remainingValue > 0.01) {
+          const installmentValue = parseFloat((remainingValue / maxParcelas).toFixed(2));
+
+          for (let i = 1; i <= maxParcelas; i++) {
+            const installmentDate = new Date(today);
+            installmentDate.setMonth(installmentDate.getMonth() + i);
+            transactionsToInsert.push({
+              user_id: signedContract.user_id,
+              tipo: 'receita',
+              origem: 'contrato',
+              descricao: `Parcela ${i}/${maxParcelas} - Contrato ${clientName}`,
+              valor: installmentValue,
+              data: installmentDate.toISOString().split('T')[0],
+              status: 'pendente',
+              forma_pagamento: nomePagamento,
+              contract_id: signedContract.id,
+              is_installment: true,
+              installment_number: (downPaymentValue > 0 ? 2 : 1) + (i - 1),
+              total_installments: totalInstallments,
+            });
+          }
+        }
+      }
+    }
+
+    // Inserir todas as transações via RPC (contorna RLS em página pública)
     if (transactionsToInsert.length > 0) {
-      console.log(`🏦 Inserindo ${transactionsToInsert.length} transações via RPC...`, transactionsToInsert);
-      
+      console.log(`🏦 Inserindo ${transactionsToInsert.length} transação(ões):`, transactionsToInsert);
       const { error } = await supabase.rpc('insert_public_transactions', {
         p_token: token,
-        p_transactions: transactionsToInsert
+        p_transactions: transactionsToInsert,
       });
-      
-      if (error) {
-        console.error('❌ Erro ao criar transações financeiras (RPC):', error);
-      } else {
-        console.log('✅ Transações criadas com sucesso!');
-      }
+      if (error) console.error('❌ Erro ao criar transações financeiras:', error);
+      else console.log(`✅ ${transactionsToInsert.length} transação(ões) criada(s) com sucesso.`);
+    } else {
+      console.warn('⚠️ Nenhuma transação gerada. Verifique a configuração da forma de pagamento.');
     }
   };
 

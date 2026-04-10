@@ -23,6 +23,7 @@ interface Contract {
   };
   client_data_json?: {
     cpf?: string;
+    documento?: string; // campo real do formulário de assinatura (CPF ou CNPJ)
     email?: string;
     [key: string]: any; // Permite outras propriedades
   };
@@ -164,7 +165,12 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
             <p><strong>Endereço IP do Assinante:</strong> {contract.client_ip || 'Não registrado'}</p>
             <p>
               <strong>Assinado por:</strong> {contract.client_data_json?.nome_completo || contract.lead_data_json.nome_cliente}
-              {contract.client_data_json?.cpf && ` (CPF: ${contract.client_data_json.cpf})`}
+              {(() => {
+                const doc = contract.client_data_json?.cpf || contract.client_data_json?.documento;
+                if (!doc) return null;
+                const tipo = doc.replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ';
+                return ` (${tipo}: ${doc})`;
+              })()}
             </p>
             <p style={{ marginTop: '10pt', fontStyle: 'italic' }}>Este documento foi assinado eletronicamente através da plataforma PriceUs.</p>
           </div>
@@ -202,7 +208,12 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-2"><User size={16} /> Cliente</h3>
               <p className="font-bold text-gray-900">{contract.lead_data_json.nome_cliente}</p>
-              {contract.client_data_json?.cpf && <p className="text-sm text-gray-600">CPF: {contract.client_data_json.cpf}</p>}
+              {(() => {
+                const doc = contract.client_data_json?.cpf || contract.client_data_json?.documento;
+                if (!doc) return null;
+                const tipo = doc.replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ';
+                return <p className="text-sm text-gray-600">{tipo}: {doc}</p>;
+              })()}
               {contract.client_data_json?.email && <p className="text-sm text-gray-600">{contract.client_data_json.email}</p>}
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">

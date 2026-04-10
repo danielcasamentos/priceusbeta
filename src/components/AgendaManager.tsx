@@ -300,6 +300,24 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       await loadData();
     }
   };
+
+  const handleDeleteFeriado = async (id: string) => {
+    const { error } = await supabase.from('feriados').delete().eq('id', id);
+    if (error) {
+      alert('Erro ao remover feriado: ' + error.message);
+    } else {
+      await loadData();
+    }
+  };
+
+  const handleDeletePeriodo = async (id: string) => {
+    const { error } = await supabase.from('periodos_bloqueados').delete().eq('id', id);
+    if (error) {
+      alert('Erro ao remover período: ' + error.message);
+    } else {
+      await loadData();
+    }
+  };
   const parseCSV = (text: string): Array<{ data: string; nome: string; tipo?: string; cidade?: string }> => {
     const lines = text.split('\n').filter(line => line.trim());
     const eventos: Array<{ data: string; nome: string; tipo?: string; cidade?: string }> = [];
@@ -559,13 +577,66 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     const dateStr = formatDateForDB(date);
     const eventosDia = getEventosPorData(dateStr);
     const todosFeriados = [...feriadosNacionais.map(f => ({ ...f, tipo: 'nacional' })), ...feriadosPersonalizados];
-    const feriadoDoDia = todosFeriados.find(f => f.data === dateStr);
+    // Feriados nacionais usam `f.date`, feriados personalizados usam `f.data`
+    const feriadoDoDia = todosFeriados.find(f => f.data === dateStr || f.date === dateStr);
     const isBloqueada = datasBloqueadas.includes(dateStr);
 
+    // 1. Data bloqueada manualmente (sempre tem prioridade)
     if (isBloqueada) {
       return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
     }
 
+    // 2. Períodos de bloqueio (férias) — aplicados sempre, independente de regras_massa_ativas
+    const emPeriodoBloqueado = periodosBloqueados.some(p =>
+      dateStr >= p.data_inicio && dateStr <= p.data_fim
+    );
+    if (emPeriodoBloqueado) {
+      return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+    }
+
+    // 3. Regras de bloqueio em massa (só se ativas)
+    if (configEdit.regras_massa_ativas) {
+      const diaSemana = date.getDay(); // 0=Domingo, 6=Sábado
+      const diaMes = date.getDate();
+
+      // 3a. Dias da semana bloqueados
+      if (configEdit.dias_semana_bloqueados?.includes(diaSemana)) {
+        return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+      }
+
+      // 3b. Dias pares/ímpares do mês
+      if (configEdit.regra_par_impar === 'pares' && diaMes % 2 === 0) {
+        return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+      }
+      if (configEdit.regra_par_impar === 'impares' && diaMes % 2 !== 0) {
+        return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+      }
+
+      // 3c. Feriados (nacionais e personalizados)
+      if (configEdit.bloquear_feriados && feriadoDoDia) {
+        return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+      }
+
+      // 3d. Semanas alternadas (trabalha semanas pares ou ímpares)
+      if (configEdit.regra_semanal !== 'nenhum' && configEdit.regra_semanal_inicio) {
+        const inicio = new Date(configEdit.regra_semanal_inicio + 'T00:00:00');
+        const diffMs = date.getTime() - inicio.getTime();
+        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const numSemana = Math.floor(diffDias / 7); // semana 0, 1, 2, 3...
+        const ehSemanaParDaContagem = numSemana % 2 === 0;
+
+        // "trabalha_pares" = bloqueia semanas ímpares
+        if (configEdit.regra_semanal === 'trabalha_pares' && !ehSemanaParDaContagem) {
+          return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+        }
+        // "trabalha_impares" = bloqueia semanas pares
+        if (configEdit.regra_semanal === 'trabalha_impares' && ehSemanaParDaContagem) {
+          return { status: 'bloqueada', color: 'bg-gray-200 text-gray-600', count: 0, feriado: feriadoDoDia };
+        }
+      }
+    }
+
+    // 4. Verificar ocupação por eventos
     const eventosAtivos = eventosDia.filter(e => e.status !== 'cancelado').length;
     const maxEventos = config?.eventos_max_por_dia || 1;
 
