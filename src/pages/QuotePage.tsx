@@ -131,9 +131,6 @@ export function QuotePage() {
   });
   const [copied, setCopied] = useState(false);
 
-  // Estado para o contador de redirecionamento automático
-  const [countdown, setCountdown] = useState(5);
-  const [autoRedirectActive, setAutoRedirectActive] = useState(true);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // 📅 Sistema de Verificação de Disponibilidade
@@ -464,27 +461,7 @@ export function QuotePage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [formData, selectedProdutos, showSummaryModal]);
 
-  // Efeito para controlar o contador de redirecionamento automático
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
 
-    if (showSummaryModal && autoRedirectActive && countdown > 0) {
-      timer = setTimeout(() => {
-        setCountdown(prev => prev - 1);
-      }, 1000);
-    } else if (showSummaryModal && autoRedirectActive && countdown === 0) {
-      // Redireciona quando o contador chega a zero
-      if (summaryData.waLink) {
-        window.open(summaryData.waLink, '_blank');
-      }
-      setAutoRedirectActive(false); // Impede redirecionamentos futuros na mesma sessão do modal
-      setShowSummaryModal(false); // Fecha o modal
-    }
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [showSummaryModal, autoRedirectActive, countdown, summaryData.waLink]);
 
   const loadPricingData = async (userId: string, templateId: string) => {
     try {
@@ -1346,9 +1323,6 @@ export function QuotePage() {
       });
 
       setShowSummaryModal(true);
-      // Reseta o contador e ativa o redirecionamento sempre que o modal abrir
-      setCountdown(5);
-      setAutoRedirectActive(true);
       console.log('✅ [handleSubmit] Modal de resumo pronto para ser exibido.');
 
       // 2. AÇÃO EM SEGUNDO PLANO: AGENDAR O SALVAMENTO DO LEAD
@@ -2233,7 +2207,6 @@ export function QuotePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setAutoRedirectActive(false); // Para o contador se o usuário decidir voltar
                       setShowSummaryModal(false);
                     }}
                     className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
@@ -2247,24 +2220,13 @@ export function QuotePage() {
                     className="w-full flex-1 flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
                     onClick={() => {
                       analytics?.markAsConverted(); // 🔥 CORREÇÃO: Conversão marcada no clique real!
-                      setAutoRedirectActive(false); // Para o contador
                       // Não precisa fechar o modal aqui, pois o clique no link já navega para outra aba
                     }}
                   >
                     <Send className="w-6 h-6" />
-                    Enviar via WhatsApp {autoRedirectActive && `(${countdown}s)`}
+                    Enviar via WhatsApp
                   </a>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoRedirectActive(false);
-                  }}
-                  className="w-full text-sm text-gray-600 hover:text-gray-800"
-                  disabled={!autoRedirectActive}
-                >
-                  {autoRedirectActive ? 'Cancelar envio automático' : 'Envio automático cancelado'}
-                </button>
               </div>
             </div>
           </div>
