@@ -472,7 +472,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
           Imagem do Produto
         </label>
 
-        {product.imagem_url ? (
+        {product.imagem_url && (
           // Preview da imagem com overlay e retry automático
           <div className="relative">
             <ImageWithFallback
