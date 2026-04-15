@@ -1,6 +1,7 @@
 import { ShoppingCart, Send, Lock, User, AlertCircle, Check, CheckCircle, Copy, X, Trash2, FileText } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
+import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { MobileDatePicker } from '../MobileDatePicker';
 import { AvailabilityIndicator } from '../AvailabilityIndicator';
 import { PublicReviews } from '../PublicReviews';
@@ -219,9 +220,17 @@ export function QuoteDocumento(props: any) {
                 {produtos.map((produto: any) => (
                   <div key={produto.id} className={`border p-4 sm:p-5 transition-all ${selectedProdutos[produto.id] ? 'border-black bg-gray-50' : tema.cores.borda}`}>
                     <div className="flex flex-col sm:flex-row gap-4">
-                      {produto.mostrar_imagem && produto.imagem_url && (
+                      {produto.mostrar_imagem && (produto.imagem_url || (produto.imagens?.length > 0)) && (
                         <div className="w-full sm:w-48 h-48 flex-shrink-0">
-                          <ImageWithFallback src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" />
+                          {produto.imagens && produto.imagens.length > 0 ? (
+                            <ProductGalleryCarousel
+                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                              autoPlay={produto.carrossel_automatico}
+                              productName={produto.nome}
+                            />
+                          ) : (
+                            <ImageWithFallback src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" />
+                          )}
                         </div>
                       )}
                       <div className="flex-1">

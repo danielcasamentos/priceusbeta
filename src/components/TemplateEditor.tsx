@@ -23,6 +23,8 @@ interface Produto {
   ordem: number;
   imagem_url?: string;
   mostrar_imagem: boolean;
+  imagens?: string[];
+  carrossel_automatico?: boolean;
 }
 
 interface FormaPagamento {
@@ -58,6 +60,7 @@ interface Template {
   ocultar_valores_intermediarios: boolean;
   forma_pagamento_obrigatoria: boolean;
   exibir_no_perfil: boolean;
+  ignorar_agenda_global?: boolean;
 }
 
 interface TemplateEditorProps {
@@ -182,6 +185,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         obrigatorio: false,
         ordem: produtos.length,
         mostrar_imagem: true,
+        imagens: [],
+        carrossel_automatico: false,
       },
     ]);
   };
@@ -217,6 +222,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       ordem: index + 1,
       imagem_url: produtoOriginal.imagem_url,
       mostrar_imagem: produtoOriginal.mostrar_imagem,
+      imagens: produtoOriginal.imagens || [],
+      carrossel_automatico: produtoOriginal.carrossel_automatico || false,
     };
 
     const novosProdutos = [...produtos];
@@ -243,6 +250,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           ordem: produto.ordem,
           imagem_url: produto.imagem_url,
           mostrar_imagem: produto.mostrar_imagem,
+          imagens: produto.imagens || [],
+          carrossel_automatico: produto.carrossel_automatico || false,
         };
 
         if (produto.id) {
@@ -815,6 +824,27 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                         <li>Cidade (se sistema geográfico ativo)</li>
                         <li>Todos os campos personalizados obrigatórios</li>
                       </ul>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="border border-purple-200 bg-purple-50 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={template?.ignorar_agenda_global || false}
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('ignorar_agenda_global', e.target.checked)
+                      }
+                      className="w-5 h-5 text-purple-600 rounded mt-1"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                        📅 Ignorar Agenda Global (Não pedir data)
+                      </div>
+                      <div className="text-sm text-gray-700 mt-1">
+                        Ative isso para orçamentos como álbuns ou produtos físicos onde a data do evento não é necessária. Isso removerá o campo de data do formulário, mesmo que a sua agenda global esteja ativa.
+                      </div>
                     </div>
                   </label>
                 </div>

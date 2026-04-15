@@ -15,6 +15,8 @@ interface Product {
   ordem: number;
   imagem_url?: string;
   mostrar_imagem: boolean;
+  imagens?: string[];
+  carrossel_automatico?: boolean;
 }
 
 interface ProductEditorProps {
@@ -85,6 +87,8 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         obrigatorio: product.obrigatorio,
         ordem: product.ordem,
         mostrar_imagem: false,
+        imagens: product.imagens || [],
+        carrossel_automatico: product.carrossel_automatico || false,
       };
 
       const { data, error: insertError } = await supabase
@@ -182,11 +186,24 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         return;
       }
 
+      // Adiciona na galeria ou como a principal se não existir principal
+      const imagensAtualizadas = [...(product.imagens || [])];
+      
+      let finalImagemUrl = product.imagem_url;
+      if (!finalImagemUrl) {
+         finalImagemUrl = result.url;
+         onChange('imagem_url', result.url);
+      } else {
+         if (imagensAtualizadas.length < 5) {
+            imagensAtualizadas.push(result.url);
+            onChange('imagens', imagensAtualizadas);
+         }
+      }
+      
       // PASSO 4: Salvar URL da imagem no banco
-      await saveImageToDatabase(result.url, productId);
+      await saveImageToDatabase(finalImagemUrl, imagensAtualizadas, productId);
 
       // PASSO 5: Atualizar estado local
-      onChange('imagem_url', result.url);
       onChange('mostrar_imagem', true);
       setImageKey(Date.now());
 
@@ -227,13 +244,14 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
   /**
    * Salva URL da imagem no banco de dados
    */
-  const saveImageToDatabase = async (imageUrl: string, productId: string) => {
+  const saveImageToDatabase = async (imageUrl: string, imagensArray: string[], productId: string) => {
     setSaving(true);
     try {
       const { error: updateError } = await supabase
         .from('produtos')
         .update({
           imagem_url: imageUrl,
+          imagens: imagensArray,
           mostrar_imagem: true,
         })
         .eq('id', productId);
@@ -359,6 +377,38 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
     }
   };
 
+  /**
+   * Remove uma imagem da galeria secundária
+   */
+  const handleRemoveSubImage = async (indexToRemove: number) => {
+    if (!confirm('⚠️ Deseja remover esta imagem da galeria auxiliar?')) return;
+
+    setError(null);
+    try {
+      setSaving(true);
+      const targetUrl = product.imagens![indexToRemove];
+      
+      const uploadService = new ImageUploadService();
+      await uploadService.deleteImage(targetUrl);
+
+      const novasImagens = [...(product.imagens || [])];
+      novasImagens.splice(indexToRemove, 1);
+      
+      onChange('imagens', novasImagens);
+      if (product.id) {
+         await saveImageToDatabase(product.imagem_url || '', novasImagens, product.id);
+      }
+      setImageKey(Date.now());
+      setSuccess('Imagem da galeria removida.');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Erro sub imagem', err);
+      setError('Erro ao remover imagem da galeria.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-white shadow-sm">
       {/* Nome do Produto */}
@@ -453,7 +503,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
 
             {/* Toggle mostrar/ocultar */}
             <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <label className="flex items-center gap-3 cursor-pointer">
+              <label className="flex items-center gap-3 cursor-pointer mb-3">
                 <input
                   type="checkbox"
                   checked={product.mostrar_imagem}
@@ -461,12 +511,56 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">
-                  Exibir imagem no orçamento público
+                  Exibir imagem principal no orçamento
                 </span>
               </label>
+              
+              {product.imagens && product.imagens.length > 0 && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={product.carrossel_automatico || false}
+                    onChange={(e) => onChange('carrossel_automatico', e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Ativar transição automática (Carrossel a cada 4s)
+                  </span>
+                </label>
+              )}
             </div>
+            
+            {/* Galeria de Thumbnails Auxiliares */}
+            {product.imagens && product.imagens.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase">Galeria do Produto</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {product.imagens.map((img, idx) => (
+                    <div key={idx} className="relative aspect-square rounded overflow-hidden border border-gray-200">
+                      <ImageWithFallback
+                        src={`${img}?v=${imageKey}`}
+                        alt={`Galeria ${idx}`}
+                        className="w-full h-full object-cover"
+                        fallbackClassName="w-full h-full bg-gray-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSubImage(idx)}
+                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded hover:bg-red-700 shadow-sm"
+                        title="Remover"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
           </div>
-        ) : (
+        )}
+        
+        {(!product.imagem_url || (product.imagens && product.imagens.length < 5)) && (
           // Área de upload (drag & drop ou click)
           <div>
             <input

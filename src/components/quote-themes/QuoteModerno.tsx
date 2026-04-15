@@ -1,6 +1,7 @@
 import { Send, Lock, Sparkles } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
+import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 
 interface QuoteModernoProps {
   template: any;
@@ -131,13 +132,23 @@ export function QuoteModerno(props: QuoteModernoProps) {
                     }`}
                   >
                     <div className="flex items-center gap-4">
-                      {produto.mostrar_imagem && produto.imagem_url && (
-                        <ImageWithFallback
-                          src={produto.imagem_url}
-                          alt={produto.nome}
-                          className="w-20 h-20 object-cover rounded-lg"
-                          fallbackClassName="w-20 h-20 rounded-lg bg-gradient-to-br from-cyan-100 to-purple-100"
-                        />
+                      {produto.mostrar_imagem && (produto.imagem_url || (produto.imagens?.length > 0)) && (
+                        <div className="w-20 h-20 shrink-0 overflow-hidden rounded-lg">
+                          {produto.imagens && produto.imagens.length > 0 ? (
+                            <ProductGalleryCarousel
+                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                              autoPlay={produto.carrossel_automatico}
+                              productName={produto.nome}
+                            />
+                          ) : (
+                            <ImageWithFallback
+                              src={produto.imagem_url}
+                              alt={produto.nome}
+                              className="w-full h-full object-cover rounded-lg"
+                              fallbackClassName="w-full h-full rounded-lg bg-gradient-to-br from-cyan-100 to-purple-100"
+                            />
+                          )}
+                        </div>
                       )}
                       <div className="flex-1">
                         <h4 className="font-bold text-lg text-gray-900">{produto.nome}</h4>

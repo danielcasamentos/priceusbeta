@@ -1099,14 +1099,16 @@ export function QuotePage() {
   };
 
   const renderLocationDateFields = () => {
-    if (!((template.sistema_sazonal_ativo && temporadas.length > 0) || (template.sistema_geografico_ativo && paises.length > 0) || agendaConfig?.agenda_ativa)) {
+    const isAgendaRequired = agendaConfig?.agenda_ativa && !template?.ignorar_agenda_global;
+    
+    if (!((template?.sistema_sazonal_ativo && temporadas.length > 0) || (template?.sistema_geografico_ativo && paises.length > 0) || isAgendaRequired)) {
       return null;
     }
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Data do Evento */}
-        {(temporadas.length > 0 || agendaConfig?.agenda_ativa) && (
+        {(temporadas.length > 0 || isAgendaRequired) && (
           <div>
             <MobileDatePicker
               value={dataEvento}
@@ -1581,7 +1583,7 @@ export function QuotePage() {
             </div>
 
             {/* Campos de Localização e Data para Preços Dinâmicos */}
-            {((template.sistema_sazonal_ativo && temporadas.length > 0) || (template.sistema_geografico_ativo && paises.length > 0) || agendaConfig?.agenda_ativa) && (
+            {((template?.sistema_sazonal_ativo && temporadas.length > 0) || (template?.sistema_geografico_ativo && paises.length > 0) || (agendaConfig?.agenda_ativa && !template?.ignorar_agenda_global)) && (
               <div className="border-t pt-6 mt-6">
                 <h3 className={`text-lg font-semibold ${tema.cores.textoPrincipal} mb-4`}>
                   📍 Localização e Data

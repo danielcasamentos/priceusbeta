@@ -13,6 +13,8 @@ interface Product {
   ordem: number;
   imagem_url?: string;
   mostrar_imagem: boolean;
+  imagens?: string[];
+  carrossel_automatico?: boolean;
 }
 
 interface SortableProductItemProps {
