@@ -20,6 +20,7 @@ interface Template {
   slug_template: string;
   titulo_template?: string;
   descricao_perfil?: string;
+  ocultar_data_criacao?: boolean;
   created_at: string;
 }
 
@@ -174,8 +175,11 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
                          {template.descricao_perfil}
                        </p>
                     )}
-                    <div className="flex items-center justify-end text-sm text-amber-800 font-bold mt-auto pt-2">
-                       <span className="flex items-center gap-1 group-hover:text-amber-900 transition-colors uppercase">Acessar Portfólio <ExternalLink className="w-4 h-4 ml-1" /></span>
+                    <div className="flex items-center justify-between text-sm text-amber-800 font-bold mt-auto pt-2">
+                      {!template.ocultar_data_criacao && (
+                        <span className="text-xs text-amber-400 font-normal">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
+                      )}
+                      <span className="flex items-center gap-1 group-hover:text-amber-900 transition-colors uppercase ml-auto">Acessar Portfólio <ExternalLink className="w-4 h-4 ml-1" /></span>
                     </div>
                   </div>
                   <div className="bg-gradient-to-r from-amber-600 to-orange-600 h-2"></div>

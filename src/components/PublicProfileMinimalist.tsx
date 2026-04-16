@@ -20,6 +20,7 @@ interface Template {
   slug_template: string;
   titulo_template?: string;
   descricao_perfil?: string;
+  ocultar_data_criacao?: boolean;
   created_at: string;
 }
 
@@ -157,8 +158,11 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
                          {template.descricao_perfil}
                        </p>
                     )}
-                    <div className="flex items-center justify-end text-sm text-slate-700 font-light mt-auto pt-2">
-                       <span className="flex items-center gap-1 group-hover:text-slate-800 transition-colors">Detalhes do Pacote <ExternalLink className="w-4 h-4 ml-1" /></span>
+                    <div className="flex items-center justify-between text-sm text-slate-700 font-light mt-auto pt-2">
+                      {!template.ocultar_data_criacao && (
+                        <span className="text-xs text-slate-400">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
+                      )}
+                      <span className="flex items-center gap-1 group-hover:text-slate-800 transition-colors ml-auto">Detalhes do Pacote <ExternalLink className="w-4 h-4 ml-1" /></span>
                     </div>
                   </div>
                   <div className="bg-slate-800 h-2"></div>

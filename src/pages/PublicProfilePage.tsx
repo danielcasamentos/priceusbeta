@@ -26,6 +26,7 @@ interface Template {
   nome_template: string;
   titulo_template?: string;
   descricao_perfil?: string;
+  ocultar_data_criacao?: boolean;
   slug_template: string;
   created_at: string;
 }
@@ -84,7 +85,7 @@ export function PublicProfilePage() {
 
       const { data: templatesData } = await supabase
         .from('templates')
-        .select('id, nome_template, titulo_template, slug_template, created_at, ordem_exibicao, descricao_perfil')
+        .select('id, nome_template, titulo_template, slug_template, created_at, ordem_exibicao, descricao_perfil, ocultar_data_criacao')
         .eq('user_id', profileData.id)
         .eq('exibir_no_perfil', true)
         .not('slug_template', 'is', null)

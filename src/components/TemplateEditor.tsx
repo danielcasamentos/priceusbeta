@@ -63,6 +63,7 @@ interface Template {
   ignorar_agenda_global?: boolean;
   exibir_painel_flutuante?: boolean;
   descricao_perfil?: string;
+  ocultar_data_criacao?: boolean;
 }
 
 interface TemplateEditorProps {
@@ -817,6 +818,28 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                      <p className="text-xs text-gray-500">Exibido nos cartões do seu portfólio (priceus.com.br/usuário)</p>
                      <p className="text-xs text-gray-500">{(template?.descricao_perfil || '').length}/150 caracteres</p>
                   </div>
+
+                  {/* Toggle ocultar data */}
+                  <label className="flex items-center gap-3 mt-3 cursor-pointer">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={template?.ocultar_data_criacao || false}
+                        onChange={(e) => handleUpdateTemplateConfig('ocultar_data_criacao', e.target.checked)}
+                      />
+                      <div className={`w-10 h-6 rounded-full transition-colors ${
+                        template?.ocultar_data_criacao ? 'bg-blue-600' : 'bg-gray-300'
+                      }`}></div>
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        template?.ocultar_data_criacao ? 'translate-x-5' : 'translate-x-1'
+                      }`}></div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Ocultar data de criação</p>
+                      <p className="text-xs text-gray-500">Quando ativado, a data do orçamento não aparece no seu perfil público</p>
+                    </div>
+                  </label>
                 </div>
                 <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
                   <label className="flex items-start gap-3 cursor-pointer">

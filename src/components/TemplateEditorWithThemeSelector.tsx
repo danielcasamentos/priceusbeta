@@ -194,21 +194,18 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
                 key={theme.id}
                 onClick={() => saveTheme(theme.id)}
                 disabled={saving}
-                className={`relative group transition-all duration-300 ${
-                  isSelected ? 'transform scale-105' : 'hover:scale-102'
-                } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`relative group transition-all duration-300 ${isSelected ? 'transform scale-105' : 'hover:scale-102'
+                  } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div
-                  className={`rounded-xl p-5 border-2 transition-all ${
-                    isSelected
+                  className={`rounded-xl p-5 border-2 transition-all ${isSelected
                       ? `${theme.borderColor} shadow-xl bg-white`
                       : 'border-gray-200 hover:border-gray-300 bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <div
-                    className={`w-12 h-12 rounded-lg bg-gradient-to-br ${theme.color} flex items-center justify-center mb-4 mx-auto transition-transform ${
-                      isSelected ? 'scale-110' : 'group-hover:scale-105'
-                    }`}
+                    className={`w-12 h-12 rounded-lg bg-gradient-to-br ${theme.color} flex items-center justify-center mb-4 mx-auto transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-105'
+                      }`}
                   >
                     <Icon className="w-6 h-6 text-white" />
                   </div>
@@ -234,47 +231,56 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
         </div>
 
         {saveMessage && (
-          <div className={`mt-6 p-4 rounded-lg border-2 ${
-            saveMessage.includes('sucesso')
+          <div className={`mt-6 p-4 rounded-lg border-2 ${saveMessage.includes('sucesso')
               ? 'bg-green-50 border-green-200'
               : 'bg-red-50 border-red-200'
-          }`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                  saveMessage.includes('sucesso') ? 'bg-green-500' : 'bg-red-500'
+            }`}>
+            <div className="flex items-start gap-3">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${saveMessage.includes('sucesso') ? 'bg-green-500' : 'bg-red-500'
                 }`}>
-                  {saveMessage.includes('sucesso') ? (
-                    <Check className="w-3 h-3 text-white" strokeWidth={3} />
-                  ) : (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                </div>
-                <p className={`text-sm font-medium ${
-                  saveMessage.includes('sucesso') ? 'text-green-900' : 'text-red-900'
-                }`}>
-                  {saveMessage}
-                </p>
+                {saveMessage.includes('sucesso') ? (
+                  <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                ) : (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
               </div>
-              {saveMessage.includes('sucesso') && previewUrl && (
-                <a
-                  href={previewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium whitespace-nowrap"
-                >
-                  <Eye className="w-4 h-4" />
-                  Ver Orçamento
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
+              <p className={`text-sm font-medium ${saveMessage.includes('sucesso') ? 'text-green-900' : 'text-red-900'
+                }`}>
+                {saveMessage}
+              </p>
             </div>
           </div>
         )}
 
-        <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+        {/* Botão fixo – sempre visível quando o template tem slug configurado */}
+        {previewUrl ? (
+          <div className="mt-4 flex items-center justify-between gap-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800">Link público do orçamento</p>
+              <p className="text-xs text-gray-500 font-mono mt-0.5 truncate">priceus.com.br{previewUrl}</p>
+            </div>
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap flex-shrink-0"
+            >
+              <Eye className="w-4 h-4" />
+              Ver Orçamento
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        ) : (
+          <div className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800 font-medium">
+              ⚠️ Configure um <strong>Slug (URL amigável)</strong> na aba <strong>Configurações</strong> para ver o link público aqui.
+            </p>
+          </div>
+        )}
+
+        <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
           <div className="flex items-start gap-3">
             <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
