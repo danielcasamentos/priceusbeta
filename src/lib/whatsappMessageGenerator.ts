@@ -401,21 +401,59 @@ function buildAdditionalDataSection(options: {
  * Limpa linhas vazias ou apenas com labels sem valores
  */
 function cleanEmptyLines(message: string): string {
-  return message
-    .split('\n')
-    .filter((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return false;
+  const lines = message.split('\n');
+  const result: string[] = [];
 
-      // Remover linhas que são apenas labels sem valores
-      const emptyPatterns = [
-        /^(Subtotal|Local|Data|Cidade|Cupom|Ajuste):?\s*$/i,
-        /^[•\-]\s*$/,
-      ];
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
 
-      return !emptyPatterns.some((pattern) => pattern.test(trimmed));
-    })
-    .join('\n');
+    // Ignorar linhas completamente vazias que formam espaços duplos
+    if (!trimmed) {
+      // Só adiciona linha em branco se a linha anterior também não for em branco
+      if (result.length > 0 && result[result.length - 1] !== '') {
+        result.push('');
+      }
+      continue;
+    }
+
+    // Padrões de linhas sem valor (label: sem conteúdo)
+    const emptyPatterns = [
+      /^(Subtotal|Local|Data|Cidade|Cupom|Ajuste):?\s*$/i,
+      /^[📅📍]\s*\*?(Data|Cidade)\*?:\s*$/i,   // emoji + label vazio
+      /^[•\-]\s*$/,
+    ];
+    if (emptyPatterns.some((p) => p.test(trimmed))) continue;
+
+    // Se a linha anterior foi um cabeçalho de seção (negrito) e esta linha
+    // acabaria sendo a próxima não-vazia, verificar se o cabeçalho ficará
+    // sozinho (sem filhos) — tratado após o loop.
+    result.push(lines[i]);
+  }
+
+  // Remover cabeçalhos de seção que ficaram sem linhas de conteúdo abaixo
+  const orphanSectionPattern = /^[🗓️📝📦💳].*\*[A-ZÁÀÃÉÊÍÓÔÕÚÜÇ ]+\*.*:?\s*$/;
+  const cleaned: string[] = [];
+  for (let i = 0; i < result.length; i++) {
+    const line = result[i].trim();
+    if (orphanSectionPattern.test(line)) {
+      // Verifica se a próxima linha não-vazia existe e NÃO é outro cabeçalho
+      const nextNonEmpty = result.slice(i + 1).find(l => l.trim() !== '');
+      if (!nextNonEmpty || orphanSectionPattern.test(nextNonEmpty.trim())) {
+        // Cabeçalho órfão — pular ele e a linha vazia que vem antes (se existir)
+        if (cleaned.length > 0 && cleaned[cleaned.length - 1] === '') {
+          cleaned.pop();
+        }
+        continue;
+      }
+    }
+    cleaned.push(result[i]);
+  }
+
+  // Remover linhas em branco extras no início e fim
+  return cleaned
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /**
@@ -461,10 +499,6 @@ Vi que você criou um orçamento em nosso site e gostaria de ajudá-lo(a) a fina
 
 💰 *VALOR TOTAL:* {{TOTAL_VALUE}}
 💳 *Forma de Pagamento:* {{PAYMENT_METHOD}}
-
-🗓️ *DETALHES DO EVENTO:*
-📅 *Data:* {{EVENT_DATE}}
-📍 *Cidade:* {{EVENT_CITY}}
 
 Estou à disposição para esclarecer dúvidas e fechar o orçamento.
 
