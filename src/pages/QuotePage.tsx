@@ -2137,6 +2137,7 @@ export function QuotePage() {
           firstProductRef={firstProductRef}
           totalSectionRef={totalSectionRef}
           temaNome={template?.tema || 'padrao'}
+          breakdown={getPriceBreakdown()}
         />
       )}
 
