@@ -194,8 +194,10 @@ export function LeadsManager({ userId }: { userId: string }) {
       template: {
         nome: template?.nome_template || '',
         texto_whatsapp: template?.texto_whatsapp,
-        sistema_sazonal_ativo: savedOrcamentoDetalhe.sistema_sazonal_ativo || false,
-        sistema_geografico_ativo: savedOrcamentoDetalhe.sistema_geografico_ativo || false,
+        // ✅ Usa configurações ATUAIS do template (banco), não as salvas no orcamento_detalhe
+        // Os valores do orcamento_detalhe são fallback para leads antigos
+        sistema_sazonal_ativo: template?.sistema_sazonal_ativo ?? savedOrcamentoDetalhe.sistema_sazonal_ativo ?? false,
+        sistema_geografico_ativo: template?.sistema_geografico_ativo ?? savedOrcamentoDetalhe.sistema_geografico_ativo ?? false,
         ocultar_valores_intermediarios: savedOrcamentoDetalhe.ocultar_valores_intermediarios || false,
       },
       products: savedOrcamentoDetalhe.produtos || [], // Full list of products from template

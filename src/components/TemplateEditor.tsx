@@ -1076,7 +1076,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                             <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
                               <LinkIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                               <span className="text-gray-600 flex-shrink-0">Link público:</span>
-                              <code className="text-green-600 font-mono truncate">priceus.com/{userSlug}/{slugInput}</code>
+                              <code className="text-green-600 font-mono truncate">priceus.com.br/{userSlug}/{slugInput}</code>
                             </div>
                             <button
                               type="button"
