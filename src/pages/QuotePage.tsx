@@ -95,6 +95,7 @@ export function QuotePage() {
     email_cliente: '',
     telefone_cliente: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; telefone?: string }>({});
   const [camposExtrasData, setCamposExtrasData] = useState<Record<string, string>>({});
   const [selectedFormaPagamento, setSelectedFormaPagamento] = useState<string>('');
   const [dataUltimaParcela] = useState<string>(''); // Removed unused setDataUltimaParcela
@@ -879,6 +880,27 @@ export function QuotePage() {
     };
   };
 
+  // ── Validações de formato de Email e Telefone ─────────────────────────
+  const validateEmail = (email: string): string => {
+    if (!email.trim()) return '';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailRegex.test(email.trim()) ? '' : 'E-mail inválido. Use o formato: nome@exemplo.com';
+  };
+
+  const validatePhone = (phone: string): string => {
+    if (!phone.trim()) return '';
+    const digits = phone.replace(/\D/g, '');
+    // Brasil: DDD (2 dígitos) + número (8 ou 9 dígitos) = 10 ou 11 dígitos
+    if (digits.length < 10 || digits.length > 11) {
+      return 'Número inválido. Informe DDD + número (ex: 11987654321)';
+    }
+    // Celular brasileiro deve começar com 9 após o DDD para números de 11 dígitos
+    if (digits.length === 11 && digits[2] !== '9') {
+      return 'Celular inválido. O número deve começar com 9 após o DDD';
+    }
+    return '';
+  };
+
   /**
    * Valida cupom de desconto
    */
@@ -1255,6 +1277,19 @@ export function QuotePage() {
     console.log('🚀 [handleSubmit] Botão clicado. Priorizando abertura do modal...');
 
     try {
+      // ── Validação de formato de email e telefone ──────────────────────
+      const emailError = validateEmail(formData.email_cliente);
+      const phoneError = validatePhone(formData.telefone_cliente);
+
+      if (emailError || phoneError) {
+        setFieldErrors({ email: emailError, telefone: phoneError });
+        setIsSubmitting(false);
+        setHasSubmitted(false);
+        // Scroll suave para o campo com erro
+        document.getElementById('email-cliente')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
       // Validação final antes de prosseguir
       if (!fieldsValidation.canUseWhatsApp) {
         alert(fieldsValidation.validationMessage);
@@ -1555,13 +1590,25 @@ export function QuotePage() {
                   id="email-cliente"
                   name="email_cliente"
                   value={formData.email_cliente}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email_cliente: e.target.value })
-                  }
-                  className={`w-full px-4 py-3 text-base border ${tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, email_cliente: val });
+                    setFieldErrors(prev => ({ ...prev, email: validateEmail(val) }));
+                  }}
+                  onBlur={(e) => {
+                    setFieldErrors(prev => ({ ...prev, email: validateEmail(e.target.value) }));
+                  }}
+                  className={`w-full px-4 py-3 text-base border ${fieldErrors.email ? 'border-red-500 ring-1 ring-red-400' : tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  placeholder="seu@email.com"
                   required
                   aria-required="true"
                 />
+                {fieldErrors.email && (
+                  <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                    <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1573,13 +1620,25 @@ export function QuotePage() {
                   id="telefone-cliente"
                   name="telefone_cliente"
                   value={formData.telefone_cliente}
-                  onChange={(e) =>
-                    setFormData({ ...formData, telefone_cliente: e.target.value })
-                  }
-                  className={`w-full px-4 py-3 text-base border ${tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, telefone_cliente: val });
+                    setFieldErrors(prev => ({ ...prev, telefone: validatePhone(val) }));
+                  }}
+                  onBlur={(e) => {
+                    setFieldErrors(prev => ({ ...prev, telefone: validatePhone(e.target.value) }));
+                  }}
+                  className={`w-full px-4 py-3 text-base border ${fieldErrors.telefone ? 'border-red-500 ring-1 ring-red-400' : tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  placeholder="(11) 98765-4321"
                   required
                   aria-required="true"
                 />
+                {fieldErrors.telefone && (
+                  <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                    <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                    {fieldErrors.telefone}
+                  </p>
+                )}
               </div>
             </div>
 
