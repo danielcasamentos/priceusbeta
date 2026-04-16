@@ -61,6 +61,7 @@ interface Template {
   forma_pagamento_obrigatoria: boolean;
   exibir_no_perfil: boolean;
   ignorar_agenda_global?: boolean;
+  exibir_painel_flutuante?: boolean;
 }
 
 interface TemplateEditorProps {
@@ -844,6 +845,27 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </div>
                       <div className="text-sm text-gray-700 mt-1">
                         Ative isso para orçamentos como álbuns ou produtos físicos onde a data do evento não é necessária. Isso removerá o campo de data do formulário, mesmo que a sua agenda global esteja ativa.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="border border-green-200 bg-green-50 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={template?.exibir_painel_flutuante !== false} // Default true
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('exibir_painel_flutuante', e.target.checked)
+                      }
+                      className="w-5 h-5 text-green-600 rounded mt-1"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                        📱 Exibir Painel Flutuante de Total
+                      </div>
+                      <div className="text-sm text-gray-700 mt-1">
+                        Mostra um botão flutuante com o totalizador na tela, acompanhando o cliente. O painel agora aparecerá inteligentemente apenas após o primeiro produto ser exibido e seu formato seguirá automaticamente o design do tema escolhido.
                       </div>
                     </div>
                   </label>

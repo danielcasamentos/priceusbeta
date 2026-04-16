@@ -6,46 +6,44 @@ import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 interface FloatingTotalPanelProps {
   calculateTotal: () => number;
   selectedProdutos: Record<string, number>;
-  produtos: any[]; // Apenas para contagem, não precisa de tipo complexo
+  produtos: any[]; 
   ocultarValoresIntermediarios: boolean;
-  produtosSectionRef: React.RefObject<HTMLElement>;
+  firstProductRef: React.RefObject<HTMLElement>;
   totalSectionRef: React.RefObject<HTMLElement>;
   tema?: any;
+  temaNome?: string;
 }
 
 export function FloatingTotalPanel({
   calculateTotal,
   selectedProdutos,
   ocultarValoresIntermediarios,
-  produtosSectionRef,
+  firstProductRef,
   totalSectionRef,
   tema,
+  temaNome = 'padrao',
 }: FloatingTotalPanelProps) {
   const total = calculateTotal();
   const totalItems = useMemo(() => {
     return Object.values(selectedProdutos).reduce((sum, qty) => sum + qty, 0);
   }, [selectedProdutos]);
 
-  // Estado para "lembrar" que o usuário já rolou até a seção de produtos.
-  const [hasEnteredProductsSection, setHasEnteredProductsSection] = useState(false);
+  const [hasPassedFirstProduct, setHasPassedFirstProduct] = useState(false);
 
-  // Observa a seção de produtos. Quando ela entra na tela, ativa o estado `hasEnteredProductsSection`.
-  const isProdutosSectionOnScreen = useIntersectionObserver(produtosSectionRef, { threshold: 0 });
-  // Observa a seção de total no final da página.
+  // Observa O PRIMEIRO produto. Margin negativa indica que ele deve subir 30% na tela
+  // antes de ser considerado "intersectado" / passado.
+  const isFirstProductOnScreen = useIntersectionObserver(firstProductRef, { rootMargin: '-30% 0px 0px 0px' });
   const isTotalSectionOnScreen = useIntersectionObserver(totalSectionRef, { threshold: 0 });
 
   useEffect(() => {
-    if (isProdutosSectionOnScreen) {
-      setHasEnteredProductsSection(true);
+    if (isFirstProductOnScreen) {
+      setHasPassedFirstProduct(true);
     }
-  }, [isProdutosSectionOnScreen]);
+  }, [isFirstProductOnScreen]);
 
-  // A condição para mostrar o painel é:
-  // 1. O usuário JÁ ENTROU na seção de produtos.
-  // 2. A seção de total final AINDA NÃO está na tela.
-  const shouldShow = hasEnteredProductsSection && !isTotalSectionOnScreen && totalItems > 0;
+  // Mostrar se já passamos do primeiro produto e não estamos no fim da página
+  const shouldShow = hasPassedFirstProduct && !isTotalSectionOnScreen && totalItems > 0;
 
-  // Estado para controlar a montagem/desmontagem com animação
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -53,7 +51,6 @@ export function FloatingTotalPanel({
     if (shouldShow) {
       setIsMounted(true);
     } else {
-      // Espera a animação de fade-out (300ms) antes de desmontar
       timeoutId = setTimeout(() => setIsMounted(false), 300);
     }
     return () => clearTimeout(timeoutId);
@@ -63,30 +60,36 @@ export function FloatingTotalPanel({
     return null;
   }
 
+  // Lógica de Design baseado no Tema
+  const isPillShape = ['classico', 'revista', 'documento'].includes(temaNome);
+  
+  // Extrai a classe de BG da cor secundária do tema (se existir) ou usa uma fallback
+  const bgClass = tema?.cores?.secundaria || 'bg-blue-600';
+  const hoverClass = bgClass.replace('500', '600').replace('600', '700');
+
   return (
-    // Aplica classes de transição e controla a opacidade com base na condição 'shouldShow'.
-    <div className={`fixed bottom-5 left-5 z-40 transition-opacity duration-300 ${shouldShow ? 'opacity-100' : 'opacity-0'}`}
-    >
+    <div className={`fixed bottom-5 right-5 sm:left-5 sm:right-auto z-40 transition-opacity duration-300 ${shouldShow ? 'opacity-100' : 'opacity-0'}`}>
       <a
         href="#total-section"
         className={`
-          w-20 h-20 sm:w-24 sm:h-24
           flex flex-col items-center justify-center
-          bg-blue-600 hover:bg-blue-700
+          ${bgClass} ${hoverClass}
           text-white
-          rounded-full
           shadow-lg hover:shadow-xl
           transition-all duration-300
           transform hover:scale-105
-          focus:outline-none focus:ring-4 focus:ring-opacity-50 ring-blue-300
+          focus:outline-none focus:ring-4 focus:ring-opacity-50
+          ${isPillShape 
+            ? 'px-6 py-3 rounded-2xl sm:px-8 sm:py-4 gap-1 w-auto min-w-[120px]' 
+            : 'w-20 h-20 sm:w-24 sm:h-24 rounded-full'}
         `}
         aria-label={`Ver total do orçamento: ${formatCurrency(total)}`}
       >
-        <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
-        <span className="text-[9px] sm:text-[10px] font-medium opacity-80 leading-none mt-1 tracking-tight">
+        <ShoppingCart className={isPillShape ? "w-5 h-5 sm:w-6 sm:h-6 mb-1" : "w-5 h-5 sm:w-6 sm:h-6"} />
+        <span className={`${isPillShape ? 'text-xs sm:text-sm' : 'text-[9px] sm:text-[10px]'} font-medium opacity-80 leading-none tracking-tight`}>
           a partir de:
         </span>
-        <span className="font-bold text-xs sm:text-sm leading-tight">
+        <span className={`font-bold leading-tight ${isPillShape ? 'text-sm sm:text-lg' : 'text-xs sm:text-sm'}`}>
           {formatCurrency(total)}
         </span>
       </a>

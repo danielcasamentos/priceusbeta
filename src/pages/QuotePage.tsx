@@ -144,6 +144,7 @@ export function QuotePage() {
   // 📌 Ref para o rodapé
   const produtosSectionRef = useRef<HTMLDivElement>(null);
   const totalSectionRef = useRef<HTMLDivElement>(null);
+  const firstProductRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null); // Mantido caso seja usado em outro lugar
 
   // � Hook de validação de campos obrigatórios
@@ -1661,9 +1662,10 @@ export function QuotePage() {
                 }
                 ref={produtosSectionRef} // 🔥 CORREÇÃO: A ref foi movida para este contêiner
               >
-                {produtos.map((produto) => (
+                {produtos.map((produto, index) => (
                   <div
                     key={produto.id}
+                    ref={index === 0 ? firstProductRef : null}
                     className={`border ${tema.estilos.borderRadius} p-4 sm:p-5 transition-all ${tema.estilos.shadow} ${
                       selectedProdutos[produto.id]
                         ? `${tema.cores.textoDestaque.replace('text-', 'border-')} ${tema.cores.secundaria}`
@@ -2125,15 +2127,18 @@ export function QuotePage() {
         )}
       </div>
 
-      <FloatingTotalPanel
-        calculateTotal={calculateTotal}
-        selectedProdutos={selectedProdutos}
-        produtos={produtos}
-        tema={tema}
-        ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
-        produtosSectionRef={produtosSectionRef}
-        totalSectionRef={totalSectionRef}
-      />
+      {template?.exibir_painel_flutuante !== false && (
+        <FloatingTotalPanel
+          calculateTotal={calculateTotal}
+          selectedProdutos={selectedProdutos}
+          produtos={produtos}
+          tema={tema}
+          ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+          firstProductRef={firstProductRef}
+          totalSectionRef={totalSectionRef}
+          temaNome={template?.tema || 'padrao'}
+        />
+      )}
 
       {/* Modal de Resumo e Envio */}
       {showSummaryModal && (
