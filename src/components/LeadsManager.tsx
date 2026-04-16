@@ -53,6 +53,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [contracts, setContracts] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em_negociacao' | 'fazer_followup'>('all');
+  const [filterTemplate, setFilterTemplate] = useState<string>('all');
   const [selectedLead, setSelectedLead] = useState<LeadWithReview | null>(null);
   const [templates, setTemplates] = useState<Record<string, TemplateFromDB>>({});
   const [cities, setCities] = useState<Record<string, City>>({});
@@ -430,10 +431,31 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
+  // Leads filtrados somente por template (base para os stats)
+  const templateFilteredLeads = useMemo(() => {
+    if (filterTemplate === 'all') return leads;
+    return leads.filter(lead => lead.template_id === filterTemplate);
+  }, [leads, filterTemplate]);
+
+  // Lista de templates que possuem leads, com contadores
+  const templateTabs = useMemo(() => {
+    const counts: Record<string, number> = {};
+    leads.forEach(lead => {
+      if (lead.template_id) {
+        counts[lead.template_id] = (counts[lead.template_id] || 0) + 1;
+      }
+    });
+    return Object.entries(counts)
+      .filter(([id]) => templates[id])
+      .map(([id, count]) => ({ id, nome: templates[id].nome_template, count }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [leads, templates]);
+
   const filteredLeads = useMemo(() => {
-    if (filter === 'all') return leads;
-    return leads.filter(lead => lead.status === filter);
-  }, [leads, filter]);
+    let result = filterTemplate === 'all' ? leads : leads.filter(lead => lead.template_id === filterTemplate);
+    if (filter !== 'all') result = result.filter(lead => lead.status === filter);
+    return result;
+  }, [leads, filter, filterTemplate]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -582,14 +604,14 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
 
   const stats = React.useMemo(() => ({
-    total: leads.length, // Corrected: Ensure leads is treated as LeadWithReview[]
-    novos: leads.filter((l: LeadWithReview) => l.status === 'novo').length, // Corrected: Explicitly type 'l'
-    abandonados: leads.filter((l: LeadWithReview) => l.status === 'abandonado').length, // Corrected: Explicitly type 'l'
-    convertidos: leads.filter((l: LeadWithReview) => l.status === 'convertido').length, // Corrected: Explicitly type 'l'
-    taxaConversao: leads.length > 0
-      ? ((leads.filter((l: LeadWithReview) => l.status === 'convertido').length / leads.length) * 100).toFixed(1)
+    total: templateFilteredLeads.length,
+    novos: templateFilteredLeads.filter((l: LeadWithReview) => l.status === 'novo').length,
+    abandonados: templateFilteredLeads.filter((l: LeadWithReview) => l.status === 'abandonado').length,
+    convertidos: templateFilteredLeads.filter((l: LeadWithReview) => l.status === 'convertido').length,
+    taxaConversao: templateFilteredLeads.length > 0
+      ? ((templateFilteredLeads.filter((l: LeadWithReview) => l.status === 'convertido').length / templateFilteredLeads.length) * 100).toFixed(1)
       : '0.0',
-  }), [leads]);
+  }), [templateFilteredLeads]);
 
   const getLeadsLimitPercentage = () => {
     if (planLimits.leadsLimit === 'unlimited') return 0;
@@ -687,7 +709,42 @@ export function LeadsManager({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* ── Tabs de Template ─────────────────────────────────────── */}
+      {templateTabs.length > 1 && (
+        <div className="flex flex-wrap gap-2 pb-1 border-b border-gray-200">
+          <button
+            onClick={() => { setFilterTemplate('all'); setFilter('all'); }}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              filterTemplate === 'all'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Todos os Templates
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              filterTemplate === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-700'
+            }`}>{leads.length}</span>
+          </button>
+          {templateTabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => { setFilterTemplate(tab.id); setFilter('all'); }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                filterTemplate === tab.id
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {tab.nome}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                filterTemplate === tab.id ? 'bg-indigo-500 text-white' : 'bg-gray-300 text-gray-700'
+              }`}>{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Filtros de Status ─────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setFilter('all')}
@@ -697,7 +754,7 @@ export function LeadsManager({ userId }: { userId: string }) {
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          Todos ({leads.length})
+          Todos ({templateFilteredLeads.length})
         </button>
         {(['novo', 'abandonado', 'contatado', 'em_negociacao', 'fazer_followup', 'convertido', 'perdido'] as const).map((status) => (
           <button
@@ -710,6 +767,7 @@ export function LeadsManager({ userId }: { userId: string }) {
             }`}
           >
             {status === 'em_negociacao' ? 'Em Negociação' : status === 'fazer_followup' ? 'Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
+            {' '}({templateFilteredLeads.filter(l => l.status === status).length})
           </button>
         ))}
         {selectedIds.length > 0 && (
