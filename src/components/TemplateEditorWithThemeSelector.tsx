@@ -167,7 +167,7 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
 
   const getPreviewUrl = () => {
     if (userSlug && templateSlug) {
-      return `/orcamento/${userSlug}/${templateSlug}`;
+      return `/${userSlug}/${templateSlug}`;
     }
     return null;
   };

@@ -18,6 +18,8 @@ interface Template {
   id: string;
   nome_template: string;
   slug_template: string;
+  titulo_template?: string;
+  descricao_perfil?: string;
   created_at: string;
 }
 
@@ -161,12 +163,19 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
                   className="bg-white rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group border-4 border-amber-600 hover:border-amber-700"
                 >
                   <div className="p-6 sm:p-8">
-                    <h3 className="text-xl sm:text-2xl font-black text-amber-900 mb-3 sm:mb-4 group-hover:text-amber-700 transition-colors uppercase">
+                    <h3 className="text-xl sm:text-2xl font-black text-amber-900 mb-1 group-hover:text-amber-700 transition-colors uppercase">
                       {template.nome_template}
                     </h3>
-                    <div className="flex items-center justify-between text-sm text-amber-700 font-bold">
-                      <span>{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
-                      <ExternalLink className="w-4 h-4 group-hover:text-amber-900 transition-colors" />
+                    {template.titulo_template && (
+                       <p className="text-sm font-bold text-amber-700 mb-3 uppercase tracking-wider">{template.titulo_template}</p>
+                    )}
+                    {template.descricao_perfil && (
+                       <p className="text-sm text-gray-700 mb-4 line-clamp-3 leading-relaxed italic">
+                         {template.descricao_perfil}
+                       </p>
+                    )}
+                    <div className="flex items-center justify-end text-sm text-amber-800 font-bold mt-auto pt-2">
+                       <span className="flex items-center gap-1 group-hover:text-amber-900 transition-colors uppercase">Acessar Portfólio <ExternalLink className="w-4 h-4 ml-1" /></span>
                     </div>
                   </div>
                   <div className="bg-gradient-to-r from-amber-600 to-orange-600 h-2"></div>

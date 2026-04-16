@@ -181,6 +181,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   const [newTemplateTitulo, setNewTemplateTitulo] = useState('');
   const [duplicating, setDuplicating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [userSlug, setUserSlug] = useState<string | null>(null);
   
   const planLimits = usePlanLimits();
 
@@ -198,6 +199,16 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   const loadTemplates = async () => {
     setLoading(true);
     try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('slug_usuario')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (profileData?.slug_usuario) {
+        setUserSlug(profileData.slug_usuario);
+      }
+
       const { data, error } = await supabase
         .from('templates')
         .select('*')
@@ -368,6 +379,10 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
 
   const getTemplateUrl = (template: Template) => {
     const baseUrl = window.location.origin;
+    if (userSlug && template.slug_template) {
+      return `${baseUrl}/${userSlug}/${template.slug_template}`;
+    }
+    // Fallback safe 
     return `${baseUrl}/orcamento/${template.uuid}`;
   };
 

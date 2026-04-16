@@ -62,6 +62,7 @@ interface Template {
   exibir_no_perfil: boolean;
   ignorar_agenda_global?: boolean;
   exibir_painel_flutuante?: boolean;
+  descricao_perfil?: string;
 }
 
 interface TemplateEditorProps {
@@ -793,6 +794,30 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
               </div>
 
               <div className="space-y-4">
+                <div className="border border-gray-200 bg-white rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    Apresentação no Perfil Público (Vitrine)
+                  </h4>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descrição do Pacote
+                  </label>
+                  <textarea
+                    value={template?.descricao_perfil || ''}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 150) {
+                        handleUpdateTemplateConfig('descricao_perfil', e.target.value);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Cobertura completa para casamentos intimistas com mini álbum incluso..."
+                    rows={2}
+                  />
+                  <div className="flex justify-between mt-1">
+                     <p className="text-xs text-gray-500">Exibido nos cartões do seu portfólio (priceus.com.br/usuário)</p>
+                     <p className="text-xs text-gray-500">{(template?.descricao_perfil || '').length}/150 caracteres</p>
+                  </div>
+                </div>
                 <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input

@@ -24,6 +24,8 @@ interface Profile {
 interface Template {
   id: string;
   nome_template: string;
+  titulo_template?: string;
+  descricao_perfil?: string;
   slug_template: string;
   created_at: string;
 }
@@ -82,7 +84,7 @@ export function PublicProfilePage() {
 
       const { data: templatesData } = await supabase
         .from('templates')
-        .select('id, nome_template, slug_template, created_at, ordem_exibicao')
+        .select('id, nome_template, titulo_template, slug_template, created_at, ordem_exibicao, descricao_perfil')
         .eq('user_id', profileData.id)
         .eq('exibir_no_perfil', true)
         .not('slug_template', 'is', null)
