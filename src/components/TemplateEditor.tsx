@@ -92,10 +92,24 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   }>({ saving: false, message: null, type: null });
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // ── Estados locais para campos de texto livre (sem salvar a cada tecla) ──
+  const [localTextoBtn, setLocalTextoBtn] = useState('');
+  const [localDescricao, setLocalDescricao] = useState('');
+  const [textoBtnSaveStatus, setTextoBtnSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [descricaoSaveStatus, setDescricaoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   useEffect(() => {
     loadTemplateData();
     getUserId();
   }, [templateId]);
+
+  // Sincronizar estados locais quando o template carrega
+  useEffect(() => {
+    if (template) {
+      setLocalTextoBtn(template.texto_botao_envio || '');
+      setLocalDescricao(template.descricao_perfil || '');
+    }
+  }, [template?.id]);
 
   const getUserId = async () => {
     const { data } = await supabase.auth.getUser();
@@ -804,19 +818,33 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     Descrição do Pacote
                   </label>
                   <textarea
-                    value={template?.descricao_perfil || ''}
+                    value={localDescricao}
                     onChange={(e) => {
-                      if (e.target.value.length <= 150) {
-                        handleUpdateTemplateConfig('descricao_perfil', e.target.value);
+                      if (e.target.value.length <= 150) setLocalDescricao(e.target.value);
+                    }}
+                    onBlur={async () => {
+                      if (localDescricao === (template?.descricao_perfil || '')) return;
+                      setDescricaoSaveStatus('saving');
+                      try {
+                        await handleUpdateTemplateConfig('descricao_perfil', localDescricao);
+                        setDescricaoSaveStatus('saved');
+                      } catch {
+                        setDescricaoSaveStatus('error');
                       }
+                      setTimeout(() => setDescricaoSaveStatus('idle'), 2500);
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="Ex: Cobertura completa para casamentos intimistas com mini álbum incluso..."
                     rows={2}
                   />
-                  <div className="flex justify-between mt-1">
+                  <div className="flex justify-between items-center mt-1">
                      <p className="text-xs text-gray-500">Exibido nos cartões do seu portfólio (priceus.com.br/usuário)</p>
-                     <p className="text-xs text-gray-500">{(template?.descricao_perfil || '').length}/150 caracteres</p>
+                     <div className="flex items-center gap-2">
+                       {descricaoSaveStatus === 'saving' && <span className="text-xs text-blue-500 animate-pulse">Salvando...</span>}
+                       {descricaoSaveStatus === 'saved' && <span className="text-xs text-green-600 font-medium">✓ Salvo</span>}
+                       {descricaoSaveStatus === 'error' && <span className="text-xs text-red-500">✗ Erro ao salvar</span>}
+                       <p className="text-xs text-gray-500">{localDescricao.length}/150</p>
+                     </div>
                   </div>
 
                   {/* Toggle ocultar data */}
@@ -970,14 +998,53 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                   <p className="text-sm text-gray-600 mb-3">
                     Personalize o texto do botão principal de envio do orçamento.
                   </p>
-                  <input
-                    type="text"
-                    value={template?.texto_botao_envio || ''}
-                    onChange={(e) => handleUpdateTemplateConfig('texto_botao_envio', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Negociar no WhatsApp"
-                    maxLength={30}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={localTextoBtn}
+                      onChange={(e) => setLocalTextoBtn(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      }}
+                      onBlur={async () => {
+                        if (localTextoBtn === (template?.texto_botao_envio || '')) return;
+                        setTextoBtnSaveStatus('saving');
+                        try {
+                          await handleUpdateTemplateConfig('texto_botao_envio', localTextoBtn);
+                          setTextoBtnSaveStatus('saved');
+                        } catch {
+                          setTextoBtnSaveStatus('error');
+                        }
+                        setTimeout(() => setTextoBtnSaveStatus('idle'), 2500);
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ex: Negociar no WhatsApp"
+                      maxLength={30}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (localTextoBtn === (template?.texto_botao_envio || '')) return;
+                        setTextoBtnSaveStatus('saving');
+                        try {
+                          await handleUpdateTemplateConfig('texto_botao_envio', localTextoBtn);
+                          setTextoBtnSaveStatus('saved');
+                        } catch {
+                          setTextoBtnSaveStatus('error');
+                        }
+                        setTimeout(() => setTextoBtnSaveStatus('idle'), 2500);
+                      }}
+                      disabled={textoBtnSaveStatus === 'saving' || localTextoBtn === (template?.texto_botao_envio || '')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium transition-colors min-w-[80px]"
+                    >
+                      {textoBtnSaveStatus === 'saving' ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                  <div className="mt-1 h-4">
+                    {textoBtnSaveStatus === 'saved' && <p className="text-xs text-green-600 font-medium">✓ Texto do botão salvo com sucesso!</p>}
+                    {textoBtnSaveStatus === 'error' && <p className="text-xs text-red-500">✗ Erro ao salvar. Tente novamente.</p>}
+                    {textoBtnSaveStatus === 'idle' && <p className="text-xs text-gray-400">Pressione Enter ou clique em Salvar para confirmar.</p>}
+                  </div>
                 </div>
 
                 <label className="flex items-center gap-3 cursor-pointer">
