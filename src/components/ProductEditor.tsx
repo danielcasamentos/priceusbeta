@@ -174,10 +174,11 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
       });
 
       const result = await uploadService.uploadImage(file, userId, {
-        maxSizeMB: 5,
-        maxWidthPx: 1920,
-        maxHeightPx: 1920,
-        quality: 0.85,
+        maxSizeMB: 1,
+        maxWidthPx: 1280,
+        maxHeightPx: 1280,
+        quality: 0.80,
+        allowedFormats: ['image/jpeg', 'image/png'],
         folder: 'produtos',
       });
 
@@ -194,7 +195,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
          finalImagemUrl = result.url;
          onChange('imagem_url', result.url);
       } else {
-         if (imagensAtualizadas.length < 5) {
+         if (imagensAtualizadas.length < 3) { // 💡 Limite: 3 imagens por produto (era 5)
             imagensAtualizadas.push(result.url);
             onChange('imagens', imagensAtualizadas);
          }
@@ -560,13 +561,13 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
           </div>
         )}
         
-        {(!product.imagem_url || (product.imagens && product.imagens.length < 5)) && (
-          // Área de upload (drag & drop ou click)
+        {(!product.imagem_url || (product.imagens && product.imagens.length < 3)) && (
+          // Área de upload — limite 3 fotos por produto
           <div>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png"
               onChange={handleFileInput}
               className="hidden"
               disabled={uploading || saving}

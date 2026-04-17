@@ -45,6 +45,8 @@ interface ProductListProps {
   onProductSaved?: (index: number, productId: string) => void;
 }
 
+const MAX_PRODUTOS = 15; // 💡 Limite por orçamento para controlar custos de armazenamento
+
 export function ProductList({
   products,
   onUpdate,
@@ -234,14 +236,22 @@ export function ProductList({
       )}
 
       {localProducts.length > 0 && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium transition-colors border-2 border-dashed border-blue-300"
-        >
-          <Plus className="w-5 h-5" />
-          Adicionar Novo Produto
-        </button>
+        <div>
+          {localProducts.length >= MAX_PRODUTOS ? (
+            <div className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 rounded-lg border-2 border-dashed border-amber-300 text-sm font-medium">
+              📌 Limite de {MAX_PRODUTOS} produtos atingido por orçamento
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium transition-colors border-2 border-dashed border-blue-300"
+            >
+              <Plus className="w-5 h-5" />
+              Adicionar Novo Produto ({localProducts.length}/{MAX_PRODUTOS})
+            </button>
+          )}
+        </div>
       )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

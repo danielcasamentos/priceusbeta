@@ -49,11 +49,11 @@ export interface UploadProgress {
 // ==========================================
 
 const DEFAULT_OPTIONS: Required<UploadOptions> = {
-  maxSizeMB: 5,
-  maxWidthPx: 1920,
-  maxHeightPx: 1920,
-  quality: 0.85,
-  allowedFormats: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  maxSizeMB: 1,           // 💡 Limite conservador: 1MB por imagem
+  maxWidthPx: 1280,       // 💡 Resolução suficiente para web (antes era 1920)
+  maxHeightPx: 1280,
+  quality: 0.80,          // 💡 Boa qualidade visual com boa compressão
+  allowedFormats: ['image/jpeg', 'image/png'], // 💡 Só JPEG e PNG — força conversão para WebP
   generateThumbnail: false,
   folder: 'uploads',
 };
@@ -142,13 +142,13 @@ export class ImageUploadService {
   private validateFile(file: File, opts: Required<UploadOptions>): string | null {
     // Validar formato
     if (!opts.allowedFormats.includes(file.type)) {
-      return `Formato não suportado. Use: ${opts.allowedFormats.join(', ')}`;
+      return `Formato não suportado. Envie uma imagem JPEG ou PNG.`;
     }
 
     // Validar tamanho
     const fileSizeMB = file.size / (1024 * 1024);
     if (fileSizeMB > opts.maxSizeMB) {
-      return `Arquivo muito grande (${fileSizeMB.toFixed(1)}MB). Máximo: ${opts.maxSizeMB}MB`;
+      return `Imagem muito grande (${fileSizeMB.toFixed(1)}MB). Limite: ${opts.maxSizeMB}MB. Reduza o tamanho antes de enviar.`;
     }
 
     // Validar nome do arquivo
@@ -206,7 +206,8 @@ export class ImageUploadService {
           ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Converter para blob com qualidade especificada
+          // 💡 Sempre converte para WebP: menor tamanho, melhor qualidade visual
+          // WebP é 25-35% menor que JPEG e 60-80% menor que PNG
           canvas.toBlob(
             (blob) => {
               if (!blob) {
@@ -219,13 +220,13 @@ export class ImageUploadService {
                 compressedSize: blob.size,
                 width,
                 height,
-                format: file.type,
+                format: 'image/webp',
                 compressionRatio: ((1 - blob.size / file.size) * 100),
               };
 
               resolve({ blob, metadata });
             },
-            file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+            'image/webp',  // 💡 Saída sempre em WebP independente do input
             opts.quality
           );
         } catch (error) {
@@ -257,8 +258,8 @@ export class ImageUploadService {
     attempt = 1
   ): Promise<UploadResult> {
     try {
-      // Gerar nome único com extensão normalizada
-      const fileExt = (originalName.split('.').pop() || 'jpg').toLowerCase(); // 🔥 Normalizar
+      // 💡 Extensão sempre .webp (saída convertida)
+      const fileExt = 'webp';
       const timestamp = Date.now();
       const randomSuffix = Math.random().toString(36).substring(7);
       const fileName = `${opts.folder}/${userId}/${timestamp}-${randomSuffix}.${fileExt}`;
