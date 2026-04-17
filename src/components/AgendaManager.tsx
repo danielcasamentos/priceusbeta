@@ -1223,21 +1223,126 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </button>
               </div>
 
-              {/* Sincronização Externa (Em desenvolvimento) */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 opacity-70">
-                <div className="flex items-start gap-3">
-                  <RefreshCw className="w-5 h-5 text-gray-400 mt-0.5" />
+              {/* Sincronizacao via Link ICS (Google Calendar / Apple Calendar) */}
+              <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                <div className="flex items-start gap-3 mb-4">
+                  <RefreshCw className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-700 mb-1 flex items-center gap-2">
-                       Integração de Calendários Externa
-                       <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Em breve</span>
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      Integração direta com Google Calendar, Apple Calendar e Outlook via API estará disponível em breve. Continue acompanhando as atualizações!
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-blue-900">Sincronizacao via Link de Calendario</h3>
+                      <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Beta</span>
+                    </div>
+                    <p className="text-sm text-blue-700">
+                      Importe eventos do Google Calendar ou Apple Calendar usando um link ICS publico.
                     </p>
                   </div>
                 </div>
+
+                <details className="mb-4 bg-white rounded-lg border border-blue-200">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-blue-800 hover:bg-blue-50 rounded-lg">
+                    Como obter o link do Google Calendar
+                  </summary>
+                  <div className="px-4 pb-4 space-y-2 text-sm text-gray-700">
+                    <p className="font-medium text-gray-900 mt-3">Passo a passo:</p>
+                    <ol className="list-decimal pl-5 space-y-1 text-sm">
+                      <li>Abra o <strong>Google Calendar</strong> no computador</li>
+                      <li>No menu lateral, encontre a agenda desejada</li>
+                      <li>Clique nos <strong>3 pontos</strong> ao lado do nome da agenda</li>
+                      <li>Selecione <strong>"Configuracoes e compartilhamento"</strong></li>
+                      <li>Role ate <strong>"Endereco de calendario em formato iCal"</strong></li>
+                      <li>Copie o link <strong>(.ics)</strong></li>
+                      <li>Cole no campo abaixo e clique em Sincronizar</li>
+                    </ol>
+                    <p className="text-xs text-gray-500 mt-2 bg-yellow-50 p-2 rounded border border-yellow-200">
+                      O link funciona somente se a agenda for publica ou se usar o "Endereco secreto em iCal".
+                    </p>
+                  </div>
+                </details>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 mb-1">
+                      URL do Calendario ICS
+                    </label>
+                    <input
+                      type="url"
+                      value={configEdit.calendar_ics_url}
+                      onChange={(e) => setConfigEdit({ ...configEdit, calendar_ics_url: e.target.value })}
+                      placeholder="https://calendar.google.com/calendar/ical/seu-calendario/basic.ics"
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                    />
+                    <p className="text-xs text-blue-600 mt-1">
+                      Cole aqui o link .ics do Google Calendar, Apple Calendar ou outro servico compativel.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between py-2">
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Sincronizacao automatica</p>
+                      <p className="text-xs text-blue-600">Sincroniza ao abrir a agenda</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={configEdit.auto_sync_enabled}
+                        onChange={(e) => setConfigEdit({ ...configEdit, auto_sync_enabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+
+                  {configEdit.calendar_ics_url && (
+                    <button
+                      onClick={async () => {
+                        if (!configEdit.calendar_ics_url) return;
+                        setImportStatus({ show: true, type: 'info', message: 'Buscando eventos do calendario...' });
+                        try {
+                          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(configEdit.calendar_ics_url)}`;
+                          const response = await fetch(proxyUrl);
+                          if (!response.ok) throw new Error('Nao foi possivel acessar o link do calendario');
+                          const text = await response.text();
+                          if (!text.includes('BEGIN:VCALENDAR')) {
+                            throw new Error('O link nao parece ser um calendario ICS valido');
+                          }
+                          const parsedEventos = parseICS(text);
+                          if (parsedEventos.length === 0) {
+                            setImportStatus({ show: true, type: 'info', message: 'Nenhum evento encontrado no calendario', details: ['O calendario pode estar vazio ou em formato nao reconhecido.'] });
+                            return;
+                          }
+                          const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
+                          await loadData();
+                          setActiveTab('list');
+                          setImportStatus({
+                            show: true,
+                            type: result.success ? 'success' : 'error',
+                            message: result.success ? `Sincronizacao concluida! ${parsedEventos.length} eventos processados.` : 'Falha na sincronizacao',
+                            details: result.success ? [
+                              `Adicionados: ${result.eventos_adicionados}`,
+                              result.eventos_atualizados > 0 ? `Atualizados: ${result.eventos_atualizados}` : '',
+                              result.eventos_ignorados > 0 ? `Ignorados (duplicatas): ${result.eventos_ignorados}` : '',
+                            ].filter(Boolean) : result.errors.slice(0, 3)
+                          });
+                        } catch (error) {
+                          const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+                          setImportStatus({ show: true, type: 'error', message: 'Erro ao sincronizar', details: [msg, 'Verifique se o link esta correto e se o calendario e publico.'] });
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Sincronizar Agora
+                    </button>
+                  )}
+
+                  {configEdit.last_calendar_sync && (
+                    <p className="text-xs text-blue-600 text-center">
+                      Ultima sincronizacao: {new Date(configEdit.last_calendar_sync).toLocaleString('pt-BR')}
+                    </p>
+                  )}
+                </div>
               </div>
+
 
               {/* Bloqueio de Feriados */}
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
