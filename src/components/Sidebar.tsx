@@ -20,6 +20,7 @@ interface SidebarProps {
   currentPage: string;
   onPageChange: (page: string) => void;
   userEmail?: string;
+  userName?: string;
   isMobile?: boolean;
   isOpen?: boolean;
   onClose?: () => void;
@@ -29,6 +30,7 @@ export function Sidebar({
   currentPage,
   onPageChange,
   userEmail,
+  userName,
   isMobile = false,
   isOpen = true,
   onClose
@@ -110,12 +112,15 @@ export function Sidebar({
               <img
                 src="/Logo Price Us.png"
                 alt="Price Us"
-                className="h-10 w-auto"
+                className="h-[46px] w-auto"
               />
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Price Us</h2>
+                <h2 className="text-sm font-semibold text-gray-500 leading-tight">Seja bem-vindo,</h2>
+                <p className="text-base font-bold text-gray-900 leading-tight">
+                  {userName || userEmail?.split('@')[0] || 'Usuário'}
+                </p>
                 {userEmail && (
-                  <p className="text-xs text-gray-600">{userEmail.split('@')[0]}</p>
+                  <p className="text-xs text-gray-400 truncate max-w-[140px]">{userEmail}</p>
                 )}
               </div>
             </div>
@@ -201,12 +206,15 @@ export function Sidebar({
             <img
               src="/Logo Price Us.png"
               alt="Price Us"
-              className="h-10 w-auto"
+              className="h-[46px] w-auto"
             />
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Price Us</h2>
+              <p className="text-xs font-semibold text-gray-500 leading-tight">Seja bem-vindo,</p>
+              <p className="text-base font-bold text-gray-900 leading-tight">
+                {userName || userEmail?.split('@')[0] || 'Usuário'}
+              </p>
               {userEmail && (
-                <p className="text-xs text-gray-600">{userEmail.split('@')[0]}</p>
+                <p className="text-xs text-gray-400 truncate max-w-[140px]">{userEmail}</p>
               )}
             </div>
           </div>

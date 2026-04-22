@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useTrialStatus } from '../hooks/useTrialStatus';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -47,6 +48,20 @@ export function DashboardPage() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [contractTab, setContractTab] = useState<'templates' | 'manager'>('templates');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userName, setUserName] = useState<string>('');
+
+  // Busca o nome profissional do perfil
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('profiles')
+      .select('nome_profissional')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.nome_profissional) setUserName(data.nome_profissional);
+      });
+  }, [user?.id]);
 
   // Sincroniza o estado com a URL quando a página mudar
   // Se a URL tiver params malformados, corrige automaticamente
@@ -154,12 +169,12 @@ export function DashboardPage() {
                 <img
                   src="/Logo Price Us.png"
                   alt="Price Us"
-                  className="h-10 w-auto"
+                  className="h-[46px] w-auto"
                 />
                 <div>
-                  <h1 className="text-xl font-bold text-gray-900">Price Us</h1>
-                  <p className="text-xs text-gray-600 hidden sm:block">
-                    {user?.email?.split('@')[0]}
+                  <p className="text-xs font-semibold text-gray-500 leading-none">Seja bem-vindo,</p>
+                  <p className="text-base font-bold text-gray-900 leading-tight">
+                    {userName || user?.email?.split('@')[0]}
                   </p>
                 </div>
               </div>
@@ -186,6 +201,7 @@ export function DashboardPage() {
         currentPage={currentPage}
         onPageChange={handlePageChange}
         userEmail={user.email}
+        userName={userName}
         // Sidebar mobile só aparece quando NÃO é mobile (para não conflitar com BottomNavigation)
         isMobile={!isMobile}
         isOpen={mobileMenuOpen}
@@ -199,6 +215,7 @@ export function DashboardPage() {
             currentPage={currentPage}
             onPageChange={handlePageChange}
             userEmail={user.email}
+            userName={userName}
           />
         )}
 
