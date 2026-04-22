@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PriceUs · Demo 2 — Visão do Cliente</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--g:#16a34a;--gl:#22c55e;--d:#05111e;--w:#fff;--gr:#7a9bb5}
+body{font-family:'Inter',sans-serif;background:var(--d);color:var(--w);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 80% 20%,rgba(22,163,74,.14),transparent 55%),radial-gradient(ellipse 50% 40% at 20% 80%,rgba(99,102,241,.09),transparent 55%),var(--d);z-index:0}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideLeft{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes checkPop{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+@keyframes notifIn{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}
+
+.wrap{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:36px 20px 80px}
+.tag{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--gl);text-align:center;margin-bottom:14px;animation:fadeUp .5s ease .1s both}
+.title{font-size:clamp(26px,4.5vw,54px);font-weight:900;text-align:center;line-height:1.12;letter-spacing:-1.5px;margin-bottom:12px;animation:fadeUp .5s ease .2s both}
+.sub{font-size:clamp(13px,1.8vw,17px);color:var(--gr);text-align:center;max-width:520px;margin:0 auto 52px;animation:fadeUp .5s ease .3s both}
+.hl{color:var(--gl)}
+
+/* DEVICE FRAME — tablet */
+.device-wrap{position:relative;width:100%;max-width:1000px;display:flex;flex-direction:column;align-items:center;animation:scaleIn .7s ease .4s both}
+.tablet-frame{width:100%;max-width:780px;background:#141f30;border-radius:28px;border:2px solid #252f42;box-shadow:0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05);overflow:hidden}
+.tablet-bar{height:12px;background:#0e1822;display:flex;align-items:center;justify-content:center;gap:6px}
+.tb-dot{width:6px;height:6px;border-radius:50%}
+.address-bar{background:#0d1826;padding:10px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06)}
+.ab-lock{font-size:12px;color:var(--gl)}
+.ab-url{font-size:11px;color:var(--gr);font-family:monospace}
+.ab-badge{margin-left:auto;font-size:9px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(34,197,94,.15);color:var(--gl);border:1px solid rgba(34,197,94,.3)}
+
+/* QUOTE PAGE */
+.quote-page{background:#f8fafc;color:#0f172a;display:flex;min-height:440px}
+.qp-sidebar{width:180px;flex-shrink:0;background:linear-gradient(160deg,#0f172a,#1e293b);color:#fff;padding:20px 16px;display:flex;flex-direction:column;gap:12px}
+.qp-logo{font-size:13px;font-weight:800;margin-bottom:8px}
+.qp-logo span{color:var(--gl)}
+.qp-photographer{display:flex;align-items:center;gap:8px;padding:10px;background:rgba(255,255,255,.07);border-radius:10px;margin-bottom:8px}
+.qp-ava{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--g),var(--gl));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.qp-pname{font-size:11px;font-weight:600}
+.qp-ptype{font-size:9px;color:#94a3b8}
+.qp-cat{font-size:9px;font-weight:700;letter-spacing:2px;color:#64748b;text-transform:uppercase;margin-bottom:6px}
+.qp-menu-item{font-size:10px;font-weight:500;padding:6px 10px;border-radius:7px;color:#94a3b8;cursor:pointer}
+.qp-menu-item.act{background:rgba(34,197,94,.2);color:var(--gl)}
+
+.qp-main{flex:1;padding:20px;overflow:hidden}
+.qp-header{margin-bottom:16px}
+.qp-htitle{font-size:16px;font-weight:800;color:#0f172a}
+.qp-hstars{color:#f59e0b;font-size:11px;margin-top:2px}
+.products-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.prod-card{border:2px solid #e2e8f0;border-radius:12px;padding:12px;cursor:pointer;transition:all .3s;position:relative;background:white}
+.prod-card.selected{border-color:var(--g);background:rgba(22,163,74,.05)}
+.prod-card .pc-img{width:100%;height:60px;background:linear-gradient(135deg,#dbeafe,#ede9fe);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.prod-card .pc-name{font-size:11px;font-weight:700;color:#0f172a}
+.prod-card .pc-price{font-size:13px;font-weight:800;color:var(--g);margin-top:3px}
+.prod-card .pc-check{position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;background:var(--g);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(0);transition:all .3s}
+.prod-card.selected .pc-check{opacity:1;transform:scale(1);animation:checkPop .4s cubic-bezier(.175,.885,.32,1.275) both}
+
+.qp-panel{background:#0f172a;border-radius:14px;padding:14px;color:#fff}
+.qp-panel-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#64748b;margin-bottom:10px}
+.qp-panel-items{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.qp-pi{display:flex;justify-content:space-between;font-size:10px}
+.qp-pi-name{color:#94a3b8}
+.qp-pi-val{font-weight:600;color:#fff}
+.qp-divider{border:none;border-top:1px solid rgba(255,255,255,.1);margin:8px 0}
+.qp-total-row{display:flex;justify-content:space-between;align-items:center}
+.qp-total-label{font-size:11px;font-weight:700}
+.qp-total-val{font-size:18px;font-weight:900;color:var(--gl);animation:countUp .5s ease both}
+.qp-wa-btn{display:block;width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#25d366,#128C7E);color:#fff;font-size:12px;font-weight:800;text-align:center;margin-top:10px;cursor:pointer;animation:pulse 2s ease infinite;border:none}
+
+/* FLOATING NOTIF */
+.float-notif{position:fixed;top:20px;right:20px;z-index:999;animation:notifIn .5s cubic-bezier(.175,.885,.32,1.275) both}
+.fn{background:rgba(12,22,42,.96);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 18px;width:264px;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.fn-h{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.fn-ic{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.fn-t{font-size:11px;font-weight:700}
+.fn-tm{font-size:9px;color:var(--gr);margin-left:auto}
+.fn-b{font-size:12px;color:rgba(255,255,255,.75);line-height:1.4}
+
+/* BOTTOM */
+.bottom-cta{width:100%;max-width:540px;text-align:center;margin-top:52px;animation:fadeUp .6s ease .9s both}
+.cta-btn{display:inline-block;padding:16px 48px;border-radius:14px;background:linear-gradient(135deg,var(--g),var(--gl));color:#fff;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 8px 32px rgba(22,163,74,.4);animation:pulse 2s ease infinite}
+.cta-url{font-size:12px;color:var(--gr);margin-top:10px}
+
+/* CAPTION */
+.caption{width:100%;max-width:780px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px;animation:fadeUp .6s ease .7s both}
+.cap-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;text-align:center}
+.cap-ic{font-size:22px;margin-bottom:6px}
+.cap-t{font-size:12px;font-weight:700;margin-bottom:4px}
+.cap-d{font-size:11px;color:var(--gr)}
+
+#progress{position:fixed;bottom:0;left:0;height:3px;background:linear-gradient(90deg,var(--g),var(--gl));z-index:999;transition:width .08s linear}
+#controls{position:fixed;bottom:12px;right:20px;display:flex;gap:8px;z-index:999}
+.cbtn{padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font:600 11px 'Inter',sans-serif;cursor:pointer}
+.cbtn.g{background:var(--g);border-color:var(--g)}
+
+@media(max-width:640px){
+  .qp-sidebar{display:none}
+  .products-grid{grid-template-columns:1fr 1fr}
+  .caption{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="tag">Visão do cliente · Orçamento interativo</p>
+  <h1 class="title">O que seu cliente <span class="hl">vê e sente</span><br>ao abrir seu orçamento</h1>
+  <p class="sub">Um link profissional com seus pacotes, fotos, totalizador automático e botão direto pro WhatsApp.</p>
+
+  <div class="device-wrap">
+    <div class="tablet-frame">
+      <div class="tablet-bar">
+        <div class="tb-dot" style="background:#ef4444"></div>
+        <div class="tb-dot" style="background:#f59e0b"></div>
+        <div class="tb-dot" style="background:#22c55e"></div>
+      </div>
+      <div class="address-bar">
+        <span class="ab-lock">🔒</span>
+        <span class="ab-url">priceus.com.br/danielfotografia/casamentos</span>
+        <span class="ab-badge">✓ Seguro</span>
+      </div>
+      <div class="quote-page">
+        <div class="qp-sidebar">
+          <div style="margin-bottom:12px">
+            <div class="qp-logo">Price<span>Us</span></div>
+            <div class="qp-photographer">
+              <div class="qp-ava">D</div>
+              <div>
+                <div class="qp-pname">Daniel Azevedo</div>
+                <div class="qp-ptype">⭐⭐⭐⭐⭐ Fotografia</div>
+              </div>
+            </div>
+          </div>
+          <div class="qp-cat">Pacotes</div>
+          <div class="qp-menu-item act">📸 Casamento</div>
+          <div class="qp-menu-item">📅 15 Anos</div>
+          <div class="qp-menu-item">📷 Ensaio</div>
+          <div class="qp-menu-item">🎬 Vídeo</div>
+          <div style="margin-top:auto">
+            <div class="qp-cat" style="margin-top:16px">Contato</div>
+            <div style="font-size:9px;color:#64748b;line-height:1.6">📍 São Paulo, SP<br>📸 Desde 2015<br>⭐ 247 avaliações</div>
+          </div>
+        </div>
+        <div class="qp-main">
+          <div class="qp-header">
+            <div class="qp-htitle">📸 Cobertura de Casamento</div>
+            <div class="qp-hstars">★★★★★ <span style="color:#64748b;font-size:10px">247 avaliações · São Paulo</span></div>
+          </div>
+          <div class="products-grid">
+            <div class="prod-card selected" id="pc1">
+              <div class="pc-img">📷</div>
+              <div class="pc-name">Cobertura Completa</div>
+              <div class="pc-price">R$4.800</div>
+              <div class="pc-check">✓</div>
+            </div>
+            <div class="prod-card" id="pc2">
+              <div class="pc-img">📖</div>
+              <div class="pc-name">Álbum Premium</div>
+              <div class="pc-price">R$1.200</div>
+              <div class="pc-check">✓</div>
+            </div>
+            <div class="prod-card selected" id="pc3">
+              <div class="pc-img">🎬</div>
+              <div class="pc-name">Vídeo Highlights</div>
+              <div class="pc-price">R$1.500</div>
+              <div class="pc-check">✓</div>
+            </div>
+            <div class="prod-card" id="pc4">
+              <div class="pc-img">🖼️</div>
+              <div class="pc-name">Quadro 60x90cm</div>
+              <div class="pc-price">R$680</div>
+              <div class="pc-check">✓</div>
+            </div>
+          </div>
+          <div class="qp-panel">
+            <div class="qp-panel-title">Resumo do Orçamento</div>
+            <div class="qp-panel-items" id="panel-items">
+              <div class="qp-pi"><span class="qp-pi-name">Cobertura Completa (1x)</span><span class="qp-pi-val">R$4.800</span></div>
+              <div class="qp-pi"><span class="qp-pi-name">Vídeo Highlights (1x)</span><span class="qp-pi-val">R$1.500</span></div>
+            </div>
+            <hr class="qp-divider">
+            <div class="qp-total-row">
+              <span class="qp-total-label">Total do Orçamento</span>
+              <span class="qp-total-val" id="total-val">R$6.300</span>
+            </div>
+            <button class="qp-wa-btn">💬 Quero este pacote — WhatsApp</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption">
+      <div class="cap-card">
+        <div class="cap-ic">🔗</div>
+        <div class="cap-t">Link único e profissional</div>
+        <div class="cap-d">Compartilhe no Instagram, WhatsApp ou email</div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-ic">⚡</div>
+        <div class="cap-t">Total calculado na hora</div>
+        <div class="cap-d">Cliente escolhe os itens e vê o preço em tempo real</div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-ic">💬</div>
+        <div class="cap-t">Lead direto no WhatsApp</div>
+        <div class="cap-d">Um clique e o orçamento chega pra você pronto</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-cta">
+    <a class="cta-btn" href="https://priceus.com.br">📲 Criar meu orçamento profissional</a>
+    <p class="cta-url">priceus.com.br · Grátis por 7 dias</p>
+  </div>
+</div>
+
+<!-- Notif -->
+<div class="float-notif" id="fn" style="display:none">
+  <div class="fn">
+    <div class="fn-h">
+      <div class="fn-ic" style="background:rgba(34,197,94,.2)">🎯</div>
+      <div class="fn-t">Novo Lead!</div>
+      <div class="fn-tm">agora</div>
+    </div>
+    <div class="fn-b">Joyce Melo enviou orçamento de <strong style="color:var(--gl)">R$7.500</strong> via WhatsApp 🔥</div>
+  </div>
+</div>
+
+<div id="progress" style="width:0%"></div>
+<div id="controls">
+  <button class="cbtn" onclick="window.location='demo1.html'">◀ Demo 1</button>
+  <button class="cbtn g" onclick="window.location='demo3.html'">Demo 3 ▶</button>
+</div>
+
+<script>
+// Animate product selection
+const items=[
+  {id:'pc2',add:true,name:'Álbum Premium (1x)',val:'R$1.200',total:'R$7.500'},
+  {id:'pc4',add:true,name:'Quadro 60x90cm (1x)',val:'R$680',total:'R$8.180'},
+  {id:'pc3',add:false,name:null,val:null,total:'R$6.680'},
+  {id:'pc1',add:false,name:null,val:null,total:'R$5.480'},
+  {id:'pc3',add:true,name:'Vídeo Highlights (1x)',val:'R$1.500',total:'R$6.980'},
+];
+let idx=0;
+function animateNext(){
+  const it=items[idx%items.length];
+  const el=document.getElementById(it.id);
+  if(it.add){
+    el.classList.add('selected');
+    const pi=document.createElement('div');pi.className='qp-pi';
+    pi.innerHTML=`<span class="qp-pi-name">${it.name}</span><span class="qp-pi-val">${it.val}</span>`;
+    pi.id='pi-'+it.id;
+    document.getElementById('panel-items').appendChild(pi);
+  } else {
+    el.classList.remove('selected');
+    const old=document.getElementById('pi-'+it.id);
+    if(old)old.remove();
+  }
+  const tv=document.getElementById('total-val');
+  tv.style.animation='none';tv.offsetHeight;
+  tv.style.animation='countUp .4s ease both';
+  tv.textContent=it.total;
+  idx++;
+}
+setInterval(animateNext,2200);
+
+// Notif
+setTimeout(()=>{
+  document.getElementById('fn').style.display='block';
+  setTimeout(()=>{document.getElementById('fn').style.display='none'},3000);
+},4000);
+
+// Progress
+let e=0;
+setInterval(()=>{e+=50;document.getElementById('progress').style.width=(e/30000*100%100)+'%'},50);
+</script>
+</body>
+</html>

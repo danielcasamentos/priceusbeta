@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PriceUs · Demo 3 — Jornada Completa</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--g:#16a34a;--gl:#22c55e;--d:#060e1c;--w:#fff;--gr:#738fa8}
+body{font-family:'Inter',sans-serif;background:var(--d);color:var(--w);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(22,163,74,.12),transparent 55%),var(--d);z-index:0}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes flow{from{stroke-dashoffset:200}to{stroke-dashoffset:0}}
+@keyframes stepPop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+@keyframes cardSlide{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:translateX(0)}}
+@keyframes moneyCount{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes glow{0%,100%{box-shadow:0 0 16px rgba(34,197,94,.3)}50%{box-shadow:0 0 32px rgba(34,197,94,.6)}}
+@keyframes notifIn{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}
+@keyframes checkDraw{from{stroke-dashoffset:60}to{stroke-dashoffset:0}}
+
+.wrap{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 80px}
+.tag{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--gl);text-align:center;margin-bottom:14px;animation:fadeUp .5s ease .1s both}
+.title{font-size:clamp(26px,4.5vw,54px);font-weight:900;text-align:center;line-height:1.12;letter-spacing:-1.5px;margin-bottom:12px;animation:fadeUp .5s ease .2s both}
+.sub{font-size:clamp(13px,1.8vw,17px);color:var(--gr);text-align:center;max-width:540px;margin:0 auto 56px;animation:fadeUp .5s ease .3s both}
+.hl{color:var(--gl)}
+
+/* JOURNEY TIMELINE */
+.journey{width:100%;max-width:960px;display:flex;flex-direction:column;gap:0;animation:fadeUp .6s ease .4s both}
+
+.j-step{display:flex;gap:20px;align-items:flex-start;opacity:0;transition:opacity .5s ease}
+.j-step.visible{opacity:1}
+
+.j-left{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:56px}
+.j-num{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;border:2px solid;animation:stepPop .5s cubic-bezier(.175,.885,.32,1.275) both;flex-shrink:0}
+.j-line{width:2px;flex:1;min-height:24px;background:linear-gradient(to bottom,rgba(34,197,94,.4),transparent)}
+
+.j-content{flex:1;padding-bottom:36px;animation:cardSlide .5s ease both}
+.j-card{border-radius:18px;padding:20px 24px;display:flex;align-items:center;gap:20px}
+.jc-icon{font-size:32px;flex-shrink:0}
+.jc-info{flex:1}
+.jc-title{font-size:17px;font-weight:800;margin-bottom:4px}
+.jc-desc{font-size:13px;color:var(--gr);line-height:1.5;margin-bottom:10px}
+.jc-visual{background:rgba(255,255,255,.05);border-radius:10px;padding:12px 14px;font-size:12px}
+.jc-value{font-size:22px;font-weight:900;animation:moneyCount .5s ease both}
+
+/* Step colors */
+.s1 .j-num{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.5);color:#818cf8}
+.s1 .j-card{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25)}
+.s2 .j-num{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4);color:#fbbf24}
+.s2 .j-card{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2)}
+.s3 .j-num{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4);color:var(--gl)}
+.s3 .j-card{background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2)}
+.s4 .j-num{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.4);color:#60a5fa}
+.s4 .j-card{background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2)}
+.s5 .j-num{background:rgba(34,197,94,.2);border-color:var(--g);color:var(--gl);animation:glow 2s ease infinite,stepPop .5s cubic-bezier(.175,.885,.32,1.275) both}
+.s5 .j-card{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35);animation:glow 2s ease infinite}
+
+/* Inline visuals */
+.ig-preview{background:#111;border-radius:10px;overflow:hidden;width:130px;flex-shrink:0}
+.ig-img{height:70px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:28px}
+.ig-info{padding:6px 8px}
+.ig-username{font-size:9px;font-weight:700;color:#fff}
+.ig-likes{font-size:9px;color:#9ca3af}
+.ig-bio{font-size:9px;color:var(--gl);margin-top:2px}
+
+.quote-mini{background:#0f172a;border-radius:10px;padding:12px;flex:1}
+.qm-item{display:flex;justify-content:space-between;font-size:10px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.qm-total{display:flex;justify-content:space-between;font-size:12px;font-weight:800;padding:8px 0 4px;color:var(--gl)}
+
+.lead-mini{background:#0f172a;border-radius:10px;padding:12px;flex:1}
+.lm-row{display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:6px}
+.lm-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+
+.contract-mini{background:#fff;border-radius:10px;padding:12px;flex:1;color:#0f172a}
+.cm-title{font-size:11px;font-weight:800;margin-bottom:8px}
+.cm-line{height:7px;background:#f1f5f9;border-radius:4px;margin-bottom:4px}
+.cm-sig{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:10px;color:var(--g)}
+
+.payment-mini{flex:1;display:flex;flex-direction:column;gap:6px}
+.pm-row{display:flex;justify-content:space-between;align-items:center;background:#0f172a;border-radius:8px;padding:8px 12px;font-size:11px}
+.pm-val{font-weight:800;color:var(--gl)}
+
+/* RESULT */
+.result-box{background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.35);border-radius:20px;padding:32px;width:100%;max-width:960px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px;animation:fadeUp .6s ease 3s both}
+.rb-stat{text-align:center}
+.rb-val{font-size:clamp(28px,4vw,44px);font-weight:900;color:var(--gl)}
+.rb-lbl{font-size:12px;color:var(--gr);margin-top:4px}
+
+.bottom-cta{text-align:center;margin-top:44px;animation:fadeUp .6s ease 3.5s both}
+.cta-btn{display:inline-block;padding:16px 48px;border-radius:14px;background:linear-gradient(135deg,var(--g),var(--gl));color:#fff;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 8px 32px rgba(22,163,74,.4);animation:pulse 2s ease infinite}
+.cta-url{font-size:12px;color:var(--gr);margin-top:10px}
+
+/* Float notif */
+.float-notif{position:fixed;top:20px;right:20px;z-index:999;display:none}
+.fn{background:rgba(12,20,38,.97);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 18px;width:260px;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(0,0,0,.5);animation:notifIn .5s cubic-bezier(.175,.885,.32,1.275) both}
+.fn-h{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.fn-ic{width:26px;height:26px;border-radius:7px;text-align:center;line-height:26px;font-size:13px}
+.fn-t{font-size:11px;font-weight:700}
+.fn-tm{font-size:9px;color:var(--gr);margin-left:auto}
+.fn-b{font-size:12px;color:rgba(255,255,255,.75);line-height:1.4}
+
+#progress{position:fixed;bottom:0;left:0;height:3px;background:linear-gradient(90deg,var(--g),var(--gl));z-index:999;transition:width .08s linear}
+#controls{position:fixed;bottom:12px;right:20px;display:flex;gap:8px;z-index:999}
+.cbtn{padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font:600 11px 'Inter',sans-serif;cursor:pointer}
+.cbtn.g{background:var(--g);border-color:var(--g)}
+
+@media(max-width:640px){
+  .j-card{flex-direction:column;gap:12px}
+  .ig-preview{width:100%}
+  .result-box{flex-direction:column;text-align:center}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="tag">Jornada completa · Do Instagram ao pagamento</p>
+  <h1 class="title">De <span class="hl">visitante anônimo</span><br>a <span class="hl">contrato assinado</span></h1>
+  <p class="sub">Veja como o PriceUs transforma cada curiosidade em dinheiro na conta, sem esforço manual.</p>
+
+  <div class="journey">
+
+    <!-- STEP 1 -->
+    <div class="j-step s1" id="st0">
+      <div class="j-left">
+        <div class="j-num" style="animation-delay:.2s">📲</div>
+        <div class="j-line"></div>
+      </div>
+      <div class="j-content" style="animation-delay:.2s">
+        <div class="j-card">
+          <div class="jc-info">
+            <div class="jc-title">Cliente encontra você no Instagram</div>
+            <div class="jc-desc">Ela viu seus fotos, clicou no link da bio e chegou ao seu perfil profissional no PriceUs.</div>
+          </div>
+          <div class="ig-preview">
+            <div class="ig-img">📸</div>
+            <div class="ig-info">
+              <div class="ig-username">@danielfotografia</div>
+              <div class="ig-likes">❤️ 847 · 📸 312 posts</div>
+              <div class="ig-bio">🔗 Ver meus orçamentos →</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="j-step s2" id="st1">
+      <div class="j-left">
+        <div class="j-num" style="animation-delay:.4s">🛒</div>
+        <div class="j-line"></div>
+      </div>
+      <div class="j-content" style="animation-delay:.4s">
+        <div class="j-card">
+          <div class="jc-info">
+            <div class="jc-title">Ela monta o próprio orçamento</div>
+            <div class="jc-desc">Escolhe os serviços, vê o total calculado automaticamente. Sem precisar de você.</div>
+          </div>
+          <div class="quote-mini">
+            <div class="qm-item"><span>📷 Cobertura Completa</span><span>R$4.800</span></div>
+            <div class="qm-item"><span>🎬 Vídeo Highlights</span><span>R$1.500</span></div>
+            <div class="qm-item"><span>📖 Álbum Premium</span><span>R$1.200</span></div>
+            <div class="qm-total"><span>TOTAL</span><span>R$7.500</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="j-step s3" id="st2">
+      <div class="j-left">
+        <div class="j-num" style="animation-delay:.6s">🎯</div>
+        <div class="j-line"></div>
+      </div>
+      <div class="j-content" style="animation-delay:.6s">
+        <div class="j-card">
+          <div class="jc-info">
+            <div class="jc-title">Lead chega pra você via WhatsApp</div>
+            <div class="jc-desc">Você recebe nome, serviço, valor e data do evento — tudo organizado no painel de leads.</div>
+          </div>
+          <div class="lead-mini">
+            <div class="lm-row">
+              <div class="lm-av" style="background:rgba(34,197,94,.2);color:var(--gl)">JM</div>
+              <div>
+                <div style="font-size:11px;font-weight:700">Joyce Melo · R$7.500</div>
+                <div style="font-size:9px;color:var(--gr)">📅 Casamento · Jun/2025</div>
+              </div>
+              <div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:8px;background:var(--g);color:#fff;margin-left:auto">NOVO</div>
+            </div>
+            <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:8px 10px;font-size:10px;color:var(--gr)">
+              💬 <em>"Gostei muito do seu trabalho! Quero conversar sobre o pacote completo."</em>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="j-step s4" id="st3">
+      <div class="j-left">
+        <div class="j-num" style="animation-delay:.8s">✍️</div>
+        <div class="j-line"></div>
+      </div>
+      <div class="j-content" style="animation-delay:.8s">
+        <div class="j-card">
+          <div class="jc-info">
+            <div class="jc-title">Gera e envia o contrato digital</div>
+            <div class="jc-desc">Com 1 clique, o contrato é gerado do lead. Cliente assina no celular. Seguro juridicamente.</div>
+          </div>
+          <div class="contract-mini">
+            <div class="cm-title">📋 Contrato de Prestação de Serviços</div>
+            <div class="cm-line" style="width:100%"></div>
+            <div class="cm-line" style="width:80%"></div>
+            <div class="cm-line" style="width:90%"></div>
+            <div class="cm-line" style="width:70%"></div>
+            <div class="cm-sig">
+              <svg width="80" height="25" viewBox="0 0 80 25">
+                <path d="M5,18 C12,8 20,6 30,14 C38,20 42,8 52,12 C60,15 65,20 75,16" stroke="#16a34a" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="140" stroke-dashoffset="140" style="animation:checkDraw 1.5s ease 1.2s forwards"/>
+              </svg>
+              <span style="font-size:10px">Assinado digitalmente ✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="j-step s5" id="st4">
+      <div class="j-left">
+        <div class="j-num" style="animation-delay:1s">💰</div>
+      </div>
+      <div class="j-content" style="animation-delay:1s">
+        <div class="j-card">
+          <div class="jc-info">
+            <div class="jc-title" style="color:var(--gl)">Dinheiro na conta! 🎉</div>
+            <div class="jc-desc">Entrada recebida. Evento confirmado. Tudo registrado automaticamente no financeiro.</div>
+          </div>
+          <div class="payment-mini">
+            <div class="pm-row" style="border-left:3px solid var(--gl)">
+              <span>💰 50% Entrada recebida</span>
+              <span class="pm-val">R$3.750</span>
+            </div>
+            <div class="pm-row" style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2)">
+              <span>📅 Evento confirmado</span>
+              <span style="color:#fbbf24;font-weight:700">14/06/2025</span>
+            </div>
+            <div class="pm-row">
+              <span>⏳ Saldo restante</span>
+              <span class="pm-val">R$3.750</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="result-box">
+    <div class="rb-stat">
+      <div class="rb-val">R$7.500</div>
+      <div class="rb-lbl">Receita gerada</div>
+    </div>
+    <div class="rb-stat">
+      <div class="rb-val">0h</div>
+      <div class="rb-lbl">Trabalho manual</div>
+    </div>
+    <div class="rb-stat">
+      <div class="rb-val">5 min</div>
+      <div class="rb-lbl">Do lead ao contrato</div>
+    </div>
+    <div class="rb-stat">
+      <div class="rb-val">100%</div>
+      <div class="rb-lbl">Automatizado</div>
+    </div>
+  </div>
+
+  <div class="bottom-cta">
+    <a class="cta-btn" href="https://priceus.com.br">🚀 Automatize seu negócio agora</a>
+    <p class="cta-url">priceus.com.br · 7 dias grátis · R$97/mês após</p>
+  </div>
+</div>
+
+<!-- Notifs -->
+<div class="float-notif" id="fn1">
+  <div class="fn">
+    <div class="fn-h"><div class="fn-ic" style="background:rgba(251,191,36,.2)">🆕</div><div class="fn-t">Novo Lead!</div><div class="fn-tm">agora</div></div>
+    <div class="fn-b">Joyce Melo · Casamento · <strong style="color:var(--gl)">R$7.500</strong></div>
+  </div>
+</div>
+<div class="float-notif" id="fn2">
+  <div class="fn">
+    <div class="fn-h"><div class="fn-ic" style="background:rgba(34,197,94,.2)">💰</div><div class="fn-t">Pagamento recebido!</div><div class="fn-tm">agora</div></div>
+    <div class="fn-b">Joyce Melo pagou <strong style="color:var(--gl)">R$3.750</strong> de entrada 🎉</div>
+  </div>
+</div>
+
+<div id="progress" style="width:0%"></div>
+<div id="controls">
+  <button class="cbtn" onclick="window.location='demo2.html'">◀ Demo 2</button>
+  <button class="cbtn g" onclick="window.location='demo4.html'">Demo 4 ▶</button>
+</div>
+
+<script>
+// Reveal steps
+const steps=document.querySelectorAll('.j-step');
+steps.forEach((s,i)=>{
+  setTimeout(()=>{s.classList.add('visible')},300+i*600);
+});
+
+// Show notifs
+setTimeout(()=>{
+  const fn=document.getElementById('fn1');fn.style.display='block';
+  setTimeout(()=>fn.style.display='none',3000);
+},2200);
+setTimeout(()=>{
+  const fn=document.getElementById('fn2');fn.style.display='block';
+  setTimeout(()=>fn.style.display='none',3000);
+},5800);
+
+let e=0;setInterval(()=>{e+=50;document.getElementById('progress').style.width=(e/40000*100%100)+'%'},50);
+</script>
+</body>
+</html>
