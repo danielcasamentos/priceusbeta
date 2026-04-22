@@ -1679,6 +1679,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   Adicionar Período
                 </button>
               </div>
+              </div>
             </form>
           </div>
         </div>
