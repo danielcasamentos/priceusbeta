@@ -1631,6 +1631,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 e.preventDefault();
                 handleAddPeriodo();
               }}
+            >
               <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Motivo *</label>
