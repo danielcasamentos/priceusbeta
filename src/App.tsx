@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
@@ -43,6 +44,7 @@ function App() {
   }, []);
 
   return (
+    <ThemeProvider>
     <Router>
       <div className="App">
         <Routes>
@@ -90,6 +92,7 @@ function App() {
         </Routes>
       </div>
     </Router>
+    </ThemeProvider>
   )
 }
 

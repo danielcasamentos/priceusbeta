@@ -140,7 +140,7 @@ export function DashboardPage() {
   const showTawkTo = currentPage === 'ajuda' || currentPage === 'videos';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#07101f] transition-colors duration-300">
       {
         !planLimits.isPrivileged && trialStatus.status === 'trial' && trialStatus.daysRemaining !== null && !trialStatus.isExpired && (
           <TrialBanner daysRemaining={trialStatus.daysRemaining} isExpired={trialStatus.isExpired} />
@@ -151,14 +151,14 @@ export function DashboardPage() {
         <FreePlanBanner />
       )}
 
-      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+      <header className="bg-white dark:bg-[#0a1628] border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] shadow-sm dark:shadow-none sticky top-0 z-40">
         <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
             {/* Botão hamburger só aparece em desktop (não em mobile) */}
             {!isMobile && (
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white"
               >
                 <Menu className="w-6 h-6" />
               </button>
@@ -172,8 +172,8 @@ export function DashboardPage() {
                   className="h-[46px] w-auto"
                 />
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 leading-none">Seja bem-vindo,</p>
-                  <p className="text-base font-bold text-gray-900 leading-tight">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-none">Seja bem-vindo,</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
                     {userName || user?.email?.split('@')[0]}
                   </p>
                 </div>
@@ -188,7 +188,7 @@ export function DashboardPage() {
             <button
               onClick={signOut}
               title="Sair"
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-[rgba(255,255,255,.08)] text-gray-700 dark:text-[rgba(255,255,255,.7)] rounded-lg hover:bg-gray-300 dark:hover:bg-[rgba(255,255,255,.14)] font-medium transition-colors"
             >
               <LogOut className="w-5 h-5" />
               <span className="hidden sm:inline">Sair</span>
@@ -243,8 +243,8 @@ export function DashboardPage() {
             ) : currentPage === 'leads' ? (
               <>
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Gestão de Leads</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Gestão de Leads</h2>
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
                     Acompanhe todos os orçamentos gerados e gerencie seus contatos.
                   </p>
                 </div>
@@ -257,7 +257,7 @@ export function DashboardPage() {
             ) : currentPage === 'avaliacoes' ? (
               <>
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Avaliações de Clientes</h2>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Avaliações de Clientes</h2>
                   <p className="text-gray-600">
                     Gerencie as avaliações recebidas e controle sua visibilidade pública.
                   </p>

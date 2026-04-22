@@ -78,7 +78,7 @@ export function CompanyTransactions() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-[#07101f] min-h-screen">
       {/* Modal de exportação CSV */}
       <ExportModal
         isOpen={showExportModal}
@@ -89,8 +89,8 @@ export function CompanyTransactions() {
 
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Transações</h1>
-          <p className="text-gray-600 mt-1">Gerencie suas receitas e despesas.</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Transações</h1>
+          <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">Gerencie suas receitas e despesas.</p>
         </div>
         <button
           id="btn-export-csv"
@@ -105,28 +105,28 @@ export function CompanyTransactions() {
 
       {/* Painel de Métricas Mensais */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-start justify-between">
+        <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-md p-6 flex items-start justify-between border border-transparent dark:border-[rgba(255,255,255,.05)]">
           <div>
-            <p className="text-sm font-medium text-gray-500">Receitas do Mês (Pagas)</p>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(monthlyMetrics.receitas)}</p>
+            <p className="text-sm font-medium text-gray-500 dark:text-[rgba(255,255,255,0.6)]">Receitas do Mês (Pagas)</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{formatCurrency(monthlyMetrics.receitas)}</p>
           </div>
           <div className="bg-green-100 text-green-600 p-3 rounded-lg">
             <ArrowUpRight className="w-6 h-6" />
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-start justify-between">
+        <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-md p-6 flex items-start justify-between border border-transparent dark:border-[rgba(255,255,255,.05)]">
           <div>
-            <p className="text-sm font-medium text-gray-500">Despesas do Mês (Pagas)</p>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(monthlyMetrics.despesas)}</p>
+            <p className="text-sm font-medium text-gray-500 dark:text-[rgba(255,255,255,0.6)]">Despesas do Mês (Pagas)</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{formatCurrency(monthlyMetrics.despesas)}</p>
           </div>
           <div className="bg-red-100 text-red-600 p-3 rounded-lg">
             <ArrowDownRight className="w-6 h-6" />
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-start justify-between">
+        <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-md p-6 flex items-start justify-between border border-transparent dark:border-[rgba(255,255,255,.05)]">
           <div>
-            <p className="text-sm font-medium text-gray-500">Saldo a Receber (Pendente)</p>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(pendingReceivables)}</p>
+            <p className="text-sm font-medium text-gray-500 dark:text-[rgba(255,255,255,0.6)]">Saldo a Receber (Pendente)</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{formatCurrency(pendingReceivables)}</p>
           </div>
           <div className="bg-yellow-100 text-yellow-600 p-3 rounded-lg">
             <Scale className="w-6 h-6" />
@@ -134,11 +134,11 @@ export function CompanyTransactions() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-md dark:shadow-none overflow-hidden border border-transparent dark:border-[rgba(255,255,255,.05)]">
         {/* Barra de Ações em Lote */}
         {selectedIds.length > 0 && (
-          <div className="bg-gray-100 p-4 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">
+          <div className="bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,0.1)] flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
               {selectedIds.length} selecionada(s)
             </span>
             <div className="relative">
@@ -171,8 +171,8 @@ export function CompanyTransactions() {
 
         {/* Tabela de Transações */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+          <table className="w-full text-sm text-left text-gray-600 dark:text-[rgba(255,255,255,0.8)]">
+            <thead className="text-xs text-gray-700 dark:text-[rgba(255,255,255,0.6)] uppercase bg-gray-50 dark:bg-[#07101f]">
               <tr>
                 <th scope="col" className="p-4">
                   <div className="flex items-center">
@@ -206,15 +206,15 @@ export function CompanyTransactions() {
                 <tr>
                   <td colSpan={6} className="text-center py-12">
                     <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">Nenhuma transação encontrada</p>
-                    <p className="text-sm text-gray-500 mt-1">Adicione sua primeira receita ou despesa.</p>
+                    <p className="text-gray-600 dark:text-[rgba(255,255,255,0.8)] font-medium">Nenhuma transação encontrada</p>
+                    <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-1">Adicione sua primeira receita ou despesa.</p>
                   </td>
                 </tr>
               ) : (
                 transactions.map((transaction) => (
                   <tr
                     key={transaction.id}
-                    className={`bg-white border-b hover:bg-gray-50 ${selectedIds.includes(transaction.id) ? 'bg-blue-50' : ''}`}
+                    className={`bg-white dark:bg-transparent border-b dark:border-[rgba(255,255,255,0.05)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] ${selectedIds.includes(transaction.id) ? 'bg-blue-50 dark:bg-[rgba(59,130,246,0.1)]' : ''}`}
                   >
                     <td className="w-4 p-4">
                       <div className="flex items-center">
@@ -228,10 +228,10 @@ export function CompanyTransactions() {
                         <label htmlFor={`checkbox-${transaction.id}`} className="sr-only">Selecionar transação</label>
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
                       {transaction.descricao}
                       {transaction.is_installment && (
-                        <span className="ml-2 text-xs text-gray-500">
+                        <span className="ml-2 text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
                           ({transaction.installment_number}/{transaction.total_installments})
                         </span>
                       )}

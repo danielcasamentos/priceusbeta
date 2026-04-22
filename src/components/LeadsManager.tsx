@@ -630,7 +630,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     if (loading || planLimits.loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500"></div>
       </div>
     );
   }
@@ -639,15 +639,15 @@ export function LeadsManager({ userId }: { userId: string }) {
     <div className="space-y-6">
       {/* Banner de Upgrade para Plano Gratuito */}
       {!planLimits.isPremium && (
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-[rgba(59,130,246,0.1)] dark:to-[rgba(59,130,246,0.15)] border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-lg p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <Crown className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-blue-900 mb-1">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-1">
                   Plano Gratuito: Máximo {planLimits.leadsLimit} leads
                 </h3>
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-blue-700 dark:text-blue-400">
                   Você tem {planLimits.leadsUsed} de {planLimits.leadsLimit} leads salvos. 
                   Quando atingir o limite, novos leads substituirão os mais antigos automaticamente.
                   Faça upgrade para leads ilimitados!
@@ -656,7 +656,7 @@ export function LeadsManager({ userId }: { userId: string }) {
             </div>
             <button
               onClick={() => setShowUpgradeModal(true)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm whitespace-nowrap"
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-500 transition-colors font-medium text-sm whitespace-nowrap"
             >
               <TrendingUp className="w-4 h-4" />
               Fazer Upgrade
@@ -667,16 +667,16 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       {/* Aviso de Limite Próximo */}
       {!planLimits.isPremium && planLimits.leadsLimit !== 'unlimited' && planLimits.leadsUsed >= planLimits.leadsLimit * 0.8 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-yellow-50 dark:bg-[rgba(234,179,8,0.1)] border border-yellow-200 dark:border-[rgba(234,179,8,0.2)] rounded-lg p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-yellow-900">
+              <p className="font-medium text-yellow-900 dark:text-yellow-300">
                 {planLimits.leadsUsed >= planLimits.leadsLimit 
                   ? 'Limite de leads atingido!' 
                   : 'Você está próximo do limite de leads!'}
               </p>
-              <p className="text-sm text-yellow-700 mt-1">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
                 {planLimits.leadsUsed >= planLimits.leadsLimit
                   ? 'Novos leads substituirão os mais antigos automaticamente. Faça upgrade para não perder seus dados!'
                   : `Faltam apenas ${planLimits.leadsLimit - planLimits.leadsUsed} lead(s) para atingir o limite. Considere fazer upgrade para leads ilimitados.`}
@@ -688,43 +688,43 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="text-sm text-blue-600 font-medium">Total de Leads</div>
-          <div className="text-2xl font-bold text-blue-900">{stats.total}</div>
+        <div className="bg-blue-50 dark:bg-[rgba(59,130,246,0.1)] border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-lg p-4">
+          <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">Total de Leads</div>
+          <div className="text-2xl font-bold text-blue-900 dark:text-blue-300">{stats.total}</div>
           {!planLimits.isPremium && planLimits.leadsLimit !== 'unlimited' && (
             <div className={`text-xs mt-1 font-medium ${getLeadsLimitColor()}`}>
               {planLimits.leadsUsed} / {planLimits.leadsLimit} salvos
             </div>
           )}
         </div>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="text-sm text-yellow-600 font-medium">Novos</div>
-          <div className="text-2xl font-bold text-yellow-900">{stats.novos}</div>
+        <div className="bg-yellow-50 dark:bg-[rgba(234,179,8,0.1)] border border-yellow-200 dark:border-[rgba(234,179,8,0.2)] rounded-lg p-4">
+          <div className="text-sm text-yellow-600 dark:text-yellow-400 font-medium">Novos</div>
+          <div className="text-2xl font-bold text-yellow-900 dark:text-yellow-300">{stats.novos}</div>
         </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600 font-medium">Abandonados</div>
-          <div className="text-2xl font-bold text-gray-900">{stats.abandonados}</div>
+        <div className="bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg p-4">
+          <div className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.5)] font-medium">Abandonados</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.abandonados}</div>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-sm text-green-600 font-medium">Taxa de Conversão</div>
-          <div className="text-2xl font-bold text-green-900">{stats.taxaConversao}%</div>
+        <div className="bg-green-50 dark:bg-[rgba(34,197,94,0.1)] border border-green-200 dark:border-[rgba(34,197,94,0.2)] rounded-lg p-4">
+          <div className="text-sm text-green-600 dark:text-green-400 font-medium">Taxa de Conversão</div>
+          <div className="text-2xl font-bold text-green-900 dark:text-green-300">{stats.taxaConversao}%</div>
         </div>
       </div>
 
       {/* ── Tabs de Template ─────────────────────────────────────── */}
       {templateTabs.length > 1 && (
-        <div className="flex flex-wrap gap-2 pb-1 border-b border-gray-200">
+        <div className="flex flex-wrap gap-2 pb-1 border-b border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
           <button
             onClick={() => { setFilterTemplate('all'); setFilter('all'); }}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
               filterTemplate === 'all'
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)]'
             }`}
           >
             Todos os Templates
             <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-              filterTemplate === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-700'
+              filterTemplate === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-[rgba(255,255,255,0.2)] text-gray-700 dark:text-white'
             }`}>{leads.length}</span>
           </button>
           {templateTabs.map(tab => (
@@ -734,12 +734,12 @@ export function LeadsManager({ userId }: { userId: string }) {
               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                 filterTemplate === tab.id
                   ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)]'
               }`}
             >
               {tab.nome}
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                filterTemplate === tab.id ? 'bg-indigo-500 text-white' : 'bg-gray-300 text-gray-700'
+                filterTemplate === tab.id ? 'bg-indigo-500 text-white' : 'bg-gray-300 dark:bg-[rgba(255,255,255,0.2)] text-gray-700 dark:text-white'
               }`}>{tab.count}</span>
             </button>
           ))}
@@ -753,7 +753,7 @@ export function LeadsManager({ userId }: { userId: string }) {
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             filter === 'all'
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.7)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)]'
           }`}
         >
           Todos ({templateFilteredLeads.length})
@@ -765,7 +765,7 @@ export function LeadsManager({ userId }: { userId: string }) {
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               filter === status
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.7)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)]'
             }`}
           >
             {status === 'em_negociacao' ? 'Em Negociação' : status === 'fazer_followup' ? 'Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -776,7 +776,7 @@ export function LeadsManager({ userId }: { userId: string }) {
           <button
             onClick={() => setDeleteConfirmMultiple(true)}
             disabled={isDeleting}
-            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-300"
+            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-500 transition-colors disabled:bg-red-300 dark:disabled:bg-[rgba(239,68,68,0.5)]"
           >
             {isDeleting ? (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -789,100 +789,100 @@ export function LeadsManager({ userId }: { userId: string }) {
       </div>
 
       {/* Lista de Leads */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none overflow-hidden">
         {leads.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
             Nenhum lead encontrado para este filtro.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-[rgba(255,255,255,0.08)]">
+              <thead className="bg-gray-50 dark:bg-[#07101f]">
                 <tr>
                   <th className="p-4">
                     <input
                       type="checkbox"
                       onChange={handleSelectAll}
                       checked={selectedIds.length > 0 && selectedIds.length === filteredLeads.length}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-[#0a1628] border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded focus:ring-blue-500"
                     />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Cliente
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Contato
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Orçamento
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Evento
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Valor
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Data
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
                     Ações
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-[#0a1628] divide-y divide-gray-200 dark:divide-[rgba(255,255,255,0.08)]">
                 {leads.map((lead: LeadWithReview) => (
-                  <tr key={lead.id} className={`hover:bg-gray-50 ${selectedIds.includes(lead.id) ? 'bg-blue-50' : ''}`}>
+                  <tr key={lead.id} className={`hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.04)] ${selectedIds.includes(lead.id) ? 'bg-blue-50 dark:bg-[rgba(59,130,246,0.1)]' : ''}`}>
                     <td className="p-4">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(lead.id)}
                         onChange={() => setSelectedIds(prev => prev.includes(lead.id) ? prev.filter(id => id !== lead.id) : [...prev, lead.id])}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-[#0a1628] border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded focus:ring-blue-500"
                       />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap flex items-center">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {lead.nome_cliente || 'Não informado'}
                       </div>
                       {contracts[lead.id] && (
-                        <span title="Contrato gerado para este lead"><CheckSquare className="w-4 h-4 text-purple-600 ml-2" /></span>
+                        <span title="Contrato gerado para este lead"><CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400 ml-2" /></span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{lead.telefone_cliente || '—'}</div>
-                      <div className="text-sm text-gray-500">{lead.email_cliente || '—'}</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{lead.telefone_cliente || '—'}</div>
+                      <div className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{lead.email_cliente || '—'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {templates[lead.template_id]?.nome_template || 'Template não encontrado'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap"> {/* Corrigido: Removido o duplicado de data e cidade */}
-                      <div className="text-sm text-gray-900">{lead.tipo_evento || '—'}</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-900 dark:text-white">{lead.tipo_evento || '—'}</div>
+                      <div className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
                         {lead.data_evento ? formatDate(lead.data_evento) : '—'}
                       </div>
-                      <div className="text-sm text-gray-500">{cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || '—'}</div>
+                      <div className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || '—'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {formatCurrency(lead.valor_total)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(lead.status)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="font-medium text-gray-900">{formatDate(lead.data_orcamento)}</div>
-                      <div className="text-xs text-gray-500">{new Date(lead.data_orcamento).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}</div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
+                      <div className="font-medium text-gray-900 dark:text-white">{formatDate(lead.data_orcamento)}</div>
+                      <div className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)]">{new Date(lead.data_orcamento).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                       {lead.telefone_cliente && (
                         <button
                           onClick={() => sendWhatsAppMessage(lead)}
-                          className="text-green-600 hover:text-green-900"
+                          className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300"
                           title="Enviar mensagem via WhatsApp"
                         >
                           💬
@@ -890,7 +890,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                       )}
                       <button
                         onClick={() => setContractLead(lead)}
-                        className="text-purple-600 hover:text-purple-900 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        className="text-purple-600 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300 disabled:text-gray-400 dark:disabled:text-[rgba(255,255,255,0.2)] disabled:cursor-not-allowed"
                         title="Gerar contrato"
                         disabled={contracts[lead.id]}
                       >
@@ -899,7 +899,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                       {lead.status === 'convertido' && lead.telefone_cliente && (
                         <button 
                           onClick={() => handleSolicitarAvaliacao(lead)}
-                          className="text-yellow-600 hover:text-yellow-900"
+                          className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300"
                           title="Solicitar avaliação do cliente"
                         >
                           <Star className="w-4 h-4 inline" />
@@ -907,14 +907,14 @@ export function LeadsManager({ userId }: { userId: string }) {
                       )}
                       <button
                         onClick={() => setSelectedLead(lead)}
-                        className="text-blue-600 hover:text-blue-900"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
                         title="Ver detalhes"
                       >
                         👁️
                       </button>
                       <button
                         onClick={() => setDeleteConfirmSingle(lead.id)}
-                        className={`text-red-600 hover:text-red-900 ${deletingIds.has(lead.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
+                        className={`text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 ${deletingIds.has(lead.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
                         title="Excluir lead"
                         disabled={deletingIds.has(lead.id)}
                       >
@@ -931,46 +931,46 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       {/* Modal de Detalhes */}
       {selectedLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-xl border dark:border-[rgba(255,255,255,0.05)] max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Detalhes do Lead</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Detalhes do Lead</h2>
                 <button
                   onClick={() => setSelectedLead(null)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-[rgba(255,255,255,0.6)]"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 text-gray-900 dark:text-[rgba(255,255,255,0.8)]">
                 <div>
-                  <h3 className="font-semibold text-gray-700">Informações do Cliente</h3>
+                  <h3 className="font-semibold text-gray-700 dark:text-white">Informações do Cliente</h3>
                   <div className="mt-2 space-y-1">
                     <p><strong>Nome:</strong> {selectedLead.nome_cliente || '—'}</p>
                     <p><strong>Email:</strong> {selectedLead.email_cliente || '—'}</p>
                     <p><strong>Telefone:</strong> {selectedLead.telefone_cliente || '—'}</p>
-                    <p className="text-sm text-gray-500 mt-2">
-                      <strong>📅 Solicitação feita em:</strong> {formatDateTime(selectedLead.data_orcamento)}
+                    <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-2">
+                      <strong className="text-gray-900 dark:text-[rgba(255,255,255,0.8)]">📅 Solicitação feita em:</strong> {formatDateTime(selectedLead.data_orcamento)}
                     </p>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-gray-700">Origem do Lead</h3>
+                  <h3 className="font-semibold text-gray-700 dark:text-white">Origem do Lead</h3>
                   <div className="mt-2 space-y-1">
                     <p><strong>Orçamento:</strong> {templates[selectedLead.template_id]?.nome_template || 'Template não encontrado'}</p>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-gray-700">Informações do Evento</h3>
+                  <h3 className="font-semibold text-gray-700 dark:text-white">Informações do Evento</h3>
                   <div className="mt-2 space-y-1">
                     <p><strong>Tipo:</strong> {selectedLead.tipo_evento || '—'}</p> {/* Corrigido: Removido o duplicado de data e cidade */}
                     <p><strong>Data:</strong> {selectedLead.data_evento ? formatDate(selectedLead.data_evento) : '—'}
                       {disponibilidadeLead && (
-                        <span className={`ml-2 text-xs font-semibold px-2 py-1 rounded-full ${disponibilidadeLead.status === 'disponivel' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{disponibilidadeLead.mensagem}</span>
+                        <span className={`ml-2 text-xs font-semibold px-2 py-1 rounded-full ${disponibilidadeLead.status === 'disponivel' ? 'bg-green-100 dark:bg-[rgba(34,197,94,0.2)] text-green-800 dark:text-green-400' : 'bg-red-100 dark:bg-[rgba(239,68,68,0.2)] text-red-800 dark:text-red-400'}`}>{disponibilidadeLead.mensagem}</span>
                       )
                       }
                     </p>
@@ -979,16 +979,16 @@ export function LeadsManager({ userId }: { userId: string }) {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-gray-700">Orçamento</h3>
-                  <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-200 mt-2">
+                  <h3 className="font-semibold text-gray-700 dark:text-white">Orçamento</h3>
+                  <div className="flex justify-between items-center bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-4 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.05)] mt-2">
                     <div>
-                      <p className="text-sm text-gray-500">Valor Total Negociado</p>
-                      <p className="text-xl font-bold text-blue-700">{formatCurrency(selectedLead.valor_total)}</p>
+                      <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">Valor Total Negociado</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatCurrency(selectedLead.valor_total)}</p>
                     </div>
                     {detalhesOrcamento && !loadingDetalhes && (
                       <button
                         onClick={() => setEditingLeadQuote({lead: selectedLead, detalhes: detalhesOrcamento})}
-                        className="px-4 py-2 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+                        className="px-4 py-2 bg-white dark:bg-[#07101f] border border-blue-200 dark:border-[rgba(59,130,246,0.5)] text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.1)] text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
                       >
                         <Edit3 className="w-4 h-4" />
                         Editar Pacote
@@ -997,14 +997,14 @@ export function LeadsManager({ userId }: { userId: string }) {
                   </div>
                   {loadingDetalhes ? (
                     <div className="text-center py-4">
-                      <p className="text-sm text-gray-500">Carregando detalhes do orçamento...</p>
+                      <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">Carregando detalhes do orçamento...</p>
                     </div>
                   ) : detalhesOrcamento && detalhesOrcamento.selectedProdutos && (
                     <>
                       {Object.keys(detalhesOrcamento.selectedProdutos).length > 0 && (
                         <div className="mt-4">
-                          <h4 className="font-semibold text-gray-600">Itens Selecionados:</h4>
-                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800">
+                          <h4 className="font-semibold text-gray-600 dark:text-[rgba(255,255,255,0.8)]">Itens Selecionados:</h4>
+                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800 dark:text-gray-200">
                             {(detalhesOrcamento?.produtos || [])
                               .filter(
                                 p =>
@@ -1025,8 +1025,8 @@ export function LeadsManager({ userId }: { userId: string }) {
                       )}
                       {detalhesOrcamento.customFields && detalhesOrcamento.customFields.length > 0 && (
                         <div className="mt-4">
-                          <h4 className="font-semibold text-gray-600">Respostas Adicionais:</h4>
-                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800">
+                          <h4 className="font-semibold text-gray-600 dark:text-[rgba(255,255,255,0.8)]">Respostas Adicionais:</h4>
+                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800 dark:text-gray-200">
                             {detalhesOrcamento.customFields
                               .filter(field => detalhesOrcamento.customFieldsData && detalhesOrcamento.customFieldsData[field.id])
                               .map(field => (
@@ -1040,8 +1040,8 @@ export function LeadsManager({ userId }: { userId: string }) {
                       {/* Displaying custom fields that were filled out */}
                       {detalhesOrcamento.customFieldsData && Object.keys(detalhesOrcamento.customFieldsData).length > 0 && (
                         <div className="mt-4">
-                          <h4 className="font-semibold text-gray-600">Campos Personalizados Preenchidos:</h4>
-                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800">
+                          <h4 className="font-semibold text-gray-600 dark:text-[rgba(255,255,255,0.8)]">Campos Personalizados Preenchidos:</h4>
+                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800 dark:text-gray-200">
                             {detalhesOrcamento.customFields // Iterar sobre a definição dos campos
                               .filter(field => detalhesOrcamento.customFieldsData?.[field.id]) // Filtrar os que têm dados preenchidos
                               .map(field => ( // Mapear para exibir
@@ -1058,12 +1058,12 @@ export function LeadsManager({ userId }: { userId: string }) {
 
                 {/* Prévia da Mensagem do WhatsApp */}
                 <div className="mt-6">
-                  <h3 className="font-semibold text-gray-700">Prévia da Mensagem de Follow-up</h3>
+                  <h3 className="font-semibold text-gray-700 dark:text-white">Prévia da Mensagem de Follow-up</h3>
                   {loadingDetalhes ? (
-                     <p className="text-sm text-gray-500 mt-2">Gerando prévia...</p>
+                     <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-2">Gerando prévia...</p>
                   ) : (
-                    <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">
+                    <div className="mt-2 p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg">
+                      <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-[rgba(255,255,255,0.8)] font-sans">
                         {whatsappMessageBody || 'Não foi possível gerar a prévia da mensagem.'}
                       </pre>
                     </div>
@@ -1071,7 +1071,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-gray-700">Atualizar Status</h3>
+                  <h3 className="font-semibold text-gray-700 dark:text-white">Atualizar Status</h3>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(['novo', 'contatado', 'em_negociacao', 'fazer_followup', 'convertido', 'perdido', 'abandonado'] as const).map((status: Lead['status']) => (
                       <button
@@ -1079,8 +1079,8 @@ export function LeadsManager({ userId }: { userId: string }) {
                         onClick={() => updateLeadStatus(selectedLead.id, status)}
                         className={`px-3 py-1 rounded-lg text-sm font-medium ${
                           selectedLead.status === status
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-300 dark:hover:bg-[rgba(255,255,255,0.2)]'
                         }`}
                       >
                         {status === 'em_negociacao' ? '🤝 Em Negociação' : status === 'fazer_followup' ? '📞 Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -1094,7 +1094,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                     {selectedLead.telefone_cliente && (
                       <button
                         onClick={() => sendWhatsAppMessage(selectedLead)}
-                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium"
+                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-medium"
                       >
                         💬 Enviar WhatsApp
                       </button>
@@ -1102,7 +1102,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                     {selectedLead.status === 'convertido' && !selectedLead.avaliacao_id && selectedLead.telefone_cliente && (
                       <button
                         onClick={() => handleSolicitarAvaliacao(selectedLead)}
-                        className="flex-1 bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 font-medium flex items-center justify-center gap-2"
+                        className="flex-1 bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium flex items-center justify-center gap-2"
                       >
                         <Star className="w-5 h-5" />
                         Solicitar Avaliação
@@ -1111,7 +1111,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                   </div>
                   <button
                     onClick={() => setSelectedLead(null)}
-                    className="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium"
+                    className="w-full bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] px-4 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-[rgba(255,255,255,0.2)] transition-colors font-medium"
                   >
                     Fechar
                   </button>
@@ -1167,37 +1167,37 @@ export function LeadsManager({ userId }: { userId: string }) {
       {/* Modal de Confirmação para WhatsApp */}
       {whatsappLeadConfig.isOpen && whatsappLeadConfig.lead && whatsappLeadConfig.savedOrcamentoDetalhe && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.05)] rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
             <div className="p-6">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4 mx-auto">
-                <FileSignature className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-[rgba(59,130,246,0.2)] flex items-center justify-center mb-4 mx-auto">
+                <FileSignature className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+              <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
                 Apresentação de Valores
               </h3>
-              <p className="text-gray-600 text-center text-sm mb-6">
+              <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] text-center text-sm mb-6">
                 Como você gostaria de apresentar os valores na mensagem de follow-up para o cliente?
               </p>
 
               <div className="space-y-3">
                 <button
                   onClick={() => executeWhatsAppMessage(whatsappLeadConfig.lead!, whatsappLeadConfig.savedOrcamentoDetalhe!, true)}
-                  className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-blue-50 to-blue-100/50 hover:border-blue-500 rounded-xl transition-all duration-200 text-left"
+                  className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-[rgba(59,130,246,0.1)] dark:to-[rgba(59,130,246,0.15)] hover:border-blue-500 dark:hover:border-blue-400 rounded-xl transition-all duration-200 text-left"
                 >
-                  <p className="font-semibold text-blue-900 flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                  <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400 mr-2"></span>
                     Ocultar valores intermediários
                   </p>
-                  <p className="text-xs text-blue-800/80 mt-1 pl-4">
+                  <p className="text-xs text-blue-800/80 dark:text-[rgba(147,197,253,0.8)] mt-1 pl-4">
                     Os produtos e eventuais taxas extras não terão seus preços listados separadamente. Apenas o valor total da proposta será exibido.
                   </p>
                 </button>
 
                 <button
                    onClick={() => executeWhatsAppMessage(whatsappLeadConfig.lead!, whatsappLeadConfig.savedOrcamentoDetalhe!, false)}
-                   className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-gray-50 to-gray-100/50 hover:border-gray-500 rounded-xl transition-all duration-200 text-left"
+                   className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-[rgba(255,255,255,0.02)] dark:to-[rgba(255,255,255,0.05)] hover:border-gray-500 dark:hover:border-gray-400 rounded-xl transition-all duration-200 text-left"
                 >
-                  <p className="font-semibold text-gray-700 flex items-center">
+                  <p className="font-semibold text-gray-700 dark:text-gray-300 flex items-center">
                     <span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>
                     Mostrar detalhado
                   </p>
@@ -1208,10 +1208,10 @@ export function LeadsManager({ userId }: { userId: string }) {
               </div>
             </div>
             
-            <div className="bg-gray-50 px-6 py-4 flex justify-end">
+            <div className="bg-gray-50 dark:bg-[#07101f] px-6 py-4 flex justify-end">
               <button
                 onClick={() => setWhatsappLeadConfig({ lead: null, savedOrcamentoDetalhe: null, isOpen: false })}
-                className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
+                className="text-gray-500 hover:text-gray-700 dark:text-[rgba(255,255,255,0.6)] dark:hover:text-white text-sm font-medium transition-colors"
                >
                 Cancelar envio
               </button>
@@ -1223,15 +1223,15 @@ export function LeadsManager({ userId }: { userId: string }) {
       {/* Safari Fallback Modal */}
       {safariFallback.isOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-fade-in text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+          <div className="bg-white dark:bg-[#0a1628] rounded-xl border dark:border-[rgba(255,255,255,0.05)] shadow-xl max-w-md w-full p-6 animate-fade-in text-center">
+            <div className="w-16 h-16 bg-green-100 dark:bg-[rgba(34,197,94,0.2)] rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Orçamento Gerado!</h3>
-            <p className="text-gray-600 mb-6 text-sm">
-              Mensagem para <strong>{safariFallback.nomeCliente}</strong> pronta para envio. Devido a limitações do iOS, clique no botão abaixo para abrir o WhatsApp de forma segura.
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Orçamento Gerado!</h3>
+            <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] mb-6 text-sm">
+              Mensagem para <strong className="text-gray-900 dark:text-white">{safariFallback.nomeCliente}</strong> pronta para envio. Devido a limitações do iOS, clique no botão abaixo para abrir o WhatsApp de forma segura.
             </p>
             
             <div className="space-y-3">
@@ -1247,7 +1247,7 @@ export function LeadsManager({ userId }: { userId: string }) {
               
               <button 
                 onClick={() => setSafariFallback({ isOpen: false, waLink: '', nomeCliente: '' })}
-                className="w-full px-4 py-2 text-gray-500 hover:text-gray-800 font-medium cursor-pointer"
+                className="w-full px-4 py-2 text-gray-500 hover:text-gray-800 dark:text-[rgba(255,255,255,0.6)] dark:hover:text-white font-medium cursor-pointer"
               >
                 Cancelar Envio
               </button>
@@ -1259,24 +1259,24 @@ export function LeadsManager({ userId }: { userId: string }) {
       {/* Modal Confirmação Exclusão Única */}
       {deleteConfirmSingle && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <Trash2 className="h-6 w-6 text-red-600" />
+          <div className="bg-white dark:bg-[#0a1628] rounded-xl border dark:border-[rgba(255,255,255,0.05)] shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-[rgba(239,68,68,0.2)] mb-4">
+              <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir Lead</h3>
-            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir este lead permanentemente? Essa ação não pode ser desfeita.</p>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Excluir Lead</h3>
+            <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] mb-6 font-medium">Tem certeza que deseja excluir este lead permanentemente? Essa ação não pode ser desfeita.</p>
             <div className="flex justify-center gap-3">
               <button
                 onClick={() => setDeleteConfirmSingle(null)}
                 disabled={deletingIds.has(deleteConfirmSingle)}
-                className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
+                className="px-5 py-2.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)] rounded-lg font-semibold transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => deleteLead(deleteConfirmSingle)}
                 disabled={deletingIds.has(deleteConfirmSingle)}
-                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2"
+                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
               >
                 {deletingIds.has(deleteConfirmSingle) ? 'Excluindo...' : 'Sim, Excluir'}
               </button>
@@ -1288,24 +1288,24 @@ export function LeadsManager({ userId }: { userId: string }) {
       {/* Modal Confirmação Exclusão Múltipla */}
       {deleteConfirmMultiple && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <Trash2 className="h-6 w-6 text-red-600" />
+          <div className="bg-white dark:bg-[#0a1628] rounded-xl border dark:border-[rgba(255,255,255,0.05)] shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-[rgba(239,68,68,0.2)] mb-4">
+              <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir {selectedIds.length} Leads</h3>
-            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir esses leads permanentemente? Essa ação não pode ser desfeita.</p>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Excluir {selectedIds.length} Leads</h3>
+            <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] mb-6 font-medium">Tem certeza que deseja excluir esses leads permanentemente? Essa ação não pode ser desfeita.</p>
             <div className="flex justify-center gap-3">
               <button
                 onClick={() => setDeleteConfirmMultiple(false)}
                 disabled={isDeleting}
-                className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
+                className="px-5 py-2.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)] rounded-lg font-semibold transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleDeleteSelected}
                 disabled={isDeleting}
-                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2"
+                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
               >
                 {isDeleting ? 'Excluindo...' : 'Sim, Excluir Todos'}
               </button>

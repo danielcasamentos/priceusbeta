@@ -169,7 +169,7 @@ const [isDeleting, setIsDeleting] = useState(false);
   const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: ptBR.localize?.month(i as any) }));
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-lg p-6">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
         <div className="relative w-full md:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -178,14 +178,14 @@ const [isDeleting, setIsDeleting] = useState(false);
             placeholder="Buscar por cliente ou contrato..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 text-sm"
+            className="px-3 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-[rgba(255,255,255,.9)] rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="all">Todos os Status</option>
             <option value="pending">Pendente</option>
@@ -195,7 +195,7 @@ const [isDeleting, setIsDeleting] = useState(false);
           <select
             value={monthFilter}
             onChange={e => setMonthFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 text-sm"
+            className="px-3 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-[rgba(255,255,255,.9)] rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="all">Todos os Meses</option>
             {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -203,7 +203,7 @@ const [isDeleting, setIsDeleting] = useState(false);
           <select
             value={yearFilter}
             onChange={e => setYearFilter(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 text-sm"
+            className="px-3 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-[rgba(255,255,255,.9)] rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value={0}>Todos os Anos</option>
             {availableYears.map(y => <option key={y} value={y!}>{y}</option>)}

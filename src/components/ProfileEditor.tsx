@@ -202,13 +202,13 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Meu Perfil</h2>
-        <p className="text-gray-600">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Meu Perfil</h2>
+        <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
           Configure suas informações profissionais e dados de contato
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6 space-y-6">
+      <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none border border-transparent dark:border-[rgba(255,255,255,.05)] p-6 space-y-6">
         <div className="flex items-start gap-6">
           <div className="flex flex-col items-center gap-3">
             {profile.profile_image_url ? (
@@ -244,53 +244,53 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           <div className="flex-1 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome do Admin
                 </label>
                 <input
                   type="text"
                   value={profile.nome_admin || ''}
                   onChange={(e) => handleUpdateField('nome_admin', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                   placeholder="Seu nome"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome Profissional
                 </label>
                 <input
                   type="text"
                   value={profile.nome_profissional || ''}
                   onChange={(e) => handleUpdateField('nome_profissional', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                   placeholder="Nome que aparecerá nos orçamentos"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                 Tipo de Fotografia
               </label>
               <input
                 type="text"
                 value={profile.tipo_fotografia || ''}
                 onChange={(e) => handleUpdateField('tipo_fotografia', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="Ex: Casamentos, Eventos, Ensaios"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                 Apresentação
               </label>
               <textarea
                 value={profile.apresentacao || ''}
                 onChange={(e) => handleUpdateField('apresentacao', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                 rows={3}
                 placeholder="Breve apresentação sobre você e seu trabalho..."
               />
@@ -298,17 +298,17 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           </div>
         </div>
 
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Globe className="w-5 h-5 text-blue-600" />
+        <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             Perfil Público e SEO
           </h3>
 
           <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-[rgba(59,130,246,0.1)] dark:to-[rgba(34,197,94,0.1)] rounded-lg border border-blue-200 dark:border-[rgba(59,130,246,0.2)]">
               <div>
-                <p className="font-medium text-gray-900">Ativar Perfil Público</p>
-                <p className="text-sm text-gray-600">Seu perfil será acessível publicamente com seus orçamentos</p>
+                <p className="font-medium text-gray-900 dark:text-blue-300">Ativar Perfil Público</p>
+                <p className="text-sm text-gray-600 dark:text-blue-200 opacity-80">Seu perfil será acessível publicamente com seus orçamentos</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -321,10 +321,10 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
               <div>
-                <p className="font-medium text-gray-900">Exibir Botão "Ver Perfil Completo"</p>
-                <p className="text-sm text-gray-600">Mostrar link para seu perfil no cabeçalho dos orçamentos</p>
+                <p className="font-medium text-gray-900 dark:text-white">Exibir Botão "Ver Perfil Completo"</p>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.5)]">Mostrar link para seu perfil no cabeçalho dos orçamentos</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -338,7 +338,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
                 Seu Username (URL Pública)
               </label>
               <div className="flex items-center gap-2">
@@ -347,7 +347,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                     type="text"
                     value={slugInput}
                     onChange={(e) => handleSlugChange(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 pr-10"
+                    className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 pr-10"
                     placeholder="seu-username"
                     minLength={3}
                     maxLength={50}
@@ -376,12 +376,12 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                 </button>
               </div>
               {slugInput && (
-                <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="mt-2 p-3 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm flex-1">
-                      <LinkIcon className="w-4 h-4 text-gray-500" />
-                      <span className="text-gray-600">URL do seu perfil:</span>
-                      <code className="text-blue-600 font-mono">priceus.com.br/{slugInput}</code>
+                      <LinkIcon className="w-4 h-4 text-gray-500 dark:text-[rgba(255,255,255,0.5)]" />
+                      <span className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">URL do seu perfil:</span>
+                      <code className="text-blue-600 dark:text-blue-400 font-mono">priceus.com.br/{slugInput}</code>
                     </div>
                     <a
                       href={`https://priceus.com.br/${slugInput}`}
@@ -395,41 +395,41 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">
                 Mínimo 3 caracteres. Use apenas letras minúsculas, números e hífens.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                 Meta Description (SEO)
               </label>
               <textarea
                 value={profile.meta_description || ''}
                 onChange={(e) => handleUpdateField('meta_description', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                 rows={2}
                 maxLength={160}
                 placeholder="Descrição curta para aparecer nos resultados do Google (máx. 160 caracteres)"
               />
               <div className="flex justify-between items-center mt-1">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
                   Descrição otimizada para buscadores (Google, Bing, etc)
                 </p>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
                   {(profile.meta_description || '').length}/160
                 </span>
               </div>
             </div>
 
             {profile.visualizacoes_perfil !== undefined && (
-              <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+              <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-[rgba(168,85,247,0.1)] dark:to-[rgba(236,72,153,0.1)] rounded-lg border border-purple-200 dark:border-[rgba(168,85,247,0.2)]">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Eye className="w-5 h-5 text-purple-600" />
-                    <span className="font-medium text-gray-900">Visualizações do Perfil</span>
+                    <Eye className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <span className="font-medium text-gray-900 dark:text-purple-300">Visualizações do Perfil</span>
                   </div>
-                  <span className="text-2xl font-bold text-purple-600">
+                  <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                     {profile.visualizacoes_perfil || 0}
                   </span>
                 </div>
@@ -438,53 +438,53 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           </div>
         </div>
 
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Informações de Contato</h3>
+        <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Informações de Contato</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                 WhatsApp Principal *
               </label>
               <input
                 type="tel"
                 value={profile.whatsapp_principal || ''}
                 onChange={(e) => handleUpdateField('whatsapp_principal', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="(11) 99999-9999"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">
                 Usado para receber mensagens dos clientes
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                 E-mail de Recebimento
               </label>
               <input
                 type="email"
                 value={profile.email_recebimento || ''}
                 onChange={(e) => handleUpdateField('email_recebimento', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="contato@seuemail.com"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">
                 Para notificações e contato dos clientes
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                 Instagram
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-gray-500">@</span>
+                <span className="text-gray-500 dark:text-[rgba(255,255,255,0.4)]">@</span>
                 <input
                   type="text"
                   value={profile.instagram || ''}
                   onChange={(e) => handleUpdateField('instagram', e.target.value)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                   placeholder="seu_instagram"
                 />
               </div>
@@ -492,13 +492,13 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           </div>
         </div>
 
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Configurações de Avaliações</h3>
+        <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Configurações de Avaliações</h3>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Aceitar Avaliações</p>
-                <p className="text-sm text-gray-600">Permitir que clientes avaliem seu trabalho</p>
+                <p className="font-medium text-gray-900 dark:text-white">Aceitar Avaliações</p>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.5)]">Permitir que clientes avaliem seu trabalho</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -511,10 +511,10 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Aprovação Automática</p>
-                <p className="text-sm text-gray-600">Aprovar avaliações automaticamente sem revisão</p>
+                <p className="font-medium text-gray-900 dark:text-white">Aprovação Automática</p>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.5)]">Aprovar avaliações automaticamente sem revisão</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -527,10 +527,10 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Exibir Publicamente</p>
-                <p className="text-sm text-gray-600">Mostrar avaliações na página de orçamento</p>
+                <p className="font-medium text-gray-900 dark:text-white">Exibir Publicamente</p>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.5)]">Mostrar avaliações na página de orçamento</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -544,13 +544,13 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
                 Rating Mínimo para Exibição
               </label>
               <select
                 value={profile.rating_minimo_exibicao ?? 1}
                 onChange={(e) => handleUpdateField('rating_minimo_exibicao', parseInt(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value={1}>1 estrela ou mais</option>
                 <option value={2}>2 estrelas ou mais</option>
@@ -558,15 +558,15 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                 <option value={4}>4 estrelas ou mais</option>
                 <option value={5}>Apenas 5 estrelas</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">
                 Apenas avaliações com este rating ou superior serão exibidas
               </p>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border border-yellow-200">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-[rgba(234,179,8,0.1)] dark:to-[rgba(249,115,22,0.1)] rounded-lg border border-yellow-200 dark:border-[rgba(234,179,8,0.2)]">
               <div className="flex-1">
-                <p className="font-medium text-gray-900 mb-1">Incentivo para Avaliações</p>
-                <p className="text-sm text-gray-600 mb-3">Mostre uma mensagem incentivando avaliações</p>
+                <p className="font-medium text-gray-900 dark:text-yellow-300 mb-1">Incentivo para Avaliações</p>
+                <p className="text-sm text-gray-600 dark:text-yellow-100 opacity-80 mb-3">Mostre uma mensagem incentivando avaliações</p>
 
                 <label className="flex items-center gap-2 mb-3 cursor-pointer">
                   <input
@@ -575,14 +575,14 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                     onChange={(e) => handleUpdateField('incentivo_avaliacao_ativo', e.target.checked)}
                     className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                   />
-                  <span className="text-sm font-medium text-gray-700">Ativar incentivo</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-yellow-200">Ativar incentivo</span>
                 </label>
 
                 {profile.incentivo_avaliacao_ativo && (
                   <textarea
                     value={profile.incentivo_avaliacao_texto || ''}
                     onChange={(e) => handleUpdateField('incentivo_avaliacao_texto', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                     rows={3}
                     placeholder="Ex: Ganhe 10% de desconto no próximo serviço ao avaliar!"
                   />
@@ -592,13 +592,13 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           </div>
         </div>
 
-        <div className="border-t pt-6">
+        <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Status da Assinatura</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Status da Assinatura</h3>
+              <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                 Plano atual:{' '}
-                <span className="font-medium text-blue-600">
+                <span className="font-medium text-blue-600 dark:text-blue-400">
                   {profile.status_assinatura === 'trial' ? 'Período de Teste' : 'Ativo'}
                 </span>
               </p>

@@ -156,7 +156,7 @@ export default function LandingPage() {
               </a>
             ))}
             <button onClick={() => navigate('/login')} style={{ width:'100%', marginTop:16, background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'12px', borderRadius:10, fontSize:15, fontWeight:700, cursor:'pointer' }}>
-              Começar Grátis — 7 dias
+              Começar Grátis — 30 dias
             </button>
           </div>
         )}
@@ -178,14 +178,14 @@ export default function LandingPage() {
           </p>
           <div className="a4" style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
             <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'16px 40px', borderRadius:14, fontSize:16, fontWeight:800, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
-              Começar Grátis — 7 dias <ArrowRight size={18}/>
+              Começar Grátis — 30 dias <ArrowRight size={18}/>
             </button>
             <a href="#sistema" style={{ border:'1px solid rgba(255,255,255,.2)', color:'#fff', padding:'16px 32px', borderRadius:14, fontSize:15, fontWeight:600, textDecoration:'none', background:'rgba(255,255,255,.04)', display:'flex', alignItems:'center', gap:8 }}>
               Ver o sistema ↓
             </a>
           </div>
           <p className="a4" style={{ marginTop:20, fontSize:13, color:'rgba(255,255,255,.4)' }}>
-            ✓ Sem cartão de crédito &nbsp;·&nbsp; ✓ 7 dias grátis &nbsp;·&nbsp; ✓ Cancele quando quiser
+            ✓ Sem cartão de crédito &nbsp;·&nbsp; ✓ 30 dias grátis &nbsp;·&nbsp; ✓ Cancele quando quiser
           </p>
         </div>
 
@@ -501,7 +501,7 @@ export default function LandingPage() {
           <div style={{ textAlign:'center', marginBottom:48 }}>
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:'3px', color:'#22c55e', textTransform:'uppercase', marginBottom:12 }}>💎 Plano</div>
             <h2 style={{ fontSize:'clamp(28px,4vw,52px)', fontWeight:900, letterSpacing:'-1.5px', marginBottom:12 }}>Um plano. Tudo incluído.</h2>
-            <p style={{ fontSize:18, color:'rgba(255,255,255,.5)' }}>7 dias grátis, depois R$97/mês com acesso completo.</p>
+            <p style={{ fontSize:18, color:'rgba(255,255,255,.5)' }}>30 dias grátis, depois R$97/mês com acesso completo.</p>
           </div>
 
           <div style={{ background:'rgba(255,255,255,.04)', border:'2px solid rgba(34,197,94,.4)', borderRadius:24, padding:'40px 36px', position:'relative', boxShadow:'0 0 60px rgba(22,163,74,.15)' }}>
@@ -514,7 +514,7 @@ export default function LandingPage() {
                 <span style={{ fontSize:64, fontWeight:900, color:'#22c55e', letterSpacing:'-3px' }}>R$97</span>
                 <span style={{ fontSize:22, color:'rgba(255,255,255,.4)', marginBottom:12 }}>/mês</span>
               </div>
-              <div style={{ fontSize:14, color:'#22c55e', fontWeight:600 }}>7 dias grátis para testar tudo</div>
+              <div style={{ fontSize:14, color:'#22c55e', fontWeight:600 }}>30 dias grátis para testar tudo</div>
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 16px', marginBottom:32 }}>
@@ -527,7 +527,7 @@ export default function LandingPage() {
             </div>
 
             <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ width:'100%', padding:'18px', borderRadius:14, background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', fontSize:17, fontWeight:800, cursor:'pointer', position:'relative', overflow:'hidden' }}>
-              Começar Teste Grátis de 7 Dias
+              Começar Teste Grátis de 30 Dias
               <span style={{ position:'absolute', top:0, left:'-100%', width:'50%', height:'100%', background:'linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent)', animation:'shine 2.5s ease infinite' }} />
             </button>
             <p style={{ textAlign:'center', fontSize:12, color:'rgba(255,255,255,.35)', marginTop:14 }}>
@@ -556,7 +556,7 @@ export default function LandingPage() {
             Junte-se a centenas de fotógrafos que já automatizaram seus processos e aumentaram suas vendas.
           </p>
           <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'18px 52px', borderRadius:14, fontSize:17, fontWeight:800, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:10 }}>
-            Começar Agora — 7 Dias Grátis <ArrowRight size={20}/>
+            Começar Agora — 30 Dias Grátis <ArrowRight size={20}/>
           </button>
           <p style={{ marginTop:16, fontSize:14, color:'rgba(255,255,255,.35)' }}>
             ✓ Sem cartão · ✓ Acesso completo · ✓ Suporte incluído

@@ -65,13 +65,13 @@ function SortableTemplateCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
+      className="bg-white dark:bg-[rgba(255,255,255,0.04)] rounded-lg shadow-lg dark:shadow-none border border-transparent dark:border-[rgba(255,255,255,0.08)] overflow-hidden hover:shadow-xl dark:hover:bg-[rgba(255,255,255,0.07)] transition-all"
     >
       <div className="p-6">
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="text-xl font-bold text-gray-900">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                 {template.nome_template}
               </h3>
               <button
@@ -83,7 +83,7 @@ function SortableTemplateCard({
               </button>
             </div>
             {template.titulo_template && (
-              <p className="text-gray-600 mt-1">{template.titulo_template}</p>
+              <p className="text-gray-600 dark:text-[rgba(255,255,255,0.55)] mt-1">{template.titulo_template}</p>
             )}
           </div>
           <div
@@ -97,7 +97,7 @@ function SortableTemplateCard({
         </div>
 
         <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
             <span className="font-medium">Criado em:</span>
             <span>{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
           </div>
@@ -121,28 +121,28 @@ function SortableTemplateCard({
           <div className="flex flex-wrap items-center gap-2 justify-start">
             <button
               onClick={onCopyUrl}
-              className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
+              className="flex items-center justify-center gap-2 bg-gray-100 dark:bg-[rgba(255,255,255,0.08)] text-gray-700 dark:text-white px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.12)] text-sm font-medium transition-colors"
               title="Copiar link do orçamento"
             >
               <Copy className="w-4 h-4" /> <span className="hidden sm:inline">Copiar</span>
             </button>
             <button
               onClick={onViewTemplate}
-              className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="p-2 bg-gray-100 dark:bg-[rgba(255,255,255,0.08)] text-gray-700 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.12)] transition-colors"
               title="Visualizar orçamento"
             >
               <ExternalLink className="w-4 h-4" />
             </button>
             <button
               onClick={onDuplicate}
-              className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="p-2 bg-gray-100 dark:bg-[rgba(255,255,255,0.08)] text-gray-700 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.12)] transition-colors"
               title="Duplicar template"
             >
               <Copy className="w-4 h-4" />
             </button>
             <button
               onClick={onDelete}
-              className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+              className="p-2 bg-red-50 dark:bg-[rgba(239,68,68,0.1)] text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-[rgba(239,68,68,0.2)] transition-colors"
               title="Excluir template"
             >
               <Trash2 className="w-4 h-4" />
@@ -486,8 +486,8 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
       {/* Header com Contador de Limites */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Meus Templates</h2>
-          <p className="text-gray-600">Gerencie seus templates de orçamento</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Meus Templates</h2>
+          <p className="text-gray-600 dark:text-[rgba(255,255,255,0.55)]">Gerencie seus templates de orçamento</p>
         </div>
         <button
           onClick={handleNewTemplateClick}
@@ -509,11 +509,11 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
       </div>
 
       {/* Card de Estatísticas e Limites */}
-      <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+      <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.08)]">
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Templates: {planLimits.templatesUsed} de {planLimits.templatesLimit}
               </h3>
               {!planLimits.isPremium && (
@@ -534,7 +534,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.55)] mt-1">
               {planLimits.isPremium 
                 ? 'Você pode criar até 10 templates no plano premium'
                 : 'Faça upgrade para criar até 10 templates'}
@@ -552,7 +552,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         </div>
 
         {/* Barra de Progresso */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+        <div className="w-full bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] rounded-full h-2.5 overflow-hidden">
           <div
             className={`h-full transition-all duration-300 ${getLimitProgressColor()}`}
             style={{
@@ -579,12 +579,12 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
       </div>
 
       {templates.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
+        <div className="bg-white dark:bg-[rgba(255,255,255,0.04)] border dark:border-[rgba(255,255,255,0.08)] rounded-lg shadow p-12 text-center">
           <div className="text-gray-400 text-6xl mb-4">📝</div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Nenhum template criado ainda
           </h3>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 dark:text-[rgba(255,255,255,0.55)] mb-6">
             Crie seu primeiro template para começar a gerar orçamentos
           </p>
           <button
@@ -601,10 +601,10 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         </div>
       ) : (
         <>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <p className="text-sm text-blue-800">
+          <div className="bg-blue-50 dark:bg-[rgba(59,130,246,0.1)] border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-lg p-4 mb-4">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
               <strong>💡 Dica:</strong> Arraste os cards para reorganizar. A ordem aqui será a mesma do seu perfil público em priceus.com.br/usuario
-              {saving && <span className="ml-2 text-blue-600">Salvando...</span>}
+              {saving && <span className="ml-2 text-blue-600 dark:text-blue-400">Salvando...</span>}
             </p>
           </div>
           <DndContext
@@ -635,15 +635,14 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         </>
       )}
 
-      {/* Modal de Criar Template */}
       {showNewTemplateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Criar Novo Template</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.1)] rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Criar Novo Template</h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome do Template *
                 </label>
                 <input
@@ -651,13 +650,13 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   value={newTemplateName}
                   onChange={(e) => setNewTemplateName(e.target.value)}
                   placeholder="Ex: Casamento Premium"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Título (Opcional)
                 </label>
                 <input
@@ -665,9 +664,9 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   value={newTemplateTitulo}
                   onChange={(e) => setNewTemplateTitulo(e.target.value)}
                   placeholder="Ex: Pacote Completo de Casamento"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-1">
                   Será exibido no topo do orçamento para o cliente
                 </p>
               </div>
@@ -680,7 +679,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   setNewTemplateName('');
                   setNewTemplateTitulo('');
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors"
               >
                 Cancelar
               </button>
@@ -697,16 +696,16 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
 
       {/* Modal de Duplicar Template */}
       {showDuplicateModal && templateToDuplicate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Duplicar Template</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Duplicando: <span className="font-semibold">{templateToDuplicate.nome_template}</span>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.1)] rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Duplicar Template</h3>
+            <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mb-4">
+              Duplicando: <span className="font-semibold text-gray-900 dark:text-white">{templateToDuplicate.nome_template}</span>
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome do Novo Template *
                 </label>
                 <input
@@ -714,13 +713,13 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   value={newTemplateName}
                   onChange={(e) => setNewTemplateName(e.target.value)}
                   placeholder="Ex: Casamento Premium v2"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Título (Opcional)
                 </label>
                 <input
@@ -728,12 +727,12 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   value={newTemplateTitulo}
                   onChange={(e) => setNewTemplateTitulo(e.target.value)}
                   placeholder="Ex: Pacote Completo de Casamento"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
 
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <p className="text-xs text-purple-800">
+              <div className="bg-purple-50 dark:bg-[rgba(168,85,247,0.1)] border border-purple-200 dark:border-[rgba(168,85,247,0.2)] rounded-lg p-3">
+                <p className="text-xs text-purple-800 dark:text-purple-300">
                   <strong>Tudo será copiado:</strong> produtos, configurações, valores e imagens!
                 </p>
               </div>
@@ -748,7 +747,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   setNewTemplateTitulo('');
                 }}
                 disabled={duplicating}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -773,10 +772,10 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
 
       {/* Modal de Editar Nome */}
       {showEditNameModal && templateToEdit && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.1)] rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Editar Nome do Template</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Editar Nome do Template</h3>
               <button
                 onClick={() => {
                   setShowEditNameModal(false);
@@ -792,7 +791,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome do Template *
                 </label>
                 <input
@@ -800,13 +799,13 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   value={editTemplateName}
                   onChange={(e) => setEditTemplateName(e.target.value)}
                   placeholder="Ex: Casamento Premium"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Título (Opcional)
                 </label>
                 <input
@@ -814,9 +813,9 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   value={editTemplateTitulo}
                   onChange={(e) => setEditTemplateTitulo(e.target.value)}
                   placeholder="Ex: Pacote Completo de Casamento"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-1">
                   Será exibido no topo do orçamento para o cliente
                 </p>
               </div>
@@ -831,7 +830,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   setEditTemplateTitulo('');
                 }}
                 disabled={saving}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>

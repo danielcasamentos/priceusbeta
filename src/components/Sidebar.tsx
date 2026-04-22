@@ -13,7 +13,10 @@ import {
   X,
   Star,
   HelpCircle,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
 
 interface SidebarProps {
@@ -39,6 +42,7 @@ export function Sidebar({
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
     empresa: true
   });
+  const { isDark, toggleTheme } = useTheme();
 
   const menuSections = [
     {
@@ -100,14 +104,35 @@ export function Sidebar({
     return currentPage === itemId;
   };
 
+  // ── Botão de toggle tema ──────────────────────────────────────────
+  const ThemeToggleBtn = ({ collapsed = false }: { collapsed?: boolean }) => (
+    <button
+      onClick={toggleTheme}
+      title={isDark ? 'Mudar para tema Claro' : 'Mudar para tema Escuro'}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 w-full
+        ${isDark
+          ? 'bg-[rgba(34,197,94,.15)] text-green-400 hover:bg-[rgba(34,197,94,.25)]'
+          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+    >
+      {isDark
+        ? <><Sun className="w-4 h-4 flex-shrink-0" />{!collapsed && <span>Tema Claro</span>}</>
+        : <><Moon className="w-4 h-4 flex-shrink-0" />{!collapsed && <span>Tema Escuro</span>}</>
+      }
+    </button>
+  );
+
+  // ══════════════════════════════════════
+  // MOBILE
+  // ══════════════════════════════════════
   if (isMobile) {
     if (!isOpen) return null;
 
     return (
       <div className="fixed inset-0 z-50 lg:hidden">
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-        <div className="fixed inset-y-0 left-0 w-80 bg-white shadow-xl overflow-y-auto">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="fixed inset-y-0 left-0 w-80 bg-white dark:bg-[#0a1628] shadow-xl overflow-y-auto transition-colors duration-300">
+          <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img
                 src="/Logo Price Us.png"
@@ -115,18 +140,18 @@ export function Sidebar({
                 className="h-[46px] w-auto"
               />
               <div>
-                <h2 className="text-sm font-semibold text-gray-500 leading-tight">Seja bem-vindo,</h2>
-                <p className="text-base font-bold text-gray-900 leading-tight">
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</h2>
+                <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
                   {userName || userEmail?.split('@')[0] || 'Usuário'}
                 </p>
                 {userEmail && (
-                  <p className="text-xs text-gray-400 truncate max-w-[140px]">{userEmail}</p>
+                  <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>
                 )}
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-100"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white"
             >
               <X className="w-6 h-6" />
             </button>
@@ -135,7 +160,7 @@ export function Sidebar({
           <nav className="p-4 space-y-6">
             {menuSections.map((section) => (
               <div key={section.title}>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.35)] uppercase tracking-wider mb-2 px-3">
                   {section.title}
                 </h3>
                 <div className="space-y-1">
@@ -152,7 +177,7 @@ export function Sidebar({
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                           isCurrentPage(item.id)
                             ? 'bg-green-600 text-white'
-                            : 'text-gray-700 hover:bg-gray-100'
+                            : 'text-gray-700 dark:text-[rgba(255,255,255,.7)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)]'
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -176,8 +201,8 @@ export function Sidebar({
                               onClick={() => handleItemClick(subItem.id)}
                               className={`w-full flex items-center px-6 py-2 rounded-lg text-sm transition-colors ${
                                 currentPage === subItem.id
-                                  ? 'bg-green-100 text-green-700 font-medium'
-                                  : 'text-gray-600 hover:bg-gray-50'
+                                  ? 'bg-green-100 dark:bg-[rgba(34,197,94,.15)] text-green-700 dark:text-green-400 font-medium'
+                                  : 'text-gray-600 dark:text-[rgba(255,255,255,.5)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,.05)]'
                               }`}
                             >
                               {subItem.label}
@@ -190,17 +215,24 @@ export function Sidebar({
                 </div>
               </div>
             ))}
+            {/* Theme toggle mobile */}
+            <div className="pt-2 border-t border-gray-100 dark:border-[rgba(255,255,255,.07)]">
+              <ThemeToggleBtn />
+            </div>
           </nav>
         </div>
       </div>
     );
   }
 
+  // ══════════════════════════════════════
+  // DESKTOP
+  // ══════════════════════════════════════
   return (
-    <aside className={`hidden lg:flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ${
+    <aside className={`hidden lg:flex flex-col bg-white dark:bg-[#0a1628] border-r border-gray-200 dark:border-[rgba(255,255,255,.08)] transition-all duration-300 ${
       isCollapsed ? 'w-20' : 'w-64'
     }`}>
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
         {!isCollapsed && (
           <div className="flex items-center gap-3">
             <img
@@ -209,19 +241,19 @@ export function Sidebar({
               className="h-[46px] w-auto"
             />
             <div>
-              <p className="text-xs font-semibold text-gray-500 leading-tight">Seja bem-vindo,</p>
-              <p className="text-base font-bold text-gray-900 leading-tight">
+              <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</p>
+              <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
                 {userName || userEmail?.split('@')[0] || 'Usuário'}
               </p>
               {userEmail && (
-                <p className="text-xs text-gray-400 truncate max-w-[140px]">{userEmail}</p>
+                <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>
               )}
             </div>
           </div>
         )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-2 rounded-lg hover:bg-gray-100"
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white"
           title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
         >
           <Menu className="w-5 h-5" />
@@ -232,7 +264,7 @@ export function Sidebar({
         {menuSections.map((section) => (
           <div key={section.title}>
             {!isCollapsed && (
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.35)] uppercase tracking-wider mb-2 px-3">
                 {section.title}
               </h3>
             )}
@@ -256,7 +288,7 @@ export function Sidebar({
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isCurrentPage(item.id)
                         ? 'bg-green-600 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        : 'text-gray-700 dark:text-[rgba(255,255,255,.7)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)]'
                     }`}
                     title={isCollapsed ? item.label : undefined}
                   >
@@ -281,8 +313,8 @@ export function Sidebar({
                           onClick={() => handleItemClick(subItem.id)}
                           className={`w-full flex items-center px-6 py-2 rounded-lg text-sm transition-colors ${
                             currentPage === subItem.id
-                              ? 'bg-green-100 text-green-700 font-medium'
-                              : 'text-gray-600 hover:bg-gray-50'
+                              ? 'bg-green-100 dark:bg-[rgba(34,197,94,.15)] text-green-700 dark:text-green-400 font-medium'
+                              : 'text-gray-600 dark:text-[rgba(255,255,255,.5)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,.05)]'
                           }`}
                         >
                           {subItem.label}
@@ -296,6 +328,11 @@ export function Sidebar({
           </div>
         ))}
       </nav>
+
+      {/* Theme toggle fixo no rodapé da sidebar */}
+      <div className="p-4 border-t border-gray-100 dark:border-[rgba(255,255,255,.07)]">
+        <ThemeToggleBtn collapsed={isCollapsed} />
+      </div>
     </aside>
   );
 }

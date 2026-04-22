@@ -674,7 +674,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-green-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[rgba(255,255,255,0.2)] border-t-green-600 dark:border-t-green-500"></div>
       </div>
     );
   }
@@ -686,14 +686,14 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Agenda de Eventos</h2>
-          <p className="text-sm text-gray-600 mt-1">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Agenda de Eventos</h2>
+          <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">
             Gerencie seus eventos e controle a disponibilidade de datas
           </p>
           <div className="flex items-center gap-3 mt-2">
-            <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
-              <Calendar className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] rounded-full">
+              <Calendar className="w-4 h-4 text-gray-600 dark:text-[rgba(255,255,255,0.6)]" />
+              <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
                 {eventosAtivos} / {planLimits.eventsLimit === 'unlimited' ? '∞' : planLimits.eventsLimit} eventos
               </span>
             </div>
@@ -717,15 +717,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         </button>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <div className="border-b border-gray-200">
+      <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-[rgba(255,255,255,.05)] rounded-lg">
+        <div className="border-b border-gray-200 dark:border-[rgba(255,255,255,.05)]">
           <nav className="flex">
             <button
               onClick={() => setActiveTab('calendar')}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
                 activeTab === 'calendar'
                   ? 'text-green-600 border-b-2 border-green-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <Calendar className="w-5 h-5" />
@@ -736,7 +736,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
                 activeTab === 'list'
                   ? 'text-green-600 border-b-2 border-green-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <Calendar className="w-5 h-5" />
@@ -747,7 +747,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
                 activeTab === 'feriados'
                   ? 'text-green-600 border-b-2 border-green-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <Flag className="w-5 h-5" /> Feriados
@@ -757,7 +757,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
                 activeTab === 'config'
                   ? 'text-green-600 border-b-2 border-green-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <Settings className="w-5 h-5" /> Configurações
@@ -771,16 +771,16 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               <div className="flex items-center justify-between mb-6">
                 <button
                   onClick={handlePreviousMonth}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] transition-colors font-medium"
                 >
                   ← Anterior
                 </button>
-                <h3 className="text-xl font-bold text-gray-900">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                   {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                 </h3>
                 <button
                   onClick={handleNextMonth}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] transition-colors font-medium"
                 >
                   Próximo →
                 </button>
@@ -791,7 +791,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   {weekDays.map((day) => (
                     <div
                       key={day}
-                      className="text-center font-semibold text-gray-700 py-2 text-sm"
+                      className="text-center font-semibold text-gray-700 dark:text-[rgba(255,255,255,0.8)] py-2 text-sm"
                     >
                       {day}
                     </div>
@@ -819,14 +819,14 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         disabled={isPast}
                         className={`min-h-[100px] flex flex-col items-start border rounded-lg p-2 transition-all ${
                           dayStatus.color
-                        } ${
+                        } dark:border-[rgba(255,255,255,0.05)] ${
                           isToday ? 'ring-2 ring-green-500' : ''
                         } ${
                           isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
                         } relative overflow-hidden`}
                       >
                         <div className="flex w-full justify-between items-start mb-1">
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
                             {date.getDate()}
                           </span>
                           {dayStatus.feriado && (
@@ -848,15 +848,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                              </div>
                            ))}
                            {eventosDoDia.length > 3 && (
-                              <div className="text-[10px] text-gray-500 font-medium pl-1">
+                              <div className="text-[10px] text-gray-500 dark:text-[rgba(255,255,255,0.5)] font-medium pl-1">
                                 +{eventosDoDia.length - 3} mais
                               </div>
                            )}
                         </div>
 
                         {dayStatus.status === 'bloqueada' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50">
-                            <div className="w-10 h-0.5 bg-gray-500 rotate-45"></div>
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 dark:bg-[#07101f]/50">
+                            <div className="w-10 h-0.5 bg-gray-500 dark:bg-[rgba(255,255,255,0.4)] rotate-45"></div>
                           </div>
                         )}
                       </button>
@@ -867,24 +867,24 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
               <div className="flex items-center justify-center gap-6 mt-6 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-white border border-gray-300 rounded"></div>
-                  <span className="text-gray-600">Disponível</span>
+                  <div className="w-4 h-4 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,0.2)] rounded"></div>
+                  <span className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Disponível</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-yellow-50 border border-yellow-300 rounded"></div>
-                  <span className="text-gray-600">Parcial</span>
+                  <div className="w-4 h-4 bg-yellow-50 dark:bg-[rgba(234,179,8,0.1)] border border-yellow-300 dark:border-[rgba(234,179,8,0.3)] rounded"></div>
+                  <span className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Parcial</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-red-50 border border-red-300 rounded"></div>
-                  <span className="text-gray-600">Ocupada</span>
+                  <div className="w-4 h-4 bg-red-50 dark:bg-[rgba(239,68,68,0.1)] border border-red-300 dark:border-[rgba(239,68,68,0.3)] rounded"></div>
+                  <span className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Ocupada</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-gray-200 rounded relative">
+                  <div className="w-4 h-4 bg-gray-200 dark:bg-[#07101f] rounded relative">
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-4 h-0.5 bg-gray-500 rotate-45"></div>
+                      <div className="w-4 h-0.5 bg-gray-500 dark:bg-[rgba(255,255,255,0.4)] rotate-45"></div>
                     </div>
                   </div>
-                  <span className="text-gray-600">Bloqueada</span>
+                  <span className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Bloqueada</span>
                 </div>
               </div>
             </div>
@@ -894,11 +894,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
             <div className="space-y-4">
               {eventos.length === 0 ? (
                 <div className="text-center py-12">
-                  <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-600">Nenhum evento cadastrado</p>
+                  <Calendar className="w-16 h-16 text-gray-300 dark:text-[rgba(255,255,255,0.2)] mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Nenhum evento cadastrado</p>
                   <button
                     onClick={() => setShowAddModal(true)}
-                    className="mt-4 text-green-600 hover:text-green-700 font-medium"
+                    className="mt-4 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
                   >
                     Adicionar primeiro evento
                   </button>
@@ -908,11 +908,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   {eventos.map((evento) => (
                     <div
                       key={evento.id}
-                      className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                      className="flex items-start gap-4 p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.1)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] transition-colors"
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <span className="font-semibold text-gray-900">
+                          <span className="font-semibold text-gray-900 dark:text-white">
                             {new Date(evento.data_evento + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </span>
                           <span
@@ -923,15 +923,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                             {statusLabels[evento.status]}
                           </span>
                         </div>
-                        <p className="text-gray-900 font-medium">{evento.cliente_nome}</p>
+                        <p className="text-gray-900 dark:text-white font-medium">{evento.cliente_nome}</p>
                         {evento.tipo_evento && (
-                          <p className="text-sm text-gray-600">Tipo: {evento.tipo_evento}</p>
+                          <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Tipo: {evento.tipo_evento}</p>
                         )}
                         {evento.cidade && (
-                          <p className="text-sm text-gray-600">Cidade: {evento.cidade}</p>
+                          <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Cidade: {evento.cidade}</p>
                         )}
                         {evento.observacoes && (
-                          <p className="text-sm text-gray-500 mt-1">{evento.observacoes}</p>
+                          <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">{evento.observacoes}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -960,18 +960,18 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
           {activeTab === 'feriados' && (
             <div className="space-y-6 max-w-2xl mx-auto">
               <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-900">Feriados Personalizados</h3>
-                <p className="text-sm text-gray-600 mt-1">Adicione feriados estaduais, municipais ou pontos facultativos.</p>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Feriados Personalizados</h3>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">Adicione feriados estaduais, municipais ou pontos facultativos.</p>
               </div>
 
-              <form onSubmit={handleAddFeriado} className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 border rounded-lg">
+              <form onSubmit={handleAddFeriado} className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] border dark:border-[rgba(255,255,255,0.1)] rounded-lg">
                 <div className="sm:col-span-2">
-                  <label className="text-sm font-medium">Nome do Feriado</label>
-                  <input name="nome" type="text" required className="w-full mt-1 p-2 border rounded-md" placeholder="Ex: Aniversário da Cidade" />
+                  <label className="text-sm font-medium dark:text-[rgba(255,255,255,0.8)]">Nome do Feriado</label>
+                  <input name="nome" type="text" required className="w-full mt-1 p-2 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-md" placeholder="Ex: Aniversário da Cidade" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Data</label>
-                  <input name="data" type="date" required className="w-full mt-1 p-2 border rounded-md" />
+                  <label className="text-sm font-medium dark:text-[rgba(255,255,255,0.8)]">Data</label>
+                  <input name="data" type="date" required className="w-full mt-1 p-2 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-md" />
                 </div>
                 <div className="sm:col-span-3">
                   <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Adicionar Feriado</button>
@@ -980,17 +980,17 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
               <div className="space-y-3">
                 {feriadosPersonalizados.length > 0 ? feriadosPersonalizados.map(feriado => (
-                  <div key={feriado.id} className="flex justify-between items-center p-3 bg-white border rounded-lg">
+                  <div key={feriado.id} className="flex justify-between items-center p-3 bg-white dark:bg-transparent border dark:border-[rgba(255,255,255,0.05)] rounded-lg">
                     <div>
-                      <p className="font-medium">{feriado.nome}</p>
-                      <p className="text-sm text-gray-500">{new Date(feriado.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                      <p className="font-medium dark:text-white">{feriado.nome}</p>
+                      <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.6)]">{new Date(feriado.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
                     </div>
                     <button onClick={() => handleDeleteFeriado(feriado.id)} className="text-red-500 hover:text-red-700 p-1">
                       <Trash2 size={16} />
                     </button>
                   </div>
                 )) : (
-                  <div className="text-center text-gray-500 py-8">
+                  <div className="text-center text-gray-500 dark:text-[rgba(255,255,255,0.4)] py-8">
                     <p>Nenhum feriado personalizado adicionado.</p>
                   </div>
                 )}
@@ -1003,25 +1003,25 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               {/* Coluna da Esquerda: Feriados */}
               <div className="space-y-6">
                 <div className="text-left">
-                  <h3 className="text-xl font-bold text-gray-900">Gestão de Feriados</h3>
-                  <p className="text-sm text-gray-600 mt-1">Decida em quais feriados você irá trabalhar.</p>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gestão de Feriados</h3>
+                  <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">Decida em quais feriados você irá trabalhar.</p>
                 </div>
 
                 {/* Feriados Nacionais */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Feriados Nacionais de {currentMonth.getFullYear()}</h3>
+                <div className="border-t dark:border-[rgba(255,255,255,0.1)] pt-6">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-[rgba(255,255,255,0.9)] mb-4">Feriados Nacionais de {currentMonth.getFullYear()}</h3>
                   <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
                     {feriadosNacionais.map(feriado => {
                       const isBlocked = datasBloqueadas.includes(feriado.date);
                       return (
-                        <div key={feriado.date} className={`flex justify-between items-center p-3 rounded-lg border ${isBlocked ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
+                        <div key={feriado.date} className={`flex justify-between items-center p-3 rounded-lg border dark:border-[rgba(255,255,255,0.05)] ${isBlocked ? 'bg-red-50 dark:bg-[rgba(239,68,68,0.1)] border-red-200 dark:border-[rgba(239,68,68,0.3)]' : 'bg-white dark:bg-transparent'}`}>
                           <div>
-                            <p className="font-medium">{feriado.name}</p>
-                            <p className="text-sm text-gray-500">{new Date(feriado.date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+                            <p className="font-medium dark:text-white">{feriado.name}</p>
+                            <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.6)]">{new Date(feriado.date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
                           </div>
                           <button
                             onClick={() => isBlocked ? desbloquearData(userId, feriado.date).then(loadData) : bloquearData(userId, feriado.date, `Feriado: ${feriado.name}`).then(loadData)}
-                            className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${isBlocked ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                            className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${isBlocked ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.7)] hover:bg-gray-300 dark:hover:bg-[rgba(255,255,255,0.15)]'}`}
                           >
                             {isBlocked ? 'Bloqueado' : 'Trabalhar'}
                           </button>
@@ -1032,16 +1032,16 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </div>
 
                 {/* Feriados Personalizados */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Feriados Personalizados</h3>
-                  <form onSubmit={handleAddFeriado} className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 border rounded-lg mb-4">
+                <div className="border-t dark:border-[rgba(255,255,255,0.1)] pt-6">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-[rgba(255,255,255,0.9)] mb-4">Feriados Personalizados</h3>
+                  <form onSubmit={handleAddFeriado} className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] border dark:border-[rgba(255,255,255,0.1)] rounded-lg mb-4">
                     <div className="sm:col-span-2">
-                      <label className="text-sm font-medium">Nome do Feriado</label>
-                      <input name="nome" type="text" required className="w-full mt-1 p-2 border rounded-md" placeholder="Ex: Aniversário da Cidade" />
+                      <label className="text-sm font-medium dark:text-[rgba(255,255,255,0.8)]">Nome do Feriado</label>
+                      <input name="nome" type="text" required className="w-full mt-1 p-2 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-md" placeholder="Ex: Aniversário da Cidade" />
                     </div>
                     <div>
-                      <label className="text-sm font-medium">Data</label>
-                      <input name="data" type="date" required className="w-full mt-1 p-2 border rounded-md" />
+                      <label className="text-sm font-medium dark:text-[rgba(255,255,255,0.8)]">Data</label>
+                      <input name="data" type="date" required className="w-full mt-1 p-2 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-md" />
                     </div>
                     <div className="sm:col-span-3">
                       <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Adicionar Feriado</button>
@@ -1049,10 +1049,10 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   </form>
                   <div className="space-y-2">
                     {feriadosPersonalizados.map(feriado => (
-                      <div key={feriado.id} className="flex justify-between items-center p-3 bg-white border rounded-lg">
+                      <div key={feriado.id} className="flex justify-between items-center p-3 bg-white dark:bg-transparent border dark:border-[rgba(255,255,255,0.05)] rounded-lg">
                         <div>
-                          <p className="font-medium">{feriado.nome}</p>
-                          <p className="text-sm text-gray-500">{new Date(feriado.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+                          <p className="font-medium dark:text-white">{feriado.nome}</p>
+                          <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.6)]">{new Date(feriado.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
                         </div>
                         <button onClick={() => handleDeleteFeriado(feriado.id)} className="text-red-500 hover:text-red-700 p-1">
                           <Trash2 size={16} />
@@ -1066,11 +1066,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               {/* Coluna da Direita: Períodos de Bloqueio */}
               <div className="space-y-6">
                 <div className="text-left">
-                  <h3 className="text-xl font-bold text-gray-900">Períodos de Bloqueio</h3>
-                  <p className="text-sm text-gray-600 mt-1">Defina suas férias, recessos ou outros períodos de ausência.</p>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Períodos de Bloqueio</h3>
+                  <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">Defina suas férias, recessos ou outros períodos de ausência.</p>
                 </div>
 
-                <div className="p-4 bg-gray-50 border rounded-lg">
+                <div className="p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] border dark:border-[rgba(255,255,255,0.1)] rounded-lg">
                   <button
                     onClick={() => setShowAddPeriodoModal(true)}
                     className="w-full flex items-center justify-center gap-2 bg-orange-500 text-white py-2 rounded-md hover:bg-orange-600"
@@ -1081,10 +1081,10 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                 <div className="space-y-3">
                   {periodosBloqueados.length > 0 ? periodosBloqueados.map(periodo => (
-                    <div key={periodo.id} className="flex justify-between items-center p-3 bg-white border rounded-lg">
+                    <div key={periodo.id} className="flex justify-between items-center p-3 bg-white dark:bg-transparent border dark:border-[rgba(255,255,255,0.05)] rounded-lg">
                       <div>
-                        <p className="font-medium">{periodo.motivo}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="font-medium dark:text-white">{periodo.motivo}</p>
+                        <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.6)]">
                           {new Date(periodo.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR')} até {new Date(periodo.data_fim + 'T00:00:00').toLocaleDateString('pt-BR')}
                         </p>
                       </div>
@@ -1093,8 +1093,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       </button>
                     </div>
                   )) : (
-                    <div className="text-center text-gray-500 py-8">
-                      <Plane className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <div className="text-center text-gray-500 dark:text-[rgba(255,255,255,0.4)] py-8">
+                      <Plane className="w-8 h-8 mx-auto text-gray-400 dark:text-[rgba(255,255,255,0.2)] mb-2" />
                       <p>Nenhum período de bloqueio adicionado.</p>
                     </div>
                   )}
@@ -1132,19 +1132,19 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </div>
               )}
 
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-start gap-3 mb-3">
                   <FileUp className="w-5 h-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900">Importar Calendário</h3>
+                      <h3 className="font-medium text-gray-900 dark:text-white">Importar Calendário</h3>
                       {!planLimits.canImportCalendar && (
                         <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-green-600 to-green-700 text-white rounded-full">
                           Premium
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">
+                    <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mb-3">
                       Importe eventos de arquivos CSV ou ICS com sistema inteligente anti-duplicatas
                     </p>
                   </div>
@@ -1152,37 +1152,37 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                 <button
                   onClick={handleImportClick}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]"
                 >
                   <Upload className="w-5 h-5" />
                   {planLimits.canImportCalendar ? 'Importar Arquivo de Calendário' : 'Upgrade para Importar Calendários'}
                 </button>
 
-                <details className="text-sm text-gray-600 mt-3">
-                  <summary className="cursor-pointer font-medium text-gray-700 hover:text-gray-900 mb-2">
+                <details className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-3">
+                  <summary className="cursor-pointer font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:text-gray-900 dark:hover:text-white mb-2">
                     Formato CSV esperado
                   </summary>
-                  <div className="pl-4 space-y-1 text-xs bg-white p-3 rounded border border-gray-200">
+                  <div className="pl-4 space-y-1 text-xs bg-white dark:bg-[#07101f] p-3 rounded border border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
                     <p className="font-mono">data,nome,tipo,cidade</p>
                     <p className="font-mono">01/12/2025,João Silva,Casamento,São Paulo</p>
                     <p className="font-mono">15/12/2025,Maria Santos,Ensaio,Rio de Janeiro</p>
-                    <p className="text-gray-500 mt-2">Data pode ser DD/MM/AAAA ou AAAA-MM-DD</p>
+                    <p className="text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-2">Data pode ser DD/MM/AAAA ou AAAA-MM-DD</p>
                   </div>
                 </details>
               </div>
 
               {planLimits.canImportCalendar && historicoImportacoes.length > 0 && (
-                <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-white dark:bg-transparent">
                   <div className="flex items-center gap-2 mb-4">
-                    <History className="w-5 h-5 text-gray-600" />
-                    <h3 className="font-medium text-gray-900">Histórico de Importações</h3>
+                    <History className="w-5 h-5 text-gray-600 dark:text-[rgba(255,255,255,0.6)]" />
+                    <h3 className="font-medium text-gray-900 dark:text-white">Histórico de Importações</h3>
                   </div>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {historicoImportacoes.map((hist) => (
-                      <div key={hist.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div key={hist.id} className="flex items-start justify-between p-3 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900 text-sm">{hist.nome_arquivo}</p>
-                          <p className="text-xs text-gray-600 mt-1">
+                          <p className="font-medium text-gray-900 dark:text-white text-sm">{hist.nome_arquivo}</p>
+                          <p className="text-xs text-gray-600 dark:text-[rgba(255,255,255,0.5)] mt-1">
                             {new Date(hist.created_at).toLocaleString('pt-BR')}
                           </p>
                           <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
@@ -1205,12 +1205,12 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </div>
               )}
 
-              <div className="border border-red-200 rounded-lg p-4 bg-red-50">
+              <div className="border border-red-200 dark:border-[rgba(239,68,68,0.2)] rounded-lg p-4 bg-red-50 dark:bg-[rgba(239,68,68,0.05)]">
                 <div className="flex items-start gap-3 mb-3">
                   <Trash className="w-5 h-5 text-red-600 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-red-900 mb-1">Limpar Eventos</h3>
-                    <p className="text-sm text-red-700 mb-3">
+                    <h3 className="font-medium text-red-900 dark:text-red-400 mb-1">Limpar Eventos</h3>
+                    <p className="text-sm text-red-700 dark:text-red-300 opacity-80 mb-3">
                       Remove eventos do calendário. Esta ação é irreversível!
                     </p>
                   </div>
@@ -1224,36 +1224,36 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </div>
 
               {/* Sincronizacao via Link ICS (Google Calendar / Apple Calendar) */}
-              <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+              <div className="border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-lg p-4 bg-blue-50 dark:bg-[rgba(59,130,246,0.05)]">
                 <div className="flex items-start gap-3 mb-4">
                   <RefreshCw className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-blue-900">Sincronizacao via Link de Calendario</h3>
+                      <h3 className="font-medium text-blue-900 dark:text-blue-300">Sincronizacao via Link de Calendario</h3>
                       <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Beta</span>
                     </div>
-                    <p className="text-sm text-blue-700">
+                    <p className="text-sm text-blue-700 dark:text-blue-200 opacity-80">
                       Importe eventos do Google Calendar ou Apple Calendar usando um link ICS publico.
                     </p>
                   </div>
                 </div>
 
-                <details className="mb-4 bg-white rounded-lg border border-blue-200">
-                  <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-blue-800 hover:bg-blue-50 rounded-lg">
+                <details className="mb-4 bg-white dark:bg-[#07101f] rounded-lg border border-blue-200 dark:border-[rgba(59,130,246,0.2)]">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.1)] rounded-lg">
                     Como obter o link do Google Calendar
                   </summary>
-                  <div className="px-4 pb-4 space-y-2 text-sm text-gray-700">
-                    <p className="font-medium text-gray-900 mt-3">Passo a passo:</p>
+                  <div className="px-4 pb-4 space-y-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.7)]">
+                    <p className="font-medium text-gray-900 dark:text-white mt-3">Passo a passo:</p>
                     <ol className="list-decimal pl-5 space-y-1 text-sm">
-                      <li>Abra o <strong>Google Calendar</strong> no computador</li>
+                      <li>Abra o <strong className="dark:text-white">Google Calendar</strong> no computador</li>
                       <li>No menu lateral, encontre a agenda desejada</li>
-                      <li>Clique nos <strong>3 pontos</strong> ao lado do nome da agenda</li>
-                      <li>Selecione <strong>"Configuracoes e compartilhamento"</strong></li>
-                      <li>Role ate <strong>"Endereco de calendario em formato iCal"</strong></li>
-                      <li>Copie o link <strong>(.ics)</strong></li>
+                      <li>Clique nos <strong className="dark:text-white">3 pontos</strong> ao lado do nome da agenda</li>
+                      <li>Selecione <strong className="dark:text-white">"Configuracoes e compartilhamento"</strong></li>
+                      <li>Role ate <strong className="dark:text-white">"Endereco de calendario em formato iCal"</strong></li>
+                      <li>Copie o link <strong className="dark:text-white">(.ics)</strong></li>
                       <li>Cole no campo abaixo e clique em Sincronizar</li>
                     </ol>
-                    <p className="text-xs text-gray-500 mt-2 bg-yellow-50 p-2 rounded border border-yellow-200">
+                    <p className="text-xs text-gray-500 dark:text-yellow-200 mt-2 bg-yellow-50 dark:bg-[rgba(234,179,8,0.1)] p-2 rounded border border-yellow-200 dark:border-[rgba(234,179,8,0.2)]">
                       O link funciona somente se a agenda for publica ou se usar o "Endereco secreto em iCal".
                     </p>
                   </div>
@@ -1261,7 +1261,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-blue-900 mb-1">
+                    <label className="block text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
                       URL do Calendario ICS
                     </label>
                     <input
@@ -1269,9 +1269,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       value={configEdit.calendar_ics_url}
                       onChange={(e) => setConfigEdit({ ...configEdit, calendar_ics_url: e.target.value })}
                       placeholder="https://calendar.google.com/calendar/ical/seu-calendario/basic.ics"
-                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                      className="w-full px-3 py-2 border border-blue-300 dark:border-[rgba(59,130,246,0.3)] rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white dark:bg-[#07101f] dark:text-white"
                     />
-                    <p className="text-xs text-blue-600 mt-1">
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                       Cole aqui o link .ics do Google Calendar, Apple Calendar ou outro servico compativel.
                     </p>
                   </div>
@@ -1345,11 +1345,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
 
               {/* Bloqueio de Feriados */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-gray-900">Bloquear Feriados Nacionais</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="font-medium text-gray-900 dark:text-white">Bloquear Feriados Nacionais</h3>
+                    <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                       Bloqueia automaticamente os feriados cadastrados no sistema.
                     </p>
                   </div>
@@ -1362,15 +1362,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </div>
 
               {/* REGRAS DE BLOQUEIO EM MASSA */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${configEdit.regras_massa_ativas ? 'bg-blue-100' : 'bg-gray-200'}`}>
-                      {configEdit.regras_massa_ativas ? <ToggleRight className="w-5 h-5 text-blue-600" /> : <ToggleLeft className="w-5 h-5 text-gray-500" />}
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${configEdit.regras_massa_ativas ? 'bg-blue-100 dark:bg-[rgba(59,130,246,0.2)]' : 'bg-gray-200 dark:bg-[rgba(255,255,255,0.1)]'}`}>
+                      {configEdit.regras_massa_ativas ? <ToggleRight className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <ToggleLeft className="w-5 h-5 text-gray-500 dark:text-[rgba(255,255,255,0.5)]" />}
                     </div>
                     <div>
-                      <h3 className="font-medium text-gray-900">Regras de Bloqueio em Massa</h3>
-                      <p className="text-sm text-gray-600">
+                      <h3 className="font-medium text-gray-900 dark:text-white">Regras de Bloqueio em Massa</h3>
+                      <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                         Defina regras para bloquear dias automaticamente na sua agenda.
                       </p>
                     </div>
@@ -1384,7 +1384,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 <div className={`space-y-6 pl-4 transition-opacity ${configEdit.regras_massa_ativas ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                   {/* Bloqueio por dia da semana */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
                       Bloquear dias da semana
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -1396,7 +1396,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                             configEdit.dias_semana_bloqueados?.includes(index)
                               ? 'bg-red-600 text-white border-red-700 shadow-sm'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                              : 'bg-white dark:bg-[#07101f] text-gray-700 dark:text-[rgba(255,255,255,0.8)] border-gray-300 dark:border-[rgba(255,255,255,0.1)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)]'
                           }`}
                         >
                           {dia}
@@ -1407,7 +1407,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                   {/* Bloqueio por dias pares/ímpares */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
                       Bloquear por dia do mês
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -1417,7 +1417,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                           configEdit.regra_par_impar === 'pares'
                             ? 'bg-red-600 text-white border-red-700 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            : 'bg-white dark:bg-[#07101f] text-gray-700 dark:text-[rgba(255,255,255,0.8)] border-gray-300 dark:border-[rgba(255,255,255,0.1)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)]'
                         }`}
                       >
                         Bloquear Dias Pares
@@ -1428,7 +1428,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                           configEdit.regra_par_impar === 'impares'
                             ? 'bg-red-600 text-white border-red-700 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            : 'bg-white dark:bg-[#07101f] text-gray-700 dark:text-[rgba(255,255,255,0.8)] border-gray-300 dark:border-[rgba(255,255,255,0.1)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)]'
                         }`}
                       >
                         Bloquear Dias Ímpares
@@ -1438,7 +1438,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                   {/* Bloqueio por semana sim/não */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
                       Bloqueio Semanal Alternado
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -1448,7 +1448,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                           configEdit.regra_semanal === 'trabalha_pares'
                             ? 'bg-red-600 text-white border-red-700 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            : 'bg-white dark:bg-[#07101f] text-gray-700 dark:text-[rgba(255,255,255,0.8)] border-gray-300 dark:border-[rgba(255,255,255,0.1)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)]'
                         }`}
                       >
                         Trabalhar Semanas Pares
@@ -1459,25 +1459,25 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                           configEdit.regra_semanal === 'trabalha_impares'
                             ? 'bg-red-600 text-white border-red-700 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            : 'bg-white dark:bg-[#07101f] text-gray-700 dark:text-[rgba(255,255,255,0.8)] border-gray-300 dark:border-[rgba(255,255,255,0.1)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)]'
                         }`}
                       >
                         Trabalhar Semanas Ímpares
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Define um padrão de trabalho em semanas alternadas do ano.</p>
+                    <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">Define um padrão de trabalho em semanas alternadas do ano.</p>
                     {configEdit.regra_semanal !== 'nenhum' && (
                       <div className="mt-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                           Data de início da contagem
                         </label>
                         <input
                           type="date"
                           value={configEdit.regra_semanal_inicio || ''}
                           onChange={(e) => setConfigEdit({ ...configEdit, regra_semanal_inicio: e.target.value })}
-                          className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg"
+                          className="w-full sm:w-auto px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg"
                         />
-                        <p className="text-xs text-gray-500 mt-1">A contagem de semanas pares/ímpares começará a partir desta data.</p>
+                        <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">A contagem de semanas pares/ímpares começará a partir desta data.</p>
                       </div>
                     )}
                   </div>
@@ -1494,15 +1494,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                     }
                     className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                   />
-                  <span className="font-medium text-gray-900">Sistema de Agenda Ativo</span>
+                  <span className="font-medium text-gray-900 dark:text-white">Sistema de Agenda Ativo</span>
                 </label>
-                <p className="text-sm text-gray-600 ml-7">
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] ml-7">
                   Quando ativo, o sistema verifica a disponibilidade de datas no orçamento
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
                   Eventos por Dia
                 </label>
                 <select
@@ -1513,7 +1513,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       eventos_max_por_dia: parseInt(e.target.value),
                     })
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 >
                   {[1, 2, 3, 4, 5].map((num) => (
                     <option key={num} value={num}>
@@ -1521,17 +1521,17 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                     </option>
                   ))}
                 </select>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">
                   Quantos eventos você pode realizar no mesmo dia?
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-3">
                   Modo de Aviso ao Cliente
                 </label>
                 <div className="space-y-3">
-                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 cursor-pointer">
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.2)] cursor-pointer">
                     <input
                       type="radio"
                       name="modo_aviso"
@@ -1546,14 +1546,14 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       className="mt-1 w-4 h-4 text-green-600 focus:ring-2 focus:ring-green-500"
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900">Informativo</div>
-                      <p className="text-sm text-gray-600">
+                      <div className="font-medium text-gray-900 dark:text-white">Informativo</div>
+                      <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                         Mostra status mas permite continuar mesmo se ocupado
                       </p>
                     </div>
                   </label>
 
-                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 cursor-pointer">
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.2)] cursor-pointer">
                     <input
                       type="radio"
                       name="modo_aviso"
@@ -1568,16 +1568,16 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       className="mt-1 w-4 h-4 text-green-600 focus:ring-2 focus:ring-green-500"
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900 dark:text-white">
                         Sugestivo (Recomendado)
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                         Mostra aviso e sugere outra data, mas permite continuar
                       </p>
                     </div>
                   </label>
 
-                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 cursor-pointer">
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.2)] cursor-pointer">
                     <input
                       type="radio"
                       name="modo_aviso"
@@ -1592,8 +1592,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       className="mt-1 w-4 h-4 text-green-600 focus:ring-2 focus:ring-green-500"
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900">Restritivo</div>
-                      <p className="text-sm text-gray-600">
+                      <div className="font-medium text-gray-900 dark:text-white">Restritivo</div>
+                      <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                         BLOQUEIA orçamento se data estiver ocupada
                       </p>
                     </div>
@@ -1615,15 +1615,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
       {/* MODAL: Adicionar Período de Bloqueio */}
       {showAddPeriodoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-xl max-w-md w-full p-6 border dark:border-[rgba(255,255,255,0.05)]">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Adicionar Período de Bloqueio</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Adicionar Período de Bloqueio</h3>
               <button
                 onClick={() => setShowAddPeriodoModal(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 dark:text-[rgba(255,255,255,0.6)]" />
               </button>
             </div>
             <form
@@ -1631,39 +1631,38 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 e.preventDefault();
                 handleAddPeriodo();
               }}
-              className="space-y-4"
-            >
+              <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Motivo *</label>
                 <input
                   type="text"
                   value={novoPeriodo.motivo}
                   onChange={(e) => setNovoPeriodo({ ...novoPeriodo, motivo: e.target.value })}
                   placeholder="Ex: Férias, Recesso, Viagem"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de Início *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Data de Início *</label>
                   <input
                     type="date"
                     value={novoPeriodo.data_inicio}
                     onChange={(e) => setNovoPeriodo({ ...novoPeriodo, data_inicio: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de Fim *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Data de Fim *</label>
                   <input
                     type="date"
                     value={novoPeriodo.data_fim}
                     onChange={(e) => setNovoPeriodo({ ...novoPeriodo, data_fim: e.target.value })}
                     min={novoPeriodo.data_inicio}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg"
                   />
                 </div>
               </div>
@@ -1671,7 +1670,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 <button
                   type="button"
                   onClick={() => setShowAddPeriodoModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg"
                 >
                   Cancelar
                 </button>
@@ -1685,10 +1684,10 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       )}
 
       {showDateModal && selectedDate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-lg max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto border dark:border-[rgba(255,255,255,0.05)]">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                 {new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', {
                   weekday: 'long',
                   year: 'numeric',
@@ -1701,9 +1700,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   setShowDateModal(false);
                   setSelectedDate(null);
                 }}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 dark:text-[rgba(255,255,255,0.6)]" />
               </button>
             </div>
 
@@ -1715,13 +1714,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                 return (
                   <>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] rounded-lg">
                       <div>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
                           Eventos: {eventosDia.length} / {maxEventos}
                         </p>
                         {isBloqueada && (
-                          <p className="text-sm text-red-600 mt-1">Data bloqueada</p>
+                          <p className="text-sm text-red-600 dark:text-red-400 mt-1">Data bloqueada</p>
                         )}
                       </div>
                       <button
@@ -1740,15 +1739,15 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                     {eventosDia.length > 0 ? (
                       <div className="space-y-3">
-                        <h4 className="font-semibold text-gray-900">Eventos do Dia</h4>
+                        <h4 className="font-semibold text-gray-900 dark:text-white">Eventos do Dia</h4>
                         {eventosDia.map((evento) => (
                           <div
                             key={evento.id}
-                            className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg"
+                            className="flex items-start gap-4 p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg"
                           >
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
-                                <p className="font-medium text-gray-900">{evento.cliente_nome}</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{evento.cliente_nome}</p>
                                 <span
                                   className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(
                                     evento.status
@@ -1758,13 +1757,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                                 </span>
                               </div>
                               {evento.tipo_evento && (
-                                <p className="text-sm text-gray-600">Tipo: {evento.tipo_evento}</p>
+                                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Tipo: {evento.tipo_evento}</p>
                               )}
                               {evento.cidade && (
-                                <p className="text-sm text-gray-600">Cidade: {evento.cidade}</p>
+                                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Cidade: {evento.cidade}</p>
                               )}
                               {evento.observacoes && (
-                                <p className="text-sm text-gray-500 mt-1">{evento.observacoes}</p>
+                                <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">{evento.observacoes}</p>
                               )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -1795,8 +1794,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <div className="text-center py-8 text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
+                        <Calendar className="w-12 h-12 text-gray-300 dark:text-[rgba(255,255,255,0.2)] mx-auto mb-2" />
                         <p>Nenhum evento nesta data</p>
                       </div>
                     )}
@@ -1810,7 +1809,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                               await loadData();
                             }
                           }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 dark:bg-[rgba(255,255,255,0.1)] text-white dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-700 dark:hover:bg-[rgba(255,255,255,0.15)] transition-colors font-medium"
                         >
                           <CheckCircle className="w-5 h-5" />
                           Desbloquear Data
@@ -1826,7 +1825,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                               }
                             }
                           }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors font-medium"
                         >
                           <AlertCircle className="w-5 h-5" />
                           Bloquear Data
@@ -1842,21 +1841,21 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-lg border dark:border-[rgba(255,255,255,0.05)] max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Novo Evento</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Novo Evento</h3>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 dark:text-[rgba(255,255,255,0.6)]" />
               </button>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Data *
                 </label>
                 <input
@@ -1864,49 +1863,49 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   value={novoEvento.data_evento}
                   onChange={(e) => setNovoEvento({ ...novoEvento, data_evento: e.target.value })}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome do Cliente *
                 </label>
                 <input
                   type="text"
                   value={novoEvento.cliente_nome}
                   onChange={(e) => setNovoEvento({ ...novoEvento, cliente_nome: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                   placeholder="Digite o nome do cliente"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Tipo de Evento
                 </label>
                 <input
                   type="text"
                   value={novoEvento.tipo_evento}
                   onChange={(e) => setNovoEvento({ ...novoEvento, tipo_evento: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                   placeholder="Ex: Casamento, Ensaio, Corporativo"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Cidade</label>
                 <input
                   type="text"
                   value={novoEvento.cidade}
                   onChange={(e) => setNovoEvento({ ...novoEvento, cidade: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                   placeholder="Digite a cidade"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Status</label>
                 <select
                   value={novoEvento.status}
                   onChange={(e) =>
@@ -1915,7 +1914,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       status: e.target.value as 'confirmado' | 'pendente' | 'concluido' | 'cancelado',
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 >
                   <option value="pendente">Pendente</option>
                   <option value="confirmado">Confirmado</option>
@@ -1925,13 +1924,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Observações
                 </label>
                 <textarea
                   value={novoEvento.observacoes}
                   onChange={(e) => setNovoEvento({ ...novoEvento, observacoes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                   rows={3}
                   placeholder="Observações adicionais"
                 />
@@ -1948,7 +1947,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </button>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors font-medium"
               >
                 Cancelar
               </button>
@@ -1958,33 +1957,33 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       )}
 
       {editingEvento && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.05)] rounded-lg max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Editar Evento</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Editar Evento</h3>
               <button
                 onClick={() => setEditingEvento(null)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 dark:text-[rgba(255,255,255,0.6)]" />
               </button>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Data *</label>
                 <input
                   type="date"
                   value={editingEvento.data_evento}
                   onChange={(e) =>
                     setEditingEvento({ ...editingEvento, data_evento: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Nome do Cliente *
                 </label>
                 <input
@@ -1993,12 +1992,12 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   onChange={(e) =>
                     setEditingEvento({ ...editingEvento, cliente_nome: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Tipo de Evento
                 </label>
                 <input
@@ -2007,24 +2006,24 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   onChange={(e) =>
                     setEditingEvento({ ...editingEvento, tipo_evento: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Cidade</label>
                 <input
                   type="text"
                   value={editingEvento.cidade}
                   onChange={(e) =>
                     setEditingEvento({ ...editingEvento, cidade: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Status</label>
                 <select
                   value={editingEvento.status}
                   onChange={(e) =>
@@ -2033,7 +2032,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                       status: e.target.value as 'confirmado' | 'pendente' | 'concluido' | 'cancelado',
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 >
                   <option value="pendente">Pendente</option>
                   <option value="confirmado">Confirmado</option>
@@ -2043,7 +2042,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
                   Observações
                 </label>
                 <textarea
@@ -2051,7 +2050,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   onChange={(e) =>
                     setEditingEvento({ ...editingEvento, observacoes: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                   rows={3}
                 />
               </div>
@@ -2067,7 +2066,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </button>
               <button
                 onClick={() => setEditingEvento(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors font-medium"
               >
                 Cancelar
               </button>
@@ -2092,30 +2091,30 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       )}
 
       {showClearConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-lg border dark:border-[rgba(255,255,255,0.05)] max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <AlertCircle className="w-5 h-5 text-red-600" />
+                <div className="w-10 h-10 bg-red-100 dark:bg-[rgba(239,68,68,0.2)] rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900">Limpar Eventos</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Limpar Eventos</h3>
               </div>
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 dark:text-[rgba(255,255,255,0.6)]" />
               </button>
             </div>
 
             <div className="space-y-4">
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                 Esta ação removerá eventos do seu calendário. Escolha o que deseja limpar:
               </p>
 
               <div className="space-y-3">
-                <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-green-300 cursor-pointer transition-colors">
+                <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:border-green-300 dark:hover:border-green-500 cursor-pointer transition-colors">
                   <input
                     type="radio"
                     name="clearType"
@@ -2124,17 +2123,17 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                     className="mt-1 w-4 h-4 text-green-600 focus:ring-2 focus:ring-green-500"
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900 mb-1">Apenas Eventos Importados</div>
-                    <p className="text-sm text-gray-600">
+                    <div className="font-medium text-gray-900 dark:text-white mb-1">Apenas Eventos Importados</div>
+                    <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                       Remove somente eventos que vieram de arquivos CSV/ICS. Eventos adicionados manualmente serão preservados.
                     </p>
-                    <span className="inline-block mt-2 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                    <span className="inline-block mt-2 px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-[rgba(34,197,94,0.2)] text-green-700 dark:text-green-400 rounded-full">
                       Recomendado
                     </span>
                   </div>
                 </label>
 
-                <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-red-300 cursor-pointer transition-colors">
+                <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:border-red-300 dark:hover:border-red-500 cursor-pointer transition-colors">
                   <input
                     type="radio"
                     name="clearType"
@@ -2143,11 +2142,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                     className="mt-1 w-4 h-4 text-green-600 focus:ring-2 focus:ring-green-500"
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900 mb-1">Todos os Eventos</div>
-                    <p className="text-sm text-gray-600">
+                    <div className="font-medium text-gray-900 dark:text-white mb-1">Todos os Eventos</div>
+                    <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
                       Remove TODOS os eventos ativos (confirmados e pendentes), incluindo os adicionados manualmente.
                     </p>
-                    <span className="inline-block mt-2 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
+                    <span className="inline-block mt-2 px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-[rgba(239,68,68,0.2)] text-red-700 dark:text-red-400 rounded-full">
                       Cuidado
                     </span>
                   </div>
@@ -2155,9 +2154,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </div>
 
               {clearIncludeManual && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-red-800">
+                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-[rgba(239,68,68,0.05)] border border-red-200 dark:border-[rgba(239,68,68,0.2)] rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-red-800 dark:text-red-300">
                     <p className="font-medium mb-1">Atenção: Ação Irreversível</p>
                     <p>
                       Esta opção removerá TODOS os eventos ativos do seu calendário, incluindo eventos manuais. Eventos concluídos e cancelados serão preservados.
@@ -2177,7 +2176,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
               </button>
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors font-medium"
               >
                 Cancelar
               </button>
