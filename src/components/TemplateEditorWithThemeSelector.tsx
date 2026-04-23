@@ -7,7 +7,7 @@ interface TemplateEditorWithThemeSelectorProps {
   onThemeChange?: (theme: QuoteTheme) => void;
 }
 
-export type QuoteTheme = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista';
+export type QuoteTheme = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'darkstudio';
 
 export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: TemplateEditorWithThemeSelectorProps) {
   const [selectedTheme, setSelectedTheme] = useState<QuoteTheme>('moderno');
@@ -162,6 +162,16 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
       textColor: 'text-slate-700',
       bgColor: 'bg-slate-100',
       borderColor: 'border-slate-600',
+    },
+    {
+      id: 'darkstudio' as QuoteTheme,
+      name: 'Dark Studio ✨',
+      description: 'Premium dark com acentos verdes neon',
+      icon: Moon,
+      color: 'from-gray-900 to-green-600',
+      textColor: 'text-green-500',
+      bgColor: 'bg-gray-900',
+      borderColor: 'border-green-500',
     },
   ];
 

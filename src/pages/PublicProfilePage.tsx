@@ -6,6 +6,7 @@ import { PublicProfileOriginal } from '../components/PublicProfileOriginal';
 import { PublicProfileMinimalist } from '../components/PublicProfileMinimalist';
 import { PublicProfileModern } from '../components/PublicProfileModern';
 import { PublicProfileMagazine } from '../components/PublicProfileMagazine';
+import { PublicProfileDarkStudio } from '../components/PublicProfileDarkStudio';
 
 interface Profile {
   id: string;
@@ -169,6 +170,9 @@ export function PublicProfilePage() {
       case 'magazine':
         console.log('✅ [RENDER] Componente: PublicProfileMagazine');
         return <PublicProfileMagazine {...commonProps} />;
+      case 'darkstudio':
+        console.log('✅ [RENDER] Componente: PublicProfileDarkStudio');
+        return <PublicProfileDarkStudio {...commonProps} />;
       case 'original':
         console.log('✅ [RENDER] Componente: PublicProfileOriginal');
         return <PublicProfileOriginal {...commonProps} />;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Palette, Sparkles, Camera, Check, ExternalLink, Eye } from 'lucide-react';
+import { Palette, Sparkles, Camera, Check, ExternalLink, Eye, Moon } from 'lucide-react';
 import { ProfileEditor } from './ProfileEditor';
 import { supabase } from '../lib/supabase';
 
@@ -7,7 +7,7 @@ interface ProfileEditorWithThemeSelectorProps {
   userId: string;
 }
 
-type Theme = 'original' | 'minimalist' | 'modern' | 'magazine';
+type Theme = 'original' | 'minimalist' | 'modern' | 'magazine' | 'darkstudio';
 
 export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThemeSelectorProps) {
   const [selectedTheme, setSelectedTheme] = useState<Theme>('original');
@@ -124,6 +124,16 @@ export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThem
       textColor: 'text-amber-600',
       bgColor: 'bg-amber-50',
       borderColor: 'border-amber-600',
+    },
+    {
+      id: 'darkstudio' as Theme,
+      name: 'Dark Studio ✨',
+      description: 'Premium dark com verde neon',
+      icon: Moon,
+      color: 'from-gray-900 to-green-600',
+      textColor: 'text-green-500',
+      bgColor: 'bg-gray-900',
+      borderColor: 'border-green-500',
     },
   ];
 

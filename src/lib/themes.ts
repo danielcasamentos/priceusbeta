@@ -5,7 +5,7 @@
  * sem afetar funcionalidades. Cada tema tem sua paleta e estilo único.
  */
 
-export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco';
+export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio';
 
 export interface TemaConfig {
   nome: string;
@@ -362,6 +362,41 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       borderWidth: 'border',
       shadow: 'shadow-lg',
       shadowHover: 'hover:shadow-xl',
+      fontFamily: 'font-sans',
+      fontHeading: 'font-bold',
+    },
+  },
+
+  darkstudio: {
+    nome: 'Dark Studio ✨',
+    descricao: 'Premium dark com acentos verdes neon',
+    emoji: '🌑',
+    cores: {
+      primaria: 'bg-green-600',
+      primariaHover: 'hover:bg-green-500',
+      primariaDark: 'bg-green-700',
+      secundaria: 'bg-white/5',
+      secundariaHover: 'hover:bg-white/10',
+      acento: 'bg-green-500',
+      acentoHover: 'hover:bg-green-400',
+
+      bgPrincipal: 'bg-dark-bg',
+      bgSecundario: 'bg-dark-bg2',
+      bgCard: 'bg-dark-bg2',
+      bgHover: 'hover:bg-dark-bg3',
+
+      textoPrincipal: 'text-white',
+      textoSecundario: 'text-gray-400',
+      textoDestaque: 'text-green-400',
+
+      borda: 'border-white/10',
+      divisor: 'divide-white/10',
+    },
+    estilos: {
+      borderRadius: 'rounded-xl',
+      borderWidth: 'border',
+      shadow: 'shadow-2xl',
+      shadowHover: 'hover:shadow-2xl',
       fontFamily: 'font-sans',
       fontHeading: 'font-bold',
     },

@@ -258,7 +258,7 @@ export function DashboardPage() {
               <>
                 <div className="mb-8">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Avaliações de Clientes</h2>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
                     Gerencie as avaliações recebidas e controle sua visibilidade pública.
                   </p>
                 </div>
@@ -266,14 +266,14 @@ export function DashboardPage() {
               </>
             ) : currentPage === 'contratos' ? (
               <div>
-                <div className="border-b border-gray-200 mb-6">
+                <div className="border-b border-gray-200 dark:border-[rgba(255,255,255,.1)] mb-6">
                   <nav className="-mb-px flex gap-6">
                     <button
                       onClick={() => setContractTab('templates')}
                       className={`py-4 px-1 border-b-2 font-medium text-sm ${
                         contractTab === 'templates'
                           ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
                       }`}
                     >
                       Modelos de Contrato
@@ -283,7 +283,7 @@ export function DashboardPage() {
                       className={`py-4 px-1 border-b-2 font-medium text-sm ${
                         contractTab === 'manager'
                           ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
                       }`}
                     >
                       Contratos Gerados
@@ -305,8 +305,8 @@ export function DashboardPage() {
             ) : currentPage === 'empresa-dashboard' ? (
               <>
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Visão Geral da Empresa</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Visão Geral da Empresa</h2>
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
                     Acompanhe o desempenho financeiro do seu negócio.
                   </p>
                 </div>
@@ -318,8 +318,8 @@ export function DashboardPage() {
             ) : currentPage === 'empresa-analytics' ? (
               <>
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Analytics</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Analytics</h2>
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
                     Análise detalhada do desempenho financeiro.
                   </p>
                 </div>
@@ -328,8 +328,8 @@ export function DashboardPage() {
             ) : currentPage === 'empresa-insights' ? (
               <>
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Insights</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Insights</h2>
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
                     Recomendações inteligentes para otimizar seu negócio.
                   </p>
                 </div>
@@ -338,8 +338,8 @@ export function DashboardPage() {
             ) : currentPage === 'empresa-dados' ? (
               <>
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Dados Empresariais</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Dados Empresariais</h2>
+                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
                     Configure os dados da sua empresa para usar nos contratos digitais.
                   </p>
                 </div>
@@ -360,8 +360,8 @@ export function DashboardPage() {
         />
       )}
 
-      <footer className={`bg-white border-t border-gray-200 ${isMobile ? 'hidden' : ''}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-gray-500">
+      <footer className={`bg-white dark:bg-[#0a1628] border-t border-gray-200 dark:border-[rgba(255,255,255,.07)] ${isMobile ? 'hidden' : ''}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-gray-500 dark:text-[rgba(255,255,255,.3)]">
           <p>© 2025 Price Us. Sistema de Orçamentos Inteligente.</p>
         </div>
       </footer>

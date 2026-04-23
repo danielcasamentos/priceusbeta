@@ -3,6 +3,7 @@ import { DollarSign, TrendingUp, Clock, PiggyBank, Plus, Calendar, Check, X } fr
 import { formatCurrency } from '../../lib/utils';
 import { useCompanyTransactions } from '../../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
+import { HourValuePanel } from './HourValuePanel';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface CompanyDashboardProps {
@@ -306,6 +307,22 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
 
       {/* Painel de Contas a Pagar e Receber */}
       <PendingTransactionsPanel transactions={transactions} />
+
+      {/* ── Calculadora de Valor por Hora ── */}
+      {(() => {
+        // Média mensal dos últimos 12 meses com dados
+        const mesesComDados = monthByMonthBreakdown.filter(m => m.receitas > 0 || m.despesas > 0);
+        const numMeses = Math.max(1, mesesComDados.length);
+        const mediaDespesasMensal = yearlyMetrics.despesas / numMeses;
+        const mediaReceitasMensal = yearlyMetrics.receitas / numMeses;
+        return (
+          <HourValuePanel
+            userId={userId}
+            mediaDespesasMensal={mediaDespesasMensal}
+            mediaReceitasMensal={mediaReceitasMensal}
+          />
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg border border-gray-200">
