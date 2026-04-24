@@ -227,8 +227,8 @@ const [isDeleting, setIsDeleting] = useState(false);
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left text-gray-600">
-          <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+        <table className="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+          <thead className="text-xs text-gray-700 dark:text-gray-400 uppercase bg-gray-50 dark:bg-[#07101f]">
             <tr>
               <th scope="col" className="p-4">
                 <input
@@ -265,7 +265,7 @@ const [isDeleting, setIsDeleting] = useState(false);
               </tr>
             ) : (
               filteredContracts.map(contract => (
-                <tr key={contract.id} className={`border-b hover:bg-gray-50 ${selectedIds.includes(contract.id) ? 'bg-blue-50' : 'bg-white'}`}>
+                <tr key={contract.id} className={`border-b dark:border-[rgba(255,255,255,.07)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,.04)] ${selectedIds.includes(contract.id) ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-[#0a1628]'}`}>
                   <td className="p-4">
                     <input
                       type="checkbox"
@@ -274,7 +274,7 @@ const [isDeleting, setIsDeleting] = useState(false);
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                     />
                   </td>
-                  <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
                     {contract.lead_data_json?.nome_cliente || 'N/A'}
                   </td>
                   <td className="px-6 py-4">
@@ -283,7 +283,7 @@ const [isDeleting, setIsDeleting] = useState(false);
                   <td className="px-6 py-4">
                     {contract.lead_data_json?.data_evento ? format(new Date(contract.lead_data_json.data_evento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}
                   </td>
-                  <td className="px-6 py-4 font-semibold text-gray-800">
+                  <td className="px-6 py-4 font-semibold text-gray-800 dark:text-gray-200">
                     {formatCurrency(contract.lead_data_json?.valor_total || 0)}
                   </td>
                   <td className="px-6 py-4">
@@ -330,14 +330,14 @@ const [isDeleting, setIsDeleting] = useState(false);
       {/* Modal Exclusão Única */}
       {deleteConfirmSingle && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <AlertCircle className="h-6 w-6 text-red-600" />
+          <div className="bg-white dark:bg-[#0a1628] rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+              <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir Contrato</h3>
-            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir este contrato permanentemente? Essa ação não pode ser desfeita.</p>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Excluir Contrato</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 font-medium">Tem certeza que deseja excluir este contrato permanentemente? Essa ação não pode ser desfeita.</p>
             <div className="flex justify-center gap-3">
-              <button onClick={() => setDeleteConfirmSingle(null)} className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors">Cancelar</button>
+              <button onClick={() => setDeleteConfirmSingle(null)} className="px-5 py-2.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 rounded-lg font-semibold transition-colors">Cancelar</button>
               <button disabled={deletingIds.has(deleteConfirmSingle)} onClick={() => handleDeleteSingle(deleteConfirmSingle)} className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2">
                 {deletingIds.has(deleteConfirmSingle) ? 'Excluindo...' : 'Sim, Excluir'}
               </button>
@@ -349,14 +349,14 @@ const [isDeleting, setIsDeleting] = useState(false);
       {/* Modal Exclusão Múltipla */}
       {deleteConfirmMultiple && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <AlertCircle className="h-6 w-6 text-red-600" />
+          <div className="bg-white dark:bg-[#0a1628] rounded-xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+              <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Excluir {selectedIds.length} Contratos</h3>
-            <p className="text-gray-600 mb-6 font-medium">Tem certeza que deseja excluir estes contratos permanentemente? Essa ação não pode ser desfeita.</p>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Excluir {selectedIds.length} Contratos</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 font-medium">Tem certeza que deseja excluir estes contratos permanentemente? Essa ação não pode ser desfeita.</p>
             <div className="flex justify-center gap-3">
-              <button onClick={() => setDeleteConfirmMultiple(false)} disabled={isDeleting} className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors">Cancelar</button>
+              <button onClick={() => setDeleteConfirmMultiple(false)} disabled={isDeleting} className="px-5 py-2.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 rounded-lg font-semibold transition-colors">Cancelar</button>
               <button disabled={isDeleting} onClick={handleDeleteSelected} className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors flex items-center gap-2">
                 {isDeleting ? 'Excluindo...' : 'Sim, Excluir Todos'}
               </button>

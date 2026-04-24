@@ -167,9 +167,14 @@ export function DashboardPage() {
             {isMobile && (
               <div className="flex items-center gap-3">
                 <img
+                  src="/Logo Price Us Dark.png"
+                  alt="Price Us"
+                  className="h-[46px] w-auto block dark:block hidden"
+                />
+                <img
                   src="/Logo Price Us.png"
                   alt="Price Us"
-                  className="h-[46px] w-auto"
+                  className="h-[46px] w-auto dark:hidden block"
                 />
                 <div>
                   <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-none">Seja bem-vindo,</p>
