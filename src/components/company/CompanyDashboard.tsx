@@ -35,14 +35,14 @@ const PendingTransactionsPanel = ({ transactions }: { transactions: any[] }) => 
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-md dark:shadow-none border border-transparent dark:border-[rgba(255,255,255,.07)] p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="bg-yellow-100 text-yellow-600 p-3 rounded-lg">
+        <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 p-3 rounded-lg">
           <Calendar className="w-6 h-6" />
         </div>
         <div>
-          <h3 className="text-lg font-bold text-gray-900">Contas a Pagar e Receber</h3>
-          <p className="text-sm text-gray-500">Visão geral de transações pendentes.</p>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Contas a Pagar e Receber</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Visão geral de transações pendentes.</p>
         </div>
       </div>
       <div className="space-y-4">
@@ -62,12 +62,12 @@ const TransactionCalculator = ({ selectedTransactions }: { selectedTransactions:
   const pendingTotal = selectedTransactions.filter(t => t.status === 'pendente').reduce((sum, t) => sum + Number(t.valor), 0);
 
   return (
-    <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl p-4 w-80 border border-gray-200 z-50">
-      <h4 className="font-bold text-gray-800 mb-3">Calculadora de Seleção</h4>
+    <div className="fixed bottom-4 right-4 bg-white dark:bg-[#0a1628] rounded-lg shadow-2xl p-4 w-80 border border-gray-200 dark:border-[rgba(255,255,255,.08)] z-50">
+      <h4 className="font-bold text-gray-800 dark:text-white mb-3">Calculadora de Seleção</h4>
       <div className="space-y-2 text-sm">
         <div className="flex justify-between">
-          <span className="text-gray-600">Itens selecionados:</span>
-          <span className="font-medium">{selectedTransactions.length}</span>
+          <span className="text-gray-600 dark:text-gray-400">Itens selecionados:</span>
+          <span className="font-medium dark:text-white">{selectedTransactions.length}</span>
         </div>
         <div className="flex justify-between text-green-600">
           <span className="font-medium">Total Pago:</span>
@@ -77,7 +77,7 @@ const TransactionCalculator = ({ selectedTransactions }: { selectedTransactions:
           <span className="font-medium">Total Pendente:</span>
           <span className="font-bold">{formatCurrency(pendingTotal)}</span>
         </div>
-        <div className="flex justify-between text-blue-700 font-bold text-base border-t pt-2 mt-2">
+        <div className="flex justify-between text-blue-700 font-bold text-base border-t border-gray-200 dark:border-[rgba(255,255,255,.1)] pt-2 mt-2">
           <span>Total Geral:</span>
           <span>{formatCurrency(total)}</span>
         </div>
@@ -150,13 +150,13 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-gray-100 dark:bg-white/10 rounded-lg p-1">
             <button
               onClick={() => setViewMode('monthly')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 viewMode === 'monthly'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-[#0a1628] text-blue-600 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               📅 Mensal
@@ -165,8 +165,8 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
               onClick={() => setViewMode('yearly')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 viewMode === 'yearly'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-[#0a1628] text-blue-600 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               📆 Anual
@@ -213,7 +213,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">
@@ -235,7 +235,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total a Receber</p>
@@ -249,7 +249,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">
@@ -270,7 +270,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Ticket Médio</p>
@@ -325,8 +325,8 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
       })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
+          <h3 className="text-lg font-semibold dark:text-white mb-4">
             {viewMode === 'monthly' ? 'Últimos 6 Meses' : 'Evolução Anual'}
           </h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -342,8 +342,8 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4">Receitas por Categoria</h3>
+        <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
+          <h3 className="text-lg font-semibold dark:text-white mb-4">Receitas por Categoria</h3>
           {revenueByCategory.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -372,15 +372,15 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4">Últimas Transações</h3>
+      <div className="bg-white dark:bg-[#0a1628] p-6 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.07)]">
+        <h3 className="text-lg font-semibold dark:text-white mb-4">Últimas Transações</h3>
         {recentTransactions.length > 0 ? (
           <div className="space-y-2">
             {recentTransactions.map(transaction => (
-              <div key={transaction.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
+              <div key={transaction.id} className="flex items-center justify-between py-2 border-b dark:border-[rgba(255,255,255,.07)] last:border-b-0">
                 <div className="flex-1">
-                  <p className="font-medium">{transaction.descricao}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="font-medium dark:text-white">{transaction.descricao}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {new Date(transaction.data).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
@@ -392,10 +392,10 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
                   </p>
                   <span className={`text-xs px-2 py-1 rounded-full ${
                     transaction.status === 'pago'
-                      ? 'bg-green-100 text-green-700'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                       : transaction.status === 'pendente'
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-gray-100 text-gray-700'
+                      ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400'
                   }`}>
                     {transaction.status === 'pago' ? 'Pago' : transaction.status === 'pendente' ? 'Pendente' : 'Cancelado'}
                   </span>
@@ -410,3 +410,4 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
     </div>
   );
 }
+

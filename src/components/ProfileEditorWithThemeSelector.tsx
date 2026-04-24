@@ -139,10 +139,10 @@ export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThem
 
   return (
     <div className="space-y-8">
-      <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
+      <div className="bg-white dark:bg-[#0a1628] rounded-xl shadow-lg dark:shadow-none p-6 border-2 border-gray-200 dark:border-[rgba(255,255,255,.08)]">
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Escolha o Estilo do seu Perfil Público</h3>
-          <p className="text-gray-600 text-sm">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Escolha o Estilo do seu Perfil Público</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
             Selecione o design que melhor representa sua marca profissional. Este tema será exibido quando visitantes acessarem seu perfil público.
           </p>
         </div>
@@ -164,8 +164,8 @@ export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThem
                 <div
                   className={`rounded-xl p-5 border-2 transition-all ${
                     isSelected
-                      ? `${theme.borderColor} shadow-xl bg-white`
-                      : 'border-gray-200 hover:border-gray-300 bg-gray-50'
+                      ? `${theme.borderColor} shadow-xl bg-white dark:bg-[#0d1f38]`
+                      : 'border-gray-200 dark:border-[rgba(255,255,255,.08)] hover:border-gray-300 dark:hover:border-[rgba(255,255,255,.2)] bg-gray-50 dark:bg-[#07101f]'
                   }`}
                 >
                   <div
@@ -256,10 +256,10 @@ export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThem
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
+      <div className="bg-white dark:bg-[#0a1628] rounded-xl shadow-lg dark:shadow-none p-6 border-2 border-gray-200 dark:border-[rgba(255,255,255,.08)]">
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Editar Informações do Perfil</h3>
-          <p className="text-gray-600 text-sm">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Editar Informações do Perfil</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
             Configure suas informações profissionais, foto, biografia e links de contato.
           </p>
         </div>
