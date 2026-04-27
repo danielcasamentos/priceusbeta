@@ -62,7 +62,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
       if (data.user) {
         const trialExpirationDate = new Date()
-        trialExpirationDate.setDate(trialExpirationDate.getDate() + 14)
+        trialExpirationDate.setDate(trialExpirationDate.getDate() + 30)
         const now = new Date().toISOString()
 
         const { error: profileError } = await supabase

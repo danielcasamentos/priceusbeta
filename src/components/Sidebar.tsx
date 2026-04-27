@@ -104,23 +104,8 @@ export function Sidebar({
     return currentPage === itemId;
   };
 
-  // ── Botão de toggle tema ──────────────────────────────────────────
-  const ThemeToggleBtn = ({ collapsed = false }: { collapsed?: boolean }) => (
-    <button
-      onClick={toggleTheme}
-      title={isDark ? 'Mudar para tema Claro' : 'Mudar para tema Escuro'}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 w-full
-        ${isDark
-          ? 'bg-[rgba(34,197,94,.15)] text-green-400 hover:bg-[rgba(34,197,94,.25)]'
-          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-        }`}
-    >
-      {isDark
-        ? <><Sun className="w-4 h-4 flex-shrink-0" />{!collapsed && <span>Tema Claro</span>}</>
-        : <><Moon className="w-4 h-4 flex-shrink-0" />{!collapsed && <span>Tema Escuro</span>}</>
-      }
-    </button>
-  );
+
+
 
   // ══════════════════════════════════════
   // MOBILE
@@ -132,29 +117,37 @@ export function Sidebar({
       <div className="fixed inset-0 z-50 lg:hidden">
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
         <div className="fixed inset-y-0 left-0 w-80 bg-white dark:bg-[#0a1628] shadow-xl overflow-y-auto transition-colors duration-300">
-          <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img
-                src="/Logo Price Us.png"
-                alt="Price Us"
-                className="h-[46px] w-auto"
-              />
-              <div>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</h2>
-                <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
-                  {userName || userEmail?.split('@')[0] || 'Usuário'}
-                </p>
-                {userEmail && (
-                  <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>
-                )}
+          <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
+                <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</h2>
+                  <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
+                    {userName || userEmail?.split('@')[0] || 'Usuário'}
+                  </p>
+                  {userEmail && (
+                    <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Toggle tema dentro da área de perfil */}
+                <button
+                  onClick={toggleTheme}
+                  title={isDark ? 'Mudar para tema Claro' : 'Mudar para tema Escuro'}
+                  className={`p-2 rounded-lg transition-all ${
+                    isDark ? 'bg-[rgba(34,197,94,.15)] text-green-400 hover:bg-[rgba(34,197,94,.25)]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+                <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white"
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
 
           <nav className="p-4 space-y-6">
@@ -215,10 +208,6 @@ export function Sidebar({
                 </div>
               </div>
             ))}
-            {/* Theme toggle mobile */}
-            <div className="pt-2 border-t border-gray-100 dark:border-[rgba(255,255,255,.07)]">
-              <ThemeToggleBtn />
-            </div>
           </nav>
         </div>
       </div>
@@ -232,33 +221,34 @@ export function Sidebar({
     <aside className={`hidden lg:flex flex-col bg-white dark:bg-[#0a1628] border-r border-gray-200 dark:border-[rgba(255,255,255,.08)] transition-all duration-300 ${
       isCollapsed ? 'w-20' : 'w-64'
     }`}>
-      <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
-        {!isCollapsed && (
-          <div className="flex items-center gap-3">
-            <img
-              src="/Logo Price Us.png"
-              alt="Price Us"
-              className="h-[46px] w-auto"
-            />
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</p>
-              <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
-                {userName || userEmail?.split('@')[0] || 'Usuário'}
-              </p>
-              {userEmail && (
-                <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>
-              )}
+          <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
+            {!isCollapsed && (
+              <div className="flex items-center gap-3">
+                <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
+                <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">{userName || userEmail?.split('@')[0] || 'Usuário'}</p>
+                  {userEmail && <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>}
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-1 ml-auto">
+              {/* Toggle tema junto ao perfil */}
+              <button
+                onClick={toggleTheme}
+                title={isDark ? 'Tema Claro' : 'Tema Escuro'}
+                className={`p-2 rounded-lg transition-all ${
+                  isDark ? 'bg-[rgba(34,197,94,.15)] text-green-400 hover:bg-[rgba(34,197,94,.25)]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white" title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}>
+                <Menu className="w-5 h-5" />
+              </button>
             </div>
           </div>
-        )}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white"
-          title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-      </div>
 
       <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
         {menuSections.map((section) => (
@@ -329,10 +319,7 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Theme toggle fixo no rodapé da sidebar */}
-      <div className="p-4 border-t border-gray-100 dark:border-[rgba(255,255,255,.07)]">
-        <ThemeToggleBtn collapsed={isCollapsed} />
-      </div>
+      {/* Toggle de tema removido do rodapé — agora fica no cabeçalho */}
     </aside>
   );
 }

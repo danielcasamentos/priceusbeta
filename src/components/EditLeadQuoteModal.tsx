@@ -57,6 +57,26 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     }
   );
 
+  // Override manual do valor total (arredondamento / desconto personalizado)
+  const [manualTotalOverride, setManualTotalOverride] = useState<number | null>(null);
+  const [manualTotalInput, setManualTotalInput] = useState('');
+
+  const efectiveTotal = manualTotalOverride !== null ? manualTotalOverride : priceBreakdown.total;
+
+  const handleManualTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '');
+    const num = Number(raw) / 100;
+    setManualTotalInput(
+      new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(num)
+    );
+    setManualTotalOverride(num);
+  };
+
+  const resetManualTotal = () => {
+    setManualTotalOverride(null);
+    setManualTotalInput('');
+  };
+
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -168,7 +188,10 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         ...savedOrcamentoDetalhe,
         selectedProdutos: selectedProducts,
         forma_pagamento_id: selectedForma,
-        priceBreakdown: priceBreakdown,
+        priceBreakdown: {
+          ...priceBreakdown,
+          total: efectiveTotal, // garante que o override é persistido
+        },
         produtos: allProducts,
         paymentMethod: formasPagamento.find((f) => f.id === selectedForma),
         customFieldsData: customFieldsData,
@@ -179,7 +202,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         telefone_cliente: telefoneCliente || null,
         data_evento: dataEvento || null,
         cidade_evento: cidadeEvento || null,
-        valor_total: priceBreakdown.total,
+        valor_total: efectiveTotal,
         orcamento_detalhe: novosDetalhes,
       };
 
@@ -514,11 +537,46 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                     </div>
                   )}
 
-                  <div className="border-t pt-3 mt-4 flex justify-between items-end">
-                    <span className="font-bold text-gray-900 text-base">Total Final</span>
-                    <span className="font-black text-blue-600 text-xl">
-                      {formatCurrency(priceBreakdown.total)}
-                    </span>
+                  <div className="border-t pt-3 mt-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-gray-900 text-base">Total Final</span>
+                      {manualTotalOverride !== null && (
+                        <button
+                          type="button"
+                          onClick={resetManualTotal}
+                          className="text-xs text-blue-500 hover:text-blue-700 underline"
+                        >
+                          Resetar
+                        </button>
+                      )}
+                    </div>
+                    {manualTotalOverride !== null && (
+                      <p className="text-xs text-amber-600 font-medium mb-1">⚠️ Valor ajustado manualmente</p>
+                    )}
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">R$</span>
+                      <input
+                        type="text"
+                        value={manualTotalOverride !== null
+                          ? manualTotalInput
+                          : new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(priceBreakdown.total)
+                        }
+                        onChange={handleManualTotalChange}
+                        onFocus={(e) => {
+                          if (manualTotalOverride === null) {
+                            const raw = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(priceBreakdown.total);
+                            setManualTotalInput(raw);
+                            setManualTotalOverride(priceBreakdown.total);
+                          }
+                          e.target.select();
+                        }}
+                        className={`w-full pl-8 pr-2 py-2 text-right text-xl font-black rounded-lg border focus:ring-2 focus:ring-blue-500 ${
+                          manualTotalOverride !== null
+                            ? 'border-amber-400 bg-amber-50 text-amber-700'
+                            : 'border-gray-200 bg-white text-blue-600'
+                        }`}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

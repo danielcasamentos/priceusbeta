@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 type Theme = 'light' | 'dark';
 type ThemeSource = 'manual' | 'system';
@@ -23,9 +24,51 @@ function getSystemTheme(): Theme {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('priceus-theme') as Theme | null;
-    // Se há uma escolha salva (manual ou sistema), usa ela; caso contrário detecta o sistema
     return saved ?? getSystemTheme();
   });
+
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Busca o usuário logado e a preferência de tema dele no BD
+  useEffect(() => {
+    let mounted = true;
+    const fetchUserAndTheme = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      
+      const uid = session.user.id;
+      if (mounted) setUserId(uid);
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('tema_preferido')
+        .eq('id', uid)
+        .maybeSingle();
+
+      if (data?.tema_preferido && (data.tema_preferido === 'light' || data.tema_preferido === 'dark')) {
+        if (mounted) {
+          setTheme(data.tema_preferido as Theme);
+          localStorage.setItem('priceus-theme-source', 'manual');
+        }
+      }
+    };
+
+    fetchUserAndTheme();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        if (mounted) setUserId(session.user.id);
+        fetchUserAndTheme(); // refetch theme on login
+      } else {
+        if (mounted) setUserId(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Aplica a classe 'dark' no <html> e persiste a escolha
   useEffect(() => {
@@ -60,12 +103,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
    * Toggle manual — usado apenas no Desktop (Sidebar).
    * Marca a origem como 'manual' para que mudanças do sistema não sobrescrevam.
    */
-  const toggleTheme = () => {
+  const toggleTheme = async () => {
+    let nextTheme: Theme = 'light';
     setTheme(prev => {
-      const next: Theme = prev === 'light' ? 'dark' : 'light';
+      nextTheme = prev === 'light' ? 'dark' : 'light';
       localStorage.setItem('priceus-theme-source', 'manual');
-      return next;
+      return nextTheme;
     });
+
+    if (userId) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ tema_preferido: nextTheme })
+          .eq('id', userId);
+      } catch (err) {
+        console.error('Failed to sync theme to DB', err);
+      }
+    }
   };
 
   return (

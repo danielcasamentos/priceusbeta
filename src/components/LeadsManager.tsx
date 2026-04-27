@@ -10,6 +10,7 @@ import { ContractGenerator } from './ContractGenerator';
 import { Product, CustomField, PriceBreakdown } from '../lib/whatsappMessageGenerator'; // Importar interfaces necessárias
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
 import { useReviewRequest } from '../hooks/useReviewRequest';
+import { ConvertLeadModal } from './company/ConvertLeadModal';
 
 // Define interfaces for better type safety
 
@@ -70,8 +71,11 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [deletingIds, setDeletingIds] = useState(new Set<string>());
   const [deleteConfirmSingle, setDeleteConfirmSingle] = useState<string | null>(null);
   const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
-  const planLimits = usePlanLimits(); // useMemo was removed from import, but usePlanLimits is used
+  const planLimits = usePlanLimits();
   const { solicitarAvaliacao } = useReviewRequest();
+
+  // Estado do modal de conversão financeira
+  const [convertModal, setConvertModal] = useState<{ lead: Lead } | null>(null);
 
   // Estado para Modal de opções extras WhatsApp
   const [whatsappLeadConfig, setWhatsappLeadConfig] = useState<{
@@ -383,25 +387,9 @@ export function LeadsManager({ userId }: { userId: string }) {
           console.error('Falha ao criar notificação de lead convertido:', notificationError);
         }
 
-        // Lógica para criar transação financeira
+        // Abre modal de configuração de entradas financeiras
         if (lead && lead.valor_total > 0) {
-          const shouldCreateTransaction = window.confirm(
-            `✅ Lead convertido! Deseja criar uma receita de ${formatCurrency(Number(lead.valor_total))} no módulo Empresa?`
-          );
-
-          if (shouldCreateTransaction) {
-            await supabase.from('company_transactions').insert({
-              user_id: userId,
-              tipo: 'receita',
-              origem: 'lead',
-              descricao: `Contratação: ${lead.nome_cliente} - ${templates[lead.template_id]?.nome_template || 'Serviço'}`,
-              valor: lead.valor_total,
-              data: new Date().toISOString().split('T')[0],
-              status: 'pendente',
-              lead_id: leadId,
-            });
-            alert('✅ Receita criada com sucesso no módulo Empresa!');
-          }
+          setConvertModal({ lead });
         }
       } else if (newStatus !== 'contatado') {
         alert('✅ Status atualizado com sucesso!'); // Evita alerta ao enviar WhatsApp, pois o link já é o feedback
@@ -790,7 +778,7 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       {/* Lista de Leads */}
       <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none overflow-hidden">
-        {leads.length === 0 ? (
+        {filteredLeads.length === 0 ? (
           <div className="text-center py-12 text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
             Nenhum lead encontrado para este filtro.
           </div>
@@ -834,7 +822,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-[#0a1628] divide-y divide-gray-200 dark:divide-[rgba(255,255,255,0.08)]">
-                {leads.map((lead: LeadWithReview) => (
+                {filteredLeads.map((lead: LeadWithReview) => (
                   <tr key={lead.id} className={`hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.04)] ${selectedIds.includes(lead.id) ? 'bg-blue-50 dark:bg-[rgba(59,130,246,0.1)]' : ''}`}>
                     <td className="p-4">
                       <input
@@ -1312,6 +1300,23 @@ export function LeadsManager({ userId }: { userId: string }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Conversão Financeira */}
+      {convertModal && (
+        <ConvertLeadModal
+          userId={userId}
+          leadId={convertModal.lead.id}
+          leadName={convertModal.lead.nome_cliente || 'Cliente'}
+          templateName={templates[convertModal.lead.template_id]?.nome_template || 'Serviço'}
+          valorTotal={Number(convertModal.lead.valor_total)}
+          dataEvento={convertModal.lead.data_evento}
+          onClose={() => setConvertModal(null)}
+          onSuccess={() => {
+            setConvertModal(null);
+            loadLeads();
+          }}
+        />
       )}
 
     </div>

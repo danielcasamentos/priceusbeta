@@ -226,7 +226,8 @@ const [isDeleting, setIsDeleting] = useState(false);
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Tabela desktop */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm text-left text-gray-600 dark:text-gray-300">
           <thead className="text-xs text-gray-700 dark:text-gray-400 uppercase bg-gray-50 dark:bg-[#07101f]">
             <tr>
@@ -267,50 +268,18 @@ const [isDeleting, setIsDeleting] = useState(false);
               filteredContracts.map(contract => (
                 <tr key={contract.id} className={`border-b dark:border-[rgba(255,255,255,.07)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,.04)] ${selectedIds.includes(contract.id) ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-[#0a1628]'}`}>
                   <td className="p-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(contract.id)}
-                      onChange={() => handleSelectOne(contract.id)}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                    />
+                    <input type="checkbox" checked={selectedIds.includes(contract.id)} onChange={() => handleSelectOne(contract.id)} className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" />
                   </td>
-                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
-                    {contract.lead_data_json?.nome_cliente || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4">
-                    {contract.contract_templates?.name || 'Template Removido'}
-                  </td>
-                  <td className="px-6 py-4">
-                    {contract.lead_data_json?.data_evento ? format(new Date(contract.lead_data_json.data_evento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-gray-800 dark:text-gray-200">
-                    {formatCurrency(contract.lead_data_json?.valor_total || 0)}
-                  </td>
-                  <td className="px-6 py-4">
-                    {getStatusBadge(contract.status)}
-                  </td>
-                  <td className="px-6 py-4">
-                    {format(new Date(contract.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                  </td>
+                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">{contract.lead_data_json?.nome_cliente || 'N/A'}</td>
+                  <td className="px-6 py-4">{contract.contract_templates?.name || 'Template Removido'}</td>
+                  <td className="px-6 py-4">{contract.lead_data_json?.data_evento ? format(new Date(contract.lead_data_json.data_evento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</td>
+                  <td className="px-6 py-4 font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(contract.lead_data_json?.valor_total || 0)}</td>
+                  <td className="px-6 py-4">{getStatusBadge(contract.status)}</td>
+                  <td className="px-6 py-4">{format(new Date(contract.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => setViewingContract(contract)}
-                        title="Visualizar" 
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      
-                      <button
-                        type="button"
-                        title="Excluir contrato"
-                        onClick={(e) => { e.preventDefault(); setDeleteConfirmSingle(contract.id); }}
-                        className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={deletingIds.has(contract.id)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <button onClick={() => setViewingContract(contract)} title="Visualizar" className="text-blue-600 hover:text-blue-800"><Eye size={16} /></button>
+                      <button type="button" title="Excluir contrato" onClick={(e) => { e.preventDefault(); setDeleteConfirmSingle(contract.id); }} className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`} disabled={deletingIds.has(contract.id)}><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>
@@ -319,6 +288,55 @@ const [isDeleting, setIsDeleting] = useState(false);
           </tbody>
         </table>
       </div>
+
+      {/* Cards Mobile */}
+      {!loading && filteredContracts.length > 0 && (
+        <div className="md:hidden space-y-3 mt-2">
+          {filteredContracts.map(contract => (
+            <div key={contract.id} className={`rounded-xl border p-4 ${
+              selectedIds.includes(contract.id)
+                ? 'border-blue-400 bg-blue-50 dark:bg-[rgba(59,130,246,0.1)]'
+                : 'border-gray-200 dark:border-[rgba(255,255,255,0.07)] bg-white dark:bg-[#0a1628]'
+            }`}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={selectedIds.includes(contract.id)} onChange={() => handleSelectOne(contract.id)} className="w-4 h-4 text-blue-600 rounded mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">{contract.lead_data_json?.nome_cliente || 'N/A'}</p>
+                    <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{contract.contract_templates?.name || 'Template Removido'}</p>
+                  </div>
+                </div>
+                {getStatusBadge(contract.status)}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)] mb-3">
+                {contract.lead_data_json?.data_evento && (
+                  <span>📅 {format(new Date(contract.lead_data_json.data_evento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                )}
+                {contract.lead_data_json?.valor_total && (
+                  <span className="font-semibold text-gray-700 dark:text-[rgba(255,255,255,0.8)]">💰 {formatCurrency(contract.lead_data_json.valor_total)}</span>
+                )}
+                <span>🕒 Criado {format(new Date(contract.created_at), 'dd/MM/yy', { locale: ptBR })}</span>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setViewingContract(contract)} className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-[rgba(59,130,246,0.3)] rounded-lg text-xs font-medium hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.1)]">
+                  <Eye size={13} /> Visualizar
+                </button>
+                <button onClick={() => setDeleteConfirmSingle(contract.id)} disabled={deletingIds.has(contract.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 dark:text-red-400 border border-red-300 dark:border-[rgba(239,68,68,0.3)] rounded-lg text-xs font-medium hover:bg-red-50 dark:hover:bg-[rgba(239,68,68,0.1)] disabled:opacity-50">
+                  <Trash2 size={13} /> Excluir
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && filteredContracts.length === 0 && (
+        <div className="text-center py-12">
+          <AlertCircle className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+          <p className="font-medium text-gray-600 dark:text-gray-400">Nenhum contrato encontrado</p>
+          <p className="text-sm text-gray-500 mt-1">Gere seu primeiro contrato a partir de um lead.</p>
+        </div>
+      )}
 
       {viewingContract && (
         <ContractViewerModal 

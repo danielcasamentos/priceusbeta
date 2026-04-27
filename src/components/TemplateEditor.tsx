@@ -574,8 +574,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="border-b border-gray-200">
+      <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none dark:border dark:border-[rgba(255,255,255,.08)]">
+        <div className="border-b border-gray-200 dark:border-[rgba(255,255,255,.08)]">
           <nav className="flex gap-1 sm:gap-2 px-2 sm:px-6 overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -614,8 +614,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold">Formas de Pagamento</h3>
-                  <p className="text-sm text-gray-600">Configure as opções de pagamento</p>
+                  <h3 className="text-lg font-semibold dark:text-white">Formas de Pagamento</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Configure as opções de pagamento</p>
                 </div>
                 <button
                   onClick={handleAddFormaPagamento}
@@ -637,12 +637,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
               ))}
 
               {formasPagamento.length === 0 && (
-                <div className="text-center py-12 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg">
-                  <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                <div className="text-center py-12 bg-gray-50 dark:bg-[#07101f] border-2 border-dashed border-gray-300 dark:border-[rgba(255,255,255,.08)] rounded-lg">
+                  <DollarSign className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Nenhuma forma de pagamento
                   </h4>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Adicione formas de pagamento para seus clientes
                   </p>
                 </div>
@@ -666,7 +666,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           {activeTab === 'campos' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Campos Extras do Formulário</h3>
+                <h3 className="text-lg font-semibold dark:text-white">Campos Extras do Formulário</h3>
                 <button
                   onClick={handleAddCampoExtra}
                   className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -789,15 +789,15 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           {activeTab === 'config' && (
             <div className="space-y-6">
               <div className="flex items-center gap-4 mb-4">
-                <h3 className="text-lg font-semibold">Configurações do Template</h3>
+                <h3 className="text-lg font-semibold dark:text-white">Configurações do Template</h3>
                 {configSaveStatus.message && (
                   <div
                     className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-opacity ${
                       configSaveStatus.type === 'success'
-                        ? 'bg-green-100 text-green-800'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
                         : configSaveStatus.type === 'error'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-blue-100 text-blue-800'
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
+                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
                     }`}
                   >
                     {configSaveStatus.saving && (
@@ -809,12 +809,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
               </div>
 
               <div className="space-y-4">
-                <div className="border border-gray-200 bg-white rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
                     Apresentação no Perfil Público (Vitrine)
                   </h4>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Descrição do Pacote
                   </label>
                   <textarea
@@ -833,7 +833,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       }
                       setTimeout(() => setDescricaoSaveStatus('idle'), 2500);
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-gray-600"
                     placeholder="Ex: Cobertura completa para casamentos intimistas com mini álbum incluso..."
                     rows={2}
                   />
@@ -864,12 +864,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       }`}></div>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-800">Ocultar data de criação</p>
-                      <p className="text-xs text-gray-500">Quando ativado, a data do orçamento não aparece no seu perfil público</p>
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Ocultar data de criação</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Quando ativado, a data do orçamento não aparece no seu perfil público</p>
                     </div>
                   </label>
                 </div>
-                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+                <div className="border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -880,22 +880,22 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       className="w-5 h-5 text-blue-600 rounded mt-1"
                     />
                     <div>
-                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         🔒 Bloquear Campos Obrigatórios
                       </div>
-                      <div className="text-sm text-gray-700 mt-1">
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                         Quando ativado, o cliente <strong>não poderá</strong>:
                       </div>
-                      <ul className="text-sm text-gray-600 mt-2 space-y-1 list-disc list-inside">
+                      <ul className="text-sm text-gray-600 dark:text-gray-400 mt-2 space-y-1 list-disc list-inside">
                         <li>Adicionar produtos/serviços extras</li>
                         <li>Ver valores totais e formas de pagamento</li>
                         <li>Usar cupons de desconto</li>
                         <li>Enviar orçamento via WhatsApp</li>
                       </ul>
-                      <div className="text-sm text-gray-700 mt-2 font-medium">
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-2 font-medium">
                         ✅ Funcionalidades desbloqueiam somente após preencher:
                       </div>
-                      <ul className="text-sm text-gray-600 mt-1 space-y-1 list-disc list-inside">
+                      <ul className="text-sm text-gray-600 dark:text-gray-400 mt-1 space-y-1 list-disc list-inside">
                         <li>Nome, e-mail e WhatsApp</li>
                         <li>Data (se sistema sazonal ativo)</li>
                         <li>Cidade (se sistema geográfico ativo)</li>
@@ -905,7 +905,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                   </label>
                 </div>
 
-                <div className="border border-purple-200 bg-purple-50 rounded-lg p-4">
+                <div className="border border-purple-200 dark:border-purple-900/30 bg-purple-50 dark:bg-purple-900/10 rounded-lg p-4">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -916,17 +916,17 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       className="w-5 h-5 text-purple-600 rounded mt-1"
                     />
                     <div>
-                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         📅 Ignorar Agenda Global (Não pedir data)
                       </div>
-                      <div className="text-sm text-gray-700 mt-1">
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                         Ative isso para orçamentos como álbuns ou produtos físicos onde a data do evento não é necessária. Isso removerá o campo de data do formulário, mesmo que a sua agenda global esteja ativa.
                       </div>
                     </div>
                   </label>
                 </div>
 
-                <div className="border border-green-200 bg-green-50 rounded-lg p-4">
+                <div className="border border-green-200 dark:border-green-900/30 bg-green-50 dark:bg-green-900/10 rounded-lg p-4">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -937,65 +937,65 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       className="w-5 h-5 text-green-600 rounded mt-1"
                     />
                     <div>
-                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         📱 Exibir Painel Flutuante de Total
                       </div>
-                      <div className="text-sm text-gray-700 mt-1">
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                         Mostra um botão flutuante com o totalizador na tela, acompanhando o cliente. O painel agora aparecerá inteligentemente apenas após o primeiro produto ser exibido e seu formato seguirá automaticamente o design do tema escolhido.
                       </div>
                     </div>
                   </label>
                 </div>
 
-                <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-gray-50 dark:bg-[#07101f] rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
                     Layout dos Produtos (Desktop)
                   </h4>
-                  <p className="text-sm text-gray-600 mb-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                     Escolha como os produtos são exibidos em telas grandes. Em celulares, o layout é sempre em "Quadro".
                   </p>
                   <select
                     value={template?.layout_produtos_desktop || 'linha'}
                     onChange={(e) => handleUpdateTemplateConfig('layout_produtos_desktop', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="linha">Linha (imagem à esquerda)</option>
                     <option value="quadro">Quadro (imagem acima)</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                     Esta opção afeta apenas a visualização em computadores e tablets.
                   </p>
                 </div>
 
-                <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Image className="w-5 h-5 text-gray-600" />
+                <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-gray-50 dark:bg-[#07101f] rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Image className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     Tamanho da Imagem
                   </h4>
-                  <p className="text-sm text-gray-600 mb-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                     Escolha o tamanho das imagens dos produtos.
                   </p>
                   <select
                     value={template?.tamanho_imagem_grid || 'medio'}
                     onChange={(e) => handleUpdateTemplateConfig('tamanho_imagem_grid', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="pequeno">Pequeno</option>
                     <option value="medio">Médio</option>
                     <option value="grande">Grande</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                     Esta opção afeta a visualização em todas as telas (celulares e desktop).
                   </p>
                 </div>
 
-                <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Send className="w-5 h-5 text-gray-600" />
+                <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-gray-50 dark:bg-[#07101f] rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Send className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     Texto do Botão de Envio
                   </h4>
-                  <p className="text-sm text-gray-600 mb-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                     Personalize o texto do botão principal de envio do orçamento.
                   </p>
                   <div className="flex gap-2">
@@ -1017,7 +1017,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                         }
                         setTimeout(() => setTextoBtnSaveStatus('idle'), 2500);
                       }}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-gray-600"
                       placeholder="Ex: Negociar no WhatsApp"
                       maxLength={30}
                     />
@@ -1057,10 +1057,10 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     className="w-5 h-5 text-blue-600 rounded"
                   />
                   <div>
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 dark:text-white">
                       Ocultar valores intermediários
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Mostra apenas o valor total final
                     </div>
                   </div>
@@ -1076,24 +1076,24 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     className="w-5 h-5 text-blue-600 rounded"
                   />
                   <div>
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 dark:text-white">
                       💳 Forma de pagamento obrigatória
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       O cliente precisa escolher uma forma de pagamento antes de enviar o orçamento
                     </div>
                   </div>
                 </label>
 
-                <div className="border border-green-200 bg-green-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <LinkIcon className="w-5 h-5 text-green-600" />
+                <div className="border border-green-200 dark:border-green-900/30 bg-green-50 dark:bg-green-900/10 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <LinkIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                     URL Amigável e Perfil Público
                   </h4>
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         URL do Orçamento
                       </label>
                       <div className="flex items-center gap-2">
@@ -1102,7 +1102,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                             type="text"
                             value={slugInput}
                             onChange={(e) => handleSlugChange(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 pr-10"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 pr-10 placeholder:text-gray-400 dark:placeholder:text-gray-600"
                             placeholder="nome-do-orcamento"
                             minLength={3}
                             maxLength={100}
@@ -1138,12 +1138,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                         </button>
                       </div>
                       {userSlug && slugInput && (
-                        <div className="mt-2 p-3 bg-white rounded-lg border border-gray-200">
+                        <div className="mt-2 p-3 bg-white dark:bg-[#07101f] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.08)]">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
-                              <LinkIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                              <span className="text-gray-600 flex-shrink-0">Link público:</span>
-                              <code className="text-green-600 font-mono truncate">priceus.com.br/{userSlug}/{slugInput}</code>
+                              <LinkIcon className="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                              <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Link público:</span>
+                              <code className="text-green-600 dark:text-green-400 font-mono truncate">priceus.com.br/{userSlug}/{slugInput}</code>
                             </div>
                             <button
                               type="button"
@@ -1170,15 +1170,15 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                           Configure seu username no perfil para gerar o link público
                         </p>
                       )}
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         Mínimo 3 caracteres. Use apenas letras minúsculas, números e hífens.
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between p-3 bg-white dark:bg-[#07101f] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,.08)]">
                       <div>
-                        <p className="font-medium text-gray-900">Exibir no Perfil Público</p>
-                        <p className="text-sm text-gray-600">Mostrar este orçamento no seu perfil público</p>
+                        <p className="font-medium text-gray-900 dark:text-white">Exibir no Perfil Público</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Mostrar este orçamento no seu perfil público</p>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
@@ -1210,12 +1210,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       {/* Video Tutorial Modal */}
       {showVideoModal && currentVideo && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-xl font-bold text-gray-900">{currentVideo.title}</h3>
+          <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)]">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">{currentVideo.title}</h3>
               <button
                 onClick={() => setShowVideoModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1227,9 +1227,9 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                 showTitle={false}
                 autoplay={true}
               />
-              <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-2">Sobre este tutorial:</h4>
-                <p className="text-blue-800 text-sm leading-relaxed">{currentVideo.description}</p>
+              <div className="mt-6 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-400 mb-2">Sobre este tutorial:</h4>
+                <p className="text-blue-800 dark:text-blue-300 text-sm leading-relaxed">{currentVideo.description}</p>
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download, Copy } from 'lucide-react';
 import { ExportModal } from '../ExportModal';
 import { formatCurrency } from '../../lib/utils';
 import { useCompanyTransactions, CompanyTransaction, CompanyCategory } from '../../hooks/useCompanyTransactions';
@@ -29,8 +29,9 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
   const [filterInstallment, setFilterInstallment] = useState<'all' | 'installment' | 'single'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<CompanyTransaction | null>(null);
   const [isDeletingTx, setIsDeletingTx] = useState(false);
 
@@ -133,6 +134,49 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
     if (!categoryId) return 'Sem categoria';
     const category = categories.find((c: CompanyCategory) => c.id === categoryId);
     return category?.nome || 'Sem categoria';
+  };
+
+  // ── Bulk delete ────────────────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkDeleting(true);
+    for (const id of selectedIds) {
+      await deleteTransaction(id);
+    }
+    setSelectedIds([]);
+    setIsBulkDeleting(false);
+  };
+
+  // ── Duplicar uma transação ────────────────────────────────────────
+  const handleDuplicate = async (transaction: CompanyTransaction) => {
+    const baseDate = new Date(transaction.data + 'T12:00:00');
+    baseDate.setMonth(baseDate.getMonth() + 1);
+    const novaData = baseDate.toISOString().split('T')[0];
+
+    await createTransaction({
+      tipo: transaction.tipo,
+      origem: 'manual',
+      descricao: `[Cópia] ${transaction.descricao}`,
+      valor: transaction.valor,
+      data: novaData,
+      status: 'pendente',
+      forma_pagamento: transaction.forma_pagamento,
+      categoria_id: transaction.categoria_id,
+      observacoes: transaction.observacoes,
+      is_installment: false,
+    } as any);
+  };
+
+  // ── Bulk duplicate ─────────────────────────────────────────────────
+  const handleBulkDuplicate = async () => {
+    if (selectedIds.length === 0) return;
+    setIsUpdating(true);
+    const todup = filteredTransactions.filter(t => selectedIds.includes(t.id));
+    for (const t of todup) {
+      await handleDuplicate(t);
+    }
+    setSelectedIds([]);
+    setIsUpdating(false);
   };
 
   const totalReceitas = filteredTransactions
@@ -250,35 +294,40 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
 
       {/* Barra de Ações em Lote */}
       {selectedIds.length > 0 && (
-        <div className="bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,0.1)] flex items-center justify-between rounded-t-lg">
-          <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
+        <div className="bg-blue-50 dark:bg-[rgba(59,130,246,0.08)] p-3 border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-xl flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-blue-700 dark:text-blue-300 mr-2">
             {selectedIds.length} selecionada(s)
           </span>
-          <div className="relative">
-            <div className="group inline-block">
-              <button
-                disabled={isUpdating}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-500 transition-colors text-sm font-semibold disabled:bg-blue-300 dark:disabled:bg-[rgba(59,130,246,0.5)] disabled:cursor-not-allowed"
-              >
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Atualizando...
-                  </>
-                ) : (
-                  <>
-                    Alterar Status
-                    <ChevronDown className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#07101f] rounded-md shadow-lg border dark:border-[rgba(255,255,255,0.1)] z-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
-                <a onClick={() => handleUpdateStatus('pago')} className="block px-4 py-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">Marcar como Pago</a>
-                <a onClick={() => handleUpdateStatus('pendente')} className="block px-4 py-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">Marcar como Pendente</a>
-                <a onClick={() => handleUpdateStatus('cancelado')} className="block px-4 py-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">Marcar como Cancelado</a>
-              </div>
+          {/* Alterar Status */}
+          <div className="relative group">
+            <button disabled={isUpdating} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+              {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              Alterar Status <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-[#07101f] rounded-lg shadow-lg border dark:border-[rgba(255,255,255,0.1)] z-20 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+              <a onClick={() => handleUpdateStatus('pago')} className="block px-4 py-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">✅ Marcar como Pago</a>
+              <a onClick={() => handleUpdateStatus('pendente')} className="block px-4 py-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">⏳ Marcar como Pendente</a>
+              <a onClick={() => handleUpdateStatus('cancelado')} className="block px-4 py-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">❌ Marcar como Cancelado</a>
             </div>
           </div>
+          {/* Duplicar em lote */}
+          <button
+            onClick={handleBulkDuplicate}
+            disabled={isUpdating}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            Duplicar ({selectedIds.length})
+          </button>
+          {/* Excluir em lote */}
+          <button
+            onClick={handleBulkDelete}
+            disabled={isBulkDeleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+          >
+            {isBulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            Excluir ({selectedIds.length})
+          </button>
         </div>
       )}
 
@@ -424,20 +473,14 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => handleEdit(transaction)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-[rgba(59,130,246,0.2)] rounded transition-colors"
-                          title="Editar"
-                        >
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => handleEdit(transaction)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-[rgba(59,130,246,0.2)] rounded transition-colors" title="Editar">
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); setTransactionToDelete(transaction); }}
-                          className="p-1 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-[rgba(239,68,68,0.2)] rounded transition-colors"
-                          title="Excluir"
-                        >
+                        <button onClick={() => handleDuplicate(transaction)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-[rgba(99,102,241,0.2)] rounded transition-colors" title="Duplicar (próximo mês)">
+                          <Copy className="w-4 h-4" />
+                        </button>
+                        <button type="button" onClick={(e) => { e.preventDefault(); setTransactionToDelete(transaction); }} className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-[rgba(239,68,68,0.2)] rounded transition-colors" title="Excluir">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -450,15 +493,59 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
         ) : (
           <div className="text-center py-12">
             <p className="text-gray-400 dark:text-[rgba(255,255,255,0.4)]">Nenhuma transação encontrada</p>
-            <button
-              onClick={() => handleNewTransaction('receita')}
-              className="mt-4 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-            >
+            <button onClick={() => handleNewTransaction('receita')} className="mt-4 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
               Adicionar primeira transação
             </button>
           </div>
         )}
       </div>
+
+      {/* ── Cards Mobile (< md) ─────────────────────────────────── */}
+      {filteredTransactions.length > 0 && (
+        <div className="md:hidden space-y-3 mt-4">
+          {filteredTransactions.map(t => (
+            <div key={t.id} className={`rounded-xl border p-4 space-y-2 ${
+              selectedIds.includes(t.id)
+                ? 'border-blue-400 bg-blue-50 dark:bg-[rgba(59,130,246,0.1)]'
+                : 'border-gray-200 dark:border-[rgba(255,255,255,0.07)] bg-white dark:bg-[#0a1628]'
+            }`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={selectedIds.includes(t.id)} onChange={() => handleSelectOne(t.id)} className="w-4 h-4 text-blue-600 rounded" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{t.descricao}</p>
+                    {t.is_installment && t.installment_number && (
+                      <span className="text-xs bg-blue-100 dark:bg-[rgba(59,130,246,0.2)] text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full">
+                        {t.installment_number}/{t.total_installments}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className={`text-sm font-black ${ t.tipo === 'receita' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }`}>
+                  {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(t.valor))}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
+                <span>📅 {new Date(t.data).toLocaleDateString('pt-BR')}</span>
+                <span>🏷️ {getCategoryName(t.categoria_id)}</span>
+                {t.forma_pagamento && <span>💳 {t.forma_pagamento}</span>}
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  t.status === 'pago' ? 'bg-blue-100 dark:bg-[rgba(59,130,246,0.2)] text-blue-700 dark:text-blue-300'
+                  : t.status === 'pendente' ? 'bg-yellow-100 dark:bg-[rgba(234,179,8,0.2)] text-yellow-700 dark:text-yellow-300'
+                  : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.1)] text-gray-600 dark:text-[rgba(255,255,255,0.6)]'
+                }`}>{t.status}</span>
+                <div className="flex gap-1">
+                  <button onClick={() => handleEdit(t)} className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.15)] rounded" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => handleDuplicate(t)} className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-[rgba(99,102,241,0.15)] rounded" title="Duplicar"><Copy className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setTransactionToDelete(t)} className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-[rgba(239,68,68,0.15)] rounded" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <TransactionFormModal
         isOpen={isModalOpen}
