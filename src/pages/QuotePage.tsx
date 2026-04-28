@@ -18,6 +18,7 @@ import { RatePhotographerButton } from '../components/RatePhotographerButton';
 import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
 import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
 import { detectBrowser, getReferrer, logBrowserInfo, isInAppBrowser } from '../lib/browserDetection';
+import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
 
 interface Produto {
   id: string;
@@ -1474,6 +1475,32 @@ export function QuotePage() {
           </p>
         </div>
       </div>
+    );
+  }
+
+  // ── Dark Studio: componente premium dedicado ──────────────────────────
+  if (template?.tema === 'darkstudio' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+    };
+    return (
+      <>
+        <CookieBanner />
+        <QuoteDarkStudio {...commonProps} />
+      </>
     );
   }
 

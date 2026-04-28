@@ -395,7 +395,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
                       ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                       : transaction.status === 'pendente'
                       ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400'
+                      : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.07)] text-gray-700 dark:text-[rgba(255,255,255,0.45)]'
                   }`}>
                     {transaction.status === 'pago' ? 'Pago' : transaction.status === 'pendente' ? 'Pendente' : 'Cancelado'}
                   </span>

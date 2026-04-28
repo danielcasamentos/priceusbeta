@@ -164,7 +164,7 @@ export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThem
                 <div
                   className={`rounded-xl p-5 border-2 transition-all ${
                     isSelected
-                      ? `${theme.borderColor} shadow-xl bg-white dark:bg-[#0d1f38]`
+                      ? `${theme.borderColor} shadow-xl bg-white dark:bg-dark-bg2`
                       : 'border-gray-200 dark:border-[rgba(255,255,255,.08)] hover:border-gray-300 dark:hover:border-[rgba(255,255,255,.2)] bg-gray-50 dark:bg-[#07101f]'
                   }`}
                 >

@@ -133,16 +133,6 @@ export function Sidebar({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {/* Toggle tema dentro da área de perfil */}
-                <button
-                  onClick={toggleTheme}
-                  title={isDark ? 'Mudar para tema Claro' : 'Mudar para tema Escuro'}
-                  className={`p-2 rounded-lg transition-all ${
-                    isDark ? 'bg-[rgba(34,197,94,.15)] text-green-400 hover:bg-[rgba(34,197,94,.25)]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </button>
                 <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white">
                   <X className="w-6 h-6" />
                 </button>
@@ -209,6 +199,21 @@ export function Sidebar({
               </div>
             ))}
           </nav>
+
+          {/* Rodapé Mobile — Toggle de Tema */}
+          <div className="sticky bottom-0 border-t border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] p-4">
+            <button
+              onClick={toggleTheme}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isDark
+                  ? 'bg-[rgba(34,197,94,.1)] text-green-400 hover:bg-[rgba(34,197,94,.18)] border border-[rgba(34,197,94,.2)]'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+              }`}
+            >
+              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              <span>{isDark ? 'Modo Claro' : 'Modo Escuro'}</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -234,16 +239,6 @@ export function Sidebar({
               </div>
             )}
             <div className="flex items-center gap-1 ml-auto">
-              {/* Toggle tema junto ao perfil */}
-              <button
-                onClick={toggleTheme}
-                title={isDark ? 'Tema Claro' : 'Tema Escuro'}
-                className={`p-2 rounded-lg transition-all ${
-                  isDark ? 'bg-[rgba(34,197,94,.15)] text-green-400 hover:bg-[rgba(34,197,94,.25)]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
               <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white" title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}>
                 <Menu className="w-5 h-5" />
               </button>
@@ -319,7 +314,21 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Toggle de tema removido do rodapé — agora fica no cabeçalho */}
+      {/* Rodapé Desktop — Toggle de Tema */}
+      <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,.08)] p-3">
+        <button
+          onClick={toggleTheme}
+          title={isDark ? 'Mudar para tema Claro' : 'Mudar para tema Escuro'}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            isDark
+              ? 'bg-[rgba(34,197,94,.1)] text-green-400 hover:bg-[rgba(34,197,94,.18)] border border-[rgba(34,197,94,.2)]'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+          }`}
+        >
+          {isDark ? <Sun className="w-4 h-4 flex-shrink-0" /> : <Moon className="w-4 h-4 flex-shrink-0" />}
+          {!isCollapsed && <span>{isDark ? 'Modo Claro' : 'Modo Escuro'}</span>}
+        </button>
+      </div>
     </aside>
   );
 }
