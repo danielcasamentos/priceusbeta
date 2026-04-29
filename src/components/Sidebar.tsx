@@ -120,8 +120,14 @@ export function Sidebar({
           <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
-                <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                <button
+                  onClick={() => handleItemClick('profile')}
+                  title="Meu Perfil"
+                  className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
+                  <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                </button>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</h2>
                   <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
@@ -229,8 +235,14 @@ export function Sidebar({
           <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
             {!isCollapsed && (
               <div className="flex items-center gap-3">
-                <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
-                <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                <button
+                  onClick={() => handleItemClick('profile')}
+                  title="Meu Perfil"
+                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
+                  <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                </button>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">{userName || userEmail?.split('@')[0] || 'Usuário'}</p>
