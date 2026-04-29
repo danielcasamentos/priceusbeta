@@ -254,8 +254,13 @@ export function ContractSignPage() {
       return;
     }
 
-    if (!clientData.nome_completo || !clientData.documento || !isValidDocument(clientData.documento)) {
-      alert('Preencha nome, documento válido (CPF/CNPJ)');
+    if (!clientData.nome_completo.trim()) {
+      alert('Por favor, preencha seu Nome Completo');
+      return;
+    }
+    // CPF/CNPJ é opcional — valida apenas se preenchido
+    if (clientData.documento && !isValidDocument(clientData.documento)) {
+      alert('O CPF/CNPJ informado não é válido. Corrija ou deixe em branco.');
       return;
     }
 
@@ -370,17 +375,21 @@ export function ContractSignPage() {
                   </label>
                   <input
                     type="text"
+                    autoComplete="name"
+                    autoCapitalize="words"
                     value={clientData.nome_completo}
                     onChange={(e) => setClientData({ ...clientData, nome_completo: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Seu nome completo"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CPF ou CNPJ *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CPF ou CNPJ <span className="text-gray-400 font-normal">(opcional)</span></label>
                   <input
                     type="tel"
+                    autoComplete="off"
                     value={formatDocument(clientData.documento)}
                     onChange={(e) => setClientData({ ...clientData, documento: e.target.value })}
                     className={`w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-blue-500 transition-all ${
