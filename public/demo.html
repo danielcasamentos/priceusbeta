@@ -23,27 +23,21 @@
       background-image:linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px);
       background-size:60px 60px}
 
-    /* PROGRESS */
-    #progress{position:fixed;bottom:0;left:0;height:3px;background:linear-gradient(90deg,var(--g),var(--gl));z-index:999;transition:width .1s linear;box-shadow:0 0 12px var(--gg)}
+    /* PROGRESS - hidden for clean recording */
+    #progress{display:none}
 
-    /* SCENE DOTS */
-    #dots{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:999}
-    .dot{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.15);cursor:pointer;transition:all .3s}
-    .dot.active{background:var(--gl);box-shadow:0 0 8px var(--gg)}
-    .dot.done{background:rgba(34,197,94,.35)}
+    /* SCENE DOTS - hidden for clean recording */
+    #dots{display:none}
+    .dot{display:none}
 
-    /* LOGO */
-    #logo{position:fixed;top:18px;left:20px;z-index:999;display:flex;align-items:center;gap:8px;opacity:.8}
-    #logo img{height:32px}
-    #logo span{font-size:13px;font-weight:700;letter-spacing:-.3px}
+    /* LOGO - hidden for clean recording */
+    #logo{display:none}
 
-    /* CONTROLS */
-    #controls{position:fixed;top:14px;right:16px;z-index:999;display:flex;gap:8px;align-items:center}
-    .cbtn{padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:var(--w);font:600 11px 'Inter',sans-serif;cursor:pointer;backdrop-filter:blur(12px);transition:all .2s;letter-spacing:.3px}
-    .cbtn:hover{background:rgba(255,255,255,.12)}
-    .cbtn.green{background:var(--g);border-color:var(--g)}
-    #scene-name{font-size:11px;color:var(--gr);letter-spacing:.5px}
-    #timer{font-size:12px;font-weight:700;color:var(--gl);min-width:32px;text-align:center}
+    /* CONTROLS - hidden for clean recording */
+    #controls{display:none}
+    .cbtn{display:none}
+    #scene-name{display:none}
+    #timer{display:none}
 
     /* SCENES */
     .scene{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;padding:72px 48px 56px;text-align:center;z-index:10}
