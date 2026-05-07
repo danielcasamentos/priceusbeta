@@ -122,8 +122,8 @@ export function Sidebar({
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => handleItemClick('profile')}
-                  title="Meu Perfil"
-                  className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                  title="Ir para Meu Perfil"
+                  className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity rounded-lg p-1 hover:ring-2 hover:ring-green-400/50 hover:ring-offset-1"
                 >
                   <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
                   <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
@@ -206,7 +206,8 @@ export function Sidebar({
             ))}
           </nav>
 
-          {/* Rodapé Mobile — Toggle de Tema */}
+          {/* Rodapé Mobile — Toggle de Tema (somente admin) */}
+          {userEmail === 'odanielfotografo@icloud.com' && (
           <div className="sticky bottom-0 border-t border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] p-4">
             <button
               onClick={toggleTheme}
@@ -220,6 +221,7 @@ export function Sidebar({
               <span>{isDark ? 'Modo Claro' : 'Modo Escuro'}</span>
             </button>
           </div>
+          )}
         </div>
       </div>
     );
@@ -237,8 +239,8 @@ export function Sidebar({
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => handleItemClick('profile')}
-                  title="Meu Perfil"
-                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                  title="Ir para Meu Perfil"
+                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-lg p-1 hover:ring-2 hover:ring-green-400/50"
                 >
                   <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
                   <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
@@ -326,7 +328,8 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Rodapé Desktop — Toggle de Tema */}
+      {/* Rodapé Desktop — Toggle de Tema (somente admin) */}
+      {userEmail === 'odanielfotografo@icloud.com' && (
       <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,.08)] p-3">
         <button
           onClick={toggleTheme}
@@ -341,6 +344,7 @@ export function Sidebar({
           {!isCollapsed && <span>{isDark ? 'Modo Claro' : 'Modo Escuro'}</span>}
         </button>
       </div>
+      )}
     </aside>
   );
 }
