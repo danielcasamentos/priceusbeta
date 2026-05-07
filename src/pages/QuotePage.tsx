@@ -1524,7 +1524,9 @@ export function QuotePage() {
         )}
         {/* ── Modal de Resumo e Envio (igual todos os outros temas) ── */}
         {showSummaryModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 16 }}
+          >
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
               <div className="p-6 border-b">
                 <div className="flex justify-between items-start">
@@ -1536,7 +1538,7 @@ export function QuotePage() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setShowSummaryModal(false)}
+                    onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
                     className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -1580,7 +1582,7 @@ export function QuotePage() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowSummaryModal(false)}
+                    onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
                     className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                   >
                     Voltar
