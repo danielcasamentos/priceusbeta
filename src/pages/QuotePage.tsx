@@ -1522,6 +1522,84 @@ export function QuotePage() {
             breakdown={getPriceBreakdown()}
           />
         )}
+        {/* ── Modal de Resumo e Envio (igual todos os outros temas) ── */}
+        {showSummaryModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Quase lá!</h2>
+                    <p className="text-gray-600 mt-1">
+                      Confira o resumo e envie seu pedido para{' '}
+                      <strong>{summaryData.profileName}</strong>.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSummaryModal(false)}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div className="bg-gray-50 rounded-lg p-4 border">
+                  <h3 className="font-semibold text-gray-800 mb-2">Seus Dados:</h3>
+                  <p className="text-sm"><strong>Nome:</strong> {summaryData.clientData.nome}</p>
+                  <p className="text-sm"><strong>Email:</strong> {summaryData.clientData.email}</p>
+                  <p className="text-sm"><strong>Telefone:</strong> {summaryData.clientData.telefone}</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4 border">
+                  <h3 className="font-semibold text-gray-800 mb-2">Detalhes do Evento:</h3>
+                  <p className="text-sm"><strong>Orçamento:</strong> {summaryData.eventData.tipo}</p>
+                  <p className="text-sm"><strong>Data:</strong> {summaryData.eventData.data}</p>
+                  <p className="text-sm"><strong>Cidade:</strong> {summaryData.eventData.cidade}</p>
+                </div>
+
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <h3 className="font-semibold text-blue-900 mb-2">Itens Selecionados:</h3>
+                  <ul className="space-y-1 text-sm">
+                    {summaryData.quoteData.items.map((item: any, index: number) => (
+                      <li key={index} className="flex justify-between">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="border-t mt-3 pt-3 flex justify-between font-bold text-lg text-blue-800">
+                    <span>Valor Total:</span>
+                    <span>{formatCurrency(summaryData.quoteData.total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t bg-gray-50">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowSummaryModal(false)}
+                    className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Voltar
+                  </button>
+                  <a
+                    href={summaryData.waLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex-1 flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
+                    onClick={() => analytics?.markAsConverted()}
+                  >
+                    <Send className="w-6 h-6" />
+                    Enviar via WhatsApp
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
