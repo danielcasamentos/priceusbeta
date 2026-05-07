@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+/** Gera UUID v4 usando a API nativa do browser — sem dependência externa */
+const uuidv4 = () => crypto.randomUUID();
 import {
   Plus, Trash2, Save, ChevronDown, ChevronUp,
-  Pause, Check, BookTemplate, FolderOpen, X, Loader2
+  Pause, Check, FolderOpen, X, Loader2
 } from 'lucide-react';
 import { WorkflowStep, WorkflowTemplate, WorkflowTemplateStep, SlaResult } from '../types/workflow';
 import { useWorkflowSla, calcularSlaEtapa } from '../hooks/useWorkflowSla';
