@@ -1,4 +1,5 @@
-import { Send, Lock, MapPin, ExternalLink, Sparkles, MessageCircle, Instagram, Mail } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Send, Lock, MapPin, ExternalLink, Sparkles, MessageCircle, Instagram, Mail, ShoppingBag } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
@@ -27,6 +28,42 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
     camposExtras, camposExtrasData,
   } = props;
 
+  const total = calculateTotal();
+
+  // ── Floating panel logic ──────────────────────────────────
+  const firstProductRef = useRef<HTMLDivElement>(null);
+  const totalSectionRef = useRef<HTMLDivElement>(null);
+  const [passedFirstProduct, setPassedFirstProduct] = useState(false);
+  const [totalVisible, setTotalVisible] = useState(false);
+
+  const totalItems = useMemo(
+    () => Object.values(selectedProdutos).reduce((s, q) => s + q, 0),
+    [selectedProdutos]
+  );
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (firstProductRef.current) {
+        setPassedFirstProduct(firstProductRef.current.getBoundingClientRect().bottom < 50);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!totalSectionRef.current) return;
+    const obs = new IntersectionObserver(
+      ([e]) => setTotalVisible(e.isIntersecting),
+      { threshold: 0 }
+    );
+    obs.observe(totalSectionRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const showPanel = passedFirstProduct && !totalVisible && totalItems > 0;
+
   return (
     <div
       style={{
@@ -54,7 +91,58 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
         .ds-qty-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s; }
         .ds-qty-btn:hover:not(:disabled) { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); }
         .ds-qty-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        @keyframes dsNeon { 0%,100% { box-shadow: 0 0 16px 2px rgba(34,197,94,.35), 0 0 40px 4px rgba(34,197,94,.15), inset 0 0 12px rgba(34,197,94,.08); } 50% { box-shadow: 0 0 28px 6px rgba(34,197,94,.6), 0 0 64px 8px rgba(34,197,94,.25), inset 0 0 20px rgba(34,197,94,.15); } }
+        .ds-float { animation: dsNeon 2.4s ease-in-out infinite; }
       `}</style>
+
+      {/* ── FLOATING TOTAL PANEL ── */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 16,
+          zIndex: 200,
+          transition: 'opacity .3s, transform .3s',
+          opacity: showPanel ? 1 : 0,
+          transform: showPanel ? 'scale(1) translateY(0)' : 'scale(.85) translateY(12px)',
+          pointerEvents: showPanel ? 'auto' : 'none',
+        }}
+      >
+        <a
+          href="#ds-total"
+          className="ds-float"
+          aria-label={`Ver total: ${formatCurrency(total)}`}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 88,
+            height: 88,
+            borderRadius: '50%',
+            background: 'linear-gradient(145deg, #064e14, #0f7a2a)',
+            border: '2px solid rgba(34,197,94,.55)',
+            textDecoration: 'none',
+            color: '#fff',
+            gap: 2,
+            backdropFilter: 'blur(8px)',
+            cursor: 'pointer',
+          }}
+        >
+          <ShoppingBag size={18} color="#86efac" />
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(134,239,172,.8)', letterSpacing: '0.5px', textTransform: 'uppercase', lineHeight: 1.2 }}>
+            Total
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 900, color: '#22c55e', lineHeight: 1.2 }}>
+            {formatCurrency(total)}
+          </span>
+          {totalItems > 1 && (
+            <span style={{ fontSize: 9, color: 'rgba(134,239,172,.6)', fontWeight: 600 }}>
+              {totalItems} itens
+            </span>
+          )}
+        </a>
+      </div>
 
       {/* ── NAV ── */}
       <nav style={{
@@ -301,7 +389,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                     }}
                   >
                     {/* Linha superior: imagem + info */}
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    <div ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                       {/* Image */}
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
                         <div style={{ width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
@@ -383,7 +471,10 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
           </div>
 
           {/* Total */}
-          <div style={{
+          <div
+            id="ds-total"
+            ref={totalSectionRef}
+            style={{
             background: 'rgba(34,197,94,.07)',
             border: '1px solid rgba(34,197,94,.2)',
             borderRadius: 16,
