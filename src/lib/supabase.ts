@@ -105,7 +105,9 @@ export interface Lead {
   cidade_evento: string | null;
   valor_total: number;
   orcamento_detalhe: any;
-  status: 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em_negociacao' | 'fazer_followup';
+  /** Array de etapas do workflow de produção (campo JSONB no banco) */
+  workflow?: import('../types/workflow').WorkflowStep[] | null;
+  status: 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em_negociacao' | 'fazer_followup' | 'finalizado';
   data_orcamento: string;
   data_ultimo_contato: string | null;
   created_at: string;

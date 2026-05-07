@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react'; // Re-confirmando importação explícita de React
+import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Re-confirmando importação explícita de React
 import { EditLeadQuoteModal } from './EditLeadQuoteModal';
 import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3 } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
@@ -11,6 +11,9 @@ import { Product, CustomField, PriceBreakdown } from '../lib/whatsappMessageGene
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
 import { useReviewRequest } from '../hooks/useReviewRequest';
 import { ConvertLeadModal } from './company/ConvertLeadModal';
+import { WorkflowStepper } from './WorkflowStepper';
+import { WorkflowStep } from '../types/workflow';
+import { checkAndCreateWorkflowNotifications, notifyLeadFinalizado } from '../hooks/useWorkflowSla';
 
 // Define interfaces for better type safety
 
@@ -73,6 +76,9 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
   const planLimits = usePlanLimits();
   const { solicitarAvaliacao } = useReviewRequest();
+
+  // Aba principal: 'leads' | 'producao' | 'finalizados'
+  const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
 
   // Estado do modal de conversão financeira
   const [convertModal, setConvertModal] = useState<{ lead: Lead; orcamentoDetalhe: any | null; fromContract?: boolean } | null>(null);
@@ -374,12 +380,13 @@ export function LeadsManager({ userId }: { userId: string }) {
       if (newStatus === 'convertido') {
         const lead = leads.find((l: LeadWithReview) => l.id === leadId);
         
-        // Adicionar notificação de lead convertido
+        // Notificação de lead convertido
         try {
           await supabase.from('notifications').insert({
             user_id: userId,
             type: 'lead_converted',
-            message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido.`,
+            title: 'Lead convertido! 🎉',
+            message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido. Inicie o workflow de produção.`,
             link: `/dashboard/leads`,
             related_id: leadId,
           });
@@ -392,14 +399,47 @@ export function LeadsManager({ userId }: { userId: string }) {
           const detalhe = lead ? await loadDetalhesOrcamento(lead, false) : null;
           setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
         }
+
+        // Move para a aba de produção
+        setMainTab('producao');
+      } else if (newStatus === 'finalizado') {
+        setMainTab('finalizados');
       } else if (newStatus !== 'contatado') {
-        alert('✅ Status atualizado com sucesso!'); // Evita alerta ao enviar WhatsApp, pois o link já é o feedback
+        alert('✅ Status atualizado com sucesso!');
       }
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       alert('❌ Erro ao atualizar status');
     }
   };
+
+  /** Chamado pelo WorkflowStepper quando o workflow de um lead muda */
+  const handleWorkflowChange = useCallback((leadId: string, updatedWorkflow: WorkflowStep[]) => {
+    setLeads(prev => prev.map(l =>
+      l.id === leadId ? { ...l, workflow: updatedWorkflow } : l
+    ));
+  }, []);
+
+  /** Chamado pelo WorkflowStepper quando TODAS as etapas são concluídas */
+  const handleLeadFinalizado = useCallback(async (lead: LeadWithReview) => {
+    try {
+      await supabase.from('leads').update({ status: 'finalizado' }).eq('id', lead.id);
+      await notifyLeadFinalizado(lead, userId);
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, status: 'finalizado' } : l));
+      setMainTab('finalizados');
+    } catch (err) {
+      console.error('Erro ao finalizar lead:', err);
+    }
+  }, [userId]);
+
+  /** Verifica notificações de SLA ao entrar na aba Produção */
+  const checkProducaoNotifications = useCallback(async () => {
+    const leadsProducao = leads.filter(l => l.status === 'convertido');
+    if (leadsProducao.length > 0) {
+      await checkAndCreateWorkflowNotifications(leadsProducao, userId);
+    }
+  }, [leads, userId]);
+
 
   const handleDeleteSelected = async () => {
     setIsDeleting(true);
@@ -626,6 +666,111 @@ export function LeadsManager({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
+
+      {/* ══════════════════════════════════════════════════════════
+          NAVEGAÇÃO PRINCIPAL: 3 ABAS
+      ══════════════════════════════════════════════════════════ */}
+      <div className="flex gap-1 p-1 bg-gray-100 dark:bg-[rgba(255,255,255,0.04)] rounded-xl border border-gray-200 dark:border-[rgba(255,255,255,0.08)]">
+        {/* Aba Leads (original) */}
+        <button
+          id="tab-leads"
+          onClick={() => setMainTab('leads')}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            mainTab === 'leads'
+              ? 'bg-white dark:bg-[#0a1628] text-blue-600 dark:text-blue-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" />
+          <span>Timeline</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+            mainTab === 'leads' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-gray-400'
+          }`}>
+            {leads.filter(l => !['convertido','finalizado'].includes(l.status)).length}
+          </span>
+        </button>
+
+        {/* Aba Clientes / Produção */}
+        <button
+          id="tab-producao"
+          onClick={() => { setMainTab('producao'); checkProducaoNotifications(); }}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            mainTab === 'producao'
+              ? 'bg-white dark:bg-[#0a1628] text-purple-600 dark:text-purple-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+          }`}
+        >
+          <Clapperboard className="w-4 h-4" />
+          <span className="hidden sm:inline">Clientes/Produção</span>
+          <span className="sm:hidden">Produção</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+            mainTab === 'producao' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400' : 'bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-gray-400'
+          }`}>
+            {leads.filter(l => l.status === 'convertido').length}
+          </span>
+        </button>
+
+        {/* Aba Finalizados */}
+        <button
+          id="tab-finalizados"
+          onClick={() => setMainTab('finalizados')}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            mainTab === 'finalizados'
+              ? 'bg-white dark:bg-[#0a1628] text-green-600 dark:text-green-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Finalizados</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+            mainTab === 'finalizados' ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' : 'bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-gray-400'
+          }`}>
+            {leads.filter(l => l.status === 'finalizado').length}
+          </span>
+        </button>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          ABA: CLIENTES / PRODUÇÃO
+      ══════════════════════════════════════════════════════════ */}
+      {mainTab === 'producao' && (
+        <ProducaoTab
+          leads={leads.filter(l => l.status === 'convertido')}
+          userId={userId}
+          templates={templates}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          onWorkflowChange={handleWorkflowChange}
+          onLeadFinalizado={handleLeadFinalizado}
+          onSolicitarAvaliacao={handleSolicitarAvaliacao}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          ABA: FINALIZADOS
+      ══════════════════════════════════════════════════════════ */}
+      {mainTab === 'finalizados' && (
+        <FinalizadosTab
+          leads={leads.filter(l => l.status === 'finalizado')}
+          userId={userId}
+          templates={templates}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          onSolicitarAvaliacao={handleSolicitarAvaliacao}
+          onReativar={async (lead) => {
+            await supabase.from('leads').update({ status: 'convertido' }).eq('id', lead.id);
+            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, status: 'convertido' } : l));
+            setMainTab('producao');
+          }}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          ABA: TIMELINE (LEADS) — conteúdo original abaixo
+      ══════════════════════════════════════════════════════════ */}
+      {mainTab === 'leads' && (
+      <>
+
       {/* Banner de Upgrade para Plano Gratuito */}
       {!planLimits.isPremium && (
         <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-[rgba(59,130,246,0.1)] dark:to-[rgba(59,130,246,0.15)] border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-lg p-4">
@@ -1331,7 +1476,298 @@ export function LeadsManager({ userId }: { userId: string }) {
           }}
         />
       )}
+      </> // fecha aba Timeline
+      )} {/* fecha mainTab === 'leads' */}
 
+    </div>
+  );
+}
+
+// ============================================================
+// SUB-COMPONENTE: ABA CLIENTES / PRODUÇÃO
+// ============================================================
+interface ProducaoTabProps {
+  leads: any[];
+  userId: string;
+  templates: Record<string, any>;
+  formatCurrency: (v: number) => string;
+  formatDate: (v: string) => string;
+  onWorkflowChange: (leadId: string, workflow: any[]) => void;
+  onLeadFinalizado: (lead: any) => void;
+  onSolicitarAvaliacao: (lead: any) => void;
+}
+
+function ProducaoTab({
+  leads,
+  userId,
+  templates,
+  formatCurrency,
+  formatDate,
+  onWorkflowChange,
+  onLeadFinalizado,
+  onSolicitarAvaliacao,
+}: ProducaoTabProps) {
+  if (leads.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+          <Clapperboard className="w-8 h-8 text-purple-500" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-white">Nenhum cliente em produção</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Leads convertidos aparecem aqui para você gerenciar o workflow de produção.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {leads.map((lead) => (
+        <ProducaoCard
+          key={lead.id}
+          lead={lead}
+          userId={userId}
+          templateName={templates[lead.template_id]?.nome_template || ''}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          onWorkflowChange={onWorkflowChange}
+          onLeadFinalizado={onLeadFinalizado}
+          onSolicitarAvaliacao={onSolicitarAvaliacao}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Card individual de Produção ───────────────────────────
+interface ProducaoCardProps {
+  lead: any;
+  userId: string;
+  templateName: string;
+  formatCurrency: (v: number) => string;
+  formatDate: (v: string) => string;
+  onWorkflowChange: (leadId: string, workflow: any[]) => void;
+  onLeadFinalizado: (lead: any) => void;
+  onSolicitarAvaliacao: (lead: any) => void;
+}
+
+function ProducaoCard({
+  lead,
+  userId,
+  templateName,
+  formatCurrency,
+  formatDate,
+  onWorkflowChange,
+  onLeadFinalizado,
+  onSolicitarAvaliacao,
+}: ProducaoCardProps) {
+  const workflow: WorkflowStep[] = Array.isArray(lead.workflow) ? lead.workflow : [];
+
+  const whatsappLink = lead.telefone_cliente
+    ? `https://wa.me/${lead.telefone_cliente.replace(/\D/g, '')}`
+    : null;
+  const emailLink = lead.email_cliente ? `mailto:${lead.email_cliente}` : null;
+
+  return (
+    <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-200 dark:border-white/[0.07] shadow-sm hover:shadow-md dark:hover:shadow-none transition-shadow overflow-hidden">
+      {/* Cabeçalho do card */}
+      <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-gray-900 dark:text-white text-base truncate">
+              {lead.nome_cliente || 'Cliente sem nome'}
+            </h3>
+            <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-semibold rounded-full">
+              Em Produção
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {templateName && <span>📋 {templateName}</span>}
+            {lead.data_evento && <span>📅 {formatDate(lead.data_evento)}</span>}
+            {lead.tipo_evento && <span>🎬 {lead.tipo_evento}</span>}
+            <span className="font-semibold text-gray-700 dark:text-gray-200">
+              {formatCurrency(lead.valor_total)}
+            </span>
+          </div>
+        </div>
+
+        {/* Ações de contato */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {whatsappLink && (
+            <a
+              href={whatsappLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Contato WhatsApp"
+              className="p-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
+          )}
+          {emailLink && (
+            <a
+              href={emailLink}
+              title="Enviar e-mail"
+              className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* WorkflowStepper */}
+      <div className="px-5 pb-4">
+        <WorkflowStepper
+          leadId={lead.id}
+          leadName={lead.nome_cliente || 'Cliente'}
+          userId={userId}
+          initialWorkflow={workflow}
+          onWorkflowChange={(updated) => onWorkflowChange(lead.id, updated)}
+          onAllCompleted={() => onLeadFinalizado(lead)}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SUB-COMPONENTE: ABA FINALIZADOS
+// ============================================================
+interface FinalizadosTabProps {
+  leads: any[];
+  userId: string;
+  templates: Record<string, any>;
+  formatCurrency: (v: number) => string;
+  formatDate: (v: string) => string;
+  onSolicitarAvaliacao: (lead: any) => void;
+  onReativar: (lead: any) => void;
+}
+
+function FinalizadosTab({
+  leads,
+  templates,
+  formatCurrency,
+  formatDate,
+  onSolicitarAvaliacao,
+  onReativar,
+}: FinalizadosTabProps) {
+  if (leads.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+          <CheckCircle2 className="w-8 h-8 text-green-500" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-white">Nenhum projeto finalizado</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Projetos concluídos aparecem aqui. Complete todas as etapas do workflow para mover um cliente.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header informativo */}
+      <div className="flex items-center gap-2 px-1">
+        <CheckCircle2 className="w-4 h-4 text-green-500" />
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          {leads.length} projeto{leads.length !== 1 ? 's' : ''} finalizado{leads.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {leads.map((lead) => {
+          const whatsappLink = lead.telefone_cliente
+            ? `https://wa.me/${lead.telefone_cliente.replace(/\D/g, '')}`
+            : null;
+          const emailLink = lead.email_cliente ? `mailto:${lead.email_cliente}` : null;
+          const templateName = templates[lead.template_id]?.nome_template || '';
+
+          return (
+            <div
+              key={lead.id}
+              className="bg-white dark:bg-[#0a1628] rounded-xl border border-green-200 dark:border-green-900/50 shadow-sm overflow-hidden"
+            >
+              {/* Barra verde de status */}
+              <div className="h-1 bg-gradient-to-r from-green-400 to-emerald-500" />
+
+              <div className="px-5 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-base">
+                        {lead.nome_cliente || 'Cliente'}
+                      </h3>
+                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-semibold rounded-full flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Finalizado
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {templateName && <span>📋 {templateName}</span>}
+                      {lead.data_evento && <span>📅 {formatDate(lead.data_evento)}</span>}
+                      <span className="font-semibold text-gray-700 dark:text-gray-200">
+                        {formatCurrency(lead.valor_total)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ações de pós-venda — destaque */}
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/[0.05]">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
+                    Ações de Pós-Venda
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {whatsappLink && (
+                      <a
+                        href={whatsappLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#128C7E] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        WhatsApp
+                      </a>
+                    )}
+                    {emailLink && (
+                      <a
+                        href={emailLink}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                      >
+                        <Mail className="w-4 h-4" />
+                        E-mail
+                      </a>
+                    )}
+                    {lead.telefone_cliente && (
+                      <button
+                        onClick={() => onSolicitarAvaliacao(lead)}
+                        className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                      >
+                        <Star className="w-4 h-4" />
+                        Pedir Avaliação
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onReativar(lead)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors"
+                      title="Mover de volta para produção"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Reativar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
