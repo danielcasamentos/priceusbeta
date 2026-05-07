@@ -403,50 +403,139 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
               style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 16, padding: '24px' }}
             >
               <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 16 }}>
-                Forma de Pagamento
+                💳 Forma de Pagamento
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {formasPagamento.map((forma) => (
-                  <label
-                    key={forma.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                      padding: '14px 16px',
-                      borderRadius: 12,
-                      border: selectedFormaPagamento === forma.id
-                        ? '1px solid rgba(34,197,94,.5)'
-                        : '1px solid rgba(255,255,255,.08)',
-                      background: selectedFormaPagamento === forma.id
-                        ? 'rgba(34,197,94,.07)'
-                        : 'rgba(255,255,255,.02)',
-                      cursor: 'pointer',
-                      transition: 'all .2s',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="ds-forma-pagamento"
-                      value={forma.id}
-                      checked={selectedFormaPagamento === forma.id}
-                      onChange={() => setSelectedFormaPagamento?.(forma.id)}
-                      style={{ marginTop: 2, accentColor: '#22c55e', width: 16, height: 16, flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: '#fff', marginBottom: 2 }}>{forma.nome}</div>
-                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,.45)' }}>
-                        {forma.entrada_tipo === 'percentual'
-                          ? `Entrada de ${forma.entrada_valor}%`
-                          : `Entrada de ${formatCurrency(forma.entrada_valor)}`}
-                        {forma.max_parcelas > 0 && ` + ${forma.max_parcelas}x parcela${forma.max_parcelas > 1 ? 's' : ''}`}
+                {formasPagamento.map((forma) => {
+                  const total = calculateTotal();
+                  const valorEntrada = forma.entrada_tipo === 'percentual'
+                    ? (total * forma.entrada_valor) / 100
+                    : forma.entrada_valor;
+
+                  return (
+                    <label
+                      key={forma.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        padding: '14px 16px',
+                        borderRadius: 12,
+                        border: selectedFormaPagamento === forma.id
+                          ? '1px solid rgba(34,197,94,.5)'
+                          : '1px solid rgba(255,255,255,.08)',
+                        background: selectedFormaPagamento === forma.id
+                          ? 'rgba(34,197,94,.07)'
+                          : 'rgba(255,255,255,.02)',
+                        cursor: 'pointer',
+                        transition: 'all .2s',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="ds-forma-pagamento"
+                        value={forma.id}
+                        checked={selectedFormaPagamento === forma.id}
+                        onChange={() => setSelectedFormaPagamento?.(forma.id)}
+                        style={{ marginTop: 3, accentColor: '#22c55e', width: 16, height: 16, flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 4 }}>{forma.nome}</div>
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', lineHeight: 1.6 }}>
+                          <div>
+                            {forma.entrada_tipo === 'percentual'
+                              ? `Entrada de ${forma.entrada_valor}% (${formatCurrency(valorEntrada)})`
+                              : `Entrada de ${formatCurrency(valorEntrada)}`}
+                          </div>
+                          {forma.max_parcelas > 0 && (
+                            <div>+ {forma.max_parcelas}x parcela{forma.max_parcelas > 1 ? 's' : ''}</div>
+                          )}
+                          {forma.acrescimo > 0 && (
+                            <div style={{ color: '#fb923c' }}>(+{forma.acrescimo}% acréscimo)</div>
+                          )}
+                          {forma.acrescimo < 0 && (
+                            <div style={{ color: '#4ade80' }}>({forma.acrescimo}% desconto)</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  );
+                })}
               </div>
+
+              {/* Detalhamento financeiro ao selecionar */}
+              {selectedFormaPagamento && (() => {
+                const forma = formasPagamento.find((f) => f.id === selectedFormaPagamento);
+                if (!forma) return null;
+
+                const total = calculateTotal();
+                const valorEntrada = forma.entrada_tipo === 'percentual'
+                  ? (total * forma.entrada_valor) / 100
+                  : forma.entrada_valor;
+                const saldoRestante = Math.max(0, total - valorEntrada);
+                const valorParcela = forma.max_parcelas > 0 ? saldoRestante / forma.max_parcelas : 0;
+
+                return (
+                  <div style={{
+                    marginTop: 16,
+                    background: 'rgba(34,197,94,.06)',
+                    border: '1px solid rgba(34,197,94,.2)',
+                    borderRadius: 12,
+                    padding: '16px',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', marginBottom: 12 }}>
+                      Detalhes do Parcelamento
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                      {/* Entrada */}
+                      <div style={{ background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Entrada</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{formatCurrency(valorEntrada)}</div>
+                        {forma.entrada_tipo === 'percentual' && (
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', marginTop: 2 }}>
+                            {forma.entrada_valor}% do total
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Parcelas */}
+                      {forma.max_parcelas > 0 && saldoRestante > 0.01 && (
+                        <div style={{ background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Parcelas</div>
+                          <div style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>
+                            {forma.max_parcelas}x de {formatCurrency(valorParcela)}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', marginTop: 2 }}>Saldo restante</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Acréscimo / Desconto */}
+                    {forma.acrescimo !== 0 && (
+                      <div style={{
+                        marginTop: 10,
+                        background: 'rgba(255,255,255,.04)',
+                        borderRadius: 10,
+                        padding: '10px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: 13,
+                      }}>
+                        <span style={{ color: 'rgba(255,255,255,.5)' }}>
+                          {forma.acrescimo > 0 ? 'Acréscimo aplicado:' : 'Desconto aplicado:'}
+                        </span>
+                        <span style={{ fontWeight: 700, color: forma.acrescimo > 0 ? '#fb923c' : '#4ade80' }}>
+                          {forma.acrescimo > 0 ? '+' : ''}{forma.acrescimo}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
+
 
           {/* Total */}
           <div
