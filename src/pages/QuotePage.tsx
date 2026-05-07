@@ -1495,14 +1495,37 @@ export function QuotePage() {
       camposExtrasData,
       setCamposExtrasData,
       renderLocationDateFields,
+      // Formas de pagamento (obrigatório para validação correta)
+      formasPagamento,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      // Refs e dados para o FloatingTotalPanel padrão
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
     };
     return (
       <>
         <CookieBanner />
         <QuoteDarkStudio {...commonProps} />
+        {/* FloatingTotalPanel com as mesmas regras de todos os outros temas */}
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="darkstudio"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
       </>
     );
   }
+
 
   return (
     <>
