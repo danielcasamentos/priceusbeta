@@ -296,73 +296,90 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                       borderRadius: 12,
                       padding: '16px',
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: 14,
+                      flexDirection: 'column',
+                      gap: 12,
                     }}
                   >
-                    {/* Image */}
-                    {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                      <div style={{ width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
-                        {produto.imagens?.length > 0 ? (
-                          <ProductGalleryCarousel
-                            images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                            autoPlay={produto.carrossel_automatico}
-                            productName={produto.nome}
-                          />
-                        ) : (
-                          <ImageWithFallback
-                            src={produto.imagem_url}
-                            alt={produto.nome}
-                            className="w-full h-full object-cover"
-                            fallbackClassName="w-full h-full"
-                          />
+                    {/* Linha superior: imagem + info */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                      {/* Image */}
+                      {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
+                        <div style={{ width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
+                          {produto.imagens?.length > 0 ? (
+                            <ProductGalleryCarousel
+                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                              autoPlay={produto.carrossel_automatico}
+                              productName={produto.nome}
+                            />
+                          ) : (
+                            <ImageWithFallback
+                              src={produto.imagem_url}
+                              alt={produto.nome}
+                              className="w-full h-full object-cover"
+                              fallbackClassName="w-full h-full"
+                            />
+                          )}
+                        </div>
+                      )}
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
+                        {produto.resumo && (
+                          <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>
+                        )}
+                        {!template?.ocultar_valores_intermediarios && (
+                          <p style={{ fontSize: 17, fontWeight: 800, color: '#22c55e', marginTop: 4 }}>
+                            {formatCurrency(produto.valor)}
+                          </p>
                         )}
                       </div>
-                    )}
-                    {/* Info */}
-                    <div style={{ flex: 1 }}>
-                      <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{produto.nome}</h4>
-                      {produto.resumo && (
-                        <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>
-                      )}
-                      {!template?.ocultar_valores_intermediarios && (
-                        <p style={{ fontSize: 17, fontWeight: 800, color: '#22c55e', marginTop: 4 }}>
-                          {formatCurrency(produto.valor)}
-                        </p>
-                      )}
                     </div>
-                    {/* Qty control */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        className="ds-qty-btn"
-                        onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
-                        disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                      >
-                        −
-                      </button>
-                      <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>
-                        {selectedProdutos[produto.id] || 0}
+
+                    {/* Linha inferior: controle de quantidade — sempre largura total no mobile */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: 'rgba(255,255,255,.04)',
+                      borderRadius: 10,
+                      padding: '10px 14px',
+                    }}>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>
+                        {isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}
                       </span>
-                      <button
-                        type="button"
-                        className="ds-qty-btn"
-                        onClick={() => {
-                          if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                            alert(fieldsValidation.validationMessage);
-                            return;
-                          }
-                          props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
-                        }}
-                        disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                      >
-                        +
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <button
+                          type="button"
+                          className="ds-qty-btn"
+                          onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
+                          disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                        >
+                          −
+                        </button>
+                        <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>
+                          {selectedProdutos[produto.id] || 0}
+                        </span>
+                        <button
+                          type="button"
+                          className="ds-qty-btn"
+                          onClick={() => {
+                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                              alert(fieldsValidation.validationMessage);
+                              return;
+                            }
+                            props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
+                          }}
+                          disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
+
           </div>
 
           {/* Total */}
