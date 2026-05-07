@@ -75,7 +75,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   const { solicitarAvaliacao } = useReviewRequest();
 
   // Estado do modal de conversão financeira
-  const [convertModal, setConvertModal] = useState<{ lead: Lead } | null>(null);
+  const [convertModal, setConvertModal] = useState<{ lead: Lead; orcamentoDetalhe: any | null; fromContract?: boolean } | null>(null);
 
   // Estado para Modal de opções extras WhatsApp
   const [whatsappLeadConfig, setWhatsappLeadConfig] = useState<{
@@ -389,7 +389,8 @@ export function LeadsManager({ userId }: { userId: string }) {
 
         // Abre modal de configuração de entradas financeiras
         if (lead && lead.valor_total > 0) {
-          setConvertModal({ lead });
+          const detalhe = lead ? await loadDetalhesOrcamento(lead, false) : null;
+          setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
         }
       } else if (newStatus !== 'contatado') {
         alert('✅ Status atualizado com sucesso!'); // Evita alerta ao enviar WhatsApp, pois o link já é o feedback
@@ -1126,7 +1127,17 @@ export function LeadsManager({ userId }: { userId: string }) {
           userId={userId}
           lead={contractLead as Lead & { nome_cliente: string }}
           onClose={() => setContractLead(null)}
-          onSuccess={() => loadLeads()}
+          onSuccess={async () => {
+            // 1. Recarrega leads para pegar status 'convertido' gravado pelo ContractGenerator
+            await loadLeads();
+            // 2. Enriquece o orcamento_detalhe com paymentMethod antes de abrir o painel
+            const detalhe = await loadDetalhesOrcamento(contractLead, false);
+            // 3. Só abre o ConvertLeadModal se o lead tem valor > 0
+            if (contractLead.valor_total && Number(contractLead.valor_total) > 0) {
+              setConvertModal({ lead: contractLead, orcamentoDetalhe: detalhe, fromContract: true });
+            }
+            setContractLead(null);
+          }}
         />
       )}
       {/* Modal de Edição de Orçamento */}
@@ -1311,6 +1322,8 @@ export function LeadsManager({ userId }: { userId: string }) {
           templateName={templates[convertModal.lead.template_id]?.nome_template || 'Serviço'}
           valorTotal={Number(convertModal.lead.valor_total)}
           dataEvento={convertModal.lead.data_evento}
+          paymentMethodData={convertModal.orcamentoDetalhe?.paymentMethod ?? null}
+          fromContract={convertModal.fromContract ?? false}
           onClose={() => setConvertModal(null)}
           onSuccess={() => {
             setConvertModal(null);

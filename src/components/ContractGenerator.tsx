@@ -158,21 +158,44 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       let produtos: any[] = [];
       let formaPagamentoNome = '';
       const priceBreakdown = orcamentoDetalhe.priceBreakdown || {};
-      
 
-      if (Object.keys(selectedProdutos).length > 0) {
-        const produtoIds = Object.keys(selectedProdutos);
-        const { data: produtosData } = await supabase
-          .from('produtos')
-          .select('id, nome, valor')
-          .in('id', produtoIds); // Corrigido para buscar da tabela 'produtos'
+      // ── Normalização de produtos: suporta formato novo e antigo ──────
+      // Formato novo (EditLeadQuoteModal): produtos = [{produto_id, nome, valor, quantidade}]
+      // Formato antigo (QuotePage):        selectedProdutos = { "id": quantidade }
+      // Formato via selecoes:              selecoes.produtos = { "id": quantidade }
 
-        if (produtosData) {
-          produtos = produtosData.map((p: any) => ({
-            nome: p.nome,
-            preco: parseFloat(p.valor || 0),
-            quantidade: typeof selectedProdutos[p.id] === 'number' ? selectedProdutos[p.id] : 1,
-          }));
+      const produtosRaw = orcamentoDetalhe.produtos || [];
+      const isNewFormat = produtosRaw.length > 0 && ('produto_id' in produtosRaw[0] || 'nome' in produtosRaw[0]);
+
+      if (isNewFormat) {
+        // ✅ Formato novo: usa snapshot (nome/valor já salvos no lead)
+        // Não vai ao banco para evitar divergência de preços
+        produtos = produtosRaw.map((p: any) => ({
+          nome: p.nome || 'Produto',
+          preco: parseFloat(p.valor || p.preco || 0),
+          quantidade: p.quantidade || 1,
+        }));
+      } else {
+        // ✅ Formato antigo: busca IDs no banco
+        const selectedMap: Record<string, number> =
+          orcamentoDetalhe.selectedProdutos ||
+          orcamentoDetalhe.selecoes?.produtos ||
+          {};
+
+        if (Object.keys(selectedMap).length > 0) {
+          const produtoIds = Object.keys(selectedMap);
+          const { data: produtosData } = await supabase
+            .from('produtos')
+            .select('id, nome, valor')
+            .in('id', produtoIds);
+
+          if (produtosData) {
+            produtos = produtosData.map((p: any) => ({
+              nome: p.nome,
+              preco: parseFloat(p.valor || 0),
+              quantidade: typeof selectedMap[p.id] === 'number' ? selectedMap[p.id] : 1,
+            }));
+          }
         }
       }
 
@@ -206,14 +229,16 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         orcamento_total: orcamentoTotal,
         valor_total: orcamentoTotal,
         produtos: produtos,
-        servicos: [], // Mantido para compatibilidade, mas produtos agora é a fonte principal
+        servicos: [],
         desconto_cupom: priceBreakdown.descontoCupom || 0,
         acrescimo_pagamento: priceBreakdown.acrescimoFormaPagamento || 0,
         ajuste_sazonal: priceBreakdown.ajusteSazonal || 0,
         ajuste_geografico: priceBreakdown.ajusteGeografico?.percentual || 0,
         forma_pagamento: formaPagamentoNome,
-        forma_pagamento_detalhes: formaPagamentoCompleta || null, // Salva o objeto completo
+        forma_pagamento_detalhes: formaPagamentoCompleta || null,
         ocultar_valores_intermediarios: ocultarValoresIntermediarios,
+        // Plano de pagamento final definido pelo usuário no ConvertLeadModal (se já existir)
+        plano_pagamento: orcamentoDetalhe.plano_pagamento || null,
       };
 
       console.log('=== CONTRACT GENERATOR - LEAD DATA SALVO ===');
@@ -278,7 +303,18 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
 
       const contractLink = `${window.location.origin}/contrato/${data.token}`;
       setGeneratedLink(contractLink);
-      setGeneratedLeadData(leadData); // Store the generated lead data
+      setGeneratedLeadData(leadData);
+
+      // ── Marca o lead como convertido automaticamente ao gerar o contrato ──
+      try {
+        await supabase
+          .from('leads')
+          .update({ status: 'convertido' })
+          .eq('id', lead.id)
+          .neq('status', 'convertido'); // só atualiza se ainda não estava convertido
+      } catch (statusError) {
+        console.warn('[ContractGenerator] Não foi possível marcar lead como convertido:', statusError);
+      }
     } catch (error) {
       console.error('Erro ao gerar contrato:', error);
       alert('Erro ao gerar contrato');
