@@ -159,24 +159,51 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       let formaPagamentoNome = '';
       const priceBreakdown = orcamentoDetalhe.priceBreakdown || {};
 
-      // ── Normalização de produtos: suporta formato novo e antigo ──────
-      // Formato novo (EditLeadQuoteModal): produtos = [{produto_id, nome, valor, quantidade}]
-      // Formato antigo (QuotePage):        selectedProdutos = { "id": quantidade }
-      // Formato via selecoes:              selecoes.produtos = { "id": quantidade }
+      // ── Normalização de produtos: suporta 3 formatos ──────────────────
+      // Formato A (EditLeadQuoteModal snapshot): produtos = [{nome, valor, quantidade, ...}]
+      // Formato B (QuotePage):                   produtos = [{produto_id, quantidade}]  ← sem nome!
+      // Formato C (legado):                      selectedProdutos = { "id": quantidade }
 
       const produtosRaw = orcamentoDetalhe.produtos || [];
-      const isNewFormat = produtosRaw.length > 0 && ('produto_id' in produtosRaw[0] || 'nome' in produtosRaw[0]);
 
-      if (isNewFormat) {
-        // ✅ Formato novo: usa snapshot (nome/valor já salvos no lead)
-        // Não vai ao banco para evitar divergência de preços
+      const isSnapshotFormat  = produtosRaw.length > 0 && 'nome' in produtosRaw[0]; // Formato A
+      const isProdutoIdFormat = produtosRaw.length > 0 && 'produto_id' in produtosRaw[0] && !('nome' in produtosRaw[0]); // Formato B
+
+      if (isSnapshotFormat) {
+        // ✅ Formato A: snapshot completo — usa diretamente
         produtos = produtosRaw.map((p: any) => ({
           nome: p.nome || 'Produto',
           preco: parseFloat(p.valor || p.preco || 0),
           quantidade: p.quantidade || 1,
         }));
+
+      } else if (isProdutoIdFormat) {
+        // ✅ Formato B: {produto_id, quantidade} — busca nomes no banco
+        const produtoIds = produtosRaw.map((p: any) => p.produto_id).filter(Boolean);
+        if (produtoIds.length > 0) {
+          const { data: produtosData } = await supabase
+            .from('produtos')
+            .select('id, nome, valor')
+            .in('id', produtoIds);
+
+          if (produtosData) {
+            // Monta mapa id→dados para lookups O(1)
+            const produtoMap = Object.fromEntries(produtosData.map((p) => [p.id, p]));
+            produtos = produtosRaw
+              .filter((p: any) => produtoMap[p.produto_id]) // ignora IDs não encontrados
+              .map((p: any) => {
+                const dbProduto = produtoMap[p.produto_id];
+                return {
+                  nome: dbProduto.nome,
+                  preco: parseFloat(dbProduto.valor || 0),
+                  quantidade: p.quantidade || 1,
+                };
+              });
+          }
+        }
+
       } else {
-        // ✅ Formato antigo: busca IDs no banco
+        // ✅ Formato C: legado selectedProdutos map { id: qty }
         const selectedMap: Record<string, number> =
           orcamentoDetalhe.selectedProdutos ||
           orcamentoDetalhe.selecoes?.produtos ||
@@ -198,6 +225,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           }
         }
       }
+
 
       if (selectedFormaPagamento) {
         const { data: formaPagamentoData } = await supabase
