@@ -16,6 +16,7 @@ export interface Product {
   nome: string;
   valor: number;
   permite_multiplos?: boolean;
+  permite_multiplas_unidades?: boolean;
 }
 
 export interface PaymentMethod {
@@ -274,10 +275,12 @@ function buildProductsList(
     .filter((p) => selectedProducts[p.id] && selectedProducts[p.id] > 0)
     .map((p) => {
       const quantity = selectedProducts[p.id];
+      const showQty = p.permite_multiplas_unidades !== false;
+      const qtyText = showQty ? `${quantity}x ` : "";
       if (hideValues) {
-        return `• ${quantity}x ${p.nome}`;
+        return `• ${qtyText}${p.nome}`;
       }
-      return `• ${quantity}x ${p.nome} - ${formatCurrency(p.valor)}`;
+      return `• ${qtyText}${p.nome} - ${formatCurrency(p.valor)}`;
     })
     .join('\n');
 }

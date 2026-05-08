@@ -197,6 +197,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
                   nome: dbProduto.nome,
                   preco: parseFloat(dbProduto.valor || 0),
                   quantidade: p.quantidade || 1,
+                  permite_multiplas_unidades: dbProduto.permite_multiplas_unidades,
                 };
               });
           }
@@ -368,7 +369,7 @@ Seu orçamento detalhado e contrato digital estão prontos para assinatura.
 
 *Detalhes do Orçamento:*
 ${generatedLeadData.produtos && generatedLeadData.produtos.length > 0 ?
-      generatedLeadData.produtos.map((p: any) => `- ${p.nome}: R$ ${p.preco.toFixed(2)} x ${p.quantidade}`).join('\n') :
+      generatedLeadData.produtos.map((p: any) => `- ${p.nome}: R$ ${p.preco.toFixed(2)}${p.permite_multiplas_unidades !== false ? ` x ${p.quantidade}` : ''}`).join('\n') :
       'Nenhum produto selecionado.'
     }
 ${generatedLeadData.servicos && generatedLeadData.servicos.length > 0 ?

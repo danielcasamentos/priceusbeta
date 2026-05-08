@@ -151,12 +151,15 @@ export function replaceContractVariables(
     const produtosLista = leadData.produtos
       .map((p: any) => {
         const cleanNome = removeEmojis(p.nome); // 🔥 REMOVE EMOJIS DO NOME DO PRODUTO
+        const showQty = p.permite_multiplas_unidades !== false;
+        const qtyText = showQty ? `${p.quantidade}x ` : '';
+        
         if (ocultarValores) {
-          // Quando ocultar valores intermediários está ativo, mostrar apenas o nome do produto
-          return `- ${cleanNome}`;
+          // Quando ocultar valores intermediários está ativo, mostrar apenas a quantidade e o nome do produto
+          return `• ${qtyText}${cleanNome}`;
         } else {
-          // Quando ocultar valores está desativado, mostrar nome e preço
-          return `- ${cleanNome}: R$ ${p.preco?.toFixed(2).replace('.', ',')}`;
+          // Quando ocultar valores está desativado, mostrar quantidade, nome e preço
+          return `• ${qtyText}${cleanNome} - R$ ${p.preco?.toFixed(2).replace('.', ',')}`;
         }
       })
       .join('\n');

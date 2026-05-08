@@ -133,7 +133,7 @@ export function QuotePage() {
     eventData: { tipo: '', data: '', cidade: '' },
     quoteData: {
       total: 0,
-      items: [] as { name: string; quantity: number; price: number }[],
+      items: [] as { name: string; quantity: number; price: number; permite_multiplas_unidades?: boolean }[],
       paymentMethod: ''
     }
   });
@@ -1354,6 +1354,7 @@ export function QuotePage() {
             name: p.nome,
             quantity: selectedProdutos[p.id],
             price: p.valor,
+            permite_multiplas_unidades: p.permite_multiplas_unidades,
           })),
         paymentMethod:
           formasPagamento.find((f) => f.id === selectedFormaPagamento)?.nome ||
@@ -1574,7 +1575,7 @@ export function QuotePage() {
                   <ul className="space-y-1 text-sm">
                     {summaryData.quoteData.items.map((item: any, index: number) => (
                       <li key={index} className="flex justify-between">
-                        <span>{item.quantity}x {item.name}</span>
+                        <span>{item.permite_multiplas_unidades === false ? item.name : `${item.quantity}x ${item.name}`}</span>
                         <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
                       </li>
                     ))}
@@ -2443,7 +2444,7 @@ export function QuotePage() {
                   {summaryData.quoteData.items.map((item, index) => (
                     <li key={index} className="flex justify-between">
                       <span>
-                        {item.quantity}x {item.name}
+                        {item.permite_multiplas_unidades === false ? item.name : `${item.quantity}x ${item.name}`}
                       </span>
                       <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
                     </li>
