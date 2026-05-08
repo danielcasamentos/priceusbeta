@@ -17,6 +17,10 @@ interface Product {
   mostrar_imagem: boolean;
   imagens?: string[];
   carrossel_automatico?: boolean;
+  /** Quando false, exibe toggle (selecionar/não) em vez de +/- quantidade */
+  permite_multiplas_unidades?: boolean;
+  /** Desconto percentual (0–100). Zero = sem desconto */
+  desconto_percentual?: number;
 }
 
 interface ProductEditorProps {
@@ -89,6 +93,8 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         mostrar_imagem: false,
         imagens: product.imagens || [],
         carrossel_automatico: product.carrossel_automatico || false,
+        permite_multiplas_unidades: product.permite_multiplas_unidades ?? true,
+        desconto_percentual: product.desconto_percentual ?? 0,
       };
 
       const { data, error: insertError } = await supabase
@@ -684,6 +690,55 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         >
           Produto obrigatório (sempre será incluído no orçamento)
         </label>
+      </div>
+
+      {/* Modo de seleção */}
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id={`multi-${product.ordem}`}
+          checked={product.permite_multiplas_unidades ?? true}
+          onChange={(e) => onChange('permite_multiplas_unidades', e.target.checked)}
+          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <label
+          htmlFor={`multi-${product.ordem}`}
+          className="text-sm text-gray-700"
+        >
+          Permite selecionar múltiplas unidades (ex: 2 álbuns)
+          <span className="text-xs text-gray-400 block">
+            Desmarcado = botão simples de selecionar/desselecionar (ideal para serviços)
+          </span>
+        </label>
+      </div>
+
+      {/* Desconto por produto */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Desconto neste produto (%)
+          <span className="text-xs text-gray-400 ml-2">0 = sem desconto</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <NumberInput
+            label=""
+            value={product.desconto_percentual ?? 0}
+            onChange={(value) => onChange('desconto_percentual', Math.min(100, Math.max(0, value)))}
+            min={0}
+            max={100}
+            step={5}
+            placeholder="0"
+          />
+          {(product.desconto_percentual ?? 0) > 0 && (
+            <span className="text-sm font-semibold text-green-600 whitespace-nowrap">
+              🏷️ {product.desconto_percentual}% OFF
+              {product.valor > 0 && (
+                <span className="text-gray-500 font-normal ml-1">
+                  → R$ {(product.valor * (1 - (product.desconto_percentual ?? 0) / 100)).toFixed(2).replace('.', ',')}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Botões de Ação */}

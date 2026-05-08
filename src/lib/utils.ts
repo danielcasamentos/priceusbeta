@@ -13,12 +13,19 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  // Strings "YYYY-MM-DD" são parseadas como UTC midnight pelo JS,
+  // o que em UTC-3 resulta no dia anterior. Parse manual corrige isso.
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number);
+    const d = new Date(year, month - 1, day); // local time — sem offset UTC
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+  }
+  const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric'
-  }).format(d)
+  }).format(d);
 }
 
 /**

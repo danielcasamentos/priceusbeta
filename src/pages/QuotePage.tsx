@@ -29,6 +29,12 @@ interface Produto {
   obrigatorio: boolean;
   imagem_url?: string;
   mostrar_imagem?: boolean;
+  imagens?: string[];
+  carrossel_automatico?: boolean;
+  /** false = botão toggle em vez de +/- quantidade */
+  permite_multiplas_unidades?: boolean;
+  /** 0–100. Desconto aplicado ao valor unitário */
+  desconto_percentual?: number;
 }
 
 interface FormaPagamento {
@@ -756,7 +762,9 @@ export function QuotePage() {
   const calculateSubtotal = () => {
     return produtos.reduce((total, produto) => {
       const qty = selectedProdutos[produto.id] || 0;
-      return total + produto.valor * qty;
+      const desconto = produto.desconto_percentual ?? 0;
+      const valorComDesconto = produto.valor * (1 - desconto / 100);
+      return total + valorComDesconto * qty;
     }, 0);
   };
 
@@ -1901,15 +1909,34 @@ export function QuotePage() {
                         {produto.resumo && (
                           <p className={`text-sm ${tema.cores.textoSecundario} mt-2 leading-relaxed`}>{produto.resumo}</p>
                         )}
-                        {!template.ocultar_valores_intermediarios && (
-                          <p className="text-lg sm:text-xl font-bold text-blue-600 mt-3">
-                            {formatCurrency(produto.valor)}
-                          </p>
-                        )}
+                        {!template.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div className="mt-3 flex items-center gap-2 flex-wrap">
+                              {desconto > 0 && (
+                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {desconto > 0 && (
+                                  <span className="text-sm text-gray-400 line-through">{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span className="text-lg sm:text-xl font-bold text-blue-600">{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span className="text-xs text-green-600">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-200">
+                    {/* Controle: toggle simples ou +/- quantidade */}
+                    {(produto.permite_multiplas_unidades ?? true) ? (
+                      <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-200">
                       <button
                         type="button"
                         onClick={() =>
@@ -1947,6 +1974,37 @@ export function QuotePage() {
                         {!produto.obrigatorio && !fieldsValidation.canAddProducts ? <Lock className="w-5 h-5" /> : '+'}
                       </button>
                     </div>
+                    ) : (
+                      // Modo toggle — selecionar/desselecionar (qty sempre 0 ou 1)
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        {produto.obrigatorio ? (
+                          <div className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold">
+                            <Check className="w-4 h-4" /> Incluído
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              handleProdutoQuantityChange(
+                                produto.id,
+                                selectedProdutos[produto.id] ? 0 : 1
+                              );
+                            }}
+                            className={`w-full py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
+                              selectedProdutos[produto.id]
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
