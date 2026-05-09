@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, CalendarOff, Flag, PartyPopper, Loader2, Plane, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -544,6 +544,32 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     concluido: 'Concluído',
     cancelado: 'Cancelado',
   };
+
+
+  const eventosAtivosPorData = useMemo(() => {
+    const map = new Map<string, any[]>();
+    eventos.forEach(e => {
+      if (e.status !== 'cancelado') {
+        const list = map.get(e.data_evento) || [];
+        list.push(e);
+        map.set(e.data_evento, list);
+      }
+    });
+    return map;
+  }, [eventos]);
+
+  const todosFeriadosMap = useMemo(() => {
+    const map = new Map<string, any>();
+    feriadosNacionais.forEach(f => {
+      map.set(f.date, { ...f, tipo: 'nacional' });
+    });
+    feriadosPersonalizados.forEach(f => {
+      map.set(f.data, f);
+    });
+    return map;
+  }, [feriadosNacionais, feriadosPersonalizados]);
+
+  const datasBloqueadasSet = useMemo(() => new Set(datasBloqueadas), [datasBloqueadas]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
