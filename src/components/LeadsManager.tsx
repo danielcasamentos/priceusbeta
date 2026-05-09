@@ -394,8 +394,24 @@ export function LeadsManager({ userId }: { userId: string }) {
           console.error('Falha ao criar notificação de lead convertido:', notificationError);
         }
 
+        // Insere na agenda (se tiver data de evento)
+        if (lead && lead.data_evento) {
+          try {
+            await supabase.from("eventos_agenda").insert({
+              user_id: userId,
+              data_evento: lead.data_evento,
+              tipo_evento: templates[lead.template_id]?.nome_template || "Evento",
+              cliente_nome: lead.nome_cliente || "Cliente",
+              cidade: lead.cidade_evento || lead.cidade || "",
+              status: "confirmado"
+            });
+          } catch (e) {
+            console.error("Erro ao inserir na agenda:", e);
+          }
+        }
+
         // Abre modal de configuração de entradas financeiras
-        if (lead && lead.valor_total > 0) {
+        if (lead) {
           const detalhe = lead ? await loadDetalhesOrcamento(lead, false) : null;
           setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
         }
@@ -1277,8 +1293,8 @@ export function LeadsManager({ userId }: { userId: string }) {
             await loadLeads();
             // 2. Enriquece o orcamento_detalhe com paymentMethod antes de abrir o painel
             const detalhe = await loadDetalhesOrcamento(contractLead, false);
-            // 3. Só abre o ConvertLeadModal se o lead tem valor > 0
-            if (contractLead.valor_total && Number(contractLead.valor_total) > 0) {
+            // 3. Abre o ConvertLeadModal
+            if (contractLead) {
               setConvertModal({ lead: contractLead, orcamentoDetalhe: detalhe, fromContract: true });
             }
             setContractLead(null);

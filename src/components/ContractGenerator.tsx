@@ -336,11 +336,28 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
 
       // ── Marca o lead como convertido automaticamente ao gerar o contrato ──
       try {
-        await supabase
+        const { data: updatedLead } = await supabase
           .from('leads')
           .update({ status: 'convertido' })
           .eq('id', lead.id)
-          .neq('status', 'convertido'); // só atualiza se ainda não estava convertido
+          .neq('status', 'convertido')
+          .select()
+          .maybeSingle();
+
+        if (updatedLead && lead.data_evento) {
+          try {
+            await supabase.from('eventos_agenda').insert({
+              user_id: userId,
+              data_evento: lead.data_evento,
+              tipo_evento: generatedLeadData.tipo_evento || 'Contrato',
+              cliente_nome: generatedLeadData.nome_cliente || lead.nome_cliente || 'Cliente',
+              cidade: generatedLeadData.cidade_evento || generatedLeadData.cidade || lead.cidade_evento || '',
+              status: 'confirmado'
+            });
+          } catch (e) {
+             console.error('Erro ao inserir na agenda via Contrato:', e);
+          }
+        }
       } catch (statusError) {
         console.warn('[ContractGenerator] Não foi possível marcar lead como convertido:', statusError);
       }
