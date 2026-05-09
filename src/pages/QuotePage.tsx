@@ -1294,8 +1294,13 @@ export function QuotePage() {
         setFieldErrors({ email: emailError, telefone: phoneError });
         setIsSubmitting(false);
         setHasSubmitted(false);
+        
+        // Mensagem explícita para o cliente
+        alert('⚠️ Opa! Alguns campos de contato parecem incorretos. Por favor, verifique o campo que está marcado em vermelho para podermos prosseguir com o envio!');
+        
         // Scroll suave para o campo com erro
-        document.getElementById('email-cliente')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const errorId = emailError ? 'email-cliente' : 'telefone-cliente';
+        document.getElementById(errorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
@@ -1533,67 +1538,66 @@ export function QuotePage() {
           />
         )}
         {/* ── Modal de Resumo e Envio (igual todos os outros temas) ── */}
+        {/* ── Modal de Resumo e Envio Dark Studio ── */}
         {showSummaryModal && (
           <div
-            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 16 }}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 16 }}
           >
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-              <div className="p-6 border-b">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Quase lá!</h2>
-                    <p className="text-gray-600 mt-1">
-                      Confira o resumo e envie seu pedido para{' '}
-                      <strong>{summaryData.profileName}</strong>.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+            <div style={{ background: '#07101f', border: '1px solid rgba(255,255,255,.08)', borderRadius: 24, boxShadow: '0 24px 64px rgba(0,0,0,.6)', maxWidth: 672, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h2 style={{ fontSize: 24, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Quase lá!</h2>
+                  <p style={{ color: 'rgba(255,255,255,.6)', marginTop: 4, fontSize: 15 }}>
+                    Confira o resumo e envie seu pedido para{' '}
+                    <strong style={{ color: '#22c55e' }}>{summaryData.profileName}</strong>.
+                  </p>
                 </div>
+                <button
+                  onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
+                  style={{ background: 'rgba(255,255,255,.05)', border: 'none', color: '#fff', padding: 8, borderRadius: '50%', cursor: 'pointer', transition: 'background .2s' }}
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4 border">
-                  <h3 className="font-semibold text-gray-800 mb-2">Seus Dados:</h3>
-                  <p className="text-sm"><strong>Nome:</strong> {summaryData.clientData.nome}</p>
-                  <p className="text-sm"><strong>Email:</strong> {summaryData.clientData.email}</p>
-                  <p className="text-sm"><strong>Telefone:</strong> {summaryData.clientData.telefone}</p>
+              <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 12, padding: 16, border: '1px solid rgba(255,255,255,.05)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Seus Dados:</h3>
+                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Nome:</strong> {summaryData.clientData.nome}</p>
+                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Email:</strong> {summaryData.clientData.email}</p>
+                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)' }}><strong style={{ color: '#fff' }}>Telefone:</strong> {summaryData.clientData.telefone}</p>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-4 border">
-                  <h3 className="font-semibold text-gray-800 mb-2">Detalhes do Evento:</h3>
-                  <p className="text-sm"><strong>Orçamento:</strong> {summaryData.eventData.tipo}</p>
-                  <p className="text-sm"><strong>Data:</strong> {summaryData.eventData.data}</p>
-                  <p className="text-sm"><strong>Cidade:</strong> {summaryData.eventData.cidade}</p>
+                <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 12, padding: 16, border: '1px solid rgba(255,255,255,.05)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Detalhes do Evento:</h3>
+                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Orçamento:</strong> {summaryData.eventData.tipo}</p>
+                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Data:</strong> {summaryData.eventData.data}</p>
+                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)' }}><strong style={{ color: '#fff' }}>Cidade:</strong> {summaryData.eventData.cidade}</p>
                 </div>
 
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <h3 className="font-semibold text-blue-900 mb-2">Itens Selecionados:</h3>
-                  <ul className="space-y-1 text-sm">
+                <div style={{ background: 'rgba(34,197,94,.05)', borderRadius: 12, padding: 16, border: '1px solid rgba(34,197,94,.15)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Itens Selecionados:</h3>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {summaryData.quoteData.items.map((item: any, index: number) => (
-                      <li key={index} className="flex justify-between">
+                      <li key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'rgba(255,255,255,.8)' }}>
                         <span>{item.permite_multiplas_unidades === false ? item.name : `${item.quantity}x ${item.name}`}</span>
-                        <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                        <span style={{ fontWeight: 600, color: '#fff' }}>{formatCurrency(item.price * item.quantity)}</span>
                       </li>
                     ))}
                   </ul>
-                  <div className="border-t mt-3 pt-3 flex justify-between font-bold text-lg text-blue-800">
+                  <div style={{ borderTop: '1px solid rgba(34,197,94,.2)', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 900, color: '#22c55e' }}>
                     <span>Valor Total:</span>
                     <span>{formatCurrency(summaryData.quoteData.total)}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-6 border-t bg-gray-50">
-                <div className="flex flex-col sm:flex-row gap-3">
+              <div style={{ padding: 24, borderTop: '1px solid rgba(255,255,255,.06)', background: 'rgba(0,0,0,.2)', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
-                    className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                    style={{ flex: '1 1 120px', padding: '14px 24px', background: 'rgba(255,255,255,.05)', color: '#fff', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', transition: 'background .2s' }}
                   >
                     Voltar
                   </button>
@@ -1601,10 +1605,10 @@ export function QuotePage() {
                     href={summaryData.waLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex-1 flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
                     onClick={() => analytics?.markAsConverted()}
+                    style={{ flex: '2 1 200px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 24px', background: 'linear-gradient(135deg,#16a34a,#22c55e)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(22,163,74,.3)', cursor: 'pointer' }}
                   >
-                    <Send className="w-6 h-6" />
+                    <Send className="w-5 h-5" />
                     Enviar via WhatsApp
                   </a>
                 </div>

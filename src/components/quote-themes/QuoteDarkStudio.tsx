@@ -235,7 +235,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                 <input
                   id="telefone-cliente"
                   type="tel"
-                  placeholder="WhatsApp *"
+                  placeholder="WhatsApp (Ex: 11999999999) *"
                   value={formData.telefone_cliente}
                   onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })}
                   className="ds-input"
