@@ -41,7 +41,7 @@ interface PublicProfileModernProps {
 
 export function PublicProfileModern({ profile, templates, reviews, averageRating }: PublicProfileModernProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-purple-100">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-cyan-50 via-blue-50 to-purple-100">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-12 relative border-4 border-cyan-200">
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-400/20 to-purple-400/20 rounded-full blur-3xl"></div>

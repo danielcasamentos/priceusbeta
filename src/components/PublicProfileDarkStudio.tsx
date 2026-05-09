@@ -97,7 +97,7 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
           </div>
 
           {/* Nome */}
-          <h1 className="ds-name" style={{ fontSize: 'clamp(28px,5vw,52px)', fontWeight: 900, letterSpacing: '-1.5px', marginBottom: 8, lineHeight: 1.1 }}>
+          <h1 className="ds-name" style={{ wordBreak: "break-word", fontSize: 'clamp(28px,5vw,52px)', fontWeight: 900, letterSpacing: '-1.5px', marginBottom: 8, lineHeight: 1.1 }}>
             {profile.nome_profissional}
           </h1>
 
@@ -176,7 +176,7 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
               </h2>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 24 }}>
               {templates.map((template, i) => (
                 <Link
                   key={template.id}

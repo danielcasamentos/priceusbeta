@@ -41,7 +41,7 @@ interface PublicProfileOriginalProps {
 
 export function PublicProfileOriginal({ profile, templates, reviews, averageRating }: PublicProfileOriginalProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-50 via-white to-green-50">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-12 border-4 border-blue-200">
           <div className="bg-gradient-to-r from-blue-600 to-green-600 h-32"></div>

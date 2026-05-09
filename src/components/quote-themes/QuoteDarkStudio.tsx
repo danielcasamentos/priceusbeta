@@ -205,7 +205,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
             <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 16 }}>
               Seus Dados
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
               <input
                 id="ds-nome"
                 type="text"
@@ -486,7 +486,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', marginBottom: 12 }}>
                       Detalhes do Parcelamento
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: 10 }}>
                       {/* Entrada */}
                       <div style={{ background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: '12px 14px' }}>
                         <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Entrada</div>

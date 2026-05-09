@@ -41,7 +41,7 @@ interface PublicProfileMagazineProps {
 
 export function PublicProfileMagazine({ profile, templates, reviews, averageRating }: PublicProfileMagazineProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-100 font-serif">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-100 font-serif">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-12 border-4 border-amber-600">
           <div className="relative bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 h-32 flex items-center justify-center">

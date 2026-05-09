@@ -41,7 +41,7 @@ interface PublicProfileMinimalistProps {
 
 export function PublicProfileMinimalist({ profile, templates, reviews, averageRating }: PublicProfileMinimalistProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-200 via-gray-200 to-slate-300">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-200 via-gray-200 to-slate-300">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
         <div className="bg-slate-50 rounded-3xl shadow-2xl overflow-hidden mb-12 border-4 border-slate-400">
           <div className="bg-slate-800 h-32"></div>

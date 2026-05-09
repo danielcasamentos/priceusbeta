@@ -24,7 +24,7 @@ export function QuoteClassico(props: QuoteClassicoProps) {
   const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData } = props;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-50 via-white to-green-50">
       <div className="max-w-4xl mx-auto px-4 py-8 sm:py-12">
         {profile && (
           <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-8 border-4 border-blue-200">
