@@ -26,13 +26,14 @@ interface QuoteDarkStudioProps {
   firstProductRef?: React.RefObject<HTMLDivElement>;
   totalSectionRef?: React.RefObject<HTMLDivElement>;
   breakdown?: any;
+  fieldErrors?: { email?: string; telefone?: string };
 }
 
 export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
   const {
     template, profile, produtos, selectedProdutos, formData,
     calculateTotal, handleSubmit, fieldsValidation,
-    camposExtras, camposExtrasData,
+    camposExtras, camposExtrasData, fieldErrors,
     formasPagamento = [],
     selectedFormaPagamento = '',
     setSelectedFormaPagamento,
@@ -206,33 +207,43 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
               Seus Dados
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
-              <input
-                id="ds-nome"
-                type="text"
-                placeholder="Nome Completo *"
-                value={formData.nome_cliente}
-                onChange={(e) => props.setFormData({ ...formData, nome_cliente: e.target.value })}
-                className="ds-input"
-                required
-              />
-              <input
-                id="ds-email"
-                type="email"
-                placeholder="E-mail *"
-                value={formData.email_cliente}
-                onChange={(e) => props.setFormData({ ...formData, email_cliente: e.target.value })}
-                className="ds-input"
-                required
-              />
-              <input
-                id="ds-tel"
-                type="tel"
-                placeholder="WhatsApp *"
-                value={formData.telefone_cliente}
-                onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })}
-                className="ds-input"
-                required
-              />
+              <div>
+                <input
+                  id="ds-nome"
+                  type="text"
+                  placeholder="Nome Completo *"
+                  value={formData.nome_cliente}
+                  onChange={(e) => props.setFormData({ ...formData, nome_cliente: e.target.value })}
+                  className="ds-input"
+                  required
+                />
+              </div>
+              <div>
+                <input
+                  id="email-cliente"
+                  type="email"
+                  placeholder="E-mail *"
+                  value={formData.email_cliente}
+                  onChange={(e) => props.setFormData({ ...formData, email_cliente: e.target.value })}
+                  className="ds-input"
+                  style={fieldErrors?.email ? { borderColor: "#ef4444", boxShadow: "0 0 0 3px rgba(239,68,68,0.1)" } : {}}
+                  required
+                />
+                {fieldErrors?.email && <p style={{color: "#ef4444", fontSize: "12px", marginTop: "4px", fontWeight: 600}}>{fieldErrors.email}</p>}
+              </div>
+              <div>
+                <input
+                  id="telefone-cliente"
+                  type="tel"
+                  placeholder="WhatsApp *"
+                  value={formData.telefone_cliente}
+                  onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })}
+                  className="ds-input"
+                  style={fieldErrors?.telefone ? { borderColor: "#ef4444", boxShadow: "0 0 0 3px rgba(239,68,68,0.1)" } : {}}
+                  required
+                />
+                {fieldErrors?.telefone && <p style={{color: "#ef4444", fontSize: "12px", marginTop: "4px", fontWeight: 600}}>{fieldErrors.telefone}</p>}
+              </div>
             </div>
           </div>
 
@@ -267,7 +278,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                       key={campo.id}
                       placeholder={campo.placeholder}
                       value={camposExtrasData[campo.id] || ''}
-                      onChange={(e) => props.setCamposExtrasData({ ...camposExtrasData, [campo.id]: e.target.value })}
+                      onChange={(e) => props.setCamposExtrasData({ ...camposExtrasData, fieldErrors, [campo.id]: e.target.value })}
                       required={campo.obrigatorio}
                       rows={3}
                       className="ds-input"
@@ -279,7 +290,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                       type={campo.tipo}
                       placeholder={`${campo.label}${campo.obrigatorio ? ' *' : ''}`}
                       value={camposExtrasData[campo.id] || ''}
-                      onChange={(e) => props.setCamposExtrasData({ ...camposExtrasData, [campo.id]: e.target.value })}
+                      onChange={(e) => props.setCamposExtrasData({ ...camposExtrasData, fieldErrors, [campo.id]: e.target.value })}
                       required={campo.obrigatorio}
                       className="ds-input"
                     />

@@ -1500,6 +1500,7 @@ export function QuotePage() {
       handleSubmit,
       setFormData,
       fieldsValidation,
+      fieldErrors,
       camposExtras,
       camposExtrasData,
       setCamposExtrasData,
