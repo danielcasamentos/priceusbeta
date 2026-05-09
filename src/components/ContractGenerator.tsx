@@ -352,7 +352,9 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
               tipo_evento: generatedLeadData.tipo_evento || 'Contrato',
               cliente_nome: generatedLeadData.nome_cliente || lead.nome_cliente || 'Cliente',
               cidade: generatedLeadData.cidade_evento || generatedLeadData.cidade || lead.cidade_evento || '',
-              status: 'confirmado'
+              status: 'confirmado',
+              origem: 'contrato',
+              observacoes: 'Gerado automaticamente via Contrato Digital'
             });
           } catch (e) {
              console.error('Erro ao inserir na agenda via Contrato:', e);

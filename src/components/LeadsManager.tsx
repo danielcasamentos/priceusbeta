@@ -403,7 +403,9 @@ export function LeadsManager({ userId }: { userId: string }) {
               tipo_evento: templates[lead.template_id]?.nome_template || "Evento",
               cliente_nome: lead.nome_cliente || "Cliente",
               cidade: lead.cidade_evento || lead.cidade || "",
-              status: "confirmado"
+              status: "confirmado",
+              origem: "lead_convertido",
+              observacoes: "Gerado automaticamente via conversão do Lead"
             });
           } catch (e) {
             console.error("Erro ao inserir na agenda:", e);
