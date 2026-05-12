@@ -128,20 +128,45 @@ export default function LandingPage() {
         .grid-plan { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
         .grid-footer{ display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
         .dash-layout { display: flex; gap: 48px; align-items: center; flex-wrap: wrap; justify-content: center; }
-        @media (max-width: 768px) {
+        
+        @media (max-width: 1024px) {
           .hidden-mobile { display: none !important; }
           .show-mobile   { display: flex !important; }
+          .dash-layout { flex-direction: column; gap: 24px; }
+        }
+        
+        @media (max-width: 768px) {
           .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 12px; }
-          .grid-vs    { grid-template-columns: 1fr; gap: 16px; }
-          .grid-vs .vs-divider { display: none; }
+          
+          .grid-vs {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            gap: 16px !important;
+            padding-bottom: 12px;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+          }
+          .grid-vs::-webkit-scrollbar { display: none; }
+          .grid-vs > div {
+            min-width: 85% !important;
+            scroll-snap-align: center;
+          }
+          .grid-vs .vs-divider { display: none !important; }
+          
           .grid-plan  { grid-template-columns: 1fr; }
           .grid-footer{ grid-template-columns: 1fr 1fr; gap: 24px; }
-          .dash-layout { flex-direction: column; gap: 24px; }
           .roi-callout { flex-direction: column; gap: 12px; text-align: center; }
           .roi-callout-right { text-align: center !important; }
         }
+        
         @media (max-width: 480px) {
-          .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 10px; }
+          .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 8px; }
+          .grid-4col > div { padding: 14px 10px !important; }
+          .grid-4col > div > div:nth-child(1) { font-size: 20px !important; }
+          .grid-4col > div > div:nth-child(2) { font-size: 11px !important; }
+          .grid-4col > div > div:nth-child(3) { font-size: 9px !important; }
+          
           .grid-footer{ grid-template-columns: 1fr; gap: 20px; }
         }
       `}</style>
