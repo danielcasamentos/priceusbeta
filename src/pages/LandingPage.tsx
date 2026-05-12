@@ -97,7 +97,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: '#07101f', color: '#fff', minHeight: '100vh' }}>
+    <div style={{ fontFamily: "'Inter', sans-serif", background: '#07101f', color: '#fff', minHeight: '100vh', overflowX: 'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -119,6 +119,31 @@ export default function LandingPage() {
         .phone-screen { transition: opacity .5s ease, transform .5s ease; }
         .step-card { transition: opacity .5s ease, transform .5s ease; }
         .bar { transform-origin: bottom; }
+        /* ── Nav responsive ── */
+        .hidden-mobile { display: flex; }
+        .show-mobile { display: none !important; }
+        /* ── Responsive grids ── */
+        .grid-4col { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+        .grid-vs   { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: start; }
+        .grid-plan { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+        .grid-footer{ display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .dash-layout { display: flex; gap: 48px; align-items: center; flex-wrap: wrap; justify-content: center; }
+        @media (max-width: 768px) {
+          .hidden-mobile { display: none !important; }
+          .show-mobile   { display: flex !important; }
+          .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 12px; }
+          .grid-vs    { grid-template-columns: 1fr; gap: 16px; }
+          .grid-vs .vs-divider { display: none; }
+          .grid-plan  { grid-template-columns: 1fr; }
+          .grid-footer{ grid-template-columns: 1fr 1fr; gap: 24px; }
+          .dash-layout { flex-direction: column; gap: 24px; }
+          .roi-callout { flex-direction: column; gap: 12px; text-align: center; }
+          .roi-callout-right { text-align: center !important; }
+        }
+        @media (max-width: 480px) {
+          .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 10px; }
+          .grid-footer{ grid-template-columns: 1fr; gap: 20px; }
+        }
       `}</style>
 
       {/* NAV */}
@@ -215,7 +240,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div ref={dashRef} style={{ display:'flex', gap:48, alignItems:'center', flexWrap:'wrap', justifyContent:'center' }}>
+          <div ref={dashRef} className="dash-layout">
             {/* Phone mockup */}
             <div style={{ width:280, flexShrink:0 }}>
               <div style={{ background:'#0d1520', borderRadius:44, border:'3px solid #1e2d42', overflow:'hidden', boxShadow:'0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05)', position:'relative' }}>
@@ -402,10 +427,10 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginTop:20, flexWrap:'wrap' }}>
+          <div className="grid-4col" style={{ marginTop:20 }}>
             {[['R$7.500','Receita gerada'],['0h','Trabalho manual'],['5 min','Do lead ao contrato'],['100%','Automatizado']].map(([v,l],i)=>(
               <div key={i} style={{ background:'rgba(34,197,94,.08)', border:'1px solid rgba(34,197,94,.25)', borderRadius:16, padding:'20px 16px', textAlign:'center' }}>
-                <div style={{ fontSize:'clamp(24px,3vw,36px)', fontWeight:900, color:'#22c55e', letterSpacing:'-1px' }}>{v}</div>
+                <div style={{ fontSize:'clamp(20px,3vw,36px)', fontWeight:900, color:'#22c55e', letterSpacing:'-1px' }}>{v}</div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,.45)', marginTop:4 }}>{l}</div>
               </div>
             ))}
@@ -428,7 +453,7 @@ export default function LandingPage() {
           </div>
 
           {/* Before vs After */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr auto 1fr', gap:20, marginBottom:48, alignItems:'start' }}>
+          <div className="grid-vs" style={{ marginBottom:48 }}>
             <div style={{ background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.25)', borderRadius:20, padding:'24px 20px' }}>
               <div style={{ fontSize:15, fontWeight:800, marginBottom:18, display:'flex', alignItems:'center', gap:8 }}>😩 Sem o PriceUs</div>
               {[['Leads respondidos','3 de 10'],['Orçamento enviado','Manual'],['Follow-up WhatsApp','Esquecido'],['Controle financeiro','Planilha'],['Leads perdidos/mês','~7'],].map(([l,v],i)=>(
@@ -440,7 +465,7 @@ export default function LandingPage() {
                 <span>💸 Deixou de ganhar</span><span style={{ color:'#f87171' }}>-R$28.000</span>
               </div>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'0 8px' }}>
+            <div className="vs-divider" style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'0 8px' }}>
               <div style={{ width:40, height:40, borderRadius:'50%', border:'2px solid rgba(255,255,255,.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:'rgba(255,255,255,.4)' }}>VS</div>
             </div>
             <div style={{ background:'rgba(22,163,74,.08)', border:'1px solid rgba(22,163,74,.25)', borderRadius:20, padding:'24px 20px', animation:'glow 3s ease infinite' }}>
@@ -457,7 +482,7 @@ export default function LandingPage() {
           </div>
 
           {/* Counters */}
-          <div ref={roiRef} style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:40 }}>
+          <div ref={roiRef} className="grid-4col" style={{ marginBottom:40 }}>
             {[[`R$${receita.toLocaleString('pt-BR')}`, 'Receita média anual', '#22c55e','↑ 127% com PriceUs'],[`${leads}`, 'Leads em 30 dias', '#fbbf24','↑ 3x mais que antes'],[`${conv}%`, 'Taxa de conversão', '#a78bfa','Média fotografia: 30%'],[`-${horas}h`, 'Economizado por mês', '#60a5fa','Sem PDF, planilha ou ctrl+c']].map(([v,l,c,t],i)=>(
               <div key={i} style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.09)', borderRadius:18, padding:'22px 18px', textAlign:'center', ...(i===0?{background:'rgba(22,163,74,.1)',border:'1px solid rgba(22,163,74,.3)', animation:'glow 2.5s ease infinite'}:{}) }}>
                 <div style={{ fontSize:'clamp(24px,3vw,36px)', fontWeight:900, color:c, letterSpacing:'-1px' }}>{v}</div>
@@ -468,27 +493,27 @@ export default function LandingPage() {
           </div>
 
           {/* ROI callout */}
-          <div style={{ background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.2)', borderRadius:20, padding:'24px 28px', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap', marginBottom:16 }}>
+          <div className="roi-callout" style={{ background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.2)', borderRadius:20, padding:'24px 28px', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap', marginBottom:16 }}>
             <div style={{ fontSize:48, animation:'moneyBounce 2s ease infinite' }}>😱</div>
             <div style={{ flex:1, minWidth:200 }}>
-              <div style={{ fontSize:18, fontWeight:900, color:'#f87171', marginBottom:4 }}>Sem PriceUs, você perde em média:</div>
+              <div style={{ fontSize:'clamp(15px,2vw,18px)', fontWeight:900, color:'#f87171', marginBottom:4 }}>Sem PriceUs, você perde em média:</div>
               <div style={{ fontSize:14, color:'rgba(255,255,255,.5)' }}>35% dos leads não respondem sem follow-up. Cada lead perdido ≈ R$4.000.</div>
             </div>
-            <div style={{ textAlign:'right' }}>
+            <div className="roi-callout-right" style={{ textAlign:'right' }}>
               <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginBottom:2 }}>Por mês:</div>
-              <div style={{ fontSize:48, fontWeight:900, color:'#f87171', letterSpacing:'-2px', lineHeight:1 }}>R$14.000</div>
+              <div style={{ fontSize:'clamp(32px,5vw,48px)', fontWeight:900, color:'#f87171', letterSpacing:'-2px', lineHeight:1 }}>R$14.000</div>
               <div style={{ fontSize:12, color:'#f87171', marginTop:2, fontWeight:600 }}>R$168.000 por ano 😱</div>
             </div>
           </div>
-          <div style={{ background:'rgba(22,163,74,.08)', border:'1px solid rgba(22,163,74,.3)', borderRadius:20, padding:'24px 28px', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap', animation:'glow 3s ease infinite' }}>
+          <div className="roi-callout" style={{ background:'rgba(22,163,74,.08)', border:'1px solid rgba(22,163,74,.3)', borderRadius:20, padding:'24px 28px', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap', animation:'glow 3s ease infinite' }}>
             <div style={{ fontSize:48 }}>🚀</div>
             <div style={{ flex:1, minWidth:200 }}>
-              <div style={{ fontSize:18, fontWeight:900, color:'#22c55e', marginBottom:4 }}>PriceUs recupera cada centavo:</div>
+              <div style={{ fontSize:'clamp(15px,2vw,18px)', fontWeight:900, color:'#22c55e', marginBottom:4 }}>PriceUs recupera cada centavo:</div>
               <div style={{ fontSize:14, color:'rgba(255,255,255,.5)' }}>Follow-up automático, orçamentos prontos e painel de leads — você fecha muito mais.</div>
             </div>
-            <div style={{ textAlign:'right' }}>
+            <div className="roi-callout-right" style={{ textAlign:'right' }}>
               <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginBottom:2 }}>Custo do PriceUs:</div>
-              <div style={{ fontSize:44, fontWeight:900, color:'#22c55e', letterSpacing:'-2px', lineHeight:1 }}>R$97/mês</div>
+              <div style={{ fontSize:'clamp(32px,5vw,44px)', fontWeight:900, color:'#22c55e', letterSpacing:'-2px', lineHeight:1 }}>R$97/mês</div>
               <div style={{ fontSize:12, color:'#22c55e', marginTop:2, fontWeight:700 }}>🔁 ROI: +2.380% ao mês</div>
             </div>
           </div>
@@ -517,7 +542,7 @@ export default function LandingPage() {
               <div style={{ fontSize:14, color:'#22c55e', fontWeight:600 }}>30 dias grátis para testar tudo</div>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 16px', marginBottom:32 }}>
+            <div className="grid-plan" style={{ marginBottom:32 }}>
               {planFeatures.map((f, i) => (
                 <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13 }}>
                   <Check size={15} color="#22c55e" style={{ flexShrink:0, marginTop:1 }} />
@@ -567,7 +592,7 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer style={{ background:'#04090f', padding:'48px 24px 24px', borderTop:'1px solid rgba(255,255,255,.06)' }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:40, marginBottom:40, flexWrap:'wrap' }}>
+          <div className="grid-footer">
             <div>
               <img src="/Logo Price Us.png" alt="PriceUs" style={{ height:36, width:'auto', marginBottom:14, filter:'brightness(1)' }}/>
               <p style={{ fontSize:13, color:'rgba(255,255,255,.35)', lineHeight:1.6, maxWidth:280 }}>
