@@ -35,6 +35,7 @@ export interface CompanyTransaction {
   observacoes?: string;
   created_at: string;
   updated_at: string;
+  cliente_nome?: string;
 }
 
 export interface TransactionFilters {
@@ -88,7 +89,7 @@ export function useCompanyTransactions(userId: string) {
     try {
       let query = supabase
         .from('company_transactions')
-        .select('*')
+        .select('*, leads:lead_id(client_name, nome)')
         .eq('user_id', userId);
 
       if (filters?.tipo) {
@@ -112,7 +113,12 @@ export function useCompanyTransactions(userId: string) {
       const { data, error: err } = await query;
 
       if (err) throw err;
-      setTransactions(data || []);
+      const mappedData = data?.map((t: any) => ({
+        ...t,
+        cliente_nome: t.leads?.client_name || t.leads?.nome || t.lead_id || '',
+      }));
+
+      setTransactions(mappedData || []);
     } catch (err) {
       console.error('Error loading transactions:', err);
       setError('Erro ao carregar transações');
