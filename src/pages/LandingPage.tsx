@@ -284,7 +284,7 @@ export default function LandingPage() {
                           ))}
                         </div>
                         <div style={{ fontSize:9, fontWeight:700, letterSpacing:'2px', color:'#6b8aaa', textTransform:'uppercase', marginBottom:8 }}>Leads recentes</div>
-                        {[['JM','Joyce Melo','📸 Casamento','R$7.500','rgba(34,197,94,.2)','#22c55e'],['CS','Camila Santos','📸+🎬','R$12.400','rgba(251,191,36,.2)','#fbbf24'],['FL','Fernanda Lima','📅 15 Anos','R$4.200','rgba(167,139,250,.2)','#a78bfa']].map(([av,nm,sv,vl,bg,cl],i)=>(
+                        {[['JM','Julia Martins','📸 Casamento','R$7.500','rgba(34,197,94,.2)','#22c55e'],['CS','Carla Silva','📸+🎬','R$12.400','rgba(251,191,36,.2)','#fbbf24'],['FL','Flavia Lima','📅 15 Anos','R$4.200','rgba(167,139,250,.2)','#a78bfa']].map(([av,nm,sv,vl,bg,cl],i)=>(
                           <div key={i} style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.06)', borderRadius:9, padding:'9px', marginBottom:6 }}>
                             <div style={{ width:30, height:30, borderRadius:'50%', background:bg, color:cl, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, flexShrink:0 }}>{av}</div>
                             <div style={{ flex:1 }}><div style={{ fontSize:10, fontWeight:600 }}>{nm}</div><div style={{ fontSize:8, color:'#6b8aaa' }}>{sv}</div></div>
@@ -307,7 +307,7 @@ export default function LandingPage() {
                         ))}
                       </div>
                       <div style={{ flex:1, padding:'12px 14px', background:'#0a1828', overflow:'hidden' }}>
-                        {[['JM','Joyce Melo','Casamento · R$7.500','rgba(34,197,94,.2)','#22c55e'],['CS','Camila Santos','Casamento+Video · R$12.400','rgba(251,191,36,.2)','#fbbf24'],['AR','Arthur Rocha','Ensaio · R$2.800','rgba(96,165,250,.2)','#60a5fa']].map(([av,nm,sv,bg,cl],i)=>(
+                        {[['JM','Julia Martins','Casamento · R$7.500','rgba(34,197,94,.2)','#22c55e'],['CS','Carla Silva','Casamento+Video · R$12.400','rgba(251,191,36,.2)','#fbbf24'],['AR','Alberto Souza','Ensaio · R$2.800','rgba(96,165,250,.2)','#60a5fa']].map(([av,nm,sv,bg,cl],i)=>(
                           <div key={i} style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)', borderRadius:11, padding:'11px', marginBottom:8, animation:`notifIn .4s ease ${i*.2+.3}s both` }}>
                             <div style={{ width:34, height:34, borderRadius:'50%', background:bg, color:cl, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0 }}>{av}</div>
                             <div style={{ flex:1 }}><div style={{ fontSize:11, fontWeight:600 }}>{nm}</div><div style={{ fontSize:9, color:'#6b8aaa', marginTop:1 }}>{sv}</div></div>
@@ -350,7 +350,7 @@ export default function LandingPage() {
                         <div style={{ fontSize:10, color:'#22c55e', fontWeight:700 }}>4 novas</div>
                       </div>
                       <div style={{ flex:1, padding:'12px 14px', background:'#0a1828', display:'flex', flexDirection:'column', gap:8 }}>
-                        {[['💰','rgba(34,197,94,.2)','Pagamento recebido!','Joyce Melo · R$3.750 entrada'],['🆕','rgba(251,191,36,.15)','Novo lead chegou','Camila Santos · R$12.400'],['✅','rgba(96,165,250,.15)','Contrato assinado','Fernanda Lima · confirmado'],['📅','rgba(167,139,250,.15)','Evento amanhã','Arthur Rocha · 14h00']].map(([ic,bg,tt,dd],i)=>(
+                        {[['💰','rgba(34,197,94,.2)','Pagamento recebido!','Julia Martins · R$3.750 entrada'],['🆕','rgba(251,191,36,.15)','Novo lead chegou','Carla Silva · R$12.400'],['✅','rgba(96,165,250,.15)','Contrato assinado','Flavia Lima · confirmado'],['📅','rgba(167,139,250,.15)','Evento amanhã','Alberto Souza · 14h00']].map(([ic,bg,tt,dd],i)=>(
                           <div key={i} style={{ display:'flex', gap:9, background:'rgba(255,255,255,.04)', borderRadius:10, padding:'10px', animation:`notifIn .4s ease ${i*.25+.2}s both` }}>
                             <div style={{ width:28, height:28, borderRadius:8, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>{ic}</div>
                             <div><div style={{ fontSize:11, fontWeight:700 }}>{tt}</div><div style={{ fontSize:9, color:'#6b8aaa', marginTop:1 }}>{dd}</div></div>

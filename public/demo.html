@@ -225,6 +225,19 @@
 
     /* MONEY RAIN */
     .money{position:fixed;pointer-events:none;font-size:18px;animation:moneyFall 2s ease both;z-index:999}
+    
+    /* RESPONSIVE / MOBILE FIXES */
+    @media (max-width: 768px) {
+      .scene { padding: 40px 20px 20px; }
+      .s1-row, .agenda-row { flex-direction: column; align-items: stretch; gap: 16px; }
+      .fin-grid { grid-template-columns: 1fr; }
+      .analyt-grid { grid-template-columns: 1fr; }
+      .feat-grid { grid-template-columns: repeat(2, 1fr); }
+      .map-card { flex-direction: column; align-items: stretch; }
+      .contract { padding: 20px; }
+      .ct-stamp { right: 10px; }
+      .vs { align-self: center; }
+    }
   </style>
 </head>
 <body>
@@ -300,7 +313,7 @@
 <div class="scene" id="s1">
   <div class="wa-notif">
     <div class="wa-h">📱 WhatsApp Business</div>
-    Novo lead! Joyce Melo criou um orçamento — <strong>R$7.500</strong> 🔥
+    Novo lead! Julia Martins criou um orçamento — <strong>R$7.500</strong> 🔥
   </div>
   <p class="tag a1">Leads em tempo real</p>
   <h1 class="t1 a2">Clientes chegando<br>enquanto você <span class="gradient-text">dorme</span></h1>
@@ -309,7 +322,7 @@
     <div class="lc card-green">
       <div class="av" style="background:rgba(34,197,94,.2);color:var(--gl)">JM</div>
       <div class="li-info">
-        <div class="li-name">Joyce Melo</div>
+        <div class="li-name">Julia Martins</div>
         <div class="li-svc">📸 Casamento · São Paulo</div>
       </div>
       <div style="text-align:right">
@@ -320,7 +333,7 @@
     <div class="lc card">
       <div class="av" style="background:rgba(96,165,250,.15);color:#60a5fa">AR</div>
       <div class="li-info">
-        <div class="li-name">Arthur Rocha</div>
+        <div class="li-name">Alberto Souza</div>
         <div class="li-svc">📸 Ensaio Externo · Campinas</div>
       </div>
       <div style="text-align:right">
@@ -331,7 +344,7 @@
     <div class="lc card">
       <div class="av" style="background:rgba(251,191,36,.15);color:#fbbf24">CS</div>
       <div class="li-info">
-        <div class="li-name">Camila Santos</div>
+        <div class="li-name">Carla Silva</div>
         <div class="li-svc">🎬 Casamento + Vídeo · Rio de Janeiro</div>
       </div>
       <div style="text-align:right">
@@ -342,7 +355,7 @@
     <div class="lc card">
       <div class="av" style="background:rgba(167,139,250,.15);color:#a78bfa">FL</div>
       <div class="li-info">
-        <div class="li-name">Fernanda Lima</div>
+        <div class="li-name">Flavia Lima</div>
         <div class="li-svc">📸 15 Anos · Belo Horizonte</div>
       </div>
       <div style="text-align:right">
@@ -413,7 +426,7 @@
       <div style="font-size:22px">📋</div>
     </div>
     <div class="ct-parties">
-      <div><strong>Contratante:</strong> Joyce Cristina de Melo</div>
+      <div><strong>Contratante:</strong> Julia Cristina Martins</div>
       <div><strong>Contratado:</strong> Daniel Azevedo Fotografia</div>
     </div>
     <div class="ct-block">
@@ -441,7 +454,7 @@
         <div class="nb-title">Contrato Assinado!</div>
         <div class="nb-time">agora</div>
       </div>
-      <div class="nb-body">Joyce Melo assinou o contrato e efetuou o pagamento de <strong style="color:var(--gl)">R$3.750</strong> (50% entrada) 🎉</div>
+      <div class="nb-body">Julia Martins assinou o contrato e efetuou o pagamento de <strong style="color:var(--gl)">R$3.750</strong> (50% entrada) 🎉</div>
     </div>
   </div>
 </div>
@@ -532,7 +545,7 @@
       </div>
       <div class="av-card av-blocked">
         <div class="ac-t">🔴 Data Ocupada!</div>
-        <div class="ac-d">14/06/2025 — Joyce Melo · Casamento confirmado.<br>Escolha outra data.</div>
+        <div class="ac-d">14/06/2025 — Julia Martins · Casamento confirmado.<br>Escolha outra data.</div>
       </div>
       <div class="av-card av-free">
         <div class="ac-t">🟢 Data Disponível!</div>
