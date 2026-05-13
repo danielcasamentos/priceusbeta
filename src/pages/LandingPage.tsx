@@ -139,18 +139,9 @@ export default function LandingPage() {
           .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 12px; }
           
           .grid-vs {
-            display: flex !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
             gap: 16px !important;
-            padding-bottom: 12px;
-            scroll-snap-type: x mandatory;
-            -webkit-overflow-scrolling: touch;
-          }
-          .grid-vs::-webkit-scrollbar { display: none; }
-          .grid-vs > div {
-            min-width: 85% !important;
-            scroll-snap-align: center;
           }
           .grid-vs .vs-divider { display: none !important; }
           
@@ -161,11 +152,11 @@ export default function LandingPage() {
         }
         
         @media (max-width: 480px) {
-          .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 8px; }
-          .grid-4col > div { padding: 14px 10px !important; }
-          .grid-4col > div > div:nth-child(1) { font-size: 20px !important; }
-          .grid-4col > div > div:nth-child(2) { font-size: 11px !important; }
-          .grid-4col > div > div:nth-child(3) { font-size: 9px !important; }
+          .grid-4col  { grid-template-columns: 1fr !important; gap: 12px !important; }
+          .grid-4col > div { padding: 20px 16px !important; }
+          .grid-4col > div > div:nth-child(1) { font-size: 26px !important; }
+          .grid-4col > div > div:nth-child(2) { font-size: 13px !important; }
+          .grid-4col > div > div:nth-child(3) { font-size: 11px !important; }
           
           .grid-footer{ grid-template-columns: 1fr; gap: 20px; }
         }

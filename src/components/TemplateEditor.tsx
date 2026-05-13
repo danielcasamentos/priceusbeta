@@ -25,6 +25,8 @@ interface Produto {
   mostrar_imagem: boolean;
   imagens?: string[];
   carrossel_automatico?: boolean;
+  permite_multiplas_unidades?: boolean;
+  desconto_percentual?: number;
 }
 
 interface FormaPagamento {
@@ -204,6 +206,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         mostrar_imagem: true,
         imagens: [],
         carrossel_automatico: false,
+        permite_multiplas_unidades: true,
+        desconto_percentual: 0,
       },
     ]);
   };
@@ -241,6 +245,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       mostrar_imagem: produtoOriginal.mostrar_imagem,
       imagens: produtoOriginal.imagens || [],
       carrossel_automatico: produtoOriginal.carrossel_automatico || false,
+      permite_multiplas_unidades: produtoOriginal.permite_multiplas_unidades ?? true,
+      desconto_percentual: produtoOriginal.desconto_percentual ?? 0,
     };
 
     const novosProdutos = [...produtos];
@@ -269,6 +275,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           mostrar_imagem: produto.mostrar_imagem,
           imagens: produto.imagens || [],
           carrossel_automatico: produto.carrossel_automatico || false,
+          permite_multiplas_unidades: produto.permite_multiplas_unidades ?? true,
+          desconto_percentual: produto.desconto_percentual ?? 0,
         };
 
         if (produto.id) {
