@@ -86,36 +86,55 @@ export function useCompanyTransactions(userId: string) {
     setLoading(true);
     setError(null);
 
+    // Helper to apply filters to a query
+    const applyFilters = (q: any) => {
+      if (filters?.tipo) q = q.eq('tipo', filters.tipo);
+      if (filters?.status) q = q.eq('status', filters.status);
+      if (filters?.categoria_id) q = q.eq('categoria_id', filters.categoria_id);
+      if (filters?.data_inicio) q = q.gte('data', filters.data_inicio);
+      if (filters?.data_fim) q = q.lte('data', filters.data_fim);
+      return q.order('data', { ascending: false });
+    };
+
     try {
-      let query = supabase
-        .from('company_transactions')
-        .select('*, leads:lead_id(client_name, nome)')
-        .eq('user_id', userId);
+      // Tenta primeiro com JOIN para obter o nome do cliente
+      const queryWithJoin = applyFilters(
+        supabase
+          .from('company_transactions')
+          .select('*, leads:lead_id(client_name, nome)')
+          .eq('user_id', userId)
+      );
 
-      if (filters?.tipo) {
-        query = query.eq('tipo', filters.tipo);
-      }
-      if (filters?.status) {
-        query = query.eq('status', filters.status);
-      }
-      if (filters?.categoria_id) {
-        query = query.eq('categoria_id', filters.categoria_id);
-      }
-      if (filters?.data_inicio) {
-        query = query.gte('data', filters.data_inicio);
-      }
-      if (filters?.data_fim) {
-        query = query.lte('data', filters.data_fim);
+      const { data, error: joinErr } = await queryWithJoin;
+
+      if (joinErr) {
+        // ⚠️ O JOIN falhou (ex: foreign key não configurada no Supabase).
+        // Faz fallback sem o JOIN para garantir que as transações carreguem.
+        console.warn('JOIN com leads falhou, tentando sem JOIN:', joinErr.message);
+
+        const fallbackQuery = applyFilters(
+          supabase
+            .from('company_transactions')
+            .select('*')
+            .eq('user_id', userId)
+        );
+
+        const { data: fallbackData, error: fallbackErr } = await fallbackQuery;
+
+        if (fallbackErr) throw fallbackErr;
+
+        const mappedData = fallbackData?.map((t: any) => ({
+          ...t,
+          cliente_nome: '',
+        }));
+
+        setTransactions(mappedData || []);
+        return;
       }
 
-      query = query.order('data', { ascending: false });
-
-      const { data, error: err } = await query;
-
-      if (err) throw err;
       const mappedData = data?.map((t: any) => ({
         ...t,
-        cliente_nome: t.leads?.client_name || t.leads?.nome || t.lead_id || '',
+        cliente_nome: t.leads?.client_name || t.leads?.nome || '',
       }));
 
       setTransactions(mappedData || []);
