@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { ContractTemplateEditor } from './ContractTemplateEditor';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
-import { FileText, Plus, Edit2, Trash2, Copy, Crown, AlertCircle } from 'lucide-react';
+import { FileText, Plus, Edit2, Trash2, Copy } from 'lucide-react';
 
 interface ContractTemplate {
   id: string;

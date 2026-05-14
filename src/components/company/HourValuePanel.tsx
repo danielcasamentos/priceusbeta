@@ -136,7 +136,10 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
           setLucroDesejado(data.lucro_desejado ?? 3000);
         }
       })
-      .finally(() => {
+      .then(() => {
+        setLoadingConfig(false);
+        setTimeout(() => { isFirstLoad.current = false; }, 200);
+      }, () => {
         setLoadingConfig(false);
         setTimeout(() => { isFirstLoad.current = false; }, 200);
       });

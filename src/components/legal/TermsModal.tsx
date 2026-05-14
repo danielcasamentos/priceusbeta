@@ -1,4 +1,3 @@
-import React from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { TERMS_AND_CONDITIONS_PT, PRIVACY_POLICY_PT } from '../../constants/terms';

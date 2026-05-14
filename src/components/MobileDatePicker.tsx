@@ -48,7 +48,7 @@ export function MobileDatePicker({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const browserInfo = detectBrowser();
+    const browserInfo = detectBrowser() as any;
     console.log('[MobileDatePicker] Browser detectado:', browserInfo);
 
     // Usar fallback para navegadores in-app problemáticos

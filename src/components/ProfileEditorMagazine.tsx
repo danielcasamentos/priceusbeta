@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Profile } from '../lib/supabase';
-import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, Camera, Palette, Mail, Phone, Instagram as InstagramIcon, Star, Award } from 'lucide-react';
+import { Save, Upload, Globe, Check, X, Link as LinkIcon, ExternalLink, Camera, Palette, Mail, Phone, Instagram as InstagramIcon, Star, Award } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
 
 interface ProfileEditorMagazineProps {
@@ -33,7 +33,7 @@ export function ProfileEditorMagazine({ userId }: ProfileEditorMagazineProps) {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        setProfile(data);
+        setProfile(data as any);
         setSlugInput(data.slug_usuario || '');
       } else {
         setProfile({
@@ -50,7 +50,7 @@ export function ProfileEditorMagazine({ userId }: ProfileEditorMagazineProps) {
           data_expiracao_trial: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        });
+        } as any);
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/utils';
-import { X, CheckCircle2, DollarSign, Calendar, Tag, CreditCard, Plus, Trash2, Loader2, AlertCircle, FileSignature } from 'lucide-react';
+import { X, CheckCircle2, DollarSign, Calendar, Tag, CreditCard, Trash2, Loader2, AlertCircle, FileSignature } from 'lucide-react';
 
 interface PaymentMethodData {
   id?: string;
@@ -40,10 +40,6 @@ function addMonths(d: string, n: number) {
   return dt.toISOString().split('T')[0];
 }
 
-function fmtBR(d: string) {
-  const [y, m, day] = d.split('-');
-  return `${day}/${m}/${y}`;
-}
 
 function detectMode(pm: PaymentMethodData | null | undefined, valorTotal: number): { mode: PaymentMode; entradaVal: number } {
   if (!pm) return { mode: 'avista', entradaVal: 0 };
@@ -111,10 +107,6 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
     setParcelas(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: val } : p));
   };
 
-  const addParcela = () => {
-    setParcelas(prev => [...prev, { numero: prev.length + 1, valor: 0, data: addMonths(dataInicial, prev.length), status: 'pendente' }]);
-    setNumParcelas(p => p + 1);
-  };
 
   const removeParcela = (i: number) => {
     setParcelas(prev => prev.filter((_, idx) => idx !== i).map((p, idx) => ({ ...p, numero: idx + 1 })));

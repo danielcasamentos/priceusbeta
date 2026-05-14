@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Trash2, Eye, Edit, Loader2, AlertCircle, Download } from 'lucide-react';
+import { Search, Trash2, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { ContractViewerModal } from './ContractViewerModal';
 
@@ -148,12 +148,12 @@ const [isDeleting, setIsDeleting] = useState(false);
   };
 
   const getStatusBadge = (status: string) => {
-    const styles = {
+    const styles: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
       signed: 'bg-green-100 text-green-800',
       expired: 'bg-red-100 text-red-800',
     };
-    const labels = {
+    const labels: Record<string, string> = {
       pending: 'Pendente',
       signed: 'Assinado',
       expired: 'Expirado',

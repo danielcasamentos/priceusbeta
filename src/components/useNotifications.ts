@@ -66,12 +66,14 @@ export function useNotifications(userId: string | undefined) {
       const trialNotification: Notification = {
         id: 'trial-reminder',
         user_id: userId!,
-        type: 'trial', // O tipo 'trial' já existe no CHECK da tabela
+        type: 'trial',
+        title: 'Aviso de Trial',
         message: `Seu período de teste termina em ${trialStatus.daysRemaining} dia(s)! Assine para não perder acesso.`,
         link: '/pricing',
-        read: false, // Corrigido de is_read para read
+        is_read: false,
         created_at: new Date().toISOString(),
-        related_id: null,
+        updated_at: new Date().toISOString(),
+        related_id: undefined,
       };
       allNotifications.unshift(trialNotification);
     }
@@ -79,7 +81,7 @@ export function useNotifications(userId: string | undefined) {
     return allNotifications.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()); // Garante que as notificações estejam ordenadas por data de criação
   }, [notifications, trialStatus, userId]); // Adicionado notifications como dependência
 
-  const unreadCount = useMemo(() => notificationsWithTrial.filter(n => !n.read).length, [notificationsWithTrial]);
+  const unreadCount = useMemo(() => notificationsWithTrial.filter(n => !n.is_read).length, [notificationsWithTrial]);
 
   const markAsRead = useCallback(async (id: string) => {
     if (id === 'trial-reminder' || !userId) return;

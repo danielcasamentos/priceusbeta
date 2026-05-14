@@ -48,8 +48,8 @@ export function useQuoteAnalytics(data: QuoteAnalyticsData | null) {
   const getUtmParams = () => {
     const params = new URLSearchParams(window.location.search);
     return {
-      utm_source: params.get('utm_source') || data.utmSource,
-      utm_campaign: params.get('utm_campaign') || data.utmCampaign,
+      utm_source: params.get('utm_source') || data?.utmSource,
+      utm_campaign: params.get('utm_campaign') || data?.utmCampaign,
     };
   };
 
@@ -81,7 +81,7 @@ export function useQuoteAnalytics(data: QuoteAnalyticsData | null) {
         throw error; // Lança o erro para ser capturado pelo catch
       }
 
-      console.log('[Analytics] Session created with browser:', browserInfo.browser);
+      console.log('[Analytics] Session created with browser:', browserInfo);
 
       if (edgeFunctionData?.id) {
         setAnalyticsId(edgeFunctionData.id);
@@ -101,7 +101,7 @@ export function useQuoteAnalytics(data: QuoteAnalyticsData | null) {
     }, 2000);
   };
 
-  const updateAnalytics = async (forceUpdate = false) => {
+  const updateAnalytics = async (_forceUpdate = false) => {
     if (!analyticsId) return;
 
     try {

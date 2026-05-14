@@ -1,10 +1,5 @@
 import { useEffect } from 'react';
 
-declare global {
-  interface Window {
-    Tawk_API: any;
-  }
-}
 
 interface TawkToChatProps {
   name?: string;

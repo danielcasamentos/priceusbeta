@@ -442,7 +442,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
 
       if (error) throw error;
 
-      setTemplate({ ...template, [field]: value });
+      setTemplate(prev => prev ? { ...prev, [field]: value } : null);
       setConfigSaveStatus({
         saving: false,
         message: 'Salvo com sucesso!',
@@ -472,9 +472,6 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     await handleUpdateTemplateConfig('sistema_geografico_ativo', ativo);
   };
 
-  const handleToggleBloquearCampos = async (ativo: boolean) => {
-    await handleUpdateTemplateConfig('bloquear_campos_obrigatorios', ativo);
-  };
 
   const handleSlugChange = async (value: string) => {
     const sanitized = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -769,7 +766,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           {activeTab === 'whatsapp' && (
             <WhatsAppTemplateEditor
               value={template?.texto_whatsapp || DEFAULT_WHATSAPP_TEMPLATE}
-              onChange={(value) => setTemplate({ ...template, texto_whatsapp: value })}
+              onChange={(value) => setTemplate(prev => prev ? { ...prev, texto_whatsapp: value } : null)}
               onSave={handleSaveWhatsAppTemplate}
               camposExtras={camposExtras}
             />

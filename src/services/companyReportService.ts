@@ -204,7 +204,7 @@ export async function generateCompanyReport(data: ReportData) {
       }
 
       const date = new Date(transaction.data).toLocaleDateString('pt-BR');
-      const tipo = transaction.tipo === 'receita' ? 'REC' : 'DESP';
+
       const valor = formatCurrency(Number(transaction.valor));
 
       pdf.setTextColor(100, 100, 100);

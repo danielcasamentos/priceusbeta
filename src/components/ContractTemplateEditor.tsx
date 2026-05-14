@@ -1,4 +1,4 @@
-import { useState, useRef, forwardRef } from 'react';
+import { useState, forwardRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { X, Copy, Check } from 'lucide-react';
 import ReactQuill from 'react-quill';

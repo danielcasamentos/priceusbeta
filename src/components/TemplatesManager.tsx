@@ -1,5 +1,22 @@
 import { useState, useEffect } from 'react';
-import { supabase, Template } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+
+// Local Template type matching the templates table shape
+interface Template {
+  id: string;
+  user_id: string;
+  nome_template: string;
+  titulo_template?: string;
+  slug_template?: string;
+  uuid?: string;
+  texto_whatsapp?: string;
+  sistema_sazonal_ativo?: boolean;
+  sistema_geografico_ativo?: boolean;
+  bloquear_campos_obrigatorios?: boolean;
+  ocultar_valores_intermediarios?: boolean;
+  ocultar_data_criacao?: boolean;
+  created_at: string;
+}
 import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';

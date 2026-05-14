@@ -95,7 +95,7 @@ export function ProductList({
       setLocalProducts(reorderedProducts);
       setHasUnsavedOrder(true);
 
-      reorderedProducts.forEach((product, index) => {
+      reorderedProducts.forEach((_product, index) => {
         onUpdate(index, 'ordem', index);
       });
 
@@ -201,7 +201,7 @@ export function ProductList({
                 product={product}
                 index={index}
                 onChange={(field, value) => {
-                  onUpdate(index, field, value);
+                  onUpdate(index, field as keyof Product, value);
                   const updated = [...localProducts];
                   updated[index] = { ...updated[index], [field]: value };
                   setLocalProducts(updated);

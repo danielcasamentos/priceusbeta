@@ -108,11 +108,10 @@ export class ContractDebugLogger {
   validateA4Layout(debugInfo: CSSDebugInfo): { isValid: boolean; issues: string[] } {
     const issues: string[] = [];
     const A4_WIDTH_MM = 210;
-    const A4_HEIGHT_MM = 297;
     const PIXELS_PER_MM = 3.78; // Aproximadamente 96 DPI / 25.4
 
     const expectedWidthPx = A4_WIDTH_MM * PIXELS_PER_MM;
-    const expectedHeightPx = A4_HEIGHT_MM * PIXELS_PER_MM;
+
 
     // Verifica largura
     if (Math.abs(debugInfo.containerWidth - expectedWidthPx) > 50) {

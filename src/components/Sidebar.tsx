@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -17,6 +17,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+
 
 
 interface SidebarProps {
@@ -44,7 +45,7 @@ export function Sidebar({
   });
   const { isDark, toggleTheme } = useTheme();
 
-  const menuSections = [
+  const menuSections: { title: string; items: ({ id: string; label: string; icon: ComponentType<{ className?: string }>; section: string; subItems?: { id: string; label: string }[] })[] }[] = [
     {
       title: 'Vendas',
       items: [
@@ -278,7 +279,7 @@ export function Sidebar({
                         }
                         toggleMenu(item.id);
                       } else if (item.id === 'chat') {
-                        window.Tawk_API?.maximize();
+                        if (typeof window !== 'undefined' && window.Tawk_API && typeof window.Tawk_API.maximize === 'function') window.Tawk_API.maximize();
                         if (isCollapsed) setIsCollapsed(false);
                       } else {
                         handleItemClick(item.id);

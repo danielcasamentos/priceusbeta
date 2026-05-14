@@ -1,10 +1,8 @@
-import { ShoppingCart, Send, Lock, User, AlertCircle, Check, CheckCircle, Copy, X, Trash2, FileText } from 'lucide-react';
+import { ShoppingCart, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
-import { MobileDatePicker } from '../MobileDatePicker';
-import { AvailabilityIndicator } from '../AvailabilityIndicator';
-import { PublicReviews } from '../PublicReviews';
+
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
@@ -19,13 +17,13 @@ export function QuoteDocumento(props: any) {
     formData,
     camposExtrasData,
     selectedFormaPagamento,
-    dataEvento,
+    dataEvento: _dataEvento,
     cupomAtivo,
-    cupomDesconto,
+    cupomDesconto: _cupomDesconto,
     cupomCodigo,
     cupomMensagem,
-    disponibilidade,
-    checkingAvailability,
+    disponibilidade: _disponibilidade,
+    checkingAvailability: _checkingAvailability,
     fieldsValidation,
     calculateTotal,
     handleProdutoQuantityChange,

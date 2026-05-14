@@ -20,10 +20,6 @@ export function RatePhotographerButton({
   profileName,
   aceitaAvaliacoes = true,
   aprovacaoAutomatica = false,
-  theme = {
-    primaryColor: 'blue',
-    buttonColor: 'bg-yellow-500 hover:bg-yellow-600'
-  }
 }: RatePhotographerButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const [rating, setRating] = useState(0);

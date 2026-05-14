@@ -106,19 +106,19 @@ export function CompanyInsights({ userId }: CompanyInsightsProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {allInsights.map((insight) => {
             const Icon = insight.icon;
-            const bgColors = {
+            const bgColors: Record<string, string> = {
               warning: 'bg-yellow-50 border-yellow-200',
               success: 'bg-green-50 border-green-200',
               info: 'bg-blue-50 border-blue-200',
               neutral: 'bg-gray-50 border-gray-200',
             };
-            const iconColors = {
+            const iconColors: Record<string, string> = {
               warning: 'text-yellow-600 bg-yellow-100',
               success: 'text-green-600 bg-green-100',
               info: 'text-blue-600 bg-blue-100',
               neutral: 'text-gray-600 bg-gray-100',
             };
-            const textColors = {
+            const textColors: Record<string, string> = {
               warning: 'text-yellow-900',
               success: 'text-green-900',
               info: 'text-blue-900',

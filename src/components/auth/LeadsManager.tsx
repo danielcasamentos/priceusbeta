@@ -11,17 +11,8 @@ import { checkAvailability, AvailabilityResult } from '../../services/availabili
 import { useReviewRequest } from '../../hooks/useReviewRequest';
 
 // Define interfaces for better type safety
-interface ProductDetail {
-  id: string;
-  nome: string;
-  valor: number;
-  quantidade: number;
-}
 
-interface CustomFieldDetail {
-  label: string;
-  valor: string;
-}
+
 
 // New interface to match what's saved in lead.orcamento_detalhe by QuotePage
 interface LeadOrcamentoDetalhe {
@@ -131,21 +122,6 @@ export function LeadsManager({ userId }: { userId: string }) {
       .eq('id', userId)
       .single();
 
-    // Reconstruct selected products with quantities for display in modal
-    const produtosDetalhes: ProductDetail[] = Object.keys(savedOrcamentoDetalhe.selectedProdutos || {})
-      .map(productId => {
-        const productInfo = savedOrcamentoDetalhe.produtos?.find(p => p.id === productId);
-        if (productInfo) {
-          return {
-            id: productId,
-            nome: productInfo.nome,
-            valor: productInfo.valor,
-            quantidade: savedOrcamentoDetalhe.selectedProdutos[productId],
-          };
-        }
-        return null;
-      })
-      .filter(Boolean) as ProductDetail[];
 
     const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || '';
 
@@ -350,7 +326,6 @@ export function LeadsManager({ userId }: { userId: string }) {
       }
 
       // 2. Gerar a mensagem com os detalhes carregados
-      const _disponibilidade = lead.data_evento ? await checkAvailability(userId, lead.data_evento) : null;
       const mensagem = await generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, false);
 
       // 🔥 GERAR LINK WA.ME

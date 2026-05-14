@@ -577,7 +577,7 @@ export default function LandingPage() {
           </div>
 
           <div style={{ display:'flex', gap:20, justifyContent:'center', marginTop:32, flexWrap:'wrap' }}>
-            {[[Shield,'Pagamento seguro'],[Check,'Sem taxas ocultas'],[Globe,'Suporte em português'],[Smartphone,'Todos os dispositivos']].map(([Icon,label],i)=>(
+            {([[Shield,'Pagamento seguro'],[Check,'Sem taxas ocultas'],[Globe,'Suporte em português'],[Smartphone,'Todos os dispositivos']] as [React.ElementType, string][]).map(([Icon,label],i)=>(
               <div key={i} style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:'rgba(255,255,255,.4)' }}>
                 <Icon size={14} color="#22c55e"/>{label}
               </div>

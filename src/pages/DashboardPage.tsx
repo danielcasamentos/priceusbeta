@@ -121,7 +121,7 @@ export function DashboardPage() {
   };
 
   const getBreadcrumbs = () => {
-    const crumbs = [{ label: 'Dashboard' }];
+    const crumbs: { label: string; onClick?: () => void }[] = [{ label: 'Dashboard' }];
 
     if (currentPage.startsWith('empresa-')) {
       crumbs.push({ label: 'Empresa', onClick: () => handlePageChange('empresa-dashboard') });

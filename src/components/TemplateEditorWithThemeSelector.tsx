@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Palette, Sparkles, Minimize2, Camera, Check, ExternalLink, Eye, Moon, Leaf, Image, Video, FileText } from 'lucide-react';
+import { Palette, Sparkles, Check, ExternalLink, Eye, Moon, Leaf, Image } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface TemplateEditorWithThemeSelectorProps {

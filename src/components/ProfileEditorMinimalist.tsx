@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Profile } from '../lib/supabase';
-import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, Star, Mail, Phone, Instagram as InstagramIcon } from 'lucide-react';
+import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, Mail, Phone, Instagram as InstagramIcon } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
 
 interface ProfileEditorMinimalistProps {
@@ -32,7 +32,7 @@ export function ProfileEditorMinimalist({ userId }: ProfileEditorMinimalistProps
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        setProfile(data);
+        setProfile(data as any);
         setSlugInput(data.slug_usuario || '');
       } else {
         setProfile({
@@ -49,7 +49,7 @@ export function ProfileEditorMinimalist({ userId }: ProfileEditorMinimalistProps
           data_expiracao_trial: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        });
+        } as any);
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);

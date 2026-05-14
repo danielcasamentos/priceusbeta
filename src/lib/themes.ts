@@ -5,7 +5,7 @@
  * sem afetar funcionalidades. Cada tema tem sua paleta e estilo único.
  */
 
-export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio';
+export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio' | 'escuro' | 'studio';
 
 export interface TemaConfig {
   nome: string;

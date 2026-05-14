@@ -199,11 +199,10 @@ export function AvailabilityIndicator({
         </div>
       );
 
-    case 'inativa':
-      // Não mostrar nada se o sistema estiver inativo
-      return null;
+    // 'inativa' handled in default below
 
     default:
+      // handles 'inativa' and any unknown status
       return null;
   }
 }

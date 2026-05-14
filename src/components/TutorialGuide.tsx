@@ -14,7 +14,7 @@ import {
   Ticket
 } from 'lucide-react';
 import { YouTubeEmbed } from './YouTubeEmbed';
-import { VIDEO_TUTORIALS, getVideoById } from '../config/videoTutorials';
+import { getVideoById } from '../config/videoTutorials';
 
 interface TutorialStep {
   id: number;
@@ -187,7 +187,7 @@ interface TutorialGuideProps {
   currentTab?: string;
 }
 
-export function TutorialGuide({ onClose, onNavigateToTab, currentTab }: TutorialGuideProps) {
+export function TutorialGuide({ onClose, onNavigateToTab, currentTab: _currentTab }: TutorialGuideProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 

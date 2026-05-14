@@ -32,7 +32,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        setProfile(data);
+        setProfile(data as any);
         setSlugInput(data.slug_usuario || '');
       } else {
         setProfile({
@@ -49,7 +49,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           data_expiracao_trial: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        });
+        } as any);
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);

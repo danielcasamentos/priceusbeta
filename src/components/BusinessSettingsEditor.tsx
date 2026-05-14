@@ -1,4 +1,3 @@
-import React from 'react';
 import { CompanyDataEditor } from './company/CompanyDataEditor';
 
 interface BusinessSettingsEditorProps {

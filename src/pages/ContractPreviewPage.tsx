@@ -152,7 +152,7 @@ export function ContractPreviewPage() {
     try {
       const { data: contractBundle, error: rpcError } = await supabase
         .rpc('get_public_contract_data', { p_token: token })
-        .single();
+        .single() as any;
 
       if (rpcError) throw rpcError;
 

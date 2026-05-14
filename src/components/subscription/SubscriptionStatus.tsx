@@ -1,4 +1,3 @@
-import React from 'react'
 import { useSubscription } from '../../hooks/useSubscription'
 import { Alert } from '../ui/Alert'
 

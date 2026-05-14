@@ -113,7 +113,6 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       expiresAt.setDate(expiresAt.getDate() + expirationDays);
 
       const orcamentoDetalhe = lead.orcamento_detalhe || {};
-      const selectedProdutos = orcamentoDetalhe.selecoes?.produtos || orcamentoDetalhe.selectedProdutos || {};
       const selectedFormaPagamento = orcamentoDetalhe.selecoes?.paymentMethod || orcamentoDetalhe.selectedFormaPagamento || orcamentoDetalhe.forma_pagamento_id;
       const formaPagamentoCompleta = orcamentoDetalhe.formasPagamento?.find((fp: any) => fp.id === selectedFormaPagamento);
 

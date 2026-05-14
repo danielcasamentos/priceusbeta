@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, X, Loader2, AlertCircle, MessageSquare, FileSignature, Calendar, DollarSign, TrendingUp, Users, Star } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, Check, Loader2, AlertCircle, MessageSquare, FileSignature, Calendar, DollarSign, TrendingUp, Users, Star } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNotifications } from '../hooks/useNotifications';

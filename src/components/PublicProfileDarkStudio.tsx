@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Sparkles, Star } from 'lucide-react';
+import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
 import { StarRating } from './StarRating';
 
 interface Profile {

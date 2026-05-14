@@ -20,7 +20,7 @@ interface Product {
 interface SortableProductItemProps {
   product: Product;
   index: number;
-  onChange: (field: keyof Product, value: any) => void;
+  onChange: (field: string, value: any) => void;
   onRemove: () => void;
   onDuplicate?: () => void;
   userId: string;

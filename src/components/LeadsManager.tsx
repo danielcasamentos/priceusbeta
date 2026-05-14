@@ -402,7 +402,7 @@ export function LeadsManager({ userId }: { userId: string }) {
               data_evento: lead.data_evento,
               tipo_evento: templates[lead.template_id]?.nome_template || "Evento",
               cliente_nome: lead.nome_cliente || "Cliente",
-              cidade: lead.cidade_evento || lead.cidade || "",
+              cidade: lead.cidade_evento || (lead as any).cidade || "",
               status: "confirmado",
               origem: "lead_convertido",
               observacoes: "Gerado automaticamente via conversão do Lead"
@@ -635,6 +635,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       abandonado: 'bg-gray-100 text-gray-800',
       em_negociacao: 'bg-purple-100 text-purple-800',
       fazer_followup: 'bg-orange-100 text-orange-800',
+  finalizado: 'Finalizado',
     };
     const labels: Record<string, string> = {
       novo: '🆕 Novo',
@@ -1512,7 +1513,7 @@ interface ProducaoTabProps {
   formatDate: (v: string) => string;
   onWorkflowChange: (leadId: string, workflow: any[]) => void;
   onLeadFinalizado: (lead: any) => void;
-  onSolicitarAvaliacao: (lead: any) => void;
+  onSolicitarAvaliacao?: (lead: any) => void;
 }
 
 function ProducaoTab({
@@ -1523,7 +1524,7 @@ function ProducaoTab({
   formatDate,
   onWorkflowChange,
   onLeadFinalizado,
-  onSolicitarAvaliacao,
+  onSolicitarAvaliacao: _onSolicitarAvaliacao = undefined,
 }: ProducaoTabProps) {
   if (leads.length === 0) {
     return (
@@ -1553,7 +1554,6 @@ function ProducaoTab({
           formatDate={formatDate}
           onWorkflowChange={onWorkflowChange}
           onLeadFinalizado={onLeadFinalizado}
-          onSolicitarAvaliacao={onSolicitarAvaliacao}
         />
       ))}
     </div>
@@ -1569,7 +1569,6 @@ interface ProducaoCardProps {
   formatDate: (v: string) => string;
   onWorkflowChange: (leadId: string, workflow: any[]) => void;
   onLeadFinalizado: (lead: any) => void;
-  onSolicitarAvaliacao: (lead: any) => void;
 }
 
 function ProducaoCard({
@@ -1580,7 +1579,6 @@ function ProducaoCard({
   formatDate,
   onWorkflowChange,
   onLeadFinalizado,
-  onSolicitarAvaliacao,
 }: ProducaoCardProps) {
   const workflow: WorkflowStep[] = Array.isArray(lead.workflow) ? lead.workflow : [];
 

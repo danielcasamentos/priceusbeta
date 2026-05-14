@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { X, Search, ChevronDown, ChevronUp, MessageCircle, BookOpen, ShoppingCart, CreditCard, MessageSquare, Settings, Shield, AlertCircle, Play, Building2, Calendar, FileSignature, Star, Palette } from 'lucide-react';
 import { VIDEO_TUTORIALS, VideoTutorial } from '../config/videoTutorials';
 import { YouTubeEmbed } from './YouTubeEmbed';
@@ -449,7 +449,7 @@ export function HelpCenter({ onClose }: HelpCenterProps) {
               <p className="text-xs text-gray-600 mt-1">Fale com nosso suporte em tempo real</p>
             </div>
             <button
-              onClick={() => window.Tawk_API?.maximize()}
+              onClick={() => window.Tawk_API && typeof (window.Tawk_API as any).maximize === 'function' && (window.Tawk_API as any).maximize()}
               className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               <MessageCircle className="w-5 h-5" />

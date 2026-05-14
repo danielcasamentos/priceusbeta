@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Upload, Image as ImageIcon, Trash2, CheckCircle, AlertCircle, Loader2, Copy } from 'lucide-react';
+import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy } from 'lucide-react';
 import { ImageUploadService, UploadProgress, formatFileSize } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
@@ -148,11 +148,11 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         });
 
         try {
-          productId = await autoSaveProduct();
-
-          if (!productId) {
+          const savedId = await autoSaveProduct();
+          if (!savedId) {
             throw new Error('Falha ao obter ID do produto');
           }
+          productId = savedId;
 
           // Atualizar estado local com o novo ID
           onChange('id', productId);
@@ -196,19 +196,19 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
       // Adiciona na galeria ou como a principal se não existir principal
       const imagensAtualizadas = [...(product.imagens || [])];
       
-      let finalImagemUrl = product.imagem_url;
+      let finalImagemUrl: string = product.imagem_url || '';
       if (!finalImagemUrl) {
-         finalImagemUrl = result.url;
+         finalImagemUrl = result.url || '';
          onChange('imagem_url', result.url);
       } else {
          if (imagensAtualizadas.length < 3) { // 💡 Limite: 3 imagens por produto (era 5)
-            imagensAtualizadas.push(result.url);
+            imagensAtualizadas.push(String(result.url));
             onChange('imagens', imagensAtualizadas);
          }
       }
       
       // PASSO 4: Salvar URL da imagem no banco
-      await saveImageToDatabase(finalImagemUrl, imagensAtualizadas, productId);
+      await saveImageToDatabase(finalImagemUrl, imagensAtualizadas, productId!);
 
       // PASSO 5: Atualizar estado local
       onChange('mostrar_imagem', true);
@@ -403,7 +403,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
       
       onChange('imagens', novasImagens);
       if (product.id) {
-         await saveImageToDatabase(product.imagem_url || '', novasImagens, product.id);
+         await saveImageToDatabase(product.imagem_url ?? '', novasImagens, product.id!);
       }
       setImageKey(Date.now());
       setSuccess('Imagem da galeria removida.');

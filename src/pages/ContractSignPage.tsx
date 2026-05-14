@@ -128,7 +128,7 @@ export function ContractSignPage() {
       // Isso é mais performático e contorna problemas de RLS para usuários não autenticados.
       const { data: contractBundle, error: rpcError } = await supabase
         .rpc('get_public_contract_data', { p_token: token })
-        .single();
+        .single() as any;
 
       if (rpcError) throw rpcError;
 

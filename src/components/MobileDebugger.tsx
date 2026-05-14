@@ -16,7 +16,7 @@ interface LogEntry {
 export function MobileDebugger() {
   const [isVisible, setIsVisible] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [tapCount, setTapCount] = useState(0);
+  const [_tapCount, setTapCount] = useState(0);
   const [browserInfo, setBrowserInfo] = useState<any>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 

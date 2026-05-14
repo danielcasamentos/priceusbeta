@@ -52,7 +52,7 @@ export function useLeadsManager(userId: string) {
         throw fetchError;
       }
 
-      setLeads(data || []);
+      setLeads((data as unknown as Lead[]) || []);
     } catch (err: any) {
       console.error('Erro ao buscar leads:', err);
       setError('Não foi possível carregar os leads. Tente novamente.');

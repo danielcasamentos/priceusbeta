@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, Flag, Plane, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -107,7 +107,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
           bloquear_feriados: configData.bloquear_feriados || false,
           regra_par_impar: configData.regra_par_impar || 'nenhum',
           regra_semanal: configData.regra_semanal || 'nenhum',
-          regra_semanal_inicio: configData.regra_semanal_inicio,
+          regra_semanal_inicio: configData.regra_semanal_inicio ?? null,
           calendar_ics_url: configData.calendar_ics_url || '',
           auto_sync_enabled: configData.auto_sync_enabled || false,
           last_calendar_sync: configData.last_calendar_sync || null,

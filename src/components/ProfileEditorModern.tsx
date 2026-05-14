@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Profile } from '../lib/supabase';
-import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, Star, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
+import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, Star, Sparkles, Award, Zap } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
 
 interface ProfileEditorModernProps {
@@ -32,7 +32,7 @@ export function ProfileEditorModern({ userId }: ProfileEditorModernProps) {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        setProfile(data);
+        setProfile(data as any);
         setSlugInput(data.slug_usuario || '');
       } else {
         setProfile({
@@ -49,7 +49,7 @@ export function ProfileEditorModern({ userId }: ProfileEditorModernProps) {
           data_expiracao_trial: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        });
+        } as any);
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);

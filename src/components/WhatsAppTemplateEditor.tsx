@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { MessageSquare, Eye, RotateCcw, Copy, Check, Info } from 'lucide-react';
 import { useDynamicFields, STANDARD_VARIABLES } from '../hooks/useDynamicFields';
 
@@ -103,7 +103,7 @@ export function WhatsAppTemplateEditor({
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null);
 
   // Hook para gerenciar variáveis dinâmicas
-  const { dynamicVariables, generateWhatsAppFieldsText } = useDynamicFields(camposExtras);
+  const { dynamicVariables } = useDynamicFields(camposExtras);
 
   // Dados mockados para o preview
   const mockData = {
@@ -156,11 +156,7 @@ export function WhatsAppTemplateEditor({
   /**
    * Copia variável para área de transferência
    */
-  const copyVariable = (varName: string) => {
-    navigator.clipboard.writeText(`{{${varName}}}`);
-    setCopiedVariable(varName);
-    setTimeout(() => setCopiedVariable(null), 2000);
-  };
+
 
   /**
    * Reseta template para o padrão
@@ -174,30 +170,7 @@ export function WhatsAppTemplateEditor({
   /**
    * Destaca variáveis no texto
    */
-  const highlightVariables = (text: string): JSX.Element => {
-    const parts = text.split(/(\[[A-Z_]+\])/g);
-    return (
-      <>
-        {parts.map((part, index) => {
-          if (part.match(/\[[A-Z_]+\]/)) {
-            const varName = part.slice(1, -1);
-            const isValid = WHATSAPP_VARIABLES.hasOwnProperty(varName);
-            return (
-              <span
-                key={index}
-                className={`font-mono font-bold ${
-                  isValid ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'
-                } px-1 rounded`}
-              >
-                {part}
-              </span>
-            );
-          }
-          return <span key={index}>{part}</span>;
-        })}
-      </>
-    );
-  };
+
 
   const invalidVars = validateTemplate();
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DollarSign, TrendingUp, Clock, PiggyBank, Plus, Calendar, Check, X } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, PiggyBank, Plus, Calendar } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { useCompanyTransactions } from '../../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
@@ -54,37 +54,6 @@ const PendingTransactionsPanel = ({ transactions }: { transactions: any[] }) => 
   );
 };
 
-const TransactionCalculator = ({ selectedTransactions }: { selectedTransactions: any[] }) => {
-  if (selectedTransactions.length === 0) return null;
-
-  const total = selectedTransactions.reduce((sum, t) => sum + Number(t.valor), 0);
-  const paidTotal = selectedTransactions.filter(t => t.status === 'pago').reduce((sum, t) => sum + Number(t.valor), 0);
-  const pendingTotal = selectedTransactions.filter(t => t.status === 'pendente').reduce((sum, t) => sum + Number(t.valor), 0);
-
-  return (
-    <div className="fixed bottom-4 right-4 bg-white dark:bg-[#0a1628] rounded-lg shadow-2xl p-4 w-80 border border-gray-200 dark:border-[rgba(255,255,255,.08)] z-50">
-      <h4 className="font-bold text-gray-800 dark:text-white mb-3">Calculadora de Seleção</h4>
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-600 dark:text-gray-400">Itens selecionados:</span>
-          <span className="font-medium dark:text-white">{selectedTransactions.length}</span>
-        </div>
-        <div className="flex justify-between text-green-600">
-          <span className="font-medium">Total Pago:</span>
-          <span className="font-bold">{formatCurrency(paidTotal)}</span>
-        </div>
-        <div className="flex justify-between text-yellow-600">
-          <span className="font-medium">Total Pendente:</span>
-          <span className="font-bold">{formatCurrency(pendingTotal)}</span>
-        </div>
-        <div className="flex justify-between text-blue-700 font-bold text-base border-t border-gray-200 dark:border-[rgba(255,255,255,.1)] pt-2 mt-2">
-          <span>Total Geral:</span>
-          <span>{formatCurrency(total)}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
 

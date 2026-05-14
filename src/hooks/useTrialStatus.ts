@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { isPrivilegedUser } from '../config/privilegedUsers';
 
+type UserArg = User | { id: string; email?: string } | string | null | undefined;
+
 interface TrialStatus {
   status: 'trial' | 'active' | 'expired' | 'canceled' | 'past_due' | null;
   daysRemaining: number | null;
@@ -11,7 +13,14 @@ interface TrialStatus {
   loading: boolean;
 }
 
-export function useTrialStatus(user: User | null): TrialStatus {
+export function useTrialStatus(userArg: UserArg): TrialStatus {
+  // Normalize: accept full User object or just an id string
+  const user: { id: string; email?: string } | null = userArg
+    ? typeof userArg === 'string'
+      ? { id: userArg }
+      : userArg
+    : null;
+
   const [trialStatus, setTrialStatus] = useState<TrialStatus>({
     status: null,
     daysRemaining: null,
@@ -105,7 +114,7 @@ export function useTrialStatus(user: User | null): TrialStatus {
     const interval = setInterval(fetchTrialStatus, 60000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [userArg]);
 
   return trialStatus;
 }

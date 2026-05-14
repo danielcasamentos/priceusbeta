@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { useContractCSSDebug } from '../lib/contractDebug';
+// @ts-ignore - contractCSS module
 import { getContractA4CSS } from '../lib/contractCSS';
 
 interface ContractPreviewProps {

@@ -1,4 +1,5 @@
 import { forwardRef, InputHTMLAttributes } from 'react';
+// @ts-ignore - no type declarations for react-input-mask
 import InputMask from 'react-input-mask';
 
 interface MaskedInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange'> {

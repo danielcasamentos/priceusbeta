@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { TrendingUp, DollarSign, ShoppingBag, Target } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { useCompanyTransactions } from '../../hooks/useCompanyTransactions';
@@ -64,13 +64,6 @@ export function CompanyAnalytics({ userId }: CompanyAnalyticsProps) {
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-  const leadConversionRate = (() => {
-    const leadTransactions = transactions.filter(t =>
-      t.origem === 'lead' &&
-      new Date(t.data).getFullYear() === selectedYear
-    );
-    return leadTransactions.length;
-  })();
 
   if (loading) {
     return (

@@ -416,6 +416,8 @@ export function QuotePage() {
 
     return false;
   }, [formData, camposExtrasData, selectedProdutos, produtos, selectedFormaPagamento, dataEvento, cidadeSelecionada, cupomCodigo]);
+  void _hasQuoteInProgress;
+
 
 
   // Chave para salvar/carregar o orçamento do localStorage

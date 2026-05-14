@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Fingerprint } from 'lucide-react';
+import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '../lib/utils';
@@ -50,12 +50,12 @@ interface ContractViewerModalProps {
 
 export function ContractViewerModal({ contract, onClose }: ContractViewerModalProps) {
   const getStatusInfo = (status: string) => {
-    const styles = {
+    const styles: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
       signed: 'bg-green-100 text-green-800',
       expired: 'bg-red-100 text-red-800',
     };
-    const labels = {
+    const labels: Record<string, string> = {
       pending: 'Pendente',
       signed: 'Assinado',
       expired: 'Expirado',
