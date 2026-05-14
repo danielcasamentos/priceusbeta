@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { StarRating } from '../components/StarRating';
 import { CheckCircle, AlertCircle, Star } from 'lucide-react';
 
 export function ReviewPage() {
   const { token } = useParams<{ token: string }>();
-  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);

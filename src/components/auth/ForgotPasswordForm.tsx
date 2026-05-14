@@ -89,15 +89,17 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
         </Alert>
       )}
 
-      <Input
-        label="E-mail"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        placeholder="seu@email.com"
-        autoFocus
-      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          placeholder="seu@email.com"
+          autoFocus
+        />
+      </div>
 
       <Button
         type="submit"

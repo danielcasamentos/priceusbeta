@@ -220,9 +220,9 @@ export function useCompanyTransactions(userId: string) {
     // Garante a consistência dos campos de parcela
     const finalUpdates = { ...updates };
     if (finalUpdates.is_installment === false) {
-      finalUpdates.installment_number = null;
-      finalUpdates.total_installments = null;
-      finalUpdates.parent_transaction_id = null;
+      finalUpdates.installment_number = undefined;
+      finalUpdates.total_installments = undefined;
+      finalUpdates.parent_transaction_id = undefined;
     }
 
     try {

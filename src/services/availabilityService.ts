@@ -18,8 +18,15 @@ export interface ConfiguracaoAgenda {
   modo_aviso: 'informativo' | 'sugestivo' | 'restritivo';
   agenda_ativa: boolean;
   calendar_ics_url?: string;
-  last_calendar_sync?: string;
+  last_calendar_sync?: string | null;
   auto_sync_enabled?: boolean;
+  // Campos de regras de bloqueio em massa
+  dias_semana_bloqueados?: number[];
+  regras_massa_ativas?: boolean;
+  bloquear_feriados?: boolean;
+  regra_par_impar?: 'nenhum' | 'pares' | 'impares';
+  regra_semanal?: 'nenhum' | 'trabalha_pares' | 'trabalha_impares';
+  regra_semanal_inicio?: string | null;
 }
 
 export interface EventoAgenda {

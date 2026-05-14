@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase, Lead, LeadStatus } from '../../lib/supabase'; // Importando LeadStatus para tipagem
+import { supabase, Lead } from '../../lib/supabase';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Search, Edit, ChevronDown, Loader2 } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Search, Edit, ChevronDown } from 'lucide-react';
 import { usePlanLimits } from '../../hooks/usePlanLimits';
 import { UpgradeLimitModal } from '../../components/UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../../lib/whatsappMessageGenerator';
@@ -51,11 +51,6 @@ interface TemplateFromDB {
   ocultar_valores_intermediarios: boolean;
 }
 
-interface OrcamentoDetalhado {
-  produtos: ProductDetail[];
-  formaPagamento?: PaymentMethod; // Use the imported PaymentMethod interface
-  camposPersonalizados: CustomFieldDetail[];
-}
 
 interface LeadWithReview extends Lead {
   avaliacao_id?: string | null;
@@ -65,7 +60,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [leads, setLeads] = useState<LeadWithReview[]>([]);
   const [contracts, setContracts] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em negociação' | 'fazer_followup'>('all');
+  const [filter, setFilter] = useState<'all' | 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em_negociacao' | 'fazer_followup'>('all');
   const [selectedLead, setSelectedLead] = useState<LeadWithReview | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,7 +147,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       })
       .filter(Boolean) as ProductDetail[];
 
-    const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento;
+    const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || '';
 
     const mensagem = generateWhatsAppMessage({
       clientName: lead.nome_cliente || '', // Corrected: Ensure clientName is always a string
@@ -355,7 +350,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       }
 
       // 2. Gerar a mensagem com os detalhes carregados
-      const disponibilidade = lead.data_evento ? await checkAvailability(userId, lead.data_evento) : null;
+      const _disponibilidade = lead.data_evento ? await checkAvailability(userId, lead.data_evento) : null;
       const mensagem = await generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, false);
 
       // 🔥 GERAR LINK WA.ME
@@ -610,7 +605,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         >
           Todos ({leads.length})
         </button>
-        {(['novo', 'abandonado', 'contatado', 'em negociação', 'fazer_followup', 'convertido', 'perdido'] as const).map((status) => (
+        {(['novo', 'abandonado', 'contatado', 'em_negociacao', 'fazer_followup', 'convertido', 'perdido'] as const).map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -620,7 +615,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {status === 'em negociação' ? 'Em Negociação' : status === 'fazer_followup' ? 'Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
+            {status === 'em_negociacao' ? 'Em Negociação' : status === 'fazer_followup' ? 'Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
           </button>
         ))}
       </div>
@@ -653,7 +648,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                   <ChevronDown className="w-4 h-4" />
                 </button>
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border z-10 hidden group-hover:block">
-                  {(['novo', 'contatado', 'em negociação', 'fazer_followup', 'convertido', 'perdido', 'abandonado'] as const).map(status => (
+                  {(['novo', 'contatado', 'em_negociacao', 'fazer_followup', 'convertido', 'perdido', 'abandonado'] as const).map(status => (
                     <a key={status} href="#" onClick={(e) => { e.preventDefault(); handleUpdateStatusSelected(status); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 capitalize">{status}</a>
                   ))}
                 </div>
@@ -715,7 +710,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                         {lead.nome_cliente || 'Não informado'}
                       </div>
                       {contracts[lead.id] && (
-                        <CheckSquare className="w-4 h-4 text-purple-600 ml-2" title="Contrato gerado para este lead" />
+                        <CheckSquare className="w-4 h-4 text-purple-600 ml-2" aria-label="Contrato gerado para este lead" />
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -942,7 +937,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                 <div>
                   <h3 className="font-semibold text-gray-700">Atualizar Status</h3>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(['novo', 'contatado', 'em negociação', 'fazer_followup', 'convertido', 'perdido', 'abandonado'] as const).map((status: Lead['status']) => (
+                    {(['novo', 'contatado', 'em_negociacao', 'fazer_followup', 'convertido', 'perdido', 'abandonado'] as const).map((status: Lead['status']) => (
                       <button
                         key={status}
                         onClick={() => updateLeadStatus(selectedLead.id, status)}
@@ -952,7 +947,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                         }`}
                       >
-                        {status === 'em negociação' ? '🤝 Em Negociação' : status === 'fazer_followup' ? '📞 Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
+                        {status === 'em_negociacao' ? '🤝 Em Negociação' : status === 'fazer_followup' ? '📞 Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
                       </button>
                     ))}
                   </div>

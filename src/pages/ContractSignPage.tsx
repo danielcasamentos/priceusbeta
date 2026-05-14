@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ContractCanvas } from '../components/ContractCanvas';
-import { FileSignature, AlertTriangle, CheckCircle, Clock, ExternalLink, Smartphone } from 'lucide-react';
+import { FileSignature, AlertTriangle, Clock, ExternalLink, Smartphone } from 'lucide-react';
 import { replaceContractVariables, type BusinessSettings, type ClientData, type LeadData } from '../lib/contractVariables';
 import { isInAppBrowser } from '../lib/browserDetection';
 
@@ -51,7 +51,6 @@ const isValidDocument = (value: string) => {
   return len === 11 || len === 14;
 };
 
-const isCpf = (value: string) => cleanDocument(value).length === 11;
 
 export function ContractSignPage() {
   const { token } = useParams<{ token: string }>();

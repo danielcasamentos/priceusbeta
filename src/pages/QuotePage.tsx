@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useLeadCapture } from '../hooks/useLeadCapture';
-import { useRequiredFieldsValidation, ValidationResult } from '../hooks/useRequiredFieldsValidation';
+import { useRequiredFieldsValidation } from '../hooks/useRequiredFieldsValidation';
 import { useQuoteAnalytics } from '../hooks/useQuoteAnalytics';
 import { formatCurrency } from '../lib/utils';
-import { ShoppingCart, Send, Lock, User, AlertCircle, Check, CheckCircle, Copy, X, Trash2 } from 'lucide-react';
+import { ShoppingCart, Send, Lock, User, AlertCircle, Check, X, Trash2 } from 'lucide-react';
 import { checkAvailability, getOrCreateAgendaConfig, type AvailabilityResult } from '../services/availabilityService';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { CookieBanner } from '../components/CookieBanner';
@@ -17,7 +17,7 @@ import { PublicReviews } from '../components/PublicReviews';
 import { RatePhotographerButton } from '../components/RatePhotographerButton';
 import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
 import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
-import { detectBrowser, getReferrer, logBrowserInfo, isInAppBrowser } from '../lib/browserDetection';
+import { detectBrowser, getReferrer, logBrowserInfo } from '../lib/browserDetection';
 import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
 
 interface Produto {
@@ -137,7 +137,7 @@ export function QuotePage() {
       paymentMethod: ''
     }
   });
-  const [copied, setCopied] = useState(false);
+  const [_copied, _setCopied] = useState(false);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
@@ -145,7 +145,7 @@ export function QuotePage() {
   const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [agendaConfig, setAgendaConfig] = useState<any>(null);
-  const [feriadosNacionais, setFeriadosNacionais] = useState<string[]>([]); // Estado para feriados da API
+  const [_feriadosNacionais, _setFeriadosNacionais] = useState<string[]>([]); // Estado para feriados da API
   const [datasBloqueadas, setDatasBloqueadas] = useState<string[]>([]);
   const [periodosBloqueados, setPeriodosBloqueados] = useState<{data_inicio: string, data_fim: string}[]>([]);
 
@@ -385,7 +385,7 @@ export function QuotePage() {
   }, [cupomAtivo]);
 
   // Verifica se há algum progresso no orçamento para exibir o botão "Limpar Orçamento"
-  const hasQuoteInProgress = useMemo(() => {
+  const _hasQuoteInProgress = useMemo(() => {
     // Verifica campos do formulário principal
     if (formData.nome_cliente || formData.email_cliente || formData.telefone_cliente) return true;
 

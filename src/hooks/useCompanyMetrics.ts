@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { CompanyTransaction } from './useCompanyTransactions';
 
 interface MonthlyMetrics {
@@ -147,6 +147,9 @@ export function useCompanyMetrics(transactions: CompanyTransaction[]) {
       lucro: receitas - despesas,
       quantidade_vendas,
       ticket_medio: quantidade_vendas > 0 ? receitas / quantidade_vendas : 0,
+      pendingReceitas: 0,
+      pendingDespesas: 0,
+      isFuture: false,
       melhor_mes: { mes: melhor_mes.mes, valor: melhor_mes.lucro },
       pior_mes: { mes: pior_mes.mes, valor: pior_mes.lucro },
       media_mensal,

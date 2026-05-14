@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { WorkflowStep, SlaResult, WorkflowProgress, SlaStatus } from '../types/workflow';
+import { WorkflowStep, SlaResult, WorkflowProgress } from '../types/workflow';
 import { supabase } from '../lib/supabase';
 import { Lead } from '../lib/supabase';
 

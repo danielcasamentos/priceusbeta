@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, Share, PlusSquare, X, Smartphone } from 'lucide-react';
 
 interface AppInstallBannerProps {

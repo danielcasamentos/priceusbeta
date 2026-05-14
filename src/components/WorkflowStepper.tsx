@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 /** Gera UUID v4 usando a API nativa do browser — sem dependência externa */
 const uuidv4 = () => crypto.randomUUID();
 import {
@@ -374,7 +374,7 @@ export function WorkflowStepper({
 
       {/* Lista de etapas */}
       <div className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-        {workflow.map((step, index) => {
+        {workflow.map((step, _index) => {
           const sla = slaMap[step.id] || calcularSlaEtapa(step);
           const isConcluido = step.status === 'concluido';
           const isPausado = step.status === 'aguardando_cliente';

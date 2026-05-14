@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, CalendarOff, Flag, PartyPopper, Loader2, Plane, RefreshCw } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, Flag, Plane, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { CalendarImportModal } from './CalendarImportModal';
@@ -19,12 +19,10 @@ import {
   getHistoricoImportacoes,
   rollbackImportacao,
   contarEventosAtivos,
-  uploadICSFile,
   type EventoAgenda,
   type ConfiguracaoAgenda,
   type HistoricoImportacao,
 } from '../services/availabilityService';
-import { NumberInput } from './ui/NumberInput';
 
 interface AgendaManagerProps {
   userId: string;
@@ -89,7 +87,6 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   const [eventosAtivos, setEventosAtivos] = useState(0);
 
   const planLimits = usePlanLimits();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadData();
@@ -546,30 +543,6 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   };
 
 
-  const eventosAtivosPorData = useMemo(() => {
-    const map = new Map<string, any[]>();
-    eventos.forEach(e => {
-      if (e.status !== 'cancelado') {
-        const list = map.get(e.data_evento) || [];
-        list.push(e);
-        map.set(e.data_evento, list);
-      }
-    });
-    return map;
-  }, [eventos]);
-
-  const todosFeriadosMap = useMemo(() => {
-    const map = new Map<string, any>();
-    feriadosNacionais.forEach(f => {
-      map.set(f.date, { ...f, tipo: 'nacional' });
-    });
-    feriadosPersonalizados.forEach(f => {
-      map.set(f.data, f);
-    });
-    return map;
-  }, [feriadosNacionais, feriadosPersonalizados]);
-
-  const datasBloqueadasSet = useMemo(() => new Set(datasBloqueadas), [datasBloqueadas]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -1046,7 +1019,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                             <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.6)]">{new Date(feriado.date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
                           </div>
                           <button
-                            onClick={() => isBlocked ? desbloquearData(userId, feriado.date).then(loadData) : bloquearData(userId, feriado.date, `Feriado: ${feriado.name}`).then(loadData)}
+                            onClick={() => isBlocked ? desbloquearData(userId, feriado.date).then(loadData) : bloquearData(userId, feriado.date, `Feriado: ${feriado.name}`, '').then(loadData)}
                             className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${isBlocked ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] text-gray-700 dark:text-[rgba(255,255,255,0.7)] hover:bg-gray-300 dark:hover:bg-[rgba(255,255,255,0.15)]'}`}
                           >
                             {isBlocked ? 'Bloqueado' : 'Trabalhar'}

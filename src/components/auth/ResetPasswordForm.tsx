@@ -91,26 +91,30 @@ export function ResetPasswordForm() {
         </Alert>
       )}
 
-      <Input
-        label="Nova Senha"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-        placeholder="Digite sua nova senha (mínimo 6 caracteres)"
-        minLength={6}
-        autoFocus
-      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          placeholder="Digite sua nova senha (mínimo 6 caracteres)"
+          minLength={6}
+          autoFocus
+        />
+      </div>
 
-      <Input
-        label="Confirmar Nova Senha"
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        required
-        placeholder="Digite a senha novamente"
-        minLength={6}
-      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Nova Senha</label>
+        <Input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          placeholder="Digite a senha novamente"
+          minLength={6}
+        />
+      </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">

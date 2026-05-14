@@ -58,7 +58,7 @@ export async function generateCompanyReport(data: ReportData) {
   ];
 
   summaryData.forEach(item => {
-    pdf.setTextColor(...item.color);
+    pdf.setTextColor(...(item.color as [number, number, number]));
     pdf.text(item.label, 25, yPos);
     pdf.setFont('helvetica', 'bold');
     pdf.text(item.value, 100, yPos);

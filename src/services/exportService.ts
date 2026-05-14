@@ -84,7 +84,6 @@ export function generateCsv(records: FinancialRecord[]): string {
   const despesas = records.filter(r => r.type === 'despesa').reduce((s, r) => s + r.amount, 0);
   const saldo = receitas - despesas;
 
-  const empty12 = () => Array(12).fill('').join(SEP);
   const footerLine = (label: string, val: string) =>
     ['', `${label}: ${val}`, ...Array(10).fill('')].join(SEP);
 
