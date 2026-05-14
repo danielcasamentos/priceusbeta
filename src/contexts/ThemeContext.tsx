@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 type Theme = 'light' | 'dark';
-type ThemeSource = 'manual' | 'system';
 
 interface ThemeContextType {
   theme: Theme;
@@ -10,59 +9,76 @@ interface ThemeContextType {
   isDark: boolean;
 }
 
+/** Única conta autorizada a usar o modo escuro do dashboard */
+const DARK_MODE_ALLOWED_EMAIL = 'odanielfotografo@icloud.com';
+
 const ThemeContext = createContext<ThemeContextType>({
   theme: 'light',
   toggleTheme: () => {},
   isDark: false,
 });
 
-/** Retorna a preferência do sistema operacional */
-function getSystemTheme(): Theme {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('priceus-theme') as Theme | null;
-    return saved ?? getSystemTheme();
-  });
-
+  const [theme, setTheme] = useState<Theme>('light');
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Busca o usuário logado e a preferência de tema dele no BD
+  // Busca o usuário logado — só carrega tema dark se for a conta autorizada
   useEffect(() => {
     let mounted = true;
-    const fetchUserAndTheme = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-      
-      const uid = session.user.id;
-      if (mounted) setUserId(uid);
 
+    const applyThemeForUser = async (session: any) => {
+      if (!session?.user) {
+        // Sem sessão → sempre light
+        if (mounted) {
+          setUserEmail(null);
+          setUserId(null);
+          setTheme('light');
+        }
+        return;
+      }
+
+      const email = session.user.email ?? '';
+      const uid = session.user.id;
+
+      if (mounted) {
+        setUserEmail(email);
+        setUserId(uid);
+      }
+
+      // Apenas a conta autorizada pode ter dark mode
+      if (email !== DARK_MODE_ALLOWED_EMAIL) {
+        if (mounted) setTheme('light');
+        return;
+      }
+
+      // Para a conta autorizada: carrega preferência salva no banco
       const { data } = await supabase
         .from('profiles')
         .select('tema_preferido')
         .eq('id', uid)
         .maybeSingle();
 
-      if (data?.tema_preferido && (data.tema_preferido === 'light' || data.tema_preferido === 'dark')) {
-        if (mounted) {
-          setTheme(data.tema_preferido as Theme);
-          localStorage.setItem('priceus-theme-source', 'manual');
-        }
+      if (mounted && data?.tema_preferido === 'dark') {
+        setTheme('dark');
+      } else if (mounted) {
+        // Fallback: preferência do localStorage (só para conta autorizada)
+        const saved = localStorage.getItem('priceus-theme') as Theme | null;
+        if (saved === 'dark') setTheme('dark');
       }
     };
 
-    fetchUserAndTheme();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        if (mounted) setUserId(session.user.id);
-        fetchUserAndTheme(); // refetch theme on login
-      } else {
-        if (mounted) setUserId(null);
-      }
+    // Sessão inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      applyThemeForUser(session);
     });
+
+    // Mudanças de sessão (login / logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        applyThemeForUser(session);
+      }
+    );
 
     return () => {
       mounted = false;
@@ -70,44 +86,29 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Aplica a classe 'dark' no <html> e persiste a escolha
+  // Aplica / remove a classe 'dark' no <html>
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
+    // Garantia dupla: nunca aplicar dark para contas não autorizadas
+    if (theme === 'dark' && userEmail === DARK_MODE_ALLOWED_EMAIL) {
       root.classList.add('dark');
+      localStorage.setItem('priceus-theme', 'dark');
     } else {
       root.classList.remove('dark');
+      localStorage.setItem('priceus-theme', 'light');
     }
-    localStorage.setItem('priceus-theme', theme);
-  }, [theme]);
-
-  // 🖥 Segue mudanças do sistema operacional APENAS se o usuário não escolheu manualmente
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const handleSystemChange = (e: MediaQueryListEvent) => {
-      const source = localStorage.getItem('priceus-theme-source') as ThemeSource | null;
-      // Só atualiza se a origem for 'system' (ou sem origem — primeira visita / mobile)
-      if (source !== 'manual') {
-        const newTheme: Theme = e.matches ? 'dark' : 'light';
-        setTheme(newTheme);
-        localStorage.setItem('priceus-theme-source', 'system');
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleSystemChange);
-    return () => mediaQuery.removeEventListener('change', handleSystemChange);
-  }, []);
+  }, [theme, userEmail]);
 
   /**
-   * Toggle manual — usado apenas no Desktop (Sidebar).
-   * Marca a origem como 'manual' para que mudanças do sistema não sobrescrevam.
+   * Toggle manual — visível e funcional apenas para a conta autorizada.
+   * Para outras contas, o botão não aparece (controlado no Sidebar).
    */
   const toggleTheme = async () => {
+    if (userEmail !== DARK_MODE_ALLOWED_EMAIL) return; // segurança extra
+
     let nextTheme: Theme = 'light';
     setTheme(prev => {
       nextTheme = prev === 'light' ? 'dark' : 'light';
-      localStorage.setItem('priceus-theme-source', 'manual');
       return nextTheme;
     });
 
