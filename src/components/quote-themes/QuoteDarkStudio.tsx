@@ -2,6 +2,8 @@ import { Send, Lock, MapPin, Sparkles, MessageCircle, Instagram, Mail } from 'lu
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { RatePhotographerButton } from '../RatePhotographerButton';
+import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
 interface QuoteDarkStudioProps {
   template: any;
@@ -149,6 +151,15 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                 {profile.apresentacao}
               </p>
             )}
+
+            {/* Rating — mesmo padrão dos outros temas */}
+            <div style={{ marginBottom: 20 }}>
+              <QuoteHeaderRating
+                userId={template.user_id}
+                ratingMinimo={profile.rating_minimo_exibicao || 1}
+                exibirAvaliacoes={profile.exibir_avaliacoes_publico ?? true}
+              />
+            </div>
 
             <div className="ds-in-3" style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               {profile.whatsapp_principal && (
@@ -598,6 +609,19 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
           </button>
         </form>
       </section>
+
+      {/* Rate Photographer Button — mesmo padrão dos outros temas */}
+      {profile && (
+        <div style={{ padding: '0 24px 32px', maxWidth: 760, margin: '0 auto' }}>
+          <RatePhotographerButton
+            userId={template.user_id}
+            templateId={template.id}
+            profileName={profile.nome_profissional}
+            aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
+            aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
+          />
+        </div>
+      )}
 
       {/* ── FOOTER ── */}
       <footer style={{ background: '#04090f', padding: '28px 24px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>

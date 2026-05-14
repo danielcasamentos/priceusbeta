@@ -4,13 +4,13 @@ import {
   FileText, 
   Building, 
   Calendar, 
-  FileSignature,
   ChevronUp,
   Home,
   TrendingUp,
   BarChart3,
   Lightbulb,
-  Settings
+  Settings,
+  UserCircle
 } from 'lucide-react';
 
 interface BottomNavigationProps {
@@ -24,7 +24,7 @@ const mainItems = [
   { id: 'templates', label: 'Templates', icon: FileText },
   { id: 'empresa', label: 'Empresa', icon: Building },
   { id: 'agenda', label: 'Agenda', icon: Calendar },
-  { id: 'contratos', label: 'Contratos', icon: FileSignature },
+  { id: 'profile', label: 'Perfil', icon: UserCircle },
 ];
 
 // Sub-itens do menu Empresa

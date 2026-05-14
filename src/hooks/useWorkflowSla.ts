@@ -45,7 +45,7 @@ export function calcularSlaEtapa(step: WorkflowStep): SlaResult {
       diasRestantes: null,
       label: 'Sem prazo',
       color: 'text-gray-500 dark:text-gray-400',
-      bgColor: 'bg-gray-100 dark:bg-gray-800/50',
+      bgColor: 'bg-gray-100 dark:bg-[#0a1628]/50',
     };
   }
 
