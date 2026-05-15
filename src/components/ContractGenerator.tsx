@@ -168,13 +168,21 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       const isSnapshotFormat  = produtosRaw.length > 0 && 'nome' in produtosRaw[0]; // Formato A
       const isProdutoIdFormat = produtosRaw.length > 0 && 'produto_id' in produtosRaw[0] && !('nome' in produtosRaw[0]); // Formato B
 
+      const selectedMap: Record<string, number> =
+          orcamentoDetalhe.selectedProdutos ||
+          orcamentoDetalhe.selecoes?.produtos ||
+          {};
+
       if (isSnapshotFormat) {
         // ✅ Formato A: snapshot completo — usa diretamente
-        produtos = produtosRaw.map((p: any) => ({
-          nome: p.nome || 'Produto',
-          preco: parseFloat(p.valor || p.preco || 0),
-          quantidade: p.quantidade || 1,
-        }));
+        produtos = produtosRaw
+          .filter((p: any) => Object.keys(selectedMap).length === 0 || (selectedMap[p.id] && selectedMap[p.id] > 0))
+          .map((p: any) => ({
+            nome: p.nome || 'Produto',
+            preco: parseFloat(p.valor || p.preco || 0),
+            quantidade: selectedMap[p.id] || p.quantidade || 1,
+            permite_multiplas_unidades: p.permite_multiplas_unidades,
+          }));
 
       } else if (isProdutoIdFormat) {
         // ✅ Formato B: {produto_id, quantidade} — busca nomes no banco
@@ -182,7 +190,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         if (produtoIds.length > 0) {
           const { data: produtosData } = await supabase
             .from('produtos')
-            .select('id, nome, valor')
+            .select('id, nome, valor, permite_multiplas_unidades')
             .in('id', produtoIds);
 
           if (produtosData) {
@@ -204,10 +212,6 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
 
       } else {
         // ✅ Formato C: legado selectedProdutos map { id: qty }
-        const selectedMap: Record<string, number> =
-          orcamentoDetalhe.selectedProdutos ||
-          orcamentoDetalhe.selecoes?.produtos ||
-          {};
 
         if (Object.keys(selectedMap).length > 0) {
           const produtoIds = Object.keys(selectedMap);
@@ -345,18 +349,21 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
 
         if (updatedLead && lead.data_evento) {
           try {
-            await supabase.from('eventos_agenda').insert({
+            const { error: insertError } = await supabase.from('eventos_agenda').insert({
               user_id: userId,
               data_evento: lead.data_evento,
               tipo_evento: generatedLeadData.tipo_evento || 'Contrato',
               cliente_nome: generatedLeadData.nome_cliente || lead.nome_cliente || 'Cliente',
               cidade: generatedLeadData.cidade_evento || generatedLeadData.cidade || lead.cidade_evento || '',
               status: 'confirmado',
-              origem: 'contrato',
+              origem: 'lead_convertido',
               observacoes: 'Gerado automaticamente via Contrato Digital'
             });
+            if (insertError) {
+               console.error('Erro ao inserir na agenda via Contrato:', insertError);
+            }
           } catch (e) {
-             console.error('Erro ao inserir na agenda via Contrato:', e);
+             console.error('Erro inesperado ao inserir na agenda via Contrato:', e);
           }
         }
       } catch (statusError) {
@@ -407,7 +414,7 @@ Qualquer dúvida, estou à disposição!`;
 
     const phone = (lead.telefone_cliente || lead.telefone || '').replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
-    window.location.href = whatsappUrl;
+    window.open(whatsappUrl, '_blank');
   };
 
   const sendViaEmail = async () => {
@@ -425,7 +432,7 @@ Este link expira em ${expirationDays} dias.
 
 Atenciosamente`;
 
-    window.location.href = `mailto:${lead.email_cliente || lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(`mailto:${lead.email_cliente || lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
   if (generatedLink) {
