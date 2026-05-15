@@ -110,15 +110,13 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
           )}
 
           {/* Rating */}
-          {averageRating > 0 && (
-            <div className="ds-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-              <StarRating rating={averageRating} size="lg" />
-              <span style={{ fontSize: 22, fontWeight: 900, color: '#22c55e' }}>{averageRating.toFixed(1)}</span>
-              {reviews.length > 0 && (
-                <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)' }}>({reviews.length} avaliações)</span>
-              )}
-            </div>
-          )}
+          <div className="ds-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+            <StarRating rating={averageRating || 5.0} size="lg" />
+            <span style={{ fontSize: 22, fontWeight: 900, color: '#22c55e' }}>{(averageRating || 5.0).toFixed(1)}</span>
+            {reviews.length > 0 && (
+              <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)' }}>({reviews.length} avaliações)</span>
+            )}
+          </div>
 
           {/* Bio */}
           {profile.apresentacao && (
