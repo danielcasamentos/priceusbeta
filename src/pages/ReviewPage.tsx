@@ -32,7 +32,7 @@ export function ReviewPage() {
 
       const { data: lead, error: leadError } = await supabase
         .from('leads')
-        .select('*, templates(nome_template), profiles(*)')
+        .select('*')
         .eq('token_avaliacao', token)
         .eq('pode_avaliar', true)
         .maybeSingle();
@@ -49,8 +49,26 @@ export function ReviewPage() {
         return;
       }
 
-      setLeadData(lead);
-      setProfileData(lead.profiles);
+      // Buscar perfil e template manualmente porque leads não tem FK rígida para templates
+      let fetchedProfile = null;
+      let fetchedTemplateName = null;
+
+      if (lead.user_id) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', lead.user_id).maybeSingle();
+        fetchedProfile = prof;
+      }
+
+      if (lead.template_id) {
+        const { data: tmpl } = await supabase.from('templates').select('nome_template').eq('id', lead.template_id).maybeSingle();
+        fetchedTemplateName = tmpl?.nome_template;
+      }
+
+      // Agrega os dados para manter o formato esperado no resto do código
+      setLeadData({
+        ...lead,
+        templates: fetchedTemplateName ? { nome_template: fetchedTemplateName } : null
+      });
+      setProfileData(fetchedProfile);
       setNomeCliente(lead.nome_cliente || '');
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
