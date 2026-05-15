@@ -415,6 +415,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         // Abre modal de configuração de entradas financeiras
         if (lead) {
           const detalhe = lead ? await loadDetalhesOrcamento(lead, false) : null;
+          setSelectedLead(null); // Fecha o modal de resumo para não sobrepor
           setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
         }
 
@@ -1488,10 +1489,24 @@ export function LeadsManager({ userId }: { userId: string }) {
           dataEvento={convertModal.lead.data_evento}
           paymentMethodData={convertModal.orcamentoDetalhe?.paymentMethod ?? null}
           fromContract={convertModal.fromContract ?? false}
-          onClose={() => setConvertModal(null)}
+          onClose={() => {
+            const closedLead = convertModal.lead;
+            const fromContract = convertModal.fromContract;
+            setConvertModal(null);
+            // Reabre o resumo se não veio da tela de contratos
+            if (!fromContract) {
+              setSelectedLead(closedLead);
+            }
+          }}
           onSuccess={() => {
+            const finishedLead = convertModal.lead;
+            const fromContract = convertModal.fromContract;
             setConvertModal(null);
             loadLeads();
+            // Reabre o resumo se não veio da tela de contratos
+            if (!fromContract) {
+              setSelectedLead(finishedLead);
+            }
           }}
         />
       )}
