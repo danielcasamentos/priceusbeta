@@ -1,0 +1,5 @@
+[project]
+id = "qrqcnrmaatthvyngwfkb"
+
+[functions.create-portal-session]
+verify_jwt = false
