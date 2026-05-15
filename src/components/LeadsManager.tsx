@@ -395,22 +395,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         }
 
         // Insere na agenda (se tiver data de evento)
-        if (lead && lead.data_evento) {
-          try {
-            await supabase.from("eventos_agenda").insert({
-              user_id: userId,
-              data_evento: lead.data_evento,
-              tipo_evento: templates[lead.template_id]?.nome_template || "Evento",
-              cliente_nome: lead.nome_cliente || "Cliente",
-              cidade: lead.cidade_evento || (lead as any).cidade || "",
-              status: "confirmado",
-              origem: "lead_convertido",
-              observacoes: "Gerado automaticamente via conversão do Lead"
-            });
-          } catch (e) {
-            console.error("Erro ao inserir na agenda:", e);
-          }
-        }
+        // A inserção na agenda agora é feita no modal financeiro (ConvertLeadModal)
 
         // Abre modal de configuração de entradas financeiras
         if (lead) {

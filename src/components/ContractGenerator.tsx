@@ -348,23 +348,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           .maybeSingle();
 
         if (updatedLead && lead.data_evento) {
-          try {
-            const { error: insertError } = await supabase.from('eventos_agenda').insert({
-              user_id: userId,
-              data_evento: lead.data_evento,
-              tipo_evento: generatedLeadData.tipo_evento || 'Contrato',
-              cliente_nome: generatedLeadData.nome_cliente || lead.nome_cliente || 'Cliente',
-              cidade: generatedLeadData.cidade_evento || generatedLeadData.cidade || lead.cidade_evento || '',
-              status: 'confirmado',
-              origem: 'lead_convertido',
-              observacoes: 'Gerado automaticamente via Contrato Digital'
-            });
-            if (insertError) {
-               console.error('Erro ao inserir na agenda via Contrato:', insertError);
-            }
-          } catch (e) {
-             console.error('Erro inesperado ao inserir na agenda via Contrato:', e);
-          }
+           // A inserção na agenda agora é feita no modal financeiro (ConvertLeadModal)
         }
       } catch (statusError) {
         console.warn('[ContractGenerator] Não foi possível marcar lead como convertido:', statusError);

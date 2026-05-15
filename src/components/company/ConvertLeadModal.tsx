@@ -164,6 +164,25 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
         orcamento_detalhe: { ...(await getOrcamentoDetalhe()), plano_pagamento: planoJson }
       }).eq('id', leadId);
 
+      // Insere na agenda após confirmar financeiro (se tiver data do evento)
+      if (dataEvento) {
+        try {
+          const { data: leadData } = await supabase.from('leads').select('cidade_evento, tipo_evento').eq('id', leadId).single();
+          await supabase.from('eventos_agenda').insert({
+            user_id: userId,
+            data_evento: dataEvento,
+            tipo_evento: leadData?.tipo_evento || templateName || 'Evento',
+            cliente_nome: leadName || 'Cliente',
+            cidade: leadData?.cidade_evento || '',
+            status: 'confirmado',
+            origem: 'lead_convertido',
+            observacoes: 'Gerado automaticamente após configuração do financeiro'
+          });
+        } catch (agendaError) {
+          console.error('Erro ao inserir na agenda via modal financeiro:', agendaError);
+        }
+      }
+
       onSuccess();
       onClose();
     } catch (e: any) {
