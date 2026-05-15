@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase, Profile } from '../lib/supabase';
-import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, CreditCard } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
+import { useSubscription } from '../hooks/useSubscription';
 
 interface ProfileEditorProps {
   userId: string;
@@ -15,6 +16,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
   const [slugInput, setSlugInput] = useState('');
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
+  const { manageSubscription, loading: subLoading } = useSubscription();
 
   useEffect(() => {
     loadProfile();
@@ -593,16 +595,34 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         </div>
 
         <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Status da Assinatura</h3>
-              <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
-                Plano atual:{' '}
-                <span className="font-medium text-blue-600 dark:text-blue-400">
-                  {profile.status_assinatura === 'trial' ? 'Período de Teste' : 'Ativo'}
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Assinatura e Cobrança</h3>
+              <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] flex items-center gap-2">
+                Status atual:{' '}
+                <span className={`font-medium px-2 py-0.5 rounded text-xs ${
+                  profile.status_assinatura === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                  profile.status_assinatura === 'trial' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                  profile.status_assinatura === 'canceled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                }`}>
+                  {profile.status_assinatura === 'active' ? 'Ativa' :
+                   profile.status_assinatura === 'trial' ? 'Período de Teste' :
+                   profile.status_assinatura === 'canceled' ? 'Cancelada' :
+                   profile.status_assinatura === 'past_due' ? 'Pagamento Pendente' :
+                   'Expirada'}
                 </span>
               </p>
             </div>
+            
+            <button
+              onClick={manageSubscription}
+              disabled={subLoading}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-white border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)] text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              <CreditCard className="w-4 h-4" />
+              {subLoading ? 'Carregando...' : 'Gerenciar Assinatura'}
+            </button>
           </div>
         </div>
 

@@ -135,7 +135,13 @@ async function syncCustomerFromStripe(customerId: string) {
       expand: ['data.default_payment_method'],
     });
 
-    // TODO verify if needed
+    // Get user_id for this customer to update profiles table later
+    const { data: customerData } = await supabase
+      .from('stripe_customers')
+      .select('user_id')
+      .eq('customer_id', customerId)
+      .maybeSingle();
+
     if (subscriptions.data.length === 0) {
       console.info(`No active subscriptions found for customer: ${customerId}`);
       const { error: noSubError } = await supabase.from('stripe_subscriptions').upsert(
@@ -151,6 +157,23 @@ async function syncCustomerFromStripe(customerId: string) {
       if (noSubError) {
         console.error('Error updating subscription status:', noSubError);
         throw new Error('Failed to update subscription status in database');
+      }
+
+      // Se não tem assinatura e temos o user_id, atualizamos o perfil para canceled,
+      // a menos que esteja em trial
+      if (customerData?.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('status_assinatura')
+          .eq('id', customerData.user_id)
+          .maybeSingle();
+
+        if (profile && profile.status_assinatura !== 'trial') {
+          await supabase
+            .from('profiles')
+            .update({ status_assinatura: 'canceled' })
+            .eq('id', customerData.user_id);
+        }
       }
     }
 
@@ -183,6 +206,26 @@ async function syncCustomerFromStripe(customerId: string) {
       console.error('Error syncing subscription:', subError);
       throw new Error('Failed to sync subscription in database');
     }
+
+    // Map Stripe status to allowed profile status: 'trial', 'active', 'expired', 'canceled', 'past_due'
+    let mappedStatus = 'active'; // Default for trialing, active
+    if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
+      mappedStatus = 'past_due';
+    } else if (subscription.status === 'canceled' || subscription.status === 'incomplete_expired') {
+      mappedStatus = 'canceled';
+    } else if (subscription.status === 'incomplete') {
+      // Incomplete usually means payment failed on first attempt, we can treat as canceled or past_due
+      mappedStatus = 'past_due';
+    }
+
+    if (customerData?.user_id) {
+      await supabase
+        .from('profiles')
+        .update({ status_assinatura: mappedStatus })
+        .eq('id', customerData.user_id);
+      console.info(`Updated profile status for user ${customerData.user_id} to ${mappedStatus}`);
+    }
+
     console.info(`Successfully synced subscription for customer: ${customerId}`);
   } catch (error) {
     console.error(`Failed to sync subscription for customer ${customerId}:`, error);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from './useAuth'
 import { getProductByPriceId } from '../stripe-config'
 import { isPrivilegedUser } from '../config/privilegedUsers'
+import { supabase } from '../lib/supabase'
 
 interface Subscription {
   subscription_status: string
@@ -36,6 +37,46 @@ export function useSubscription() {
   const isPastDue = subscription?.subscription_status === 'past_due'
   const isCanceled = subscription?.subscription_status === 'canceled'
 
+  const manageSubscription = async () => {
+    try {
+      setLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        throw new Error('Sessão expirada. Faça login novamente.')
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal-session`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({}),
+        }
+      )
+
+      const responseData = await response.json()
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Falha ao acessar o portal da Stripe.')
+      }
+
+      if (responseData.url) {
+        window.location.href = responseData.url
+      } else {
+        throw new Error('URL do portal não encontrada.')
+      }
+    } catch (error: any) {
+      console.error('Erro ao gerenciar assinatura:', error)
+      alert(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     subscription,
     loading,
@@ -43,6 +84,7 @@ export function useSubscription() {
     isTrialing,
     isPastDue,
     isCanceled,
-    plan: getSubscriptionPlan()
+    plan: getSubscriptionPlan(),
+    manageSubscription
   }
 }
