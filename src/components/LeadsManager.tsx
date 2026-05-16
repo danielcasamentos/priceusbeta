@@ -375,42 +375,38 @@ export function LeadsManager({ userId }: { userId: string }) {
         .eq('id', leadId);
 
       if (error) throw error;
-      await loadLeads();
+      if (error) throw error;
       
       if (newStatus === 'convertido') {
         const lead = leads.find((l: LeadWithReview) => l.id === leadId);
         
-        // Notificação de lead convertido
-        try {
-          await supabase.from('notifications').insert({
-            user_id: userId,
-            type: 'lead_converted',
-            title: 'Lead convertido! 🎉',
-            message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido. Inicie o workflow de produção.`,
-            link: `/dashboard/leads`,
-            related_id: leadId,
-          });
-        } catch (notificationError) {
-          console.error('Falha ao criar notificação de lead convertido:', notificationError);
-        }
-
-        // Insere na agenda (se tiver data de evento)
-        // A inserção na agenda agora é feita no modal financeiro (ConvertLeadModal)
-
-        // Abre modal de configuração de entradas financeiras
         if (lead) {
-          const detalhe = lead ? await loadDetalhesOrcamento(lead, false) : null;
           setSelectedLead(null); // Fecha o modal de resumo para não sobrepor
-          setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
+          setMainTab('producao'); // Move para a aba de produção imediatamente
+          
+          // Abre modal de configuração de entradas financeiras sem bloquear
+          loadDetalhesOrcamento(lead, false).then(detalhe => {
+            setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
+          });
         }
+        
+        // Notificação de lead convertido (em background)
+        supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'lead_converted',
+          title: 'Lead convertido! 🎉',
+          message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido. Inicie o workflow de produção.`,
+          link: `/dashboard/leads`,
+          related_id: leadId,
+        }).catch(err => console.error('Falha ao criar notificação:', err));
 
-        // Move para a aba de produção
-        setMainTab('producao');
       } else if (newStatus === 'finalizado') {
         setMainTab('finalizados');
       } else if (newStatus !== 'contatado') {
         alert('✅ Status atualizado com sucesso!');
       }
+
+      loadLeads(); // Atualiza a lista em background
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       alert('❌ Erro ao atualizar status');

@@ -4,17 +4,19 @@ import { useCompanyMetrics } from '../hooks/useCompanyMetrics';
 import { useAuth } from '../hooks/useAuth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronDown, AlertCircle, Loader2, ArrowUpRight, ArrowDownRight, Scale, Download } from 'lucide-react';
+import { ChevronDown, AlertCircle, Loader2, ArrowUpRight, ArrowDownRight, Scale, Download, Tags } from 'lucide-react';
 import { ExportModal } from '../components/ExportModal';
+import { CategoryManagerModal } from '../components/company/CategoryManagerModal';
 
 export function CompanyTransactions() {
   const { user } = useAuth();
-  const { transactions, categories, loading, updateMultipleTransactionStatus } = useCompanyTransactions(user?.id || '');
+  const { transactions, categories, loading, updateMultipleTransactionStatus, refreshCategories } = useCompanyTransactions(user?.id || '');
   const { monthlyMetrics, pendingReceivables } = useCompanyMetrics(transactions);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   /** Resolve o nome da categoria a partir do ID ou retorna o valor passado diretamente */
   const getCategoryName = (categoryIdOrName?: string): string => {
@@ -87,20 +89,41 @@ export function CompanyTransactions() {
         getCategoryName={getCategoryName}
       />
 
+      {/* Modal de gerenciamento de categorias */}
+      {showCategoryModal && user && (
+        <CategoryManagerModal
+          userId={user.id}
+          categories={categories}
+          onClose={() => setShowCategoryModal(false)}
+          onCategoriesChange={() => {
+            refreshCategories();
+          }}
+        />
+      )}
+
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Transações</h1>
           <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">Gerencie suas receitas e despesas.</p>
         </div>
-        <button
-          id="btn-export-csv"
-          onClick={() => setShowExportModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-sm whitespace-nowrap"
-          title="Exportar dados financeiros em CSV para fins fiscais"
-        >
-          <Download className="w-4 h-4" />
-          Exportar CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#0a1628] text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors shadow-sm whitespace-nowrap"
+          >
+            <Tags className="w-4 h-4" />
+            Categorias
+          </button>
+          <button
+            id="btn-export-csv"
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-sm whitespace-nowrap"
+            title="Exportar dados financeiros em CSV para fins fiscais"
+          >
+            <Download className="w-4 h-4" />
+            Exportar CSV
+          </button>
+        </div>
       </div>
 
       {/* Painel de Métricas Mensais */}
