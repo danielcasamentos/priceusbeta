@@ -79,6 +79,7 @@ export function LeadsManager({ userId }: { userId: string }) {
 
   // Aba principal: 'leads' | 'producao' | 'finalizados'
   const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
+  const [leadsViewMode, setLeadsViewMode] = useState<'list' | 'grid'>('list');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -931,6 +932,22 @@ export function LeadsManager({ userId }: { userId: string }) {
             Excluir ({selectedIds.length})
           </button>
         )}
+        <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg ml-auto">
+          <button 
+            onClick={() => setLeadsViewMode('grid')}
+            className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            title="Visualização em Grade"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => setLeadsViewMode('list')}
+            className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            title="Visualização em Lista"
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Lista de Leads */}
@@ -939,7 +956,7 @@ export function LeadsManager({ userId }: { userId: string }) {
           <div className="text-center py-12 text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
             Nenhum lead encontrado para este filtro.
           </div>
-        ) : (
+        ) : leadsViewMode === 'list' ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-[rgba(255,255,255,0.08)]">
               <thead className="bg-gray-50 dark:bg-[#07101f]">
@@ -952,30 +969,14 @@ export function LeadsManager({ userId }: { userId: string }) {
                       className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-[#0a1628] border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded focus:ring-blue-500"
                     />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Cliente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Contato
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Orçamento
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Evento
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Valor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Data
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
-                    Ações
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Cliente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Contato</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Orçamento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Evento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Valor</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Data</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-[#0a1628] divide-y divide-gray-200 dark:divide-[rgba(255,255,255,0.08)]">
@@ -1070,6 +1071,86 @@ export function LeadsManager({ userId }: { userId: string }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : (
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredLeads.map((lead: LeadWithReview) => (
+              <div 
+                key={lead.id}
+                className={`relative p-5 rounded-xl border transition-all ${
+                  selectedIds.includes(lead.id) 
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-md' 
+                    : 'border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#0a1628] hover:border-indigo-300 dark:hover:border-indigo-700 shadow-sm'
+                }`}
+              >
+                <div className="absolute top-3 right-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(lead.id)}
+                    onChange={() => setSelectedIds(prev => prev.includes(lead.id) ? prev.filter(id => id !== lead.id) : [...prev, lead.id])}
+                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="mb-3 pr-6">
+                  <h3 className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-2" title={lead.nome_cliente}>
+                    {lead.nome_cliente || 'Não informado'}
+                    {contracts[lead.id] && <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400" title="Contrato Gerado" />}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    {getStatusBadge(lead.status)}
+                    <span className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
+                      {formatDate(lead.data_orcamento)}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">
+                  {formatCurrency(lead.valor_total)}
+                </div>
+                <div className="space-y-2 mb-4 text-sm">
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-[rgba(255,255,255,0.7)]">
+                    <span className="w-4 text-center">📋</span>
+                    <span className="truncate flex-1">{templates[lead.template_id]?.nome_template || 'Template não encontrado'}</span>
+                  </div>
+                  {lead.data_evento && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-[rgba(255,255,255,0.7)]">
+                      <span className="w-4 text-center">📅</span>
+                      <span className="truncate flex-1">{formatDate(lead.data_evento)}</span>
+                    </div>
+                  )}
+                  {lead.telefone_cliente && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-[rgba(255,255,255,0.7)]">
+                      <span className="w-4 text-center">📱</span>
+                      <span className="truncate flex-1">{lead.telefone_cliente}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-[rgba(255,255,255,0.1)]">
+                  <button
+                    onClick={() => setSelectedLead(lead)}
+                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+                  >
+                    Ver detalhes
+                  </button>
+                  {lead.telefone_cliente && (
+                    <button
+                      onClick={() => sendWhatsAppMessage(lead)}
+                      className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded-lg transition-colors"
+                      title="WhatsApp"
+                    >
+                      💬
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setContractLead(lead)}
+                    disabled={contracts[lead.id]}
+                    className="p-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Contrato"
+                  >
+                    <FileSignature className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
