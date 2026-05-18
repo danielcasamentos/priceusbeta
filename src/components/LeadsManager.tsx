@@ -381,7 +381,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         
         if (lead) {
           setSelectedLead(null);
-          setMainTab('producao');
+          // Não muda a aba ainda — o usuário confirma no modal primeiro
           loadDetalhesOrcamento(lead, false).then(detalhe => {
             setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
           });
@@ -1484,11 +1484,9 @@ export function LeadsManager({ userId }: { userId: string }) {
             const finishedLead = convertModal.lead;
             const fromContract = convertModal.fromContract;
             setConvertModal(null);
+            setMainTab('producao'); // Só muda para produção DEPOIS de confirmar
             loadLeads();
-            // Reabre o resumo se não veio da tela de contratos
-            if (!fromContract) {
-              setSelectedLead(finishedLead);
-            }
+            // Não reabre o resumo pois já foi para a aba de produção
           }}
         />
       )}
