@@ -1606,6 +1606,7 @@ function ProducaoTab({
           onLeadFinalizado={onLeadFinalizado}
         />
       ))}
+      </div>
     </div>
   );
 }
