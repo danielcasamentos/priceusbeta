@@ -13,7 +13,7 @@ interface AgendaDate { id: string; data: string; tipo_evento: string; }
 interface ConvertLeadModalProps {
   userId: string; leadId: string; leadName: string; templateName: string;
   valorTotal: number; dataEvento?: string | null; paymentMethodData?: PaymentMethodData | null;
-  fromContract?: boolean; onClose: () => void; onSuccess: () => void; onConfirmWithContract?: () => void;
+  fromContract?: boolean; onClose: () => void; onSuccess: () => void; onConfirmWithContract?: (payload: any) => void;
 }
 
 type PaymentMode = 'avista' | 'parcelado' | 'entrada_parcelas';
@@ -124,18 +124,39 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
     setSaving(true); setError('');
     const desc = `Contratação: ${leadName} - ${templateName}`;
     try {
-      // 1. Salvar financeiro
+      // 1. Preparar financeiro
+      let dbRows: any[] = [];
+      let planoJson: any = null;
+      let leadUpdatePromise: any = null;
+      
       if (temFinanceiro) {
-        const rows: any[] = [];
         if (mode === 'avista') {
-          rows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: desc, valor: valorOverride, data: dataInicial, status: 'pendente', forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: false });
+          dbRows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: desc, valor: valorOverride, data: dataInicial, status: 'pendente', forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: false });
         } else if (mode === 'parcelado') {
-          parcelas.forEach(p => rows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: `${desc} (${p.numero}/${parcelas.length})`, valor: p.valor, data: p.data, status: p.status, forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: true, installment_number: p.numero, total_installments: parcelas.length }));
+          parcelas.forEach(p => dbRows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: `${desc} (${p.numero}/${parcelas.length})`, valor: p.valor, data: p.data, status: p.status, forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: true, installment_number: p.numero, total_installments: parcelas.length }));
         } else {
-          rows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: `Entrada: ${desc}`, valor: entradaValor, data: entradaData, status: entradaStatus, forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: false });
-          parcelas.forEach(p => rows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: `${desc} (${p.numero}/${parcelas.length})`, valor: p.valor, data: p.data, status: p.status, forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: true, installment_number: p.numero, total_installments: parcelas.length }));
+          dbRows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: `Entrada: ${desc}`, valor: entradaValor, data: entradaData, status: entradaStatus, forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: false });
+          parcelas.forEach(p => dbRows.push({ user_id: userId, tipo: 'receita', origem: 'lead', descricao: `${desc} (${p.numero}/${parcelas.length})`, valor: p.valor, data: p.data, status: p.status, forma_pagamento: formaPagamento, categoria_id: categoria || null, observacoes: observacoes || null, lead_id: leadId, is_installment: true, installment_number: p.numero, total_installments: parcelas.length }));
         }
-        const { data: inserted, error: err } = await supabase.from('company_transactions').insert(rows).select('id');
+        planoJson = { modo: mode, forma_pagamento_nome: formaPagamento, valor_total: valorOverride, ...(mode === 'entrada_parcelas' ? { entrada: { valor: entradaValor, data: entradaData, status: entradaStatus } } : {}), parcelas: mode !== 'avista' ? parcelas : [] };
+      }
+
+      if (generateContract && onConfirmWithContract) {
+        // Se for para gerar contrato, não salva no BD ainda. Passa os dados para o pai gerenciar.
+        onConfirmWithContract({
+          dbRows,
+          planoJson,
+          datasValidas,
+          valorOverride,
+          formaPagamento,
+        });
+        setSaving(false);
+        return; // Early return to NOT save anything to DB now
+      }
+
+      // Se NÃO for gerar contrato (ou se não houver o callback), salva diretamente no banco
+      if (temFinanceiro) {
+        const { data: inserted, error: err } = await supabase.from('company_transactions').insert(dbRows).select('id');
         if (err) throw err;
         if (inserted && inserted.length > 1) {
           const parentId = inserted[0].id;
@@ -159,14 +180,10 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
         } catch (agErr) { console.error('Erro ao inserir data na agenda:', agErr); }
       }
 
-      onSuccess(); 
+      onSuccess();
       onClose();
-      
-      if (generateContract && onConfirmWithContract) {
-        onConfirmWithContract();
-      }
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao salvar. Tente novamente.');
+    } catch (err: any) {
+      setError(err?.message ?? 'Erro ao salvar. Tente novamente.');
     } finally { setSaving(false); }
   };
 

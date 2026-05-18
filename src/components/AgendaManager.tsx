@@ -1297,10 +1297,12 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         if (!configEdit.calendar_ics_url) return;
                         setImportStatus({ show: true, type: 'info', message: 'Buscando eventos do calendario...' });
                         try {
-                          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(configEdit.calendar_ics_url)}`;
-                          const response = await fetch(proxyUrl);
-                          if (!response.ok) throw new Error('Nao foi possivel acessar o link do calendario');
-                          const text = await response.text();
+                          const { data, error } = await supabase.functions.invoke('fetch-calendar', {
+                            body: { url: configEdit.calendar_ics_url }
+                          });
+                          if (error) throw error;
+                          if (!data || !data.text) throw new Error('Não foi possível obter o calendário');
+                          const text = data.text;
                           if (!text.includes('BEGIN:VCALENDAR')) {
                             throw new Error('O link nao parece ser um calendario ICS valido');
                           }

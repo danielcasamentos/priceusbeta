@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download, Copy, LayoutGrid, List, Search } from 'lucide-react';
 import { ExportModal } from '../ExportModal';
 import { formatCurrency } from '../../lib/utils';
 import { useCompanyTransactions, CompanyTransaction, CompanyCategory } from '../../hooks/useCompanyTransactions';
+import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
 import { TransactionFormModal } from '../TransactionFormModal';
 
 interface CompanyTransactionsProps {
@@ -27,6 +28,17 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
   const [filterTipo, setFilterTipo] = useState<'all' | 'receita' | 'despesa'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pago' | 'pendente' | 'cancelado'>('all');
   const [filterInstallment, setFilterInstallment] = useState<'all' | 'installment' | 'single'>('all');
+  
+  // Novos filtros
+  const [filterMonth, setFilterMonth] = useState<string>(String(new Date().getMonth() + 1));
+  const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
+  const [filterDay, setFilterDay] = useState<string>('all');
+  const [filterSearch, setFilterSearch] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  // Mantém os top cards sincronizados
+  const { availableYears } = useCompanyMetrics(transactions);
+  
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -40,6 +52,21 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterInstallment === 'installment' && !t.is_installment) return false;
     if (filterInstallment === 'single' && t.is_installment) return false;
+
+    if (t.data) {
+      const [year, month, day] = t.data.split('-');
+      if (filterYear !== 'all' && year !== filterYear) return false;
+      if (filterMonth !== 'all' && Number(month) !== Number(filterMonth)) return false;
+      if (filterDay !== 'all' && Number(day) !== Number(filterDay)) return false;
+    }
+
+    if (filterSearch.trim() !== '') {
+      const query = filterSearch.toLowerCase();
+      if (!t.descricao.toLowerCase().includes(query)) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -263,6 +290,51 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
               </select>
             </div>
 
+            {/* Novos filtros */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Mês</label>
+              <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="w-full px-3 py-2 border dark:border-[rgba(255,255,255,0.1)] dark:bg-[#0a1628] dark:text-white rounded-lg"
+              >
+                <option value="all">Todos os meses</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={String(m)}>
+                    {new Date(2000, m - 1, 1).toLocaleString('pt-BR', { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Ano</label>
+              <select
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+                className="w-full px-3 py-2 border dark:border-[rgba(255,255,255,0.1)] dark:bg-[#0a1628] dark:text-white rounded-lg"
+              >
+                <option value="all">Todos os anos</option>
+                {availableYears.map(year => (
+                  <option key={year} value={String(year)}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="col-span-1 md:col-span-2 relative">
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar descrição..." 
+                  value={filterSearch}
+                  onChange={e => setFilterSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border dark:border-[rgba(255,255,255,0.1)] dark:bg-[#0a1628] dark:text-white rounded-lg"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">Tipo de Pagamento</label>
               <select
@@ -282,6 +354,10 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                   setFilterTipo('all');
                   setFilterStatus('all');
                   setFilterInstallment('all');
+                  setFilterMonth('all');
+                  setFilterYear('all');
+                  setFilterDay('all');
+                  setFilterSearch('');
                 }}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:text-[rgba(255,255,255,0.8)] rounded-lg hover:bg-white dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors"
               >
@@ -383,9 +459,29 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
         </div>
       </div>
 
+      <div className="flex justify-end gap-2 mb-2">
+        <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg">
+          <button 
+            onClick={() => setViewMode('grid')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            title="Visualização em Grade"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => setViewMode('list')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            title="Visualização em Lista"
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-[#0a1628] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.05)]">
         {filteredTransactions.length > 0 ? (
-          <div className="overflow-x-auto">
+          viewMode === 'list' ? (
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-left">
               <thead className="bg-gray-50 dark:bg-[#07101f] border-b dark:border-[rgba(255,255,255,0.05)]">
                 <tr>
@@ -490,6 +586,53 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
               </tbody>
             </table>
           </div>
+          ) : (
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 hidden md:grid">
+              {filteredTransactions.map(transaction => (
+                <div 
+                  key={transaction.id}
+                  onClick={() => handleSelectOne(transaction.id)}
+                  className={`relative p-4 rounded-xl border transition-all cursor-pointer ${
+                    selectedIds.includes(transaction.id) 
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                      : 'border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#0a1628] hover:border-indigo-300 dark:hover:border-indigo-700'
+                  }`}
+                >
+                  <div className="absolute top-3 right-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(transaction.id)}
+                      readOnly
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 pointer-events-none"
+                    />
+                  </div>
+                  <div className="mb-2 pr-6">
+                    <h3 className="font-bold text-gray-900 dark:text-white truncate" title={transaction.descricao}>
+                      {transaction.descricao}
+                      {transaction.is_installment && ` (${transaction.installment_number}/${transaction.total_installments})`}
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{new Date(transaction.data).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <div className={`text-xl font-bold mb-3 ${transaction.tipo === 'receita' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {transaction.tipo === 'despesa' ? '- ' : '+ '}
+                    {formatCurrency(Number(transaction.valor))}
+                  </div>
+                  <div className="flex items-center justify-between text-xs mt-3 pt-3 border-t border-gray-100 dark:border-white/[0.05]">
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${
+                      transaction.status === 'pago' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                    </span>
+                    <div className="flex gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); handleEdit(transaction); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDuplicate(transaction); }} className="p-1 text-indigo-600 hover:bg-indigo-50 rounded"><Copy className="w-3.5 h-3.5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setTransactionToDelete(transaction); }} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <div className="text-center py-12">
             <p className="text-gray-400 dark:text-[rgba(255,255,255,0.4)]">Nenhuma transação encontrada</p>

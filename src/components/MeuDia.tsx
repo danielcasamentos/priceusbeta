@@ -256,31 +256,60 @@ export function MeuDia({ userId }: MeuDiaProps) {
             {transacoes.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-sm">Nenhuma transação no período</div>
             ) : (
-              <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] uppercase">
-                    <tr>
-                      <th className="px-5 py-2 text-left">Descrição</th>
-                      <th className="px-5 py-2 text-left">Data</th>
-                      <th className="px-5 py-2 text-right">Valor</th>
-                      <th className="px-5 py-2 text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)]">
-                    {transacoes.map(t => (
-                      <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)]">
-                        <td className="px-5 py-2.5 text-gray-800 dark:text-white font-medium max-w-[200px] truncate">{t.descricao}</td>
-                        <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{fmt(t.data)}</td>
-                        <td className={`px-5 py-2.5 font-bold text-right whitespace-nowrap ${t.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
-                          {t.tipo === 'despesa' ? '- ' : '+ '}{fmtCurrency(t.valor)}
-                        </td>
-                        <td className="px-5 py-2.5">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor(t.status)}`}>{t.status}</span>
-                        </td>
+              <div className="max-h-64 overflow-y-auto">
+                {/* Desktop View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] uppercase">
+                      <tr>
+                        <th className="px-5 py-2 text-left">Descrição</th>
+                        <th className="px-5 py-2 text-left">Data</th>
+                        <th className="px-5 py-2 text-right">Valor</th>
+                        <th className="px-5 py-2 text-left">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)]">
+                      {transacoes.map(t => (
+                        <tr 
+                          key={t.id} 
+                          onClick={() => navigate('/dashboard/financeiro')} 
+                          className="hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] cursor-pointer transition-colors"
+                        >
+                          <td className="px-5 py-2.5 text-gray-800 dark:text-white font-medium max-w-[200px] truncate">{t.descricao}</td>
+                          <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{fmt(t.data)}</td>
+                          <td className={`px-5 py-2.5 font-bold text-right whitespace-nowrap ${t.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
+                            {t.tipo === 'despesa' ? '- ' : '+ '}{fmtCurrency(t.valor)}
+                          </td>
+                          <td className="px-5 py-2.5">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor(t.status)}`}>{t.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden flex flex-col p-4 gap-3">
+                  {transacoes.map(t => (
+                    <div 
+                      key={t.id} 
+                      onClick={() => navigate('/dashboard/financeiro')}
+                      className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] cursor-pointer"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <p className="font-semibold text-gray-900 dark:text-white truncate">{t.descricao}</p>
+                        <p className={`font-bold shrink-0 ml-2 ${t.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
+                          {t.tipo === 'despesa' ? '- ' : '+ '}{fmtCurrency(t.valor)}
+                        </p>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{fmt(t.data)}</span>
+                        <span className={`font-semibold px-2 py-0.5 rounded-full ${statusColor(t.status)}`}>{t.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

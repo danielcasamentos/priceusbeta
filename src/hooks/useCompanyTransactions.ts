@@ -97,47 +97,28 @@ export function useCompanyTransactions(userId: string) {
     };
 
     try {
-      // Tenta primeiro com JOIN para obter o nome do cliente
-      const queryWithJoin = applyFilters(
+      const { data, error } = await applyFilters(
         supabase
           .from('company_transactions')
-          .select('*, leads:lead_id(client_name, nome)')
+          .select('*, leads:lead_id(nome_cliente)')
           .eq('user_id', userId)
       );
 
-      const { data, error: joinErr } = await queryWithJoin;
-
-      if (joinErr) {
-        // ⚠️ O JOIN falhou (ex: foreign key não configurada no Supabase).
-        // Faz fallback sem o JOIN para garantir que as transações carreguem.
-        console.warn('JOIN com leads falhou, tentando sem JOIN:', joinErr.message);
-
-        const fallbackQuery = applyFilters(
-          supabase
-            .from('company_transactions')
-            .select('*')
-            .eq('user_id', userId)
-        );
-
-        const { data: fallbackData, error: fallbackErr } = await fallbackQuery;
-
-        if (fallbackErr) throw fallbackErr;
-
-        const mappedData = fallbackData?.map((t: any) => ({
-          ...t,
-          cliente_nome: '',
-        }));
-
-        setTransactions(mappedData || []);
-        return;
+      if (error) {
+        console.error('Erro ao buscar transações:', error);
+        throw error;
       }
 
-      const mappedData = data?.map((t: any) => ({
-        ...t,
-        cliente_nome: t.leads?.client_name || t.leads?.nome || '',
-      }));
+      if (data) {
+        const processedData: CompanyTransaction[] = data.map((t: any) => ({
+          ...t,
+          cliente_nome: t.leads?.nome_cliente || '',
+        }));
 
-      setTransactions(mappedData || []);
+        setTransactions(processedData);
+      } else {
+        setTransactions([]);
+      }
     } catch (err) {
       console.error('Error loading transactions:', err);
       setError('Erro ao carregar transações');

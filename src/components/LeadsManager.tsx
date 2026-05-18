@@ -6,11 +6,10 @@ import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSqu
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
-import { ContractGenerator } from './ContractGenerator';
+import { ConvertAndContractModal } from './company/ConvertAndContractModal';
 import { Product, CustomField, PriceBreakdown } from '../lib/whatsappMessageGenerator'; // Importar interfaces necessárias
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
 import { useReviewRequest } from '../hooks/useReviewRequest';
-import { ConvertLeadModal } from './company/ConvertLeadModal';
 import { WorkflowStepper } from './WorkflowStepper';
 import { WorkflowStep } from '../types/workflow';
 import { checkAndCreateWorkflowNotifications, notifyLeadFinalizado } from '../hooks/useWorkflowSla';
@@ -1358,22 +1357,16 @@ export function LeadsManager({ userId }: { userId: string }) {
         />
       )}
 
-      {/* Modal de Geração de Contrato */}
+      {/* Modal Unificado de Geração de Contrato (iniciado direto no passo 2) */}
       {contractLead && (
-        <ContractGenerator
+        <ConvertAndContractModal
           userId={userId}
-          lead={contractLead as Lead & { nome_cliente: string }}
+          lead={contractLead}
+          initialStep={2}
           onClose={() => setContractLead(null)}
           onSuccess={async () => {
-            // 1. Recarrega leads para pegar status 'convertido' gravado pelo ContractGenerator
-            await loadLeads();
-            // 2. Enriquece o orcamento_detalhe com paymentMethod antes de abrir o painel
-            const detalhe = await loadDetalhesOrcamento(contractLead, false);
-            // 3. Abre o ConvertLeadModal
-            if (contractLead) {
-              setConvertModal({ lead: contractLead, orcamentoDetalhe: detalhe, fromContract: true });
-            }
             setContractLead(null);
+            await loadLeads();
           }}
         />
       )}
@@ -1550,38 +1543,22 @@ export function LeadsManager({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* Modal de Conversão Financeira */}
+      {/* Modal Unificado de Conversão e Contrato */}
       {convertModal && (
-        <ConvertLeadModal
+        <ConvertAndContractModal
           userId={userId}
-          leadId={convertModal.lead.id}
-          leadName={convertModal.lead.nome_cliente || 'Cliente'}
-          templateName={templates[convertModal.lead.template_id]?.nome_template || 'Serviço'}
-          valorTotal={Number(convertModal.lead.valor_total)}
-          dataEvento={convertModal.lead.data_evento}
-          paymentMethodData={convertModal.orcamentoDetalhe?.paymentMethod ?? null}
-          fromContract={convertModal.fromContract ?? false}
-          onConfirmWithContract={() => {
-            const leadToContract = convertModal.lead;
-            setConvertModal(null);
-            setContractLead(leadToContract);
-          }}
+          lead={{...convertModal.lead, orcamento_detalhe: convertModal.orcamentoDetalhe || convertModal.lead.orcamento_detalhe}}
+          initialStep={1}
           onClose={() => {
             const closedLead = convertModal.lead;
-            const fromContract = convertModal.fromContract;
             setConvertModal(null);
-            // Reabre o resumo se não veio da tela de contratos
-            if (!fromContract) {
-              setSelectedLead(closedLead);
-            }
+            // Reabre o resumo
+            setSelectedLead(closedLead);
           }}
           onSuccess={() => {
-            const finishedLead = convertModal.lead;
-            const fromContract = convertModal.fromContract;
             setConvertModal(null);
-            setMainTab('producao'); // Só muda para produção DEPOIS de confirmar
+            setMainTab('producao');
             loadLeads();
-            // Não reabre o resumo pois já foi para a aba de produção
           }}
         />
       )}

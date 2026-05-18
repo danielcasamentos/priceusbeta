@@ -324,7 +324,8 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
       try {
         await supabase.from('notifications').insert({
           user_id: userId,
-          type: 'contract_generated',
+          type: 'info',
+          title: 'Contrato Gerado',
           message: `Contrato gerado para ${leadData.nome_cliente}. Aguardando assinatura.`,
           link: '/dashboard/contratos',
           related_id: data.id,
