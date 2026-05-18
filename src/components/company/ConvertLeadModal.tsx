@@ -13,7 +13,7 @@ interface AgendaDate { id: string; data: string; tipo_evento: string; }
 interface ConvertLeadModalProps {
   userId: string; leadId: string; leadName: string; templateName: string;
   valorTotal: number; dataEvento?: string | null; paymentMethodData?: PaymentMethodData | null;
-  fromContract?: boolean; onClose: () => void; onSuccess: () => void;
+  fromContract?: boolean; onClose: () => void; onSuccess: () => void; onConfirmWithContract?: () => void;
 }
 
 type PaymentMode = 'avista' | 'parcelado' | 'entrada_parcelas';
@@ -33,7 +33,7 @@ function detectMode(pm: PaymentMethodData | null | undefined, valorTotal: number
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-export function ConvertLeadModal({ userId, leadId, leadName, templateName, valorTotal, dataEvento, paymentMethodData, fromContract, onClose, onSuccess }: ConvertLeadModalProps) {
+export function ConvertLeadModal({ userId, leadId, leadName, templateName, valorTotal, dataEvento, paymentMethodData, fromContract, onClose, onSuccess, onConfirmWithContract }: ConvertLeadModalProps) {
   const today = new Date().toISOString().split('T')[0];
   const eventoDate = dataEvento?.split('T')[0] ?? '';
   const detected = useMemo(() => detectMode(paymentMethodData, valorTotal), [paymentMethodData, valorTotal]);
@@ -47,7 +47,14 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
   const [categorias, setCategorias] = useState<{ id: string; nome: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [entradaValor, setEntradaValor] = useState(detected.entradaVal);
+  
+  // Entrada options
+  const [entradaTipo, setEntradaTipo] = useState<'fixo' | 'percentual'>(paymentMethodData?.entrada_tipo || 'fixo');
+  const [entradaPercentual, setEntradaPercentual] = useState(paymentMethodData?.entrada_tipo === 'percentual' ? (paymentMethodData.entrada_valor || 0) : 0);
+  const [entradaValorFixo, setEntradaValorFixo] = useState(detected.entradaVal);
+  
+  const entradaValor = entradaTipo === 'percentual' ? (valorOverride * entradaPercentual) / 100 : entradaValorFixo;
+
   const [entradaData, setEntradaData] = useState(today);
   const [entradaStatus, setEntradaStatus] = useState<'pago' | 'pendente'>('pendente');
   const [numParcelas, setNumParcelas] = useState(Math.max(1, paymentMethodData?.max_parcelas ?? 1));
@@ -89,7 +96,29 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
   const removeAgendaDate = (id: string) => setAgendaDates(prev => prev.filter(d => d.id !== id));
   const updateAgendaDate = (id: string, field: keyof AgendaDate, val: string) => setAgendaDates(prev => prev.map(d => d.id === id ? { ...d, [field]: val } : d));
 
-  const handleSave = async () => {
+  const applyPaymentMethodFromQuote = () => {
+    if (!paymentMethodData) return;
+    setFormaPagamento(paymentMethodData.nome || 'pix');
+    const { mode: newMode, entradaVal } = detectMode(paymentMethodData, valorOverride);
+    setMode(newMode);
+    
+    if (paymentMethodData.entrada_tipo) {
+      setEntradaTipo(paymentMethodData.entrada_tipo);
+      if (paymentMethodData.entrada_tipo === 'percentual') {
+        setEntradaPercentual(paymentMethodData.entrada_valor || 0);
+      } else {
+        setEntradaValorFixo(paymentMethodData.entrada_valor || 0);
+      }
+    } else {
+      setEntradaValorFixo(entradaVal);
+    }
+    
+    if (paymentMethodData.max_parcelas) {
+      setNumParcelas(paymentMethodData.max_parcelas);
+    }
+  };
+
+  const handleSave = async (generateContract: boolean = false) => {
     const temFinanceiro = salvarFinanceiro && valorOverride > 0;
     const datasValidas = agendaDates.filter(d => d.data.trim() !== '');
     setSaving(true); setError('');
@@ -130,7 +159,12 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
         } catch (agErr) { console.error('Erro ao inserir data na agenda:', agErr); }
       }
 
-      onSuccess(); onClose();
+      onSuccess(); 
+      onClose();
+      
+      if (generateContract && onConfirmWithContract) {
+        onConfirmWithContract();
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Erro ao salvar. Tente novamente.');
     } finally { setSaving(false); }
@@ -207,6 +241,19 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
 
           {salvarFinanceiro && (
             <>
+              {/* Opção de importar do orçamento */}
+              {paymentMethodData && (
+                <div className="mb-3">
+                  <button 
+                    onClick={applyPaymentMethodFromQuote}
+                    className="w-full py-2 px-3 bg-blue-50 dark:bg-[rgba(59,130,246,0.1)] text-blue-700 dark:text-blue-400 text-sm font-medium rounded-lg border border-blue-200 dark:border-[rgba(59,130,246,0.2)] hover:bg-blue-100 dark:hover:bg-[rgba(59,130,246,0.15)] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Aplicar forma de pagamento escolhida pelo cliente ({paymentMethodData.nome || 'Padrão'})
+                  </button>
+                </div>
+              )}
+            
               {/* Modo de pagamento */}
               <div>
                 <label className={labelCls}><CreditCard className="inline w-3.5 h-3.5 mr-1" />Modalidade</label>
@@ -235,9 +282,28 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
               {mode === 'entrada_parcelas' && (
                 <div className="grid grid-cols-3 gap-3 p-3 bg-amber-50 dark:bg-[rgba(245,158,11,0.07)] rounded-xl border border-amber-200 dark:border-[rgba(245,158,11,0.2)]">
                   <div>
-                    <label className={labelCls}>Valor Entrada</label>
-                    <input type="text" value={new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(entradaValor)}
-                      onChange={e => setEntradaValor(Number(e.target.value.replace(/\D/g, '')) / 100)} className={inputCls} />
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className={labelCls} style={{ marginBottom: 0 }}>Valor Entrada</label>
+                      <button 
+                        onClick={() => setEntradaTipo(t => t === 'fixo' ? 'percentual' : 'fixo')}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200/50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 font-bold"
+                      >
+                        {entradaTipo === 'fixo' ? 'R$' : '%'}
+                      </button>
+                    </div>
+                    {entradaTipo === 'fixo' ? (
+                      <input type="text" value={new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(entradaValorFixo)}
+                        onChange={e => setEntradaValorFixo(Number(e.target.value.replace(/\D/g, '')) / 100)} className={inputCls} />
+                    ) : (
+                      <div className="relative">
+                        <input type="number" value={entradaPercentual} min="0" max="100"
+                          onChange={e => setEntradaPercentual(Number(e.target.value))} className={`${inputCls} pr-6`} />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">%</span>
+                      </div>
+                    )}
+                    <div className="text-[10px] text-gray-500 mt-1">
+                      {entradaTipo === 'percentual' ? `= ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entradaValor)}` : `${((entradaValorFixo / valorOverride) * 100 || 0).toFixed(1)}% do total`}
+                    </div>
                   </div>
                   <div>
                     <label className={labelCls}>Data Entrada</label>
@@ -317,11 +383,18 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
             {agendaDates.filter(d => d.data).length} data(s) na agenda
             {salvarFinanceiro && ` • ${formatCurrency(valorOverride)} financeiro`}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.7)] bg-white dark:bg-[rgba(255,255,255,0.05)] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-xl hover:bg-gray-50 transition-colors">
               Cancelar
             </button>
-            <button onClick={handleSave} disabled={saving}
+            {!fromContract && onConfirmWithContract && (
+              <button onClick={() => handleSave(true)} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-xl transition-all bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSignature className="w-4 h-4" />}
+                Confirmar com Contrato
+              </button>
+            )}
+            <button onClick={() => handleSave(false)} disabled={saving}
               className={`flex items-center gap-2 px-6 py-2 text-sm font-bold text-white rounded-xl transition-all ${fromContract ? 'bg-purple-600 hover:bg-purple-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
               {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><CheckCircle2 className="w-4 h-4" /> Confirmar</>}
             </button>

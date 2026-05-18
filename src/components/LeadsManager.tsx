@@ -1471,6 +1471,11 @@ export function LeadsManager({ userId }: { userId: string }) {
           dataEvento={convertModal.lead.data_evento}
           paymentMethodData={convertModal.orcamentoDetalhe?.paymentMethod ?? null}
           fromContract={convertModal.fromContract ?? false}
+          onConfirmWithContract={() => {
+            const leadToContract = convertModal.lead;
+            setConvertModal(null);
+            setContractLead(leadToContract);
+          }}
           onClose={() => {
             const closedLead = convertModal.lead;
             const fromContract = convertModal.fromContract;
