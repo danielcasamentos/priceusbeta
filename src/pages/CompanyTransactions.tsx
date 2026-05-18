@@ -11,7 +11,30 @@ import { CategoryManagerModal } from '../components/company/CategoryManagerModal
 export function CompanyTransactions() {
   const { user } = useAuth();
   const { transactions, categories, loading, updateMultipleTransactionStatus, refreshCategories } = useCompanyTransactions(user?.id || '');
-  const { monthlyMetrics, pendingReceivables } = useCompanyMetrics(transactions);
+  
+  // Local filters for the table
+  const [filterMonth, setFilterMonth] = useState<string>(String(new Date().getMonth() + 1));
+  const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // Pass the filtered year/month to useCompanyMetrics to keep the top cards in sync
+  const { monthlyMetrics, pendingReceivables, setSelectedMonth, setSelectedYear, availableYears } = useCompanyMetrics(transactions);
+
+  useEffect(() => {
+    if (filterMonth !== 'all') setSelectedMonth(Number(filterMonth));
+    if (filterYear !== 'all') setSelectedYear(Number(filterYear));
+  }, [filterMonth, filterYear, setSelectedMonth, setSelectedYear]);
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      if (!t.data) return false;
+      const [year, month] = t.data.split('-');
+      if (filterYear !== 'all' && year !== filterYear) return false;
+      if (filterMonth !== 'all' && Number(month) !== Number(filterMonth)) return false;
+      if (filterStatus !== 'all' && t.status !== filterStatus) return false;
+      return true;
+    });
+  }, [transactions, filterMonth, filterYear, filterStatus]);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -27,7 +50,7 @@ export function CompanyTransactions() {
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const allIds = transactions.map(t => t.id);
+      const allIds = filteredTransactions.map(t => t.id);
       setSelectedIds(allIds);
     } else {
       setSelectedIds([]);
@@ -56,8 +79,8 @@ export function CompanyTransactions() {
   };
 
   const isAllSelected = useMemo(() => {
-    return transactions.length > 0 && selectedIds.length === transactions.length;
-  }, [selectedIds, transactions]);
+    return filteredTransactions.length > 0 && selectedIds.length === filteredTransactions.length;
+  }, [selectedIds, filteredTransactions]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -85,7 +108,7 @@ export function CompanyTransactions() {
       <ExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        transactions={transactions as any[]}
+        transactions={filteredTransactions as any[]}
         getCategoryName={getCategoryName}
       />
 
@@ -158,6 +181,53 @@ export function CompanyTransactions() {
       </div>
 
       <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow-md dark:shadow-none overflow-hidden border border-transparent dark:border-[rgba(255,255,255,.05)]">
+        {/* Filtros */}
+        <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,0.1)] bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.7)]">Mês:</label>
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="text-sm border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg px-3 py-1.5 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white"
+            >
+              <option value="all">Todos os meses</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={String(m)}>
+                  {new Date(2000, m - 1, 1).toLocaleString('pt-BR', { month: 'long' })}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.7)]">Ano:</label>
+            <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value)}
+              className="text-sm border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg px-3 py-1.5 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white"
+            >
+              <option value="all">Todos os anos</option>
+              {availableYears.map(year => (
+                <option key={year} value={String(year)}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.7)]">Status:</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="text-sm border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg px-3 py-1.5 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white"
+            >
+              <option value="all">Todos os status</option>
+              <option value="pago">Pago</option>
+              <option value="pendente">Pendente</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+        </div>
+
         {/* Barra de Ações em Lote */}
         {selectedIds.length > 0 && (
           <div className="bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,0.1)] flex items-center justify-between">
@@ -220,21 +290,19 @@ export function CompanyTransactions() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
-                    <Loader2 className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
-                    <p className="mt-2 text-gray-500">Carregando transações...</p>
+                  <td colSpan={7} className="text-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-600 mb-2" />
+                    <p className="text-gray-500">Carregando transações...</p>
                   </td>
                 </tr>
-              ) : transactions.length === 0 ? (
+              ) : filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
-                    <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-[rgba(255,255,255,0.8)] font-medium">Nenhuma transação encontrada</p>
-                    <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-1">Adicione sua primeira receita ou despesa.</p>
+                  <td colSpan={7} className="text-center py-8 text-gray-500">
+                    Nenhuma transação encontrada.
                   </td>
                 </tr>
               ) : (
-                transactions.map((transaction) => (
+                filteredTransactions.map((transaction) => (
                   <tr
                     key={transaction.id}
                     className={`bg-white dark:bg-transparent border-b dark:border-[rgba(255,255,255,0.05)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] ${selectedIds.includes(transaction.id) ? 'bg-blue-50 dark:bg-[rgba(59,130,246,0.1)]' : ''}`}

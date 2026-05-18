@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Calendar, DollarSign, CheckSquare, Clock, ChevronLeft, ChevronRight, Filter, Sun, AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -49,6 +50,7 @@ function getRangeForPeriodo(periodo: Periodo, customStart: string, customEnd: st
 }
 
 export function MeuDia({ userId }: MeuDiaProps) {
+  const navigate = useNavigate();
   const [periodo, setPeriodo] = useState<Periodo>('hoje');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -83,6 +85,15 @@ export function MeuDia({ userId }: MeuDiaProps) {
           }
         }
       }
+      
+      // Ordena tarefas: das mais urgentes (menor prazo/atrasadas) para as menos urgentes
+      tarefasRaw.sort((a, b) => {
+        if (!a.prazo && !b.prazo) return 0;
+        if (!a.prazo) return 1; // Sem prazo vai para o final
+        if (!b.prazo) return -1;
+        return new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
+      });
+      
       setTarefas(tarefasRaw);
     } finally { setLoading(false); }
   }, [userId, range.start, range.end]);
@@ -214,7 +225,11 @@ export function MeuDia({ userId }: MeuDiaProps) {
                 {tarefas.map(t => {
                   const atrasada = t.prazo && t.prazo < new Date().toISOString().split('T')[0];
                   return (
-                    <div key={`${t.leadId}-${t.stepId}`} className={`flex items-center gap-3 px-5 py-3 ${atrasada ? 'bg-red-50 dark:bg-[rgba(239,68,68,0.04)]' : 'hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)]'}`}>
+                    <button 
+                      key={`${t.leadId}-${t.stepId}`} 
+                      onClick={() => navigate(`/dashboard/leads?tab=producao&leadId=${t.leadId}`)}
+                      className={`w-full text-left flex items-center gap-3 px-5 py-3 transition-colors ${atrasada ? 'bg-red-50 dark:bg-[rgba(239,68,68,0.04)] hover:bg-red-100 dark:hover:bg-[rgba(239,68,68,0.08)]' : 'hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)]'}`}
+                    >
                       <div className={`w-2 h-2 rounded-full shrink-0 ${atrasada ? 'bg-red-500' : 'bg-purple-500'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] truncate">{t.leadNome}</p>
@@ -225,7 +240,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
                           <Clock className="w-3 h-3" />{fmt(t.prazo)}
                         </div>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>

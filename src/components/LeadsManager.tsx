@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Re-
 import { EditLeadQuoteModal } from './EditLeadQuoteModal';
 import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
@@ -79,6 +79,15 @@ export function LeadsManager({ userId }: { userId: string }) {
 
   // Aba principal: 'leads' | 'producao' | 'finalizados'
   const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'producao') {
+      setMainTab('producao');
+      // Limpa os params da URL sem recarregar a página
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // Estado do modal de conversão financeira
   const [convertModal, setConvertModal] = useState<{ lead: Lead; orcamentoDetalhe: any | null; fromContract?: boolean } | null>(null);
@@ -1526,6 +1535,9 @@ function ProducaoTab({
   onLeadFinalizado,
   onSolicitarAvaliacao: _onSolicitarAvaliacao = undefined,
 }: ProducaoTabProps) {
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); // asc = mais próximo primeiro, desc = mais distante primeiro
+
   if (leads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
@@ -1542,9 +1554,47 @@ function ProducaoTab({
     );
   }
 
+  // Ordena os leads por data do evento
+  const sortedLeads = [...leads].sort((a, b) => {
+    if (!a.data_evento && !b.data_evento) return 0;
+    if (!a.data_evento) return 1;
+    if (!b.data_evento) return -1;
+    const dateA = new Date(a.data_evento).getTime();
+    const dateB = new Date(b.data_evento).getTime();
+    return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+  });
+
   return (
-    <div className="grid grid-cols-1 gap-4">
-      {leads.map((lead) => (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between bg-white dark:bg-[#0a1628] p-3 rounded-xl border border-gray-200 dark:border-white/[0.07] shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">Ordenar por data:</span>
+          <button 
+            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/[0.05] text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-white/[0.1] transition-colors"
+          >
+            {sortOrder === 'asc' ? <ArrowDownWideNarrow className="w-4 h-4" /> : <ArrowUpNarrowWide className="w-4 h-4" />}
+            {sortOrder === 'asc' ? 'Mais Próximo' : 'Mais Distante'}
+          </button>
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 dark:bg-[#07101f] p-1 rounded-lg">
+          <button 
+            onClick={() => setViewMode('grid')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => setViewMode('list')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-4"}>
+        {sortedLeads.map((lead) => (
         <ProducaoCard
           key={lead.id}
           lead={lead}

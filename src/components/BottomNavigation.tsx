@@ -11,7 +11,9 @@ import {
   Lightbulb,
   Settings,
   UserCircle,
-  Sun
+  Sun,
+  Building,
+  FileSignature
 } from 'lucide-react';
 
 interface BottomNavigationProps {
@@ -24,7 +26,8 @@ const mainItems = [
   { id: 'meu-dia', label: 'Meu Dia', icon: Sun },
   { id: 'leads', label: 'Leads', icon: LayoutDashboard },
   { id: 'templates', label: 'Templates', icon: FileText },
-  { id: 'agenda', label: 'Agenda', icon: Calendar },
+  { id: 'empresa', label: 'Empresa', icon: Building },
+  { id: 'contratos', label: 'Contratos', icon: FileSignature },
   { id: 'profile', label: 'Perfil', icon: UserCircle },
 ];
 
