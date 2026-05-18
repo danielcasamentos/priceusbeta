@@ -375,30 +375,31 @@ export function LeadsManager({ userId }: { userId: string }) {
         .eq('id', leadId);
 
       if (error) throw error;
-      if (error) throw error;
       
       if (newStatus === 'convertido') {
         const lead = leads.find((l: LeadWithReview) => l.id === leadId);
         
         if (lead) {
-          setSelectedLead(null); // Fecha o modal de resumo para não sobrepor
-          setMainTab('producao'); // Move para a aba de produção imediatamente
-          
-          // Abre modal de configuração de entradas financeiras sem bloquear
+          setSelectedLead(null);
+          setMainTab('producao');
           loadDetalhesOrcamento(lead, false).then(detalhe => {
             setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
           });
         }
         
-        // Notificação de lead convertido (em background)
-        supabase.from('notifications').insert({
-          user_id: userId,
-          type: 'lead_converted',
-          title: 'Lead convertido! 🎉',
-          message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido. Inicie o workflow de produção.`,
-          link: `/dashboard/leads`,
-          related_id: leadId,
-        }).catch(err => console.error('Falha ao criar notificação:', err));
+        // Notificação de lead convertido (em background, sem .catch() direto)
+        try {
+          await supabase.from('notifications').insert({
+            user_id: userId,
+            type: 'lead_converted',
+            title: 'Lead convertido! 🎉',
+            message: `Parabéns! O lead ${lead?.nome_cliente || ''} foi convertido. Inicie o workflow de produção.`,
+            link: `/dashboard/leads`,
+            related_id: leadId,
+          });
+        } catch (notifErr) {
+          console.error('Falha ao criar notificação:', notifErr);
+        }
 
       } else if (newStatus === 'finalizado') {
         setMainTab('finalizados');

@@ -10,7 +10,8 @@ import {
   BarChart3,
   Lightbulb,
   Settings,
-  UserCircle
+  UserCircle,
+  Sun
 } from 'lucide-react';
 
 interface BottomNavigationProps {
@@ -20,9 +21,9 @@ interface BottomNavigationProps {
 
 // Itens principais do menu
 const mainItems = [
+  { id: 'meu-dia', label: 'Meu Dia', icon: Sun },
   { id: 'leads', label: 'Leads', icon: LayoutDashboard },
   { id: 'templates', label: 'Templates', icon: FileText },
-  { id: 'empresa', label: 'Empresa', icon: Building },
   { id: 'agenda', label: 'Agenda', icon: Calendar },
   { id: 'profile', label: 'Perfil', icon: UserCircle },
 ];

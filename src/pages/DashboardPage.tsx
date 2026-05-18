@@ -29,6 +29,8 @@ import { AppInstallBanner } from '../components/AppInstallBanner';
 import { TawkToChat } from '../components/TawkToChat';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceType } from '../hooks/useDeviceType';
+import { MeuDia } from '../components/MeuDia';
+import { useMeuDiaNotification } from '../hooks/useMeuDiaNotification';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -37,6 +39,7 @@ export function DashboardPage() {
   const trialStatus = useTrialStatus(user?.id);
   const planLimits = usePlanLimits();
   const { isMobile } = useDeviceType();
+  useMeuDiaNotification(user?.id || '');
   
   console.log('[DashboardPage] Tipo de dispositivo:', { isMobile });
   
@@ -115,6 +118,8 @@ export function DashboardPage() {
         return 'Insights';
       case 'empresa-dados':
         return 'Dados Empresariais';
+      case 'meu-dia':
+        return 'Meu Dia';
       default:
         return '';
     }
@@ -350,6 +355,8 @@ export function DashboardPage() {
                 </div>
                 <BusinessSettingsEditor userId={user.id} />
               </>
+            ) : currentPage === 'meu-dia' ? (
+              <MeuDia userId={user.id} />
             ) : currentPage === 'profile' ? (
               <ProfileEditorWithThemeSelector userId={user.id} />
             ) : null}

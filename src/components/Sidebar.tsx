@@ -49,6 +49,7 @@ export function Sidebar({
     {
       title: 'Vendas',
       items: [
+        { id: 'meu-dia', label: 'Meu Dia', icon: Sun, section: 'vendas' },
         { id: 'templates', label: 'Meus Templates', icon: FileText, section: 'vendas' },
         { id: 'leads', label: 'Leads', icon: LayoutDashboard, section: 'vendas' },
         { id: 'contratos', label: 'Contratos', icon: FileSignature, section: 'vendas' },
