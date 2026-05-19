@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Trash2, Eye, Loader2, AlertCircle } from 'lucide-react';
+import { Search, Trash2, Eye, Loader2, AlertCircle, Share2, Check } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { ContractViewerModal } from './ContractViewerModal';
 
@@ -36,8 +36,16 @@ export function ContractsManager({ userId }: { userId:string }) {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [deletingIds, setDeletingIds] = useState(new Set<string>());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyLink = (token: string, id: string) => {
+    const link = `${window.location.origin}/contrato/${token}`;
+    navigator.clipboard.writeText(link);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
@@ -279,6 +287,15 @@ const [isDeleting, setIsDeleting] = useState(false);
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <button onClick={() => setViewingContract(contract)} title="Visualizar" className="text-blue-600 hover:text-blue-800"><Eye size={16} /></button>
+                      {contract.status === 'pending' && new Date(contract.expires_at) > new Date() && (
+                        <button
+                          onClick={() => handleCopyLink(contract.token, contract.id)}
+                          title={copiedId === contract.id ? "Link copiado!" : "Copiar link de assinatura"}
+                          className={`${copiedId === contract.id ? 'text-green-600 hover:text-green-800' : 'text-green-600 hover:text-green-800'}`}
+                        >
+                          {copiedId === contract.id ? <Check size={16} /> : <Share2 size={16} />}
+                        </button>
+                      )}
                       <button type="button" title="Excluir contrato" onClick={(e) => { e.preventDefault(); setDeleteConfirmSingle(contract.id); }} className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`} disabled={deletingIds.has(contract.id)}><Trash2 size={16} /></button>
                     </div>
                   </td>
@@ -321,6 +338,15 @@ const [isDeleting, setIsDeleting] = useState(false);
                 <button onClick={() => setViewingContract(contract)} className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-[rgba(59,130,246,0.3)] rounded-lg text-xs font-medium hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.1)]">
                   <Eye size={13} /> Visualizar
                 </button>
+                {contract.status === 'pending' && new Date(contract.expires_at) > new Date() && (
+                  <button
+                    onClick={() => handleCopyLink(contract.token, contract.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-green-600 dark:text-green-400 border border-green-300 dark:border-[rgba(34,197,94,0.3)] rounded-lg text-xs font-medium hover:bg-green-50 dark:hover:bg-[rgba(34,197,94,0.1)]"
+                  >
+                    {copiedId === contract.id ? <Check size={13} /> : <Share2 size={13} />}
+                    {copiedId === contract.id ? 'Copiado!' : 'Compartilhar'}
+                  </button>
+                )}
                 <button onClick={() => setDeleteConfirmSingle(contract.id)} disabled={deletingIds.has(contract.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 dark:text-red-400 border border-red-300 dark:border-[rgba(239,68,68,0.3)] rounded-lg text-xs font-medium hover:bg-red-50 dark:hover:bg-[rgba(239,68,68,0.1)] disabled:opacity-50">
                   <Trash2 size={13} /> Excluir
                 </button>

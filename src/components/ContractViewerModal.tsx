@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2 } from 'lucide-react';
+import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Share2, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '../lib/utils';
@@ -68,6 +68,16 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
   // Estados para a nova funcionalidade
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [processedContent, setProcessedContent] = useState('');
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
+
+  const isLinkActive = contract.status === 'pending' && new Date(contract.expires_at) > new Date();
+
+  const handleCopyShareLink = () => {
+    const signatureLink = `${window.location.origin}/contrato/${contract.token}`;
+    navigator.clipboard.writeText(signatureLink);
+    setCopiedShareLink(true);
+    setTimeout(() => setCopiedShareLink(false), 2000);
+  };
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({});
   const [allTemplates, setAllTemplates] = useState<ContractTemplate[]>([]);
@@ -332,6 +342,17 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
         <div className="p-4 bg-gray-50 border-t text-right">
           <div className="flex justify-end items-center gap-3">
             <button onClick={onClose} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Fechar</button>
+            
+            {isLinkActive && (
+              <button
+                onClick={handleCopyShareLink}
+                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+              >
+                {copiedShareLink ? <Check className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
+                {copiedShareLink ? 'Link Copiado!' : 'Compartilhar Link'}
+              </button>
+            )}
+
             {/* 🔥 BOTÃO ALTERADO */}
             <button
               onClick={handleViewAndPrint}
