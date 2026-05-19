@@ -178,10 +178,8 @@ function SortableTemplateCard({
           </button>
         </div>
 
-        {/* Analytics Section - Hide in list mode to save vertical space if desired, or keep it. Let's keep it but compact if needed */}
-        {viewMode === 'grid' && (
-          <TemplateAnalyticsSummary templateId={template.id} />
-        )}
+        {/* Analytics Section */}
+        <TemplateAnalyticsSummary templateId={template.id} />
       </div>
     </div>
   );
