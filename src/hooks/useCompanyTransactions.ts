@@ -101,7 +101,7 @@ export function useCompanyTransactions(userId: string) {
       const { data, error } = await applyFilters(
         supabase
           .from('company_transactions')
-          .select('*, leads:lead_id(nome_cliente, cpf), contratos:contract_id(client_data_json)')
+          .select('*, leads:lead_id(nome_cliente, cpf)')
           .eq('user_id', userId)
       );
 
@@ -111,11 +111,29 @@ export function useCompanyTransactions(userId: string) {
       }
 
       if (data) {
-        const processedData: CompanyTransaction[] = data.map((t: any) => ({
-          ...t,
-          cliente_nome: t.leads?.nome_cliente || '',
-          documento_fiscal: t.contratos?.client_data_json?.cpf || t.contratos?.client_data_json?.documento || t.leads?.cpf || '',
-        }));
+        // Buscar contratos vinculados em memória para evitar erro de JOIN no PostgREST
+        const contractIds = data.map((t: any) => t.contract_id).filter(Boolean);
+        let contractsMap: Record<string, any> = {};
+
+        if (contractIds.length > 0) {
+          const { data: contractsData, error: contractsError } = await supabase
+            .from('contracts')
+            .select('id, client_data_json')
+            .in('id', contractIds);
+
+          if (!contractsError && contractsData) {
+            contractsMap = Object.fromEntries(contractsData.map((c) => [c.id, c]));
+          }
+        }
+
+        const processedData: CompanyTransaction[] = data.map((t: any) => {
+          const linkedContract = t.contract_id ? contractsMap[t.contract_id] : null;
+          return {
+            ...t,
+            cliente_nome: t.leads?.nome_cliente || '',
+            documento_fiscal: linkedContract?.client_data_json?.cpf || linkedContract?.client_data_json?.documento || t.leads?.cpf || '',
+          };
+        });
 
         setTransactions(processedData);
       } else {
