@@ -7,6 +7,7 @@ export interface FinancialRecord {
   description?: string;
   category?: string;
   clientName?: string;
+  documento_fiscal?: string;
   formaPagamento?: string;
   origem?: string;
   parcelas?: string;

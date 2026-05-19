@@ -36,6 +36,7 @@ export interface CompanyTransaction {
   created_at: string;
   updated_at: string;
   cliente_nome?: string;
+  documento_fiscal?: string;
 }
 
 export interface TransactionFilters {
@@ -100,7 +101,7 @@ export function useCompanyTransactions(userId: string) {
       const { data, error } = await applyFilters(
         supabase
           .from('company_transactions')
-          .select('*, leads:lead_id(nome_cliente)')
+          .select('*, leads:lead_id(nome_cliente, cpf), contratos:contract_id(client_data_json)')
           .eq('user_id', userId)
       );
 
@@ -113,6 +114,7 @@ export function useCompanyTransactions(userId: string) {
         const processedData: CompanyTransaction[] = data.map((t: any) => ({
           ...t,
           cliente_nome: t.leads?.nome_cliente || '',
+          documento_fiscal: t.contratos?.client_data_json?.cpf || t.contratos?.client_data_json?.documento || t.leads?.cpf || '',
         }));
 
         setTransactions(processedData);

@@ -40,6 +40,7 @@ export interface EventoAgenda {
   origem: string;
   observacoes: string;
   importacao_id?: string | null;
+  uid_externo?: string;
 }
 
 export interface HistoricoImportacao {
@@ -362,7 +363,7 @@ export async function rollbackImportacao(userId: string, importacaoId: string): 
 export async function importarEventosInteligente(
   userId: string,
   nomeArquivo: string,
-  eventos: Array<{ data: string; nome: string; tipo?: string; cidade?: string }>,
+  eventos: Array<{ data: string; nome: string; tipo?: string; cidade?: string; uid_externo?: string }>,
   estrategia: 'substituir_tudo' | 'adicionar_novos' | 'mesclar_atualizar'
 ): Promise<ImportResult> {
   const result: ImportResult = {
@@ -405,14 +406,16 @@ export async function importarEventosInteligente(
       const chunk = eventos.slice(i, i + chunkSize);
       await Promise.all(chunk.map(async (evento) => {
         try {
+          let queryExistente = supabase.from('eventos_agenda').select('*').eq('user_id', userId);
+          
+          if (evento.uid_externo) {
+            queryExistente = queryExistente.eq('uid_externo', evento.uid_externo);
+          } else {
+            queryExistente = queryExistente.eq('data_evento', evento.data).eq('cliente_nome', evento.nome);
+          }
+
           if (estrategia === 'adicionar_novos') {
-            const { data: existente } = await supabase
-              .from('eventos_agenda')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('data_evento', evento.data)
-              .eq('cliente_nome', evento.nome)
-              .maybeSingle();
+            const { data: existente } = await queryExistente.maybeSingle();
 
             if (existente) {
               result.eventos_ignorados++;
@@ -421,20 +424,17 @@ export async function importarEventosInteligente(
           }
 
           if (estrategia === 'mesclar_atualizar') {
-            const { data: existente } = await supabase
-              .from('eventos_agenda')
-              .select('*')
-              .eq('user_id', userId)
-              .eq('data_evento', evento.data)
-              .eq('cliente_nome', evento.nome)
-              .maybeSingle();
+            const { data: existente } = await queryExistente.maybeSingle();
 
             if (existente) {
               await updateEvento(existente.id, {
+                data_evento: evento.data, // Atualiza a data caso tenha sido movida
+                cliente_nome: evento.nome, // Atualiza nome caso tenha mudado
                 tipo_evento: evento.tipo || existente.tipo_evento,
                 cidade: evento.cidade || existente.cidade,
                 observacoes: `Atualizado de ${nomeArquivo}`,
-                importacao_id: historicoId
+                importacao_id: historicoId,
+                uid_externo: evento.uid_externo || existente.uid_externo
               });
               result.eventos_atualizados++;
               return;
@@ -450,7 +450,8 @@ export async function importarEventosInteligente(
             status: 'confirmado',
             origem: nomeArquivo === 'google-calendar-sync' ? 'google-calendar-sync' : 'csv_import',
             observacoes: `Importado de ${nomeArquivo}`,
-            importacao_id: historicoId
+            importacao_id: historicoId,
+            uid_externo: evento.uid_externo
           });
 
           if (novoEvento) {
@@ -469,14 +470,18 @@ export async function importarEventosInteligente(
       try {
         const { data: eventosSincronizados } = await supabase
           .from('eventos_agenda')
-          .select('id, data_evento, cliente_nome')
+          .select('id, data_evento, cliente_nome, uid_externo')
           .eq('user_id', userId)
           .or('origem.eq.google-calendar-sync,observacoes.ilike.%google-calendar-sync%');
 
         if (eventosSincronizados && eventosSincronizados.length > 0) {
-          const setEventosICS = new Set(eventos.map(e => `${e.data}-${e.nome}`));
+          // Usa UID se disponível, senão fallback para data-nome
+          const setEventosICS = new Set(eventos.map(e => e.uid_externo ? e.uid_externo : `${e.data}-${e.nome}`));
           const idsParaDeletar = eventosSincronizados
-            .filter(e => !setEventosICS.has(`${e.data_evento}-${e.cliente_nome}`))
+            .filter(e => {
+              const ch = e.uid_externo ? e.uid_externo : `${e.data_evento}-${e.cliente_nome}`;
+              return !setEventosICS.has(ch);
+            })
             .map(e => e.id);
 
           if (idsParaDeletar.length > 0) {

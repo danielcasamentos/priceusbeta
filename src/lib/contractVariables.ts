@@ -51,6 +51,7 @@ export interface LeadData {
   ajuste_geografico?: number;
   subtotal?: number;
   ocultar_valores_intermediarios?: boolean;
+  plano_pagamento?: any;
 }
 
 /**
@@ -144,7 +145,48 @@ export function replaceContractVariables(
     '{{AJUSTE_GEOGRAFICO}}': ocultarValores || !leadData.ajuste_geografico
       ? ''
       : `R$ ${leadData.ajuste_geografico.toFixed(2).replace('.', ',')}`,
-    '{{FORMA_PAGAMENTO}}': leadData.forma_pagamento || '',
+    '{{FORMA_PAGAMENTO}}': (() => {
+      if (leadData.plano_pagamento) {
+        const p = leadData.plano_pagamento;
+        const formatCurrency = (val: number) => `R$ ${Number(val).toFixed(2).replace('.', ',')}`;
+        const formatDate = (dtStr: string) => {
+          if (!dtStr) return '';
+          try {
+            const parts = dtStr.split('-');
+            if (parts.length === 3) {
+              return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return new Date(dtStr + 'T00:00:00').toLocaleDateString('pt-BR');
+          } catch {
+            return dtStr;
+          }
+        };
+
+        const formaNome = p.forma_pagamento_nome || leadData.forma_pagamento || 'Não informado';
+        let txt = `${formaNome}`;
+
+        if (p.modo === 'avista') {
+          txt += ` (À vista no valor de ${formatCurrency(p.valor_total || leadData.valor_total || 0)})`;
+        } else if (p.modo === 'parcelado') {
+          txt += ` (Parcelado em ${p.parcelas?.length || 0}x):\n`;
+          if (p.parcelas && p.parcelas.length > 0) {
+            p.parcelas.forEach((parc: any) => {
+              txt += `• Parcela ${parc.numero}/${p.parcelas.length}: ${formatCurrency(parc.valor)} - Vencimento: ${formatDate(parc.data)}\n`;
+            });
+          }
+        } else if (p.modo === 'entrada_parcelas') {
+          txt += ` (Entrada + Parcelas):\n`;
+          txt += `• Entrada: ${formatCurrency(p.entrada?.valor || 0)} - Vencimento: ${formatDate(p.entrada?.data || '')}\n`;
+          if (p.parcelas && p.parcelas.length > 0) {
+            p.parcelas.forEach((parc: any) => {
+              txt += `• Parcela ${parc.numero}/${p.parcelas.length}: ${formatCurrency(parc.valor)} - Vencimento: ${formatDate(parc.data)}\n`;
+            });
+          }
+        }
+        return txt.trim();
+      }
+      return leadData.forma_pagamento || '';
+    })(),
   };
 
   if (leadData.produtos && leadData.produtos.length > 0) {

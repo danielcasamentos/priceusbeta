@@ -68,6 +68,7 @@ export function ContractSignPage() {
     nome_completo: '',
     documento: '',
     rg: '',
+    data_nascimento: '',
     endereco_completo: '',
     cep: '',
     data_evento: '',
@@ -212,6 +213,26 @@ export function ContractSignPage() {
       alert('Por favor, preencha seu Nome Completo');
       return;
     }
+
+    if (!clientData.data_nascimento) {
+      alert('Por favor, preencha sua Data de Nascimento');
+      return;
+    }
+
+    // Validação de maioridade (18 anos)
+    const dtNascimento = new Date(clientData.data_nascimento);
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - dtNascimento.getFullYear();
+    const m = hoje.getMonth() - dtNascimento.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < dtNascimento.getDate())) {
+      idade--;
+    }
+
+    if (idade < 18) {
+      alert('Você deve ter pelo menos 18 anos para assinar este contrato.');
+      return;
+    }
+
     // CPF/CNPJ é opcional — valida apenas se preenchido
     if (clientData.documento && !isValidDocument(clientData.documento)) {
       alert('O CPF/CNPJ informado não é válido. Corrija ou deixe em branco.');
@@ -366,6 +387,17 @@ export function ContractSignPage() {
                     />
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
+                  <input
+                    type="date"
+                    value={clientData.data_nascimento}
+                    onChange={(e) => setClientData({ ...clientData, data_nascimento: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    required
+                  />
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Data do Evento</label>

@@ -70,6 +70,9 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
   const [processedContent, setProcessedContent] = useState('');
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({});
+  const [allTemplates, setAllTemplates] = useState<ContractTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(contract.template_id || '');
+  const [isUpdatingTemplate, setIsUpdatingTemplate] = useState(false);
   const contractContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,10 +117,47 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
       if (businessError) throw businessError;
       setBusinessSettings(businessData || {});
 
+      // 3. Buscar todos os outros templates para permitir a troca (apenas se for pendente)
+      if (contract.status === 'pending') {
+        const { data: templatesData } = await supabase
+          .from('contract_templates')
+          .select('id, name, content_text')
+          .eq('user_id', contract.user_id)
+          .order('name', { ascending: true });
+        
+        setAllTemplates(templatesData || []);
+      }
+
     } catch (error) {
       console.error("Erro ao carregar detalhes completos do contrato:", error);
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  const handleTemplateChange = async (newTemplateId: string) => {
+    if (newTemplateId === selectedTemplateId) return;
+    
+    setIsUpdatingTemplate(true);
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .update({ template_id: newTemplateId })
+        .eq('id', contract.id);
+        
+      if (error) throw error;
+      
+      setSelectedTemplateId(newTemplateId);
+      
+      const selected = allTemplates.find(t => t.id === newTemplateId);
+      if (selected) {
+        setTemplate(selected);
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar modelo de contrato:', err);
+      alert('Erro ao alterar o modelo de contrato.');
+    } finally {
+      setIsUpdatingTemplate(false);
     }
   };
 
@@ -218,7 +258,23 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-2"><FileText size={16} /> Contrato</h3>
-              <p className="font-bold text-gray-900">{contract.contract_templates.name}</p>
+              {contract.status === 'pending' && allTemplates.length > 0 ? (
+                <div className="flex flex-col gap-1 mb-1">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => handleTemplateChange(e.target.value)}
+                    disabled={isUpdatingTemplate}
+                    className="w-full text-sm border border-gray-300 rounded-lg p-1.5 bg-white text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {allTemplates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  {isUpdatingTemplate && <span className="text-xs text-blue-600 animate-pulse">Atualizando contrato...</span>}
+                </div>
+              ) : (
+                <p className="font-bold text-gray-900">{template?.name || contract.contract_templates.name}</p>
+              )}
               <p className={`text-sm font-bold inline-block px-2 py-1 rounded-full mt-1 ${statusInfo.style}`}>{statusInfo.label}</p>
             </div>
           </div>

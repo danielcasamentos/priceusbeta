@@ -61,7 +61,7 @@ export function generateCsv(records: FinancialRecord[]): string {
 
   const headers = [
     'ID', 'Data', 'Tipo', 'Valor (R$)', 'Status',
-    'Descrição', 'Categoria', 'Cliente', 'Forma de Pagamento',
+    'Descrição', 'Categoria', 'Cliente', 'CPF/CNPJ', 'Forma de Pagamento',
     'Origem', 'Parcelas', 'Observações',
   ];
 
@@ -74,6 +74,7 @@ export function generateCsv(records: FinancialRecord[]): string {
     csvEscape(r.description),
     csvEscape(r.category),
     csvEscape(r.clientName),
+    csvEscape(r.documento_fiscal),
     csvEscape(r.formaPagamento),
     csvEscape(origemLabel(r.origem ?? '')),
     csvEscape(r.parcelas),
@@ -120,6 +121,7 @@ export function downloadXlsx(records: FinancialRecord[], filename: string): void
     'Descrição': r.description ?? '',
     'Categoria': r.category ?? '',
     'Cliente': r.clientName ?? '',
+    'CPF/CNPJ': r.documento_fiscal ?? '',
     'Forma de Pagamento': r.formaPagamento ?? '',
     'Origem': origemLabel(r.origem ?? ''),
     'Parcelas': r.parcelas ?? '',
@@ -150,6 +152,7 @@ export function downloadXlsx(records: FinancialRecord[], filename: string): void
     { wch: 32 }, // Descrição
     { wch: 20 }, // Categoria
     { wch: 24 }, // Cliente
+    { wch: 18 }, // CPF/CNPJ
     { wch: 20 }, // Forma de Pag
     { wch: 12 }, // Origem
     { wch: 10 }, // Parcelas

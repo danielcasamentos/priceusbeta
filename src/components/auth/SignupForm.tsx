@@ -16,6 +16,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [birthDate, setBirthDate] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [termsError, setTermsError] = useState(false)
@@ -32,6 +33,27 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
     if (password !== confirmPassword) {
       setError('As senhas não correspondem')
+      setLoading(false)
+      return
+    }
+
+    if (!birthDate) {
+      setError('A data de nascimento é obrigatória')
+      setLoading(false)
+      return
+    }
+
+    // Validação de maioridade (18 anos)
+    const dtNascimento = new Date(birthDate)
+    const hoje = new Date()
+    let idade = hoje.getFullYear() - dtNascimento.getFullYear()
+    const m = hoje.getMonth() - dtNascimento.getMonth()
+    if (m < 0 || (m === 0 && hoje.getDate() < dtNascimento.getDate())) {
+      idade--
+    }
+
+    if (idade < 18) {
+      setError('Você deve ter pelo menos 18 anos para criar uma conta.')
       setLoading(false)
       return
     }
@@ -75,6 +97,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
             terms_accepted_at: now,
             terms_version: TERMS_VERSION,
             privacy_policy_accepted_at: now,
+            data_nascimento: birthDate,
           })
 
         if (profileError) {
@@ -118,6 +141,17 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           required
           placeholder="Digite seu e-mail"
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Data de Nascimento</label>
+        <input
+          type="date"
+          value={birthDate}
+          onChange={(e) => setBirthDate(e.target.value)}
+          required
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
         />
       </div>

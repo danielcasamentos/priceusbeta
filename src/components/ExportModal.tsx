@@ -13,6 +13,7 @@ interface CompanyTransactionRaw {
   categoria_nome?: string;
   categoria_id?: string;
   cliente_nome?: string;
+  documento_fiscal?: string;
   forma_pagamento?: string;
   origem?: string;
   is_installment?: boolean;
@@ -116,6 +117,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       description: t.descricao,
       category: getCategoryName(t.categoria_nome ?? t.categoria_id),
       clientName: t.cliente_nome,
+      documento_fiscal: t.documento_fiscal,
       formaPagamento: t.forma_pagamento,
       origem: t.origem,
       parcelas:

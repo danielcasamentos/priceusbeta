@@ -355,11 +355,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     return eventos;
   };
 
-  const parseICS = (text: string): Array<{ data: string; nome: string; tipo?: string }> => {
-    const eventos: Array<{ data: string; nome: string; tipo?: string }> = [];
+  const parseICS = (text: string): Array<{ data: string; nome: string; tipo?: string; uid_externo?: string }> => {
+    const eventos: Array<{ data: string; nome: string; tipo?: string; uid_externo?: string }> = [];
     const lines = text.split('\n');
 
-    let currentEvent: { data?: string; nome?: string; tipo?: string } = {};
+    let currentEvent: { data?: string; nome?: string; tipo?: string; uid_externo?: string } = {};
     let inEvent = false;
 
     for (const line of lines) {
@@ -370,7 +370,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         currentEvent = { tipo: 'evento' };
       } else if (trimmedLine === 'END:VEVENT') {
         if (currentEvent.data && currentEvent.nome) {
-          eventos.push(currentEvent as { data: string; nome: string; tipo?: string });
+          eventos.push(currentEvent as { data: string; nome: string; tipo?: string; uid_externo?: string });
         }
         inEvent = false;
         currentEvent = {};
@@ -382,6 +382,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
           }
         } else if (trimmedLine.startsWith('SUMMARY:')) {
           currentEvent.nome = trimmedLine.substring(8).trim();
+        } else if (trimmedLine.startsWith('UID:')) {
+          currentEvent.uid_externo = trimmedLine.substring(4).trim();
         } else if (trimmedLine.startsWith('DESCRIPTION:')) {
           currentEvent.tipo = trimmedLine.substring(12).trim() || 'evento';
         } else if (trimmedLine.startsWith('LOCATION:')) {
@@ -395,19 +397,36 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     return eventos;
   };
 
-  // Efeito de Auto-Sync em Background
+  // Efeito de Auto-Sync em Background (Smart Polling com Idle Detection)
   useEffect(() => {
     if (!configEdit.auto_sync_enabled || !configEdit.calendar_ics_url) return;
 
+    let syncInterval: NodeJS.Timeout;
+    let lastActivity = Date.now();
+
+    const handleActivity = () => {
+      lastActivity = Date.now();
+    };
+
+    // Registrar eventos de atividade do usuário
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('touchstart', handleActivity);
+    window.addEventListener('click', handleActivity);
+
     const performBackgroundSync = async () => {
       try {
-        if (configEdit.last_calendar_sync) {
-          const lastSyncDate = new Date(configEdit.last_calendar_sync);
-          const now = new Date();
-          const diffMinutes = (now.getTime() - lastSyncDate.getTime()) / (1000 * 60);
-          
-          // Cooldown de 30 minutos para não sobrecarregar
-          if (diffMinutes < 30) return;
+        const timeSinceLastActivity = Date.now() - lastActivity;
+        const isIdle = timeSinceLastActivity > 60000; // 1 minuto ocioso
+
+        // Se ocioso, reduz frequência. Vamos bloquear se < 5 min desde o último sync no idle
+        // Se ativo, bloqueia se < 10 segundos
+        const cooldownMs = isIdle ? 300000 : 10000;
+        
+        const lastSync = localStorage.getItem('last_calendar_smart_sync');
+        if (lastSync) {
+          const diffMs = Date.now() - parseInt(lastSync);
+          if (diffMs < cooldownMs) return; // Ainda em cooldown
         }
 
         const { data, error } = await supabase.functions.invoke('fetch-calendar', {
@@ -425,18 +444,27 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         // Se houver mudanças, carrega silenciosamente
         if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
           await loadData(true);
-          // Atualiza last_calendar_sync para não buscar de novo na mesma sessão
-          setConfigEdit(prev => ({ ...prev, last_calendar_sync: new Date().toISOString() }));
         }
+        
+        // Atualiza last_calendar_sync para não buscar de novo fora do cooldown
+        localStorage.setItem('last_calendar_smart_sync', Date.now().toString());
+
       } catch (err) {
         console.warn('Erro silencioso no auto-sync:', err);
       }
     };
 
-    // Atraso de 3 segundos para não atrasar o render da UI principal
-    const timer = setTimeout(performBackgroundSync, 3000);
-    return () => clearTimeout(timer);
-  }, [configEdit.auto_sync_enabled, configEdit.calendar_ics_url, configEdit.last_calendar_sync, userId]);
+    // Roda a checagem a cada 2 segundos (loop rápido). Ele só faz request se o cooldown permitir.
+    syncInterval = setInterval(performBackgroundSync, 2000);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('click', handleActivity);
+    };
+  }, [configEdit.auto_sync_enabled, configEdit.calendar_ics_url, userId]);
 
   const handleImportClick = () => {
     if (!planLimits.canImportCalendar) {
