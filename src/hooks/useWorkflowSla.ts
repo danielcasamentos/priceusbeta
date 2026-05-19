@@ -213,7 +213,7 @@ export async function checkAndCreateWorkflowNotifications(
           message: msg,
           related_id: step.id,
           link: '/dashboard/leads',
-          is_read: false,
+          read: false,
         });
       }
     }
@@ -242,7 +242,7 @@ export async function notifyLeadFinalizado(
       message: `✅ O projeto de ${lead.nome_cliente || 'Cliente'} foi concluído. Que tal solicitar uma avaliação?`,
       related_id: lead.id,
       link: '/dashboard/leads',
-      is_read: false,
+      read: false,
     });
   } catch (err) {
     console.warn('[WorkflowSLA] Falha ao notificar finalização:', err);

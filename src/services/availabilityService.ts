@@ -400,64 +400,68 @@ export async function importarEventosInteligente(
 
     const historicoId = historico.id;
 
-    for (const evento of eventos) {
-      try {
-        if (estrategia === 'adicionar_novos') {
-          const { data: existente } = await supabase
-            .from('eventos_agenda')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('data_evento', evento.data)
-            .eq('cliente_nome', evento.nome)
-            .maybeSingle();
+    const chunkSize = 10;
+    for (let i = 0; i < eventos.length; i += chunkSize) {
+      const chunk = eventos.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(async (evento) => {
+        try {
+          if (estrategia === 'adicionar_novos') {
+            const { data: existente } = await supabase
+              .from('eventos_agenda')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('data_evento', evento.data)
+              .eq('cliente_nome', evento.nome)
+              .maybeSingle();
 
-          if (existente) {
-            result.eventos_ignorados++;
-            continue;
+            if (existente) {
+              result.eventos_ignorados++;
+              return;
+            }
           }
-        }
 
-        if (estrategia === 'mesclar_atualizar') {
-          const { data: existente } = await supabase
-            .from('eventos_agenda')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('data_evento', evento.data)
-            .eq('cliente_nome', evento.nome)
-            .maybeSingle();
+          if (estrategia === 'mesclar_atualizar') {
+            const { data: existente } = await supabase
+              .from('eventos_agenda')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('data_evento', evento.data)
+              .eq('cliente_nome', evento.nome)
+              .maybeSingle();
 
-          if (existente) {
-            await updateEvento(existente.id, {
-              tipo_evento: evento.tipo || existente.tipo_evento,
-              cidade: evento.cidade || existente.cidade,
-              observacoes: `Atualizado de ${nomeArquivo}`,
-              importacao_id: historicoId
-            });
-            result.eventos_atualizados++;
-            continue;
+            if (existente) {
+              await updateEvento(existente.id, {
+                tipo_evento: evento.tipo || existente.tipo_evento,
+                cidade: evento.cidade || existente.cidade,
+                observacoes: `Atualizado de ${nomeArquivo}`,
+                importacao_id: historicoId
+              });
+              result.eventos_atualizados++;
+              return;
+            }
           }
-        }
 
-        const novoEvento = await addEvento({
-          user_id: userId,
-          data_evento: evento.data,
-          cliente_nome: evento.nome,
-          tipo_evento: evento.tipo || 'evento',
-          cidade: evento.cidade || '',
-          status: 'confirmado',
-          origem: 'csv_import',
-          observacoes: `Importado de ${nomeArquivo}`,
-          importacao_id: historicoId
-        });
+          const novoEvento = await addEvento({
+            user_id: userId,
+            data_evento: evento.data,
+            cliente_nome: evento.nome,
+            tipo_evento: evento.tipo || 'evento',
+            cidade: evento.cidade || '',
+            status: 'confirmado',
+            origem: 'csv_import',
+            observacoes: `Importado de ${nomeArquivo}`,
+            importacao_id: historicoId
+          });
 
-        if (novoEvento) {
-          result.eventos_adicionados++;
-        } else {
-          result.errors.push(`${evento.nome} (${evento.data})`);
+          if (novoEvento) {
+            result.eventos_adicionados++;
+          } else {
+            result.errors.push(`${evento.nome} (${evento.data})`);
+          }
+        } catch (error) {
+          result.errors.push(`${evento.nome} (${evento.data}): ${error}`);
         }
-      } catch (error) {
-        result.errors.push(`${evento.nome} (${evento.data}): ${error}`);
-      }
+      }));
     }
 
     await supabase

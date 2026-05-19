@@ -1313,6 +1313,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                             setImportStatus({ show: true, type: 'info', message: 'Nenhum evento encontrado no calendario', details: ['O calendario pode estar vazio ou em formato nao reconhecido.'] });
                             return;
                           }
+                          setImportStatus({ show: true, type: 'info', message: `Sincronizando ${parsedEventos.length} eventos encontrados...` });
                           const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
                           await loadData();
                           setActiveTab('list');
