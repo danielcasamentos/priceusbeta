@@ -448,7 +448,7 @@ export async function importarEventosInteligente(
             tipo_evento: evento.tipo || 'evento',
             cidade: evento.cidade || '',
             status: 'confirmado',
-            origem: 'csv_import',
+            origem: nomeArquivo === 'google-calendar-sync' ? 'google-calendar-sync' : 'csv_import',
             observacoes: `Importado de ${nomeArquivo}`,
             importacao_id: historicoId
           });
@@ -462,6 +462,35 @@ export async function importarEventosInteligente(
           result.errors.push(`${evento.nome} (${evento.data}): ${error}`);
         }
       }));
+    }
+
+    // Lógica para apagar eventos deletados no Google Calendar
+    if (estrategia === 'mesclar_atualizar' && nomeArquivo === 'google-calendar-sync') {
+      try {
+        const { data: eventosSincronizados } = await supabase
+          .from('eventos_agenda')
+          .select('id, data_evento, cliente_nome')
+          .eq('user_id', userId)
+          .eq('origem', 'google-calendar-sync');
+
+        if (eventosSincronizados && eventosSincronizados.length > 0) {
+          const setEventosICS = new Set(eventos.map(e => `${e.data}-${e.nome}`));
+          const idsParaDeletar = eventosSincronizados
+            .filter(e => !setEventosICS.has(`${e.data_evento}-${e.cliente_nome}`))
+            .map(e => e.id);
+
+          if (idsParaDeletar.length > 0) {
+            // Deleta em chunks de 50
+            for (let i = 0; i < idsParaDeletar.length; i += 50) {
+              const chunkIds = idsParaDeletar.slice(i, i + 50);
+              await supabase.from('eventos_agenda').delete().in('id', chunkIds);
+            }
+            result.eventos_removidos += idsParaDeletar.length;
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao tentar deletar eventos órfãos do calendário', err);
+      }
     }
 
     await supabase

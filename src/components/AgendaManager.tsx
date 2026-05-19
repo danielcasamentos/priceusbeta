@@ -92,8 +92,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     loadData();
   }, [userId, currentMonth]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent: boolean = false) => {
+    if (!silent) setLoading(true);
     try {
       const configData = await getOrCreateAgendaConfig(userId);
       setConfig(configData);
@@ -150,14 +150,16 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
     } catch (error) {
       console.error('Erro ao carregar dados da agenda:', error);
-      setImportStatus({
-        show: true,
-        type: 'error',
-        message: 'Erro ao carregar dados',
-        details: ['Verifique sua conexão e tente novamente']
-      });
+      if (!silent) {
+        setImportStatus({
+          show: true,
+          type: 'error',
+          message: 'Erro ao carregar dados',
+          details: ['Verifique sua conexão e tente novamente']
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -422,7 +424,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         
         // Se houver mudanças, carrega silenciosamente
         if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
-          await loadData();
+          await loadData(true);
           // Atualiza last_calendar_sync para não buscar de novo na mesma sessão
           setConfigEdit(prev => ({ ...prev, last_calendar_sync: new Date().toISOString() }));
         }
