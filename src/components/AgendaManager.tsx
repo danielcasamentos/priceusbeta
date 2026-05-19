@@ -1293,7 +1293,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
                   {configEdit.calendar_ics_url && (
                     <button
-                      onClick={async () => {
+                      type="button"
+                      onClick={async (e) => {
+                        e.preventDefault();
                         if (!configEdit.calendar_ics_url) return;
                         setImportStatus({ show: true, type: 'info', message: 'Buscando eventos do calendario...' });
                         try {
