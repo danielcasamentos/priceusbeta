@@ -536,7 +536,13 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                           )}
                         </p>
                         {transaction.forma_pagamento && (
-                          <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{transaction.forma_pagamento}</p>
+                          <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
+                            {transaction.forma_pagamento}
+                            {transaction.documento_fiscal && ` • CPF/CNPJ: ${transaction.documento_fiscal}`}
+                          </p>
+                        )}
+                        {!transaction.forma_pagamento && transaction.documento_fiscal && (
+                          <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">CPF/CNPJ: {transaction.documento_fiscal}</p>
                         )}
                       </div>
                     </td>
@@ -611,7 +617,10 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                       {transaction.descricao}
                       {transaction.is_installment && ` (${transaction.installment_number}/${transaction.total_installments})`}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{new Date(transaction.data).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {new Date(transaction.data).toLocaleDateString('pt-BR')}
+                      {transaction.documento_fiscal && ` • CPF/CNPJ: ${transaction.documento_fiscal}`}
+                    </p>
                   </div>
                   <div className={`text-xl font-bold mb-3 ${transaction.tipo === 'receita' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {transaction.tipo === 'despesa' ? '- ' : '+ '}
@@ -672,6 +681,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                 <span>📅 {new Date(t.data).toLocaleDateString('pt-BR')}</span>
                 <span>🏷️ {getCategoryName(t.categoria_id)}</span>
                 {t.forma_pagamento && <span>💳 {t.forma_pagamento}</span>}
+                {t.documento_fiscal && <span>👤 CPF/CNPJ: {t.documento_fiscal}</span>}
               </div>
               <div className="flex items-center justify-between pt-1">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${

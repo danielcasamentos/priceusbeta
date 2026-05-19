@@ -40,6 +40,7 @@ export function TransactionFormModal({
     status: 'pago' as 'pago' | 'pendente' | 'cancelado',
     forma_pagamento: 'pix',
     observacoes: '',
+    documento_fiscal: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,6 +57,7 @@ export function TransactionFormModal({
         status: transaction.status || 'pago',
         forma_pagamento: transaction.forma_pagamento || 'pix',
         observacoes: transaction.observacoes || '',
+        documento_fiscal: transaction.documento_fiscal || '',
       });
     } else if (isOpen) {
       // Modo de criação
@@ -67,6 +69,7 @@ export function TransactionFormModal({
         status: 'pago',
         forma_pagamento: 'pix',
         observacoes: '',
+        documento_fiscal: '',
       });
       setError(null);
     }
@@ -107,6 +110,7 @@ export function TransactionFormModal({
       forma_pagamento: formData.forma_pagamento,
       categoria_id: formData.categoria_id || undefined,
       observacoes: formData.observacoes,
+      documento_fiscal: formData.documento_fiscal || undefined,
     };
 
     const result = await onSubmit(transactionData);
@@ -144,6 +148,11 @@ export function TransactionFormModal({
           <div>
             <label htmlFor="descricao" className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
             <input type="text" id="descricao" name="descricao" value={formData.descricao} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" />
+          </div>
+
+          <div>
+            <label htmlFor="documento_fiscal" className="block text-sm font-medium text-gray-700 mb-1">CPF/CNPJ do Cliente (Opcional)</label>
+            <input type="text" id="documento_fiscal" name="documento_fiscal" value={formData.documento_fiscal} onChange={handleChange} placeholder="Ex: 000.000.000-00 ou 00.000.000/0000-00" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

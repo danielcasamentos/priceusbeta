@@ -204,6 +204,7 @@ export function ContractPreviewPage() {
     const paymentDetails = signedContract.payment_details_json;
     const totalValue = signedContract.lead_data_json?.valor_total || 0;
     const clientName = signedContract.lead_data_json?.nome_cliente || 'Cliente';
+    const docFiscal = signedContract.client_data_json?.cpf || signedContract.client_data_json?.documento || '';
 
     if (totalValue <= 0) {
       console.log('⚠️ Valor total zero. Nenhuma transação será criada.');
@@ -228,6 +229,7 @@ export function ContractPreviewPage() {
           is_installment: false,
           installment_number: 1,
           total_installments: 1,
+          documento_fiscal: docFiscal,
         }],
       });
       if (error) console.error('❌ Erro ao criar transação fallback:', error);
@@ -274,6 +276,7 @@ export function ContractPreviewPage() {
         is_installment: false,
         installment_number: 1,
         total_installments: 1,
+        documento_fiscal: docFiscal,
       });
 
       // Se havia entrada menor que o total e max_parcelas = 1, adicionar o restante
@@ -293,6 +296,7 @@ export function ContractPreviewPage() {
           is_installment: true,
           installment_number: 2,
           total_installments: 2,
+          documento_fiscal: docFiscal,
         });
       }
     }
@@ -327,6 +331,7 @@ export function ContractPreviewPage() {
           is_installment: true,
           installment_number: 1,
           total_installments: totalInstallments,
+          documento_fiscal: docFiscal,
         });
       }
 
@@ -355,6 +360,7 @@ export function ContractPreviewPage() {
             is_installment: true,
             installment_number: (downPaymentValue > 0 ? 2 : 1) + idx,
             total_installments: totalInstallments,
+            documento_fiscal: docFiscal,
           });
         });
       } else {
@@ -378,6 +384,7 @@ export function ContractPreviewPage() {
               is_installment: true,
               installment_number: (downPaymentValue > 0 ? 2 : 1) + (i - 1),
               total_installments: totalInstallments,
+              documento_fiscal: docFiscal,
             });
           }
         }

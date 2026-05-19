@@ -132,7 +132,7 @@ export function useCompanyTransactions(userId: string) {
           return {
             ...t,
             cliente_nome: t.leads?.nome_cliente || '',
-            documento_fiscal: linkedContract?.client_data_json?.cpf || linkedContract?.client_data_json?.documento || leadCpf || '',
+            documento_fiscal: t.documento_fiscal || linkedContract?.client_data_json?.cpf || linkedContract?.client_data_json?.documento || leadCpf || '',
           };
         });
 
