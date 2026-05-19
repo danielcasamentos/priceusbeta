@@ -471,7 +471,7 @@ export async function importarEventosInteligente(
           .from('eventos_agenda')
           .select('id, data_evento, cliente_nome')
           .eq('user_id', userId)
-          .eq('origem', 'google-calendar-sync');
+          .or('origem.eq.google-calendar-sync,observacoes.ilike.%google-calendar-sync%');
 
         if (eventosSincronizados && eventosSincronizados.length > 0) {
           const setEventosICS = new Set(eventos.map(e => `${e.data}-${e.nome}`));
