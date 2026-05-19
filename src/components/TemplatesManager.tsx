@@ -17,7 +17,8 @@ interface Template {
   ocultar_data_criacao?: boolean;
   created_at: string;
 }
-import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X } from 'lucide-react';
+}
+import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { TemplateAnalyticsSummary } from './TemplateAnalyticsSummary';
@@ -52,6 +53,7 @@ interface SortableTemplateCardProps {
   onViewTemplate: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  viewMode?: 'grid' | 'list';
 }
 
 function SortableTemplateCard({
@@ -62,6 +64,7 @@ function SortableTemplateCard({
   onViewTemplate,
   onDuplicate,
   onDelete,
+  viewMode = 'grid',
 }: SortableTemplateCardProps) {
   const {
     attributes,
@@ -176,8 +179,10 @@ function SortableTemplateCard({
           </button>
         </div>
 
-        {/* Analytics Section */}
-        <TemplateAnalyticsSummary templateId={template.id} />
+        {/* Analytics Section - Hide in list mode to save vertical space if desired, or keep it. Let's keep it but compact if needed */}
+        {viewMode === 'grid' && (
+          <TemplateAnalyticsSummary templateId={template.id} />
+        )}
       </div>
     </div>
   );
@@ -199,6 +204,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   const [duplicating, setDuplicating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userSlug, setUserSlug] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const planLimits = usePlanLimits();
 
@@ -525,6 +531,25 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         </button>
       </div>
 
+      <div className="flex justify-end gap-2 -mt-2">
+        <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg">
+          <button 
+            onClick={() => setViewMode('grid')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            title="Visualização em Grade"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => setViewMode('list')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            title="Visualização em Lista"
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Card de Estatísticas e Limites */}
       <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.08)]">
         <div className="flex items-center justify-between mb-3">
@@ -633,11 +658,12 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
               items={templates.map((t) => t.id)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-4"}>
                 {templates.map((template) => (
                   <SortableTemplateCard
                     key={template.id}
                     template={template}
+                    viewMode={viewMode}
                     onEdit={() => onEditTemplate?.(template.id)}
                     onEditName={() => handleEditNameClick(template)}
                     onCopyUrl={() => copyTemplateUrl(template)}

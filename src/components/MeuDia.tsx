@@ -58,21 +58,41 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [eventos, setEventos] = useState<EventoAgenda[]>([]);
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
   const [tarefas, setTarefas] = useState<TarefaWorkflow[]>([]);
+  
+  // Previsão para amanhã
+  const [eventosAmanha, setEventosAmanha] = useState<EventoAgenda[]>([]);
+  const [transacoesAmanha, setTransacoesAmanha] = useState<Transacao[]>([]);
+  const [tarefasAmanha, setTarefasAmanha] = useState<TarefaWorkflow[]>([]);
 
   const range = getRangeForPeriodo(periodo, customStart, customEnd);
 
   const load = useCallback(async () => {
     setLoading(true);
+    
+    // Calcula a data de amanhã
+    const hoje = new Date();
+    const amanhaDate = new Date(hoje);
+    amanhaDate.setDate(hoje.getDate() + 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const amanhaStr = `${amanhaDate.getFullYear()}-${pad(amanhaDate.getMonth() + 1)}-${pad(amanhaDate.getDate())}`;
+
     try {
-      const [evRes, trRes, leadsRes] = await Promise.all([
+      const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes] = await Promise.all([
         supabase.from('eventos_agenda').select('*').eq('user_id', userId).gte('data_evento', range.start).lte('data_evento', range.end).order('data_evento'),
         supabase.from('company_transactions').select('*').eq('user_id', userId).gte('data', range.start).lte('data', range.end).order('data'),
         supabase.from('leads').select('id, nome_cliente, workflow').eq('user_id', userId).eq('status', 'convertido'),
+        // Consultas específicas para amanhã
+        supabase.from('eventos_agenda').select('*').eq('user_id', userId).eq('data_evento', amanhaStr).order('data_evento'),
+        supabase.from('company_transactions').select('*').eq('user_id', userId).eq('data', amanhaStr).order('data')
       ]);
       setEventos(evRes.data || []);
       setTransacoes(trRes.data || []);
+      setEventosAmanha(evAmanhaRes.data || []);
+      setTransacoesAmanha(trAmanhaRes.data || []);
 
       const tarefasRaw: TarefaWorkflow[] = [];
+      const tarefasAmanhaRaw: TarefaWorkflow[] = [];
+      
       for (const lead of (leadsRes.data || [])) {
         const wf = Array.isArray(lead.workflow) ? lead.workflow : [];
         for (const step of wf) {
@@ -81,6 +101,9 @@ export function MeuDia({ userId }: MeuDiaProps) {
             const inRange = !prazo || (prazo >= range.start && prazo <= range.end);
             if (inRange || periodo === 'hoje') {
               tarefasRaw.push({ leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome: step.nome || step.title || 'Tarefa', status: step.status, prazo });
+            }
+            if (prazo === amanhaStr) {
+              tarefasAmanhaRaw.push({ leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome: step.nome || step.title || 'Tarefa', status: step.status, prazo });
             }
           }
         }
@@ -95,6 +118,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       });
       
       setTarefas(tarefasRaw);
+      setTarefasAmanha(tarefasAmanhaRaw);
     } finally { setLoading(false); }
   }, [userId, range.start, range.end]);
 
@@ -312,6 +336,95 @@ export function MeuDia({ userId }: MeuDiaProps) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Previsão para Amanhã */}
+      {!loading && (
+        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-[rgba(255,255,255,0.05)]">
+          <div className="flex items-center gap-2 mb-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">O que temos para amanhã?</h3>
+            <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 text-xs font-semibold px-2.5 py-1 rounded-full">
+              Preview
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Bloco de Trabalhos (Tarefas) */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckSquare className="w-5 h-5 text-purple-600" />
+                <h4 className="font-semibold text-gray-900 dark:text-white">Trabalhos</h4>
+                <span className="ml-auto text-sm font-bold text-gray-500 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded-full">{tarefasAmanha.length}</span>
+              </div>
+              {tarefasAmanha.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.4)] text-center py-4">Nenhum prazo para amanhã</p>
+              ) : (
+                <div className="space-y-3">
+                  {tarefasAmanha.map(t => (
+                    <button 
+                      key={`${t.leadId}-${t.stepId}`} 
+                      onClick={() => navigate(`/dashboard/leads?tab=producao&leadId=${t.leadId}`)}
+                      className="w-full text-left bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                    >
+                      <p className="text-xs text-purple-600 font-semibold truncate">{t.leadNome}</p>
+                      <p className="text-sm text-gray-900 dark:text-white font-medium truncate mt-0.5">{t.stepNome}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bloco de Entradas (Receitas) */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign className="w-5 h-5 text-green-600" />
+                <h4 className="font-semibold text-gray-900 dark:text-white">Entradas</h4>
+                <span className="ml-auto text-sm font-bold text-gray-500 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded-full">
+                  {transacoesAmanha.filter(t => t.tipo === 'receita').length}
+                </span>
+              </div>
+              {transacoesAmanha.filter(t => t.tipo === 'receita').length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.4)] text-center py-4">Nenhuma entrada agendada</p>
+              ) : (
+                <div className="space-y-3">
+                  {transacoesAmanha.filter(t => t.tipo === 'receita').map(t => (
+                    <div key={t.id} className="bg-green-50 dark:bg-[rgba(34,197,94,0.05)] border border-green-100 dark:border-[rgba(34,197,94,0.1)] p-3 rounded-lg flex justify-between items-center">
+                      <p className="text-sm text-gray-900 dark:text-white font-medium truncate pr-2">{t.descricao}</p>
+                      <p className="text-sm font-bold text-green-600 shrink-0">{fmtCurrency(t.valor)}</p>
+                    </div>
+                  ))}
+                  <div className="pt-2 mt-2 border-t border-gray-100 dark:border-[rgba(255,255,255,0.05)] flex justify-between items-center">
+                    <span className="text-xs font-semibold text-gray-500">Total a receber:</span>
+                    <span className="font-bold text-green-600">
+                      {fmtCurrency(transacoesAmanha.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0))}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bloco de Eventos */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="w-5 h-5 text-blue-600" />
+                <h4 className="font-semibold text-gray-900 dark:text-white">Eventos</h4>
+                <span className="ml-auto text-sm font-bold text-gray-500 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded-full">{eventosAmanha.length}</span>
+              </div>
+              {eventosAmanha.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.4)] text-center py-4">Nenhum evento na agenda</p>
+              ) : (
+                <div className="space-y-3">
+                  {eventosAmanha.map(ev => (
+                    <div key={ev.id} className="bg-blue-50 dark:bg-[rgba(59,130,246,0.05)] border border-blue-100 dark:border-[rgba(59,130,246,0.1)] p-3 rounded-lg">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{ev.cliente_nome}</p>
+                      <p className="text-xs text-blue-600 font-medium truncate mt-0.5">{ev.tipo_evento}{ev.cidade ? ` • ${ev.cidade}` : ''}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
