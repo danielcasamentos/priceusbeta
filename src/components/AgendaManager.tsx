@@ -393,6 +393,49 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     return eventos;
   };
 
+  // Efeito de Auto-Sync em Background
+  useEffect(() => {
+    if (!configEdit.auto_sync_enabled || !configEdit.calendar_ics_url) return;
+
+    const performBackgroundSync = async () => {
+      try {
+        if (configEdit.last_calendar_sync) {
+          const lastSyncDate = new Date(configEdit.last_calendar_sync);
+          const now = new Date();
+          const diffMinutes = (now.getTime() - lastSyncDate.getTime()) / (1000 * 60);
+          
+          // Cooldown de 30 minutos para não sobrecarregar
+          if (diffMinutes < 30) return;
+        }
+
+        const { data, error } = await supabase.functions.invoke('fetch-calendar', {
+          body: { url: configEdit.calendar_ics_url }
+        });
+        
+        if (error || !data || !data.text) return;
+        if (!data.text.includes('BEGIN:VCALENDAR')) return;
+
+        const parsedEventos = parseICS(data.text);
+        if (parsedEventos.length === 0) return;
+
+        const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
+        
+        // Se houver mudanças, carrega silenciosamente
+        if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
+          await loadData();
+          // Atualiza last_calendar_sync para não buscar de novo na mesma sessão
+          setConfigEdit(prev => ({ ...prev, last_calendar_sync: new Date().toISOString() }));
+        }
+      } catch (err) {
+        console.warn('Erro silencioso no auto-sync:', err);
+      }
+    };
+
+    // Atraso de 3 segundos para não atrasar o render da UI principal
+    const timer = setTimeout(performBackgroundSync, 3000);
+    return () => clearTimeout(timer);
+  }, [configEdit.auto_sync_enabled, configEdit.calendar_ics_url, configEdit.last_calendar_sync, userId]);
+
   const handleImportClick = () => {
     if (!planLimits.canImportCalendar) {
       setShowUpgradeModal(true);
