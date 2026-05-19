@@ -219,12 +219,13 @@ export function downloadPdf(records: FinancialRecord[], filename: string): void 
   const cols = [
     { header: 'Data',        key: 'date',           w: 22, fmt: (r: FinancialRecord) => formatDate(r.date) },
     { header: 'Tipo',        key: 'type',           w: 18, fmt: (r: FinancialRecord) => tipoLabel(r.type) },
-    { header: 'Descrição',   key: 'description',    w: 60, fmt: (r: FinancialRecord) => (r.description ?? '').substring(0, 38) },
-    { header: 'Categoria',   key: 'category',       w: 32, fmt: (r: FinancialRecord) => (r.category ?? '').substring(0, 20) },
-    { header: 'Cliente',     key: 'clientName',     w: 38, fmt: (r: FinancialRecord) => (r.clientName ?? '').substring(0, 22) },
-    { header: 'Status',      key: 'status',         w: 22, fmt: (r: FinancialRecord) => statusLabel(r.status ?? '') },
-    { header: 'Parcelas',    key: 'parcelas',       w: 18, fmt: (r: FinancialRecord) => r.parcelas ?? '' },
-    { header: 'Valor (R$)',  key: 'amount',         w: 28, fmt: (r: FinancialRecord) => formatBRL(r.amount) },
+    { header: 'Descrição',   key: 'description',    w: 46, fmt: (r: FinancialRecord) => (r.description ?? '').substring(0, 30) },
+    { header: 'Categoria',   key: 'category',       w: 28, fmt: (r: FinancialRecord) => (r.category ?? '').substring(0, 18) },
+    { header: 'Cliente',     key: 'clientName',     w: 32, fmt: (r: FinancialRecord) => (r.clientName ?? '').substring(0, 20) },
+    { header: 'CPF/CNPJ',    key: 'documento_fiscal', w: 30, fmt: (r: FinancialRecord) => r.documento_fiscal ?? '' },
+    { header: 'Status',      key: 'status',         w: 20, fmt: (r: FinancialRecord) => statusLabel(r.status ?? '') },
+    { header: 'Parcelas',    key: 'parcelas',       w: 16, fmt: (r: FinancialRecord) => r.parcelas ?? '' },
+    { header: 'Valor (R$)',  key: 'amount',         w: 26, fmt: (r: FinancialRecord) => formatBRL(r.amount) },
   ];
 
   const totalW = cols.reduce((s, c) => s + c.w, 0);
