@@ -101,7 +101,7 @@ export function useCompanyTransactions(userId: string) {
       const { data, error } = await applyFilters(
         supabase
           .from('company_transactions')
-          .select('*, leads:lead_id(nome_cliente, cpf)')
+          .select('*, leads:lead_id(nome_cliente, dados_formulario)')
           .eq('user_id', userId)
       );
 
@@ -128,10 +128,11 @@ export function useCompanyTransactions(userId: string) {
 
         const processedData: CompanyTransaction[] = data.map((t: any) => {
           const linkedContract = t.contract_id ? contractsMap[t.contract_id] : null;
+          const leadCpf = t.leads?.dados_formulario?.cpf || t.leads?.dados_formulario?.documento || '';
           return {
             ...t,
             cliente_nome: t.leads?.nome_cliente || '',
-            documento_fiscal: linkedContract?.client_data_json?.cpf || linkedContract?.client_data_json?.documento || t.leads?.cpf || '',
+            documento_fiscal: linkedContract?.client_data_json?.cpf || linkedContract?.client_data_json?.documento || leadCpf || '',
           };
         });
 
