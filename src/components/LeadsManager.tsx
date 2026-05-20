@@ -165,7 +165,8 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
 
     let formaPagamentoCompleta = savedOrcamentoDetalhe.paymentMethod;
-    const pagamentoId = savedOrcamentoDetalhe.selectedFormaPagamento || savedOrcamentoDetalhe.forma_pagamento_id || (savedOrcamentoDetalhe as any).selecoes?.paymentMethod;
+    const pagamentoIdRaw = savedOrcamentoDetalhe.selectedFormaPagamento || savedOrcamentoDetalhe.forma_pagamento_id || (savedOrcamentoDetalhe as any).selecoes?.paymentMethod;
+    const pagamentoId = typeof pagamentoIdRaw === 'object' && pagamentoIdRaw !== null ? pagamentoIdRaw.id : pagamentoIdRaw;
     if (pagamentoId && !formaPagamentoCompleta) {
       const { data: fetchPagamento } = await supabase.from('formas_pagamento').select('*').eq('id', pagamentoId).maybeSingle();
       if (fetchPagamento) {
@@ -1091,9 +1092,13 @@ export function LeadsManager({ userId }: { userId: string }) {
                   />
                 </div>
                 <div className="mb-3 pr-6">
-                  <h3 className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-2" title={lead.nome_cliente}>
+                  <h3 className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-2" title={lead.nome_cliente || undefined}>
                     {lead.nome_cliente || 'Não informado'}
-                    {contracts[lead.id] && <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400" title="Contrato Gerado" />}
+                    {contracts[lead.id] && (
+                      <span title="Contrato Gerado">
+                        <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      </span>
+                    )}
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
                     {getStatusBadge(lead.status)}

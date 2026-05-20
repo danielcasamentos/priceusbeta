@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { X, Plus, Trash2, Loader2 } from 'lucide-react';
-import type { CompanyCategory } from '../hooks/useCompanyTransactions';
+import type { CompanyCategory } from '../../hooks/useCompanyTransactions';
 
 interface CategoryManagerModalProps {
   userId: string;

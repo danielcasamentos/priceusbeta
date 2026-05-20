@@ -52,7 +52,6 @@ interface SortableTemplateCardProps {
   onViewTemplate: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  viewMode?: 'grid' | 'list';
 }
 
 function SortableTemplateCard({
@@ -63,7 +62,6 @@ function SortableTemplateCard({
   onViewTemplate,
   onDuplicate,
   onDelete,
-  viewMode = 'grid',
 }: SortableTemplateCardProps) {
   const {
     attributes,
@@ -383,7 +381,59 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         if (insertProdutosError) throw insertProdutosError;
       }
 
-      alert(`✅ Template duplicado com sucesso! ${produtos?.length || 0} produtos copiados.`);
+      // 4. Buscar e duplicar formas de pagamento
+      const { data: formasPagamento, error: formasError } = await supabase
+        .from('formas_pagamento')
+        .select('*')
+        .eq('template_id', templateToDuplicate.id);
+
+      if (formasError) throw formasError;
+
+      if (formasPagamento && formasPagamento.length > 0) {
+        const formasDuplicadas = formasPagamento.map((forma) => ({
+          template_id: newTemplate.id,
+          user_id: userId,
+          nome: forma.nome,
+          entrada_tipo: forma.entrada_tipo,
+          entrada_valor: forma.entrada_valor,
+          max_parcelas: forma.max_parcelas,
+          acrescimo: forma.acrescimo,
+        }));
+
+        const { error: insertFormasError } = await supabase
+          .from('formas_pagamento')
+          .insert(formasDuplicadas);
+
+        if (insertFormasError) throw insertFormasError;
+      }
+
+      // 5. Buscar e duplicar campos extras
+      const { data: campos, error: camposError } = await supabase
+        .from('campos')
+        .select('*')
+        .eq('template_id', templateToDuplicate.id);
+
+      if (camposError) throw camposError;
+
+      if (campos && campos.length > 0) {
+        const camposDuplicados = campos.map((campo) => ({
+          template_id: newTemplate.id,
+          nome_campo: campo.nome_campo,
+          label: campo.label,
+          tipo: campo.tipo,
+          placeholder: campo.placeholder,
+          obrigatorio: campo.obrigatorio,
+          ordem: campo.ordem,
+        }));
+
+        const { error: insertCamposError } = await supabase
+          .from('campos')
+          .insert(camposDuplicados);
+
+        if (insertCamposError) throw insertCamposError;
+      }
+
+      alert(`✅ Template duplicado com sucesso! ${produtos?.length || 0} produtos, ${formasPagamento?.length || 0} formas de pagamento e ${campos?.length || 0} campos extras copiados.`);
       setShowDuplicateModal(false);
       setTemplateToDuplicate(null);
       setNewTemplateName('');
@@ -662,7 +712,6 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   <SortableTemplateCard
                     key={template.id}
                     template={template}
-                    viewMode={viewMode}
                     onEdit={() => onEditTemplate?.(template.id)}
                     onEditName={() => handleEditNameClick(template)}
                     onCopyUrl={() => copyTemplateUrl(template)}

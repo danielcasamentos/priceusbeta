@@ -107,6 +107,13 @@ export function QuotePage() {
   const [selectedFormaPagamento, setSelectedFormaPagamento] = useState<string>('');
   const [dataUltimaParcela] = useState<string>(''); // Removed unused setDataUltimaParcela
 
+  // Auto-selecionar a primeira forma de pagamento disponível por padrão
+  useEffect(() => {
+    if (formasPagamento.length > 0 && !selectedFormaPagamento) {
+      setSelectedFormaPagamento(formasPagamento[0].id);
+    }
+  }, [formasPagamento, selectedFormaPagamento]);
+
   // Cupom de desconto
   const [cupomCodigo, setCupomCodigo] = useState<string>('');
   const [cupomAtivo, setCupomAtivo] = useState<boolean>(false);

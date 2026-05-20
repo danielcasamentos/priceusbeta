@@ -127,7 +127,6 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
       // 1. Preparar financeiro
       let dbRows: any[] = [];
       let planoJson: any = null;
-      let leadUpdatePromise: any = null;
       
       if (temFinanceiro) {
         if (mode === 'avista') {

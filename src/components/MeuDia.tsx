@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Calendar, DollarSign, CheckSquare, Clock, ChevronLeft, ChevronRight, Filter, Sun, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Calendar, DollarSign, CheckSquare, Clock, Sun, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface MeuDiaProps { userId: string; }
 

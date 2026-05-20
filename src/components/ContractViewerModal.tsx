@@ -12,6 +12,7 @@ interface Contract {
   template_id?: string;
   status: 'pending' | 'signed' | 'expired';
   created_at: string;
+  expires_at: string;
   client_ip?: string;
   token: string;
   signed_at: string | null;

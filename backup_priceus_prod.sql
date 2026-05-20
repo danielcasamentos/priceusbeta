@@ -407,7 +407,7 @@ VALUES (
 NEW.id,
 now(),
 now(),
-now() + INTERVAL '14 days'
+now() + INTERVAL '30 days'
 );
 RETURN NEW;
 END;

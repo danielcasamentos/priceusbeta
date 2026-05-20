@@ -421,8 +421,12 @@ function cleanEmptyLines(message: string): string {
 
     // Padrões de linhas sem valor (label: sem conteúdo)
     const emptyPatterns = [
-      /^(Subtotal|Local|Data|Cidade|Cupom|Ajuste):?\s*$/i,
-      /^[📅📍]\s*\*?(Data|Cidade)\*?:\s*$/i,   // emoji + label vazio
+      /^(Subtotal|Local|Data|Cidade|Cupom|Ajuste|Forma de Pagamento|Entrada|Parcelamento|Parcelas):?\s*$/i,
+      /^[📅📍💳]\s*\*?(Data|Cidade|Forma de Pagamento|Entrada|Parcelamento|Parcelas)\*?:\s*$/i,   // emoji + label vazio
+      /^(💳\s*)?[\*_]?Forma de Pagamento[\*_]?:?[\*_]?\s*$/i,
+      /^(💳\s*)?[\*_]?Entrada[\*_]?:?[\*_]?\s*$/i,
+      /^(💳\s*)?[\*_]?Parcelamento[\*_]?:?[\*_]?\s*$/i,
+      /^(💳\s*)?[\*_]?Parcelas[\*_]?:?[\*_]?\s*$/i,
       /^[•\-]\s*$/,
     ];
     if (emptyPatterns.some((p) => p.test(trimmed))) continue;
