@@ -16,6 +16,7 @@ import { ContractCompletePage } from './pages/ContractCompletePage'
 import { ContractVerificationPage } from './pages/ContractVerificationPage'; // Adicionado
 import { ContractPreviewPage } from './pages/ContractPreviewPage' // Adicionado
 import { ReviewPage } from './pages/ReviewPage'
+import { InteractiveTutorialsPage } from './pages/InteractiveTutorialsPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
@@ -73,7 +74,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          {/* Rotas públicas com slug (perfil público e template) */}
+          {/* Rotas públicas de tutoriais e com slug */}
+          <Route path="/tutoriais" element={<InteractiveTutorialsPage />} />
           <Route path="/:slugUsuario" element={<PublicProfilePage />} />
           <Route path="/:slugUsuario/:slugTemplate" element={<QuotePage />} />
           <Route path="/avaliar/:token" element={<ReviewPage />} />
