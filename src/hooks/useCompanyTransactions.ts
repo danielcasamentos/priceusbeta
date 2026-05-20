@@ -113,26 +113,48 @@ export function useCompanyTransactions(userId: string) {
       if (data) {
         // Buscar contratos vinculados em memória para evitar erro de JOIN no PostgREST
         const contractIds = data.map((t: any) => t.contract_id).filter(Boolean);
+        const leadIds = data.map((t: any) => t.lead_id).filter(Boolean);
         let contractsMap: Record<string, any> = {};
 
-        if (contractIds.length > 0) {
-          const { data: contractsData, error: contractsError } = await supabase
+        if (contractIds.length > 0 || leadIds.length > 0) {
+          const query = supabase
             .from('contracts')
-            .select('id, client_data_json')
-            .in('id', contractIds);
+            .select('id, lead_id, client_data_json');
+
+          const { data: contractsData, error: contractsError } = await (contractIds.length > 0 && leadIds.length > 0
+            ? query.or(`id.in.(${contractIds.join(',')}),lead_id.in.(${leadIds.join(',')})`)
+            : contractIds.length > 0
+            ? query.in('id', contractIds)
+            : query.in('lead_id', leadIds));
 
           if (!contractsError && contractsData) {
-            contractsMap = Object.fromEntries(contractsData.map((c) => [c.id, c]));
+            contractsData.forEach((c) => {
+              if (c.id) contractsMap[c.id] = c;
+              if (c.lead_id) contractsMap[c.lead_id] = c;
+            });
           }
         }
 
         const processedData: CompanyTransaction[] = data.map((t: any) => {
-          const linkedContract = t.contract_id ? contractsMap[t.contract_id] : null;
-          const leadCpf = t.leads?.dados_formulario?.cpf || t.leads?.dados_formulario?.documento || '';
+          const linkedContract = (t.contract_id ? contractsMap[t.contract_id] : null) || (t.lead_id ? contractsMap[t.lead_id] : null);
+          const leadCpf =
+            t.leads?.dados_formulario?.cpf ||
+            t.leads?.dados_formulario?.documento ||
+            t.leads?.dados_formulario?.cpf_cnpj ||
+            t.leads?.dados_formulario?.cliente?.cpf ||
+            t.leads?.dados_formulario?.cliente?.documento ||
+            '';
+
+          const contractCpf =
+            linkedContract?.client_data_json?.cpf ||
+            linkedContract?.client_data_json?.documento ||
+            linkedContract?.client_data_json?.cpf_cnpj ||
+            '';
+
           return {
             ...t,
             cliente_nome: t.leads?.nome_cliente || '',
-            documento_fiscal: t.documento_fiscal || linkedContract?.client_data_json?.cpf || linkedContract?.client_data_json?.documento || leadCpf || '',
+            documento_fiscal: t.documento_fiscal || contractCpf || leadCpf || '',
           };
         });
 
