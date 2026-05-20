@@ -548,74 +548,76 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
       </div>
 
       {/* Card de Estatísticas e Limites */}
-      <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.08)]">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Templates: {planLimits.templatesUsed} de {planLimits.templatesLimit}
-              </h3>
-              {!planLimits.isPremium && (
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                  Plano Gratuito
-                </span>
-              )}
-              {planLimits.isPremium && !planLimits.isPrivileged && (
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                  <Crown className="w-3 h-3" />
-                  Premium
-                </span>
-              )}
-              {planLimits.isPrivileged && (
-                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                  <Crown className="w-3 h-3" />
-                  Conta Especial
-                </span>
-              )}
+      {!planLimits.isPremium && (
+        <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.08)]">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Templates: {planLimits.templatesUsed} de {planLimits.templatesLimit}
+                </h3>
+                {!planLimits.isPremium && (
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                    Plano Gratuito
+                  </span>
+                )}
+                {planLimits.isPremium && !planLimits.isPrivileged && (
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
+                    <Crown className="w-3 h-3" />
+                    Premium
+                  </span>
+                )}
+                {planLimits.isPrivileged && (
+                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
+                    <Crown className="w-3 h-3" />
+                    Conta Especial
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.55)] mt-1">
+                {planLimits.isPremium 
+                  ? 'Você pode criar até 10 templates no plano premium'
+                  : 'Faça upgrade para criar até 10 templates'}
+              </p>
             </div>
-            <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.55)] mt-1">
-              {planLimits.isPremium 
-                ? 'Você pode criar até 10 templates no plano premium'
-                : 'Faça upgrade para criar até 10 templates'}
-            </p>
+            {!planLimits.isPremium && (
+              <button
+                onClick={() => setShowUpgradeModal(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium text-sm"
+              >
+                <Crown className="w-4 h-4" />
+                Fazer Upgrade
+              </button>
+            )}
           </div>
-          {!planLimits.isPremium && (
-            <button
-              onClick={() => setShowUpgradeModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium text-sm"
-            >
-              <Crown className="w-4 h-4" />
-              Fazer Upgrade
-            </button>
+
+          {/* Barra de Progresso */}
+          <div className="w-full bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] rounded-full h-2.5 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${getLimitProgressColor()}`}
+              style={{
+                width: `${Math.min((planLimits.templatesUsed / planLimits.templatesLimit) * 100, 100)}%`,
+              }}
+            />
+          </div>
+
+          {/* Aviso de Limite Próximo */}
+          {!planLimits.isPremium && planLimits.templatesUsed >= planLimits.templatesLimit && (
+            <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">
+                  Limite de templates atingido!
+                </p>
+                <p className="text-sm text-red-700 mt-1">
+                  Você atingiu o limite de {planLimits.templatesLimit} template no plano gratuito. 
+                  Faça upgrade para criar até 10 templates.
+                </p>
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Barra de Progresso */}
-        <div className="w-full bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] rounded-full h-2.5 overflow-hidden">
-          <div
-            className={`h-full transition-all duration-300 ${getLimitProgressColor()}`}
-            style={{
-              width: `${Math.min((planLimits.templatesUsed / planLimits.templatesLimit) * 100, 100)}%`,
-            }}
-          />
-        </div>
-
-        {/* Aviso de Limite Próximo */}
-        {!planLimits.isPremium && planLimits.templatesUsed >= planLimits.templatesLimit && (
-          <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-red-900">
-                Limite de templates atingido!
-              </p>
-              <p className="text-sm text-red-700 mt-1">
-                Você atingiu o limite de {planLimits.templatesLimit} template no plano gratuito. 
-                Faça upgrade para criar até 10 templates.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {templates.length === 0 ? (
         <div className="bg-white dark:bg-[rgba(255,255,255,0.04)] border dark:border-[rgba(255,255,255,0.08)] rounded-lg shadow p-12 text-center">

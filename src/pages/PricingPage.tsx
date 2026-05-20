@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { stripeProducts } from '../stripe-config'
 import { useAuth } from '../hooks/useAuth'
@@ -7,6 +7,7 @@ import { useTrialStatus } from '../hooks/useTrialStatus'
 import { Alert } from '../components/ui/Alert'
 import { AlertCircle } from 'lucide-react'
 import { handleCheckout } from '../checkoutService'
+import { supabase } from '../lib/supabase'
 
 export function PricingPage() {
   const navigate = useNavigate()
@@ -15,6 +16,33 @@ export function PricingPage() {
   const trialStatus = useTrialStatus(user)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [contracts, setContracts] = useState<any[]>([])
+  const [loadingContracts, setLoadingContracts] = useState(false)
+
+  useEffect(() => {
+    if (user && trialStatus.isExpired && trialStatus.status === 'trial') {
+      const fetchContracts = async () => {
+        setLoadingContracts(true)
+        try {
+          const { data, error } = await supabase
+            .from('contracts')
+            .select('id, token, created_at, lead_data_json, client_data_json, signature_base64')
+            .eq('user_id', user.id)
+            .eq('status', 'signed')
+            .order('created_at', { ascending: false })
+          
+          if (!error && data) {
+            setContracts(data)
+          }
+        } catch (err) {
+          console.error('Erro ao buscar contratos:', err)
+        } finally {
+          setLoadingContracts(false)
+        }
+      }
+      fetchContracts()
+    }
+  }, [user, trialStatus.isExpired, trialStatus.status])
 
   const onSubscribeClick = async (priceId: string) => {
     if (!user) {
@@ -50,14 +78,19 @@ export function PricingPage() {
 
         {trialStatus.isExpired && trialStatus.status === 'trial' && (
           <div className="mt-8 max-w-2xl mx-auto">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-4 shadow-sm animate-fade-in">
+              <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={24} />
               <div>
-                <h3 className="font-semibold text-red-900 mb-1">Seu período de teste expirou</h3>
-                <p className="text-sm text-red-700">
-                  Para continuar usando o Price Us e acessar todos os recursos,
-                  escolha um dos nossos planos abaixo.
+                <h3 className="font-bold text-red-900 text-lg mb-1">Seu período de teste expirou!</h3>
+                <p className="text-sm text-red-700 leading-relaxed mb-3">
+                  Para continuar usando o PriceUs e ter acesso ilimitado a todos os seus recursos, 
+                  escolha um dos nossos planos abaixo. 
                 </p>
+                {trialStatus.graceDaysRemaining !== null && (
+                  <p className="text-sm font-semibold text-red-800 bg-red-100/50 inline-block px-3 py-1.5 rounded-lg border border-red-200">
+                    ⚠️ Atenção: Você tem mais <span className="font-extrabold text-red-900">{trialStatus.graceDaysRemaining} {trialStatus.graceDaysRemaining === 1 ? 'dia' : 'dias'}</span> de carência para assinar antes que sua conta e todos os seus dados sejam **excluídos permanentemente**.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -86,6 +119,59 @@ export function PricingPage() {
             <Alert type="error" onClose={() => setError('')}>
               {error}
             </Alert>
+          </div>
+        )}
+
+        {/* Seção de Resgate de Contratos para Usuários Expirados */}
+        {trialStatus.isExpired && trialStatus.status === 'trial' && (
+          <div className="mt-12 max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+              📂 Resgate de Contratos Fechados
+            </h3>
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+              Durante o período de carência de 15 dias, você pode baixar a cópia em PDF de todos os contratos que fechou pela plataforma. Após este prazo, sua conta será totalmente excluída do sistema.
+            </p>
+            
+            {loadingContracts ? (
+              <div className="text-center py-8 text-gray-500 flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                Buscando contratos...
+              </div>
+            ) : contracts.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                Nenhum contrato assinado encontrado na sua conta.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto pr-2">
+                {contracts.map((contract) => {
+                  const clientName = contract.client_data_json?.nome_completo || contract.lead_data_json?.nome_cliente || 'Cliente';
+                  const date = new Date(contract.created_at).toLocaleDateString('pt-BR');
+                  return (
+                    <div key={contract.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-gray-800">{clientName}</p>
+                        <p className="text-xs text-gray-500">Fechado em: {date}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const url = `/contrato/${contract.token}/preview`;
+                          const state = {
+                            clientData: contract.client_data_json,
+                            clientSignature: contract.signature_base64,
+                            action: 'print',
+                          };
+                          const newWindow = window.open(url, '_blank');
+                          if (newWindow) newWindow.history.replaceState(state, '');
+                        }}
+                        className="inline-flex items-center justify-center px-4 py-2 border-2 border-blue-600 rounded-lg text-sm font-bold text-blue-600 hover:bg-blue-50 transition"
+                      >
+                        📄 Baixar PDF / Imprimir
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

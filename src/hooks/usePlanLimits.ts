@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { useSubscription } from './useSubscription';
+import { useTrialStatus } from './useTrialStatus';
 import { supabase } from '../lib/supabase';
 import { isPrivilegedUser } from '../config/privilegedUsers';
 
@@ -29,6 +30,7 @@ interface PlanLimits {
 export function usePlanLimits(): PlanLimits {
   const { user } = useAuth();
   const { isActive, isTrialing, loading: subscriptionLoading } = useSubscription();
+  const trialStatus = useTrialStatus(user?.id);
   const [templatesCount, setTemplatesCount] = useState(0);
   const [leadsCount, setLeadsCount] = useState(0);
   const [eventsCount, setEventsCount] = useState(0);
@@ -39,11 +41,11 @@ export function usePlanLimits(): PlanLimits {
   // Verificar se é usuário privilegiado
   const isPrivileged = isPrivilegedUser(user?.email);
 
-  // Definir se é premium (assinatura ativa, trialing ou privilegiado)
-  const isPremium = isPrivileged || isActive || isTrialing;
+  // Definir se é premium (assinatura ativa, trialing, trial ativo de 30 dias ou privilegiado)
+  const isPremium = isPrivileged || isActive || isTrialing || (trialStatus.status === 'trial' && !trialStatus.isExpired);
 
-  // Definir limites baseado no plano
-  const templatesLimit = isPremium ? 10 : 1;
+  // Definir limites baseado no plano (premium = ilimitado)
+  const templatesLimit = isPremium ? Infinity : 1;
   const leadsLimit = isPremium ? 'unlimited' as const : 10;
   const productsLimit = isPremium ? Infinity : 7;
   const eventsLimit = isPremium ? 'unlimited' as const : 20;
@@ -116,7 +118,7 @@ export function usePlanLimits(): PlanLimits {
   }, [user]);
 
   const canCreateTemplate = isPremium
-    ? templatesCount < 10
+    ? true
     : templatesCount < 1;
 
   const canCreateContractTemplate = isPremium

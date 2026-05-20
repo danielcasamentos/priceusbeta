@@ -15,8 +15,11 @@ import {
   HelpCircle,
   Sun,
   Moon,
+  Crown,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { usePlanLimits } from '../hooks/usePlanLimits';
+import { useSubscription } from '../hooks/useSubscription';
 
 
 
@@ -44,6 +47,9 @@ export function Sidebar({
     empresa: true
   });
   const { isDark, toggleTheme } = useTheme();
+  
+  const planLimits = usePlanLimits();
+  const { isActive } = useSubscription();
 
   const menuSections: { title: string; items: ({ id: string; label: string; icon: ComponentType<{ className?: string }>; section: string; subItems?: { id: string; label: string }[] })[] }[] = [
     {
@@ -206,6 +212,42 @@ export function Sidebar({
                 </div>
               </div>
             ))}
+            {/* Propaganda / Upgrade Banner no final do Menu Mobile */}
+            {!isActive && !planLimits.loading && !planLimits.isPrivileged && (
+              <div className="mx-3 my-4 p-4 bg-gradient-to-br from-amber-50 to-orange-100 dark:from-[#1b233a] dark:to-[#2d3748] rounded-xl border border-amber-200 dark:border-[rgba(255,255,255,0.08)] shadow-sm text-center">
+                <div className="flex justify-center mb-2">
+                  <div className="bg-amber-500 text-white p-1.5 rounded-full shadow-sm animate-pulse">
+                    <Crown className="w-5 h-5" />
+                  </div>
+                </div>
+                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-400">Garante o PriceUs PRO</h4>
+                <p className="text-xs text-amber-800 dark:text-gray-300 mt-1 leading-relaxed">
+                  Desbloqueie todas as vantagens de se ter o sistema assinado oficialmente!
+                </p>
+                <ul className="text-left text-[11px] text-amber-800 dark:text-gray-300 mt-3 space-y-1.5 pl-1 font-medium">
+                  <li className="flex items-center gap-1.5">
+                    <span>✨</span> Orçamentos & Leads Ilimitados
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span>📄</span> Assinatura Digital de Contratos
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span>💰</span> Gestão e Cashflow Automático
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span>💬</span> Notificações e Prazos Inteligentes
+                  </li>
+                </ul>
+                <button
+                  onClick={() => {
+                    window.location.href = '/pricing';
+                  }}
+                  className="mt-4 w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white py-2 rounded-lg text-xs font-bold transition shadow-sm"
+                >
+                  Assinar Agora
+                </button>
+              </div>
+            )}
           </nav>
 
           {/* Rodapé Mobile — Toggle de Tema (somente admin) */}
@@ -329,6 +371,43 @@ export function Sidebar({
           </div>
         ))}
       </nav>
+ 
+      {/* Propaganda / Upgrade Banner no final do Menu Desktop */}
+      {!isCollapsed && !isActive && !planLimits.loading && !planLimits.isPrivileged && (
+        <div className="mx-4 my-4 p-4 bg-gradient-to-br from-amber-50 to-orange-100 dark:from-[#1b233a] dark:to-[#2d3748] rounded-xl border border-amber-200 dark:border-[rgba(255,255,255,0.08)] shadow-md text-center">
+          <div className="flex justify-center mb-2">
+            <div className="bg-amber-500 text-white p-1.5 rounded-full shadow-sm animate-pulse">
+              <Crown className="w-5 h-5" />
+            </div>
+          </div>
+          <h4 className="text-sm font-bold text-amber-900 dark:text-amber-400">Garante o PriceUs PRO</h4>
+          <p className="text-xs text-amber-800 dark:text-gray-300 mt-1 leading-relaxed">
+            Desbloqueie todas as vantagens de se ter o sistema assinado oficialmente!
+          </p>
+          <ul className="text-left text-[11px] text-amber-800 dark:text-gray-300 mt-3 space-y-1.5 pl-1 font-medium">
+            <li className="flex items-center gap-1.5">
+              <span>✨</span> Orçamentos & Leads Ilimitados
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span>📄</span> Assinatura Digital de Contratos
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span>💰</span> Gestão e Cashflow Automático
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span>💬</span> Notificações e Prazos Inteligentes
+            </li>
+          </ul>
+          <button
+            onClick={() => {
+              window.location.href = '/pricing';
+            }}
+            className="mt-4 w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white py-2 rounded-lg text-xs font-bold transition shadow-sm"
+          >
+            Assinar Agora
+          </button>
+        </div>
+      )}
 
       {/* Rodapé Desktop — Toggle de Tema (somente admin) */}
       {userEmail === 'odanielfotografo@icloud.com' && (

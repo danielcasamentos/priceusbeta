@@ -766,7 +766,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
             <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] rounded-full">
               <Calendar className="w-4 h-4 text-gray-600 dark:text-[rgba(255,255,255,0.6)]" />
               <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
-                {eventosAtivos} / {planLimits.eventsLimit === 'unlimited' ? '∞' : planLimits.eventsLimit} eventos
+                {planLimits.isPremium 
+                  ? `${eventosAtivos} eventos cadastrados` 
+                  : `${eventosAtivos} / ${planLimits.eventsLimit} eventos`}
               </span>
             </div>
             {nearLimit && (

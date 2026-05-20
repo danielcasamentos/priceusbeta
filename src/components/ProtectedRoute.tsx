@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, signOut } = useAuth()
   const trialStatus = useTrialStatus(user?.id)
   const navigate = useNavigate()
 
@@ -19,10 +19,21 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     // Usuários privilegiados não são redirecionados
     if (isUserPrivileged) return
 
-    if (!trialStatus.loading && trialStatus.isExpired && trialStatus.status === 'trial') {
-      navigate('/pricing')
+    if (!trialStatus.loading && trialStatus.status === 'trial') {
+      if (trialStatus.isGraceExpired) {
+        // Se a carência expirou, força sign out imediato e joga para login com mensagem explicativa
+        signOut().then(() => {
+          navigate('/login', { 
+            state: { 
+              error: 'Seu período de teste de 30 dias e a carência de 15 dias expiraram. Sua conta foi desativada e agendada para exclusão permanente.' 
+            } 
+          })
+        })
+      } else if (trialStatus.isExpired) {
+        navigate('/pricing')
+      }
     }
-  }, [trialStatus.isExpired, trialStatus.loading, trialStatus.status, navigate, isUserPrivileged])
+  }, [trialStatus.isExpired, trialStatus.isGraceExpired, trialStatus.loading, trialStatus.status, navigate, isUserPrivileged, signOut])
 
   if (loading || trialStatus.loading) {
     return (
@@ -38,6 +49,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Usuários privilegiados não são redirecionados para pricing
   if (!isUserPrivileged && trialStatus.isExpired && trialStatus.status === 'trial') {
+    if (trialStatus.isGraceExpired) {
+      return <Navigate to="/login" replace />
+    }
     return <Navigate to="/pricing" replace />
   }
 
