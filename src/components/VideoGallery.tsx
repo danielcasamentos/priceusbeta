@@ -5,14 +5,17 @@ import { VideoCard } from './VideoCard';
 import { YouTubeEmbed } from './YouTubeEmbed';
 
 export function VideoGallery() {
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'template' | 'agenda' | 'leads'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'template' | 'agenda' | 'leads' | 'financeiro' | 'contratos' | 'avaliacoes'>('all');
   const [selectedVideo, setSelectedVideo] = useState<VideoTutorial | null>(null);
 
   const categories = [
     { id: 'all', name: 'Todos os Vídeos', count: VIDEO_TUTORIALS.length },
-    { id: 'template', name: 'Configuração de Templates', count: getVideosByCategory('template').length },
-    { id: 'agenda', name: 'Agenda', count: getVideosByCategory('agenda').length },
+    { id: 'template', name: 'Templates de Orçamento', count: getVideosByCategory('template').length },
+    { id: 'agenda', name: 'Agenda e Reservas', count: getVideosByCategory('agenda').length },
     { id: 'leads', name: 'Gestão de Leads', count: getVideosByCategory('leads').length },
+    { id: 'financeiro', name: 'Controle Financeiro', count: getVideosByCategory('financeiro').length },
+    { id: 'contratos', name: 'Contratos Digitais', count: getVideosByCategory('contratos').length },
+    { id: 'avaliacoes', name: 'Avaliações de Clientes', count: getVideosByCategory('avaliacoes').length },
   ];
 
   const filteredVideos = selectedCategory === 'all'
@@ -76,8 +79,12 @@ export function VideoGallery() {
               <div>
                 <h3 className="text-xl font-bold text-gray-900">{selectedVideo.title}</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  {selectedVideo.category === 'template' ? 'Configuração de Templates' :
-                   selectedVideo.category === 'agenda' ? 'Agenda' : 'Gestão de Leads'}
+                  {selectedVideo.category === 'template' ? 'Templates de Orçamento' :
+                   selectedVideo.category === 'agenda' ? 'Agenda e Reservas' :
+                   selectedVideo.category === 'leads' ? 'Gestão de Leads' :
+                   selectedVideo.category === 'financeiro' ? 'Controle Financeiro' :
+                   selectedVideo.category === 'contratos' ? 'Contratos Digitais' :
+                   'Avaliações de Clientes'}
                 </p>
               </div>
               <button

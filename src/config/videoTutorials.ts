@@ -4,8 +4,8 @@ export interface VideoTutorial {
   description: string;
   youtubeUrl: string;
   youtubeId: string;
-  category: 'template' | 'agenda' | 'leads';
-  tab?: 'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'config' | 'agenda' | 'leads';
+  category: 'template' | 'agenda' | 'leads' | 'financeiro' | 'contratos' | 'avaliacoes';
+  tab?: 'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'analytics' | 'config' | 'agenda' | 'leads';
   order: number;
   duration?: string;
 }
@@ -100,6 +100,26 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     order: 9
   },
   {
+    id: 'aparencia-template',
+    title: 'Personalizando a Aparência do Orçamento',
+    description: 'Aprenda a mudar cores, logotipos, fontes e estilo visual para que a página de orçamento tenha a identidade visual da sua marca.',
+    youtubeUrl: 'https://youtu.be/placeholder-aparencia',
+    youtubeId: 'placeholder-aparencia',
+    category: 'template',
+    tab: 'aparencia',
+    order: 10
+  },
+  {
+    id: 'analytics-template',
+    title: 'Configurando Rastreamento e Analytics',
+    description: 'Configure o Google Analytics, Facebook Pixel e outras tags de rastreamento para mensurar os acessos e conversões na sua página de orçamento.',
+    youtubeUrl: 'https://youtu.be/placeholder-analytics',
+    youtubeId: 'placeholder-analytics',
+    category: 'template',
+    tab: 'analytics',
+    order: 11
+  },
+  {
     id: 'configuracoes-finais',
     title: 'Configurações Finais',
     description: 'Aprenda sobre personalização do template, bloqueio de campos obrigatórios e ocultação de valores intermediários.',
@@ -107,7 +127,7 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     youtubeId: 'seEPWxcO2tM',
     category: 'template',
     tab: 'config',
-    order: 10
+    order: 12
   },
   {
     id: 'configurar-agenda',
@@ -117,7 +137,7 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     youtubeId: 'mhe_AXqh6xo',
     category: 'agenda',
     tab: 'agenda',
-    order: 11
+    order: 13
   },
   {
     id: 'painel-leads',
@@ -127,7 +147,67 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     youtubeId: 'RpFUSFFpdZY',
     category: 'leads',
     tab: 'leads',
-    order: 12
+    order: 14
+  },
+  {
+    id: 'financeiro-receitas',
+    title: 'Gerenciando Receitas e Faturamento',
+    description: 'Entenda como registrar vendas, receber pagamentos e controlar as entradas financeiras da sua empresa no painel financeiro.',
+    youtubeUrl: 'https://youtu.be/placeholder-receitas',
+    youtubeId: 'placeholder-receitas',
+    category: 'financeiro',
+    order: 15,
+    duration: '4:15'
+  },
+  {
+    id: 'financeiro-despesas',
+    title: 'Registrando Despesas e Custos',
+    description: 'Saiba como categorizar e lançar todas as despesas da sua empresa, mantendo seu fluxo de caixa sempre atualizado.',
+    youtubeUrl: 'https://youtu.be/placeholder-despesas',
+    youtubeId: 'placeholder-despesas',
+    category: 'financeiro',
+    order: 16,
+    duration: '3:50'
+  },
+  {
+    id: 'financeiro-insights',
+    title: 'Análise de Saúde Financeira e Insights',
+    description: 'Aprenda a ler os gráficos de faturamento, exportar relatórios e usar os insights automatizados do sistema para expandir seu negócio.',
+    youtubeUrl: 'https://youtu.be/placeholder-insights',
+    youtubeId: 'placeholder-insights',
+    category: 'financeiro',
+    order: 17,
+    duration: '5:10'
+  },
+  {
+    id: 'contratos-modelos',
+    title: 'Criando e Editando Modelos de Contratos',
+    description: 'Descubra como estruturar seus contratos e utilizar as variáveis automáticas do sistema para preenchimento dinâmico de dados do cliente.',
+    youtubeUrl: 'https://youtu.be/placeholder-modelos',
+    youtubeId: 'placeholder-modelos',
+    category: 'contratos',
+    order: 18,
+    duration: '6:30'
+  },
+  {
+    id: 'contratos-assinatura',
+    title: 'Fluxo de Assinatura Digital',
+    description: 'Veja como o seu cliente assina o contrato de forma digital e como o sistema valida, arquiva e notifica ambas as partes.',
+    youtubeUrl: 'https://youtu.be/placeholder-assinatura',
+    youtubeId: 'placeholder-assinatura',
+    category: 'contratos',
+    order: 19,
+    duration: '4:45'
+  },
+  {
+    id: 'avaliacoes-gestao',
+    title: 'Coleta Automática de Avaliações',
+    description: 'Saiba como enviar solicitações de avaliações após o fechamento de um contrato e como exibi-las para conquistar novos clientes.',
+    youtubeUrl: 'https://youtu.be/placeholder-avaliacoes',
+    youtubeId: 'placeholder-avaliacoes',
+    category: 'avaliacoes',
+    order: 20,
+    duration: '3:20'
   }
 ];
 
@@ -135,7 +215,7 @@ export const getVideoByTab = (tab: string): VideoTutorial | undefined => {
   return VIDEO_TUTORIALS.find(video => video.tab === tab);
 };
 
-export const getVideosByCategory = (category: 'template' | 'agenda' | 'leads'): VideoTutorial[] => {
+export const getVideosByCategory = (category: 'template' | 'agenda' | 'leads' | 'financeiro' | 'contratos' | 'avaliacoes'): VideoTutorial[] => {
   return VIDEO_TUTORIALS.filter(video => video.category === category);
 };
 

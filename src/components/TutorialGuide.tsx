@@ -11,7 +11,9 @@ import {
   MessageSquare,
   FileText,
   MapPin,
-  Ticket
+  Ticket,
+  Palette,
+  BarChart3
 } from 'lucide-react';
 import { YouTubeEmbed } from './YouTubeEmbed';
 import { getVideoById } from '../config/videoTutorials';
@@ -33,7 +35,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     title: 'Bem-vindo ao Criador de Orçamentos',
     description: 'Este tutorial vai guiá-lo através de todas as etapas necessárias para criar um orçamento profissional e personalizado. Você aprenderá a configurar produtos, formas de pagamento, campos personalizados e muito mais.',
     tips: [
-      'O processo é dividido em 6 etapas principais',
+      'O processo é dividido em etapas principais',
       'Você pode navegar entre as etapas usando as setas ou clicando nas abas',
       'Todas as alterações são salvas automaticamente',
       'Você pode retornar a qualquer etapa para fazer ajustes'
@@ -150,8 +152,41 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: 7,
+    tab: 'aparencia',
+    title: 'Passo 7: Aparência e Identidade Visual (Opcional)',
+    description: 'Personalize a cara da sua página de orçamento! Defina cores personalizadas, envie seu logotipo e mude o estilo para que o orçamento tenha a identidade visual da sua marca.',
+    tips: [
+      'Envie um logotipo em alta resolução com fundo transparente',
+      'Escolha cores alinhadas à sua marca para botões e destaques',
+      'Você pode visualizar o resultado visual em tempo real',
+      'Use um layout que valorize suas fotos e portfólio'
+    ],
+    warnings: [
+      'A personalização visual ajuda a transmitir mais profissionalismo e gerar valor',
+      'Por padrão, o sistema usará o design padrão do Priceus'
+    ],
+    videoId: 'aparencia-template'
+  },
+  {
+    id: 8,
+    tab: 'analytics',
+    title: 'Passo 8: Rastreamento e Analytics (Opcional)',
+    description: 'Configure ferramentas como Google Analytics, Facebook Pixel e Google Tag Manager para acompanhar visitas, cliques e o comportamento dos clientes.',
+    tips: [
+      'Insira apenas o ID correspondente da ferramenta (ex: G-XXXXXX para GA4)',
+      'Monitore quantos clientes visualizaram o link e quantos de fato converteram',
+      'Mensure os acessos de campanhas de tráfego pago'
+    ],
+    warnings: [
+      'Insira o ID correto para garantir a captura correta dos eventos',
+      'Essas integrações são invisíveis para o cliente e não afetam o visual da página'
+    ],
+    videoId: 'analytics-template'
+  },
+  {
+    id: 9,
     tab: 'config',
-    title: 'Passo 7: Configurações Finais',
+    title: 'Passo 9: Configurações Finais',
     description: 'Revise todas as configurações e ative seu template de orçamento.',
     tips: [
       'Verifique se todos os produtos estão corretos',
@@ -167,7 +202,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     videoId: 'configuracoes-finais'
   },
   {
-    id: 8,
+    id: 10,
     tab: 'final',
     title: 'Parabéns! Você completou a configuração',
     description: 'Seu template de orçamento está pronto para uso. Agora você pode compartilhar o link com seus clientes e começar a receber solicitações de orçamento.',
@@ -237,6 +272,8 @@ export function TutorialGuide({ onClose, onNavigateToTab, currentTab: _currentTa
       case 'campos': return <FileText className="w-4 h-4" />;
       case 'whatsapp': return <MessageSquare className="w-4 h-4" />;
       case 'precos': return <MapPin className="w-4 h-4" />;
+      case 'aparencia': return <Palette className="w-4 h-4" />;
+      case 'analytics': return <BarChart3 className="w-4 h-4" />;
       case 'config': return <CheckCircle className="w-4 h-4" />;
       default: return <BookOpen className="w-4 h-4" />;
     }
