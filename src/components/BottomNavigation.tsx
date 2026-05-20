@@ -12,9 +12,11 @@ import {
   Settings,
   UserCircle,
   Sun,
-  Building,
-  FileSignature
+  FileSignature,
+  Crown
 } from 'lucide-react';
+import { usePlanLimits } from '../hooks/usePlanLimits';
+import { useSubscription } from '../hooks/useSubscription';
 
 interface BottomNavigationProps {
   currentPage: string;
@@ -42,6 +44,10 @@ const empresaSubItems = [
 
 export function BottomNavigation({ currentPage, onPageChange }: BottomNavigationProps) {
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
+  const planLimits = usePlanLimits();
+  const { isActive } = useSubscription();
+
+  const showBanner = !isActive && !planLimits.loading && !planLimits.isPrivileged;
 
   console.log('[BottomNavigation] Renderizando, página atual:', currentPage);
 
@@ -115,7 +121,9 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
 
         {/* Submenu Empresa Expandido */}
         {expandedMenu === 'empresa' && (
-          <div className="absolute bottom-16 left-2 right-2 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+          <div className={`absolute left-2 right-2 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden ${
+            showBanner ? 'bottom-[100px]' : 'bottom-16'
+          }`}>
             <div className="max-h-64 overflow-y-auto">
               {empresaSubItems.map((subItem) => {
                 const isSubItemActive = currentPage === subItem.id;
@@ -139,8 +147,36 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
         )}
       </nav>
 
+      {/* Faixa Animada (Upgrade) acima do bottom menu */}
+      {showBanner && (
+        <div 
+          onClick={() => {
+            window.location.href = '/pricing';
+          }}
+          className="fixed bottom-16 left-0 right-0 h-9 z-50 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 border-t border-amber-400/30 flex items-center shadow-lg cursor-pointer overflow-hidden select-none"
+        >
+          {/* Badge PRO Fixo à Esquerda */}
+          <div className="bg-amber-950 text-amber-400 px-2 py-0.5 rounded text-[10px] font-extrabold ml-3 flex items-center gap-1 z-10 shadow-sm flex-shrink-0">
+            <Crown className="w-3.5 h-3.5 fill-current" />
+            PRO
+          </div>
+
+          {/* Container do Texto Deslizante */}
+          <div className="flex-1 overflow-hidden relative flex items-center h-full">
+            <div className="flex animate-marquee whitespace-nowrap">
+              <span className="text-[11px] font-semibold tracking-wider text-white uppercase px-4">
+                ✨ PRICEUS PRO: Libere orçamentos e leads ilimitados, assinatura digital de contratos e fluxo de caixa automático! Clique aqui e assine agora. ✨
+              </span>
+              <span className="text-[11px] font-semibold tracking-wider text-white uppercase px-4">
+                ✨ PRICEUS PRO: Libere orçamentos e leads ilimitados, assinatura digital de contratos e fluxo de caixa automático! Clique aqui e assine agora. ✨
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Espaçamento para evitar que o conteúdo seja coberto */}
-      <div className="h-20" />
+      <div className={showBanner ? "h-[100px]" : "h-20"} />
     </>
   );
 }

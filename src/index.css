@@ -49,3 +49,17 @@
 .animate-slide-down {
   animation: slide-down 0.3s ease-out forwards;
 }
+
+/* Animação Marquee para Banner Mobile */
+@keyframes marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
