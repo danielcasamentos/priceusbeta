@@ -12,7 +12,8 @@ import {
   UserCircle,
   Sun,
   FileSignature,
-  Crown
+  Crown,
+  Calendar
 } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { useSubscription } from '../hooks/useSubscription';
@@ -27,6 +28,7 @@ const mainItems = [
   { id: 'meu-dia', label: 'Meu Dia', icon: Sun },
   { id: 'leads', label: 'Leads', icon: LayoutDashboard },
   { id: 'templates', label: 'Templates', icon: FileText },
+  { id: 'agenda', label: 'Agenda', icon: Calendar },
   { id: 'empresa', label: 'Empresa', icon: Building },
   { id: 'contratos', label: 'Contratos', icon: FileSignature },
   { id: 'profile', label: 'Perfil', icon: UserCircle },
@@ -91,14 +93,14 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
               <button
                 key={item.id}
                 onClick={() => handleItemClick(item.id)}
-                className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors ${
+                className={`flex flex-col items-center justify-center flex-1 h-full py-1.5 transition-colors ${
                   isActive 
                     ? 'text-green-600' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 <div className="relative">
-                  <item.icon className={`w-6 h-6 ${isActive ? 'fill-current' : ''}`} />
+                  <item.icon className={`w-5 h-5 ${isActive ? 'fill-current' : ''}`} />
                   {item.id === 'empresa' && (
                     <ChevronUp 
                       className={`absolute -top-3 -right-2 w-3 h-3 transition-transform ${
@@ -107,7 +109,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
                     />
                   )}
                 </div>
-                <span className="text-xs mt-1 font-medium truncate max-w-[60px]">
+                <span className="text-[10px] mt-0.5 font-medium truncate max-w-[50px] leading-tight">
                   {item.label}
                 </span>
                 {isActive && (
