@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 /** Gera UUID v4 usando a API nativa do browser — sem dependência externa */
 const uuidv4 = () => crypto.randomUUID();
 import {
@@ -184,9 +185,35 @@ export function WorkflowStepper({
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const [highlightedStepId, setHighlightedStepId] = useState<string | null>(null);
   const templateMenuRef = useRef<HTMLDivElement>(null);
+  const stepRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [searchParams] = useSearchParams();
 
   const { slaMap, progress } = useWorkflowSla(workflow);
+
+  // Scroll automático até a etapa indicada pelo parâmetro stepId na URL
+  useEffect(() => {
+    const targetStepId = searchParams.get('stepId');
+    if (!targetStepId) return;
+    // Verificar se esse step pertence a este lead
+    const belongs = workflow.some(s => s.id === targetStepId);
+    if (!belongs) return;
+    // Expandir painel se estiver colapsado
+    setExpanded(true);
+    // Aguardar render e fazer scroll
+    const timer = setTimeout(() => {
+      const el = stepRefs.current[targetStepId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedStepId(targetStepId);
+        // Remover destaque após 3 segundos
+        setTimeout(() => setHighlightedStepId(null), 3000);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Fechar menu ao clicar fora
   useEffect(() => {
@@ -255,12 +282,13 @@ export function WorkflowStepper({
     updateWorkflow(workflow.map(s => s.id === id ? { ...s, ...changes } : s));
   };
 
-  // Toggle concluído
+  // Toggle concluído — salva completedAt ao concluir, remove ao reverter
   const toggleConcluido = (id: string) => {
     const step = workflow.find(s => s.id === id);
     if (!step) return;
     const novoStatus = step.status === 'concluido' ? 'pendente' : 'concluido';
-    updateStep(id, { status: novoStatus });
+    const completedAt = novoStatus === 'concluido' ? new Date().toISOString() : undefined;
+    updateStep(id, { status: novoStatus, completedAt });
   };
 
   // Toggle aguardando_cliente
@@ -382,7 +410,12 @@ export function WorkflowStepper({
           return (
             <div
               key={step.id}
-              className={`px-4 py-3 transition-colors ${isConcluido ? 'bg-green-50/50 dark:bg-green-900/10' : ''}`}
+              ref={(el) => { stepRefs.current[step.id] = el; }}
+              className={`px-4 py-3 transition-all duration-500 ${
+                highlightedStepId === step.id
+                  ? 'ring-2 ring-amber-400 dark:ring-amber-500 bg-amber-50/70 dark:bg-amber-900/20 rounded-lg shadow-md shadow-amber-200/50 dark:shadow-amber-900/30'
+                  : isConcluido ? 'bg-green-50/50 dark:bg-green-900/10' : ''
+              }`}
             >
               {/* Linha principal: checkbox + label + sla + ações */}
               <div className="flex items-start gap-3">

@@ -34,6 +34,8 @@ export interface WorkflowStep {
   deadline: string;
   /** Status atual da etapa */
   status: WorkflowStepStatus;
+  /** Timestamp ISO registrado quando a etapa foi concluída, usado para estatísticas de produtividade */
+  completedAt?: string;
 }
 
 /**
