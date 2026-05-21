@@ -429,6 +429,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
           if (diffMs < cooldownMs) return; // Ainda em cooldown
         }
 
+        // Registrar a tentativa imediatamente para evitar loop infinito em caso de erro
+        localStorage.setItem('last_calendar_smart_sync', Date.now().toString());
+
         const { data, error } = await supabase.functions.invoke('fetch-calendar', {
           body: { url: configEdit.calendar_ics_url }
         });
@@ -445,9 +448,6 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
           await loadData(true);
         }
-        
-        // Atualiza last_calendar_sync para não buscar de novo fora do cooldown
-        localStorage.setItem('last_calendar_smart_sync', Date.now().toString());
 
       } catch (err) {
         console.warn('Erro silencioso no auto-sync:', err);
@@ -756,16 +756,16 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Agenda de Eventos</h2>
-          <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Agenda de Eventos</h2>
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">
             Gerencie seus eventos e controle a disponibilidade de datas
           </p>
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex flex-wrap items-center gap-3 mt-2">
             <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] rounded-full">
-              <Calendar className="w-4 h-4 text-gray-600 dark:text-[rgba(255,255,255,0.6)]" />
-              <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
+              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-[rgba(255,255,255,0.6)]" />
+              <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">
                 {planLimits.isPremium 
                   ? `${eventosAtivos} eventos cadastrados` 
                   : `${eventosAtivos} / ${planLimits.eventsLimit} eventos`}
@@ -784,7 +784,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         <button
           onClick={() => setShowAddModal(true)}
           disabled={!planLimits.isPremium && eventosAtivos >= 20}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-5 h-5" />
           Novo Evento
@@ -793,87 +793,90 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
       <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-[rgba(255,255,255,.05)] rounded-lg">
         <div className="border-b border-gray-200 dark:border-[rgba(255,255,255,.05)]">
-          <nav className="flex">
+          <nav className="flex w-full overflow-x-auto sm:overflow-visible">
             <button
               onClick={() => setActiveTab('calendar')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
+              className={`flex flex-1 sm:flex-none items-center justify-center gap-2 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'calendar'
                   ? 'text-green-600 border-b-2 border-green-600'
                   : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Calendar className="w-5 h-5" />
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
               Calendário
             </button>
             <button
               onClick={() => setActiveTab('list')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
+              className={`flex flex-1 sm:flex-none items-center justify-center gap-2 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'list'
                   ? 'text-green-600 border-b-2 border-green-600'
                   : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Calendar className="w-5 h-5" />
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
               Lista
             </button>
             <button
               onClick={() => setActiveTab('feriados')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
+              className={`flex flex-1 sm:flex-none items-center justify-center gap-2 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'feriados'
                   ? 'text-green-600 border-b-2 border-green-600'
                   : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Flag className="w-5 h-5" /> Feriados
+              <Flag className="w-4 h-4 sm:w-5 sm:h-5" /> Feriados
             </button>
             <button
               onClick={() => setActiveTab('config')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
+              className={`flex flex-1 sm:flex-none items-center justify-center gap-2 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'config'
                   ? 'text-green-600 border-b-2 border-green-600'
                   : 'text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Settings className="w-5 h-5" /> Configurações
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5" /> Configurações
             </button>
           </nav>
         </div>
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {activeTab === 'calendar' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 gap-2">
                 <button
                   onClick={handlePreviousMonth}
-                  className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] transition-colors font-medium"
+                  className="px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] transition-colors font-medium text-xs sm:text-sm"
                 >
-                  ← Anterior
+                  <span className="hidden sm:inline">← Anterior</span>
+                  <span className="inline sm:hidden">←</span>
                 </button>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white text-center">
                   {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                 </h3>
                 <button
                   onClick={handleNextMonth}
-                  className="px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] transition-colors font-medium"
+                  className="px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.8)] transition-colors font-medium text-xs sm:text-sm"
                 >
-                  Próximo →
+                  <span className="hidden sm:inline">Próximo →</span>
+                  <span className="inline sm:hidden">→</span>
                 </button>
               </div>
 
-              <div className="overflow-x-auto pb-4">
-                <div className="min-w-[700px] grid grid-cols-7 gap-2">
+              <div className="w-full pb-4">
+                <div className="w-full grid grid-cols-7 gap-1 sm:gap-2">
                   {weekDays.map((day) => (
                     <div
                       key={day}
-                      className="text-center font-semibold text-gray-700 dark:text-[rgba(255,255,255,0.8)] py-2 text-sm"
+                      className="text-center font-semibold text-gray-700 dark:text-[rgba(255,255,255,0.8)] py-1 sm:py-2 text-[10px] sm:text-sm"
                     >
-                      {day}
+                      <span className="hidden sm:inline">{day}</span>
+                      <span className="inline sm:hidden">{day.charAt(0)}</span>
                     </div>
                   ))}
 
                   {getDaysInMonth(currentMonth).map((date, index) => {
                     if (!date) {
-                      return <div key={`empty-${index}`} className="min-h-[100px]" />;
+                      return <div key={`empty-${index}`} className="min-h-[50px] sm:min-h-[100px]" />;
                     }
 
                     const dayStatus = getDayStatus(date);
@@ -891,24 +894,25 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                         key={index}
                         onClick={() => handleDateClick(date)}
                         disabled={isPast}
-                        className={`min-h-[100px] flex flex-col items-start border rounded-lg p-2 transition-all ${
+                        className={`min-h-[50px] sm:min-h-[100px] flex flex-col items-start border rounded-lg p-1 sm:p-2 transition-all ${
                           dayStatus.color
                         } dark:border-[rgba(255,255,255,0.05)] ${
                           isToday ? 'ring-2 ring-green-500' : ''
                         } ${
                           isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
-                        } relative overflow-hidden`}
+                        } relative overflow-hidden w-full`}
                       >
-                        <div className="flex w-full justify-between items-start mb-1">
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="flex w-full justify-between items-start mb-0.5 sm:mb-1">
+                          <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
                             {date.getDate()}
                           </span>
                           {dayStatus.feriado && (
-                            <span title={dayStatus.feriado.name || dayStatus.feriado.nome}>🚩</span>
+                            <span title={dayStatus.feriado.name || dayStatus.feriado.nome} className="text-[10px] sm:text-xs">🚩</span>
                           )}
                         </div>
                         
-                        <div className="flex-1 w-full flex flex-col gap-1 overflow-y-auto hidden-scrollbar">
+                        {/* Desktop View: Lista de eventos com nomes */}
+                        <div className="hidden md:flex flex-1 w-full flex-col gap-1 overflow-y-auto hidden-scrollbar">
                            {eventosDoDia.slice(0, 3).map(evento => (
                              <div 
                                key={evento.id} 
@@ -926,6 +930,21 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                                 +{eventosDoDia.length - 3} mais
                               </div>
                            )}
+                        </div>
+
+                        {/* Mobile View: Dots coloridos para os eventos */}
+                        <div className="flex md:hidden w-full flex-wrap gap-0.5 justify-center mt-1">
+                          {eventosDoDia.map(evento => (
+                            <span 
+                              key={evento.id} 
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                evento.status === 'confirmado' ? 'bg-green-500' :
+                                evento.status === 'pendente' ? 'bg-yellow-500' :
+                                'bg-gray-400'
+                              }`}
+                              title={evento.cliente_nome}
+                            />
+                          ))}
                         </div>
 
                         {dayStatus.status === 'bloqueada' && (

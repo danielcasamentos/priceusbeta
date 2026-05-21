@@ -1697,7 +1697,10 @@ function ProducaoCard({
   const workflow: WorkflowStep[] = Array.isArray(lead.workflow) ? lead.workflow : [];
 
   const whatsappLink = lead.telefone_cliente
-    ? `https://wa.me/${lead.telefone_cliente.replace(/\D/g, '')}`
+    ? (() => {
+        const cleaned = lead.telefone_cliente.replace(/\D/g, '');
+        return `https://wa.me/${(cleaned.length === 10 || cleaned.length === 11) && !cleaned.startsWith('55') ? '55' + cleaned : cleaned}`;
+      })()
     : null;
   const emailLink = lead.email_cliente ? `mailto:${lead.email_cliente}` : null;
 
@@ -1814,7 +1817,10 @@ function FinalizadosTab({
       <div className="grid grid-cols-1 gap-4">
         {leads.map((lead) => {
           const whatsappLink = lead.telefone_cliente
-            ? `https://wa.me/${lead.telefone_cliente.replace(/\D/g, '')}`
+            ? (() => {
+                const cleaned = lead.telefone_cliente.replace(/\D/g, '');
+                return `https://wa.me/${(cleaned.length === 10 || cleaned.length === 11) && !cleaned.startsWith('55') ? '55' + cleaned : cleaned}`;
+              })()
             : null;
           const emailLink = lead.email_cliente ? `mailto:${lead.email_cliente}` : null;
           const templateName = templates[lead.template_id]?.nome_template || '';

@@ -27,7 +27,10 @@ interface TarefaWorkflow {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(d: string) {
-  return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  if (!d) return '';
+  const parsed = new Date(d + 'T12:00:00');
+  if (isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 function fmtCurrency(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -78,7 +81,9 @@ function getRangeForPeriodo(periodo: Periodo, customStart: string, customEnd: st
   if (periodo === 'ano') {
     return { start: `${today.getFullYear()}-01-01`, end: `${today.getFullYear()}-12-31`, label: String(today.getFullYear()) };
   }
-  return { start: customStart, end: customEnd, label: `${fmt(customStart)} – ${fmt(customEnd)}` };
+  const startLbl = fmt(customStart) || '...';
+  const endLbl = fmt(customEnd) || '...';
+  return { start: customStart, end: customEnd, label: `${startLbl} – ${endLbl}` };
 }
 
 // ── Componente Principal ──────────────────────────────────────────────────────
@@ -115,11 +120,27 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const inicioAno = `${todayObj.getFullYear()}-01-01`;
 
     try {
+      let evQuery = supabase.from('eventos_agenda').select('*').eq('user_id', userId);
+      if (range.start && range.start.trim() !== '') {
+        evQuery = evQuery.gte('data_evento', range.start);
+      }
+      if (range.end && range.end.trim() !== '') {
+        evQuery = evQuery.lte('data_evento', range.end);
+      }
+      evQuery = evQuery.order('data_evento');
+
+      let trQuery = supabase.from('company_transactions').select('*').eq('user_id', userId);
+      if (range.start && range.start.trim() !== '') {
+        trQuery = trQuery.gte('data', range.start);
+      }
+      if (range.end && range.end.trim() !== '') {
+        trQuery = trQuery.lte('data', range.end);
+      }
+      trQuery = trQuery.order('data');
+
       const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes, trMesRes, trAnoRes] = await Promise.all([
-        supabase.from('eventos_agenda').select('*').eq('user_id', userId)
-          .gte('data_evento', range.start).lte('data_evento', range.end).order('data_evento'),
-        supabase.from('company_transactions').select('*').eq('user_id', userId)
-          .gte('data', range.start).lte('data', range.end).order('data'),
+        evQuery,
+        trQuery,
         supabase.from('leads').select('id, nome_cliente, workflow').eq('user_id', userId)
           .eq('status', 'convertido'),
         supabase.from('eventos_agenda').select('*').eq('user_id', userId).eq('data_evento', amanha),

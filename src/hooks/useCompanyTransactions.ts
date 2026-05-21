@@ -92,8 +92,8 @@ export function useCompanyTransactions(userId: string) {
       if (filters?.tipo) q = q.eq('tipo', filters.tipo);
       if (filters?.status) q = q.eq('status', filters.status);
       if (filters?.categoria_id) q = q.eq('categoria_id', filters.categoria_id);
-      if (filters?.data_inicio) q = q.gte('data', filters.data_inicio);
-      if (filters?.data_fim) q = q.lte('data', filters.data_fim);
+      if (filters?.data_inicio && filters.data_inicio.trim() !== '') q = q.gte('data', filters.data_inicio);
+      if (filters?.data_fim && filters.data_fim.trim() !== '') q = q.lte('data', filters.data_fim);
       return q.order('data', { ascending: false });
     };
 
