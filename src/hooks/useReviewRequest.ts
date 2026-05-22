@@ -50,7 +50,13 @@ Agradecemos desde já pelo seu feedback!
 
 ${nomeFornecedor}`;
 
-      const whatsappUrl = `https://wa.me/${lead.telefone_cliente?.replace(/\D/g, '')}?text=${encodeURIComponent(mensagem)}`;
+      const rawPhone = lead.telefone_cliente || '';
+      const cleanedPhone = rawPhone.replace(/\D/g, '');
+      const formattedPhone = (cleanedPhone.length === 10 || cleanedPhone.length === 11) && !cleanedPhone.startsWith('55')
+        ? '55' + cleanedPhone
+        : cleanedPhone;
+
+      const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(mensagem)}`;
 
       return { success: true, token: whatsappUrl };
     } catch (error) {
