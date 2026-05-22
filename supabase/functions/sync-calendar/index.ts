@@ -6,38 +6,100 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string }> => {
-  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string }> = [];
-  const lines = text.split('\n');
+const parseICalDate = (dateStr: string): string | null => {
+  if (!dateStr || dateStr.length < 8) return null;
+  // Handle UTC datetime (ends with Z), convert to America/Sao_Paulo date
+  if (dateStr.endsWith('Z') && dateStr.includes('T')) {
+    try {
+      const year = parseInt(dateStr.substring(0, 4), 10);
+      const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+      const day = parseInt(dateStr.substring(6, 8), 10);
+      const hour = parseInt(dateStr.substring(9, 11), 10);
+      const minute = parseInt(dateStr.substring(11, 13), 10);
+      const second = parseInt(dateStr.substring(13, 15), 10);
 
-  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string } = {};
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
+        const utcMs = Date.UTC(year, month, day, hour, minute, second);
+        // America/Sao_Paulo is UTC-3 (or UTC-2 during DST)
+        // Use Intl if available in Deno, otherwise offset manually by -3h
+        try {
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          });
+          const parts = formatter.formatToParts(new Date(utcMs));
+          const y = parts.find((p: {type: string; value: string}) => p.type === 'year')?.value;
+          const m = parts.find((p: {type: string; value: string}) => p.type === 'month')?.value;
+          const d = parts.find((p: {type: string; value: string}) => p.type === 'day')?.value;
+          if (y && m && d) return `${y}-${m}-${d}`;
+        } catch (_) {
+          // Deno fallback: manual offset -3h
+          const localMs = utcMs - 3 * 60 * 60 * 1000;
+          const localDate = new Date(localMs);
+          const y = localDate.getUTCFullYear();
+          const m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(localDate.getUTCDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+      }
+    } catch (_) {
+      // fall through to digit-extraction below
+    }
+  }
+
+  // Handles date-only format YYYYMMDD or datetime without Z
+  const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (dateMatch) {
+    return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+  }
+  return null;
+};
+
+const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> => {
+  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> = [];
+  // RFC 5545 line unfolding: CRLF followed by whitespace is a continuation
+  const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
+  const lines = unfoldedText.split(/\r?\n/);
+
+  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string; uid_externo?: string } = {};
   let inEvent = false;
 
   for (const line of lines) {
     const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
 
-    if (trimmedLine === 'BEGIN:VEVENT') {
+    const colonIndex = trimmedLine.indexOf(':');
+    if (colonIndex === -1) continue;
+
+    // Split key (may have params like SUMMARY;CHARSET=UTF-8) from value
+    const keyWithParams = trimmedLine.substring(0, colonIndex);
+    const value = trimmedLine.substring(colonIndex + 1).trim();
+    const key = keyWithParams.split(';')[0].trim().toUpperCase();
+
+    if (key === 'BEGIN' && value === 'VEVENT') {
       inEvent = true;
       currentEvent = { tipo_evento: 'evento' };
-    } else if (trimmedLine === 'END:VEVENT') {
+    } else if (key === 'END' && value === 'VEVENT') {
       if (currentEvent.data_evento && currentEvent.cliente_nome) {
-        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string });
+        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string });
       }
       inEvent = false;
       currentEvent = {};
     } else if (inEvent) {
-      if (trimmedLine.startsWith('DTSTART')) {
-        const dateMatch = trimmedLine.match(/(\d{4})(\d{2})(\d{2})/);
-        if (dateMatch) {
-          currentEvent.data_evento = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
-        }
-      } else if (trimmedLine.startsWith('SUMMARY:')) {
-        currentEvent.cliente_nome = trimmedLine.substring(8).trim() || 'Evento de Calendário';
-      } else if (trimmedLine.startsWith('DESCRIPTION:')) {
-        currentEvent.tipo_evento = trimmedLine.substring(12).trim() || 'evento';
-      } else if (trimmedLine.startsWith('LOCATION:')) {
+      if (key === 'DTSTART') {
+        const parsedDate = parseICalDate(value);
+        if (parsedDate) currentEvent.data_evento = parsedDate;
+      } else if (key === 'SUMMARY') {
+        currentEvent.cliente_nome = value || 'Evento de Calendário';
+      } else if (key === 'UID') {
+        currentEvent.uid_externo = value;
+      } else if (key === 'DESCRIPTION') {
+        currentEvent.tipo_evento = value || 'evento';
+      } else if (key === 'LOCATION') {
         if (!currentEvent.tipo_evento || currentEvent.tipo_evento === 'evento') {
-          currentEvent.tipo_evento = trimmedLine.substring(9).trim() || 'evento';
+          currentEvent.tipo_evento = value || 'evento';
         }
       }
     }
@@ -113,31 +175,41 @@ serve(async (req) => {
     if (parsedEventos.length > 0) {
       const { data: existentes, error: queryError } = await supabase
          .from('eventos_agenda')
-         .select('cliente_nome, data_evento')
+         .select('cliente_nome, data_evento, uid_externo')
          .eq('user_id', user.id)
+         .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%')
 
       if (queryError) throw queryError;
       
-      const setExistentes = new Set(existentes?.map(e => `${e.cliente_nome}-${e.data_evento}`));
-      const novosEventos = [];
+      // Build lookup sets: by UID (preferred) and by name+date (fallback)
+      const setUidsExistentes = new Set(existentes?.map((e: any) => e.uid_externo).filter(Boolean));
+      const setDataNomeExistentes = new Set(existentes?.map((e: any) => `${e.cliente_nome}-${e.data_evento}`));
+      const novosEventos: any[] = [];
       const dataHoraAtual = new Date().toISOString();
       
       for (const evento of parsedEventos) {
+         // Skip if already exists by UID
+         if (evento.uid_externo && setUidsExistentes.has(evento.uid_externo)) continue;
+         // Skip if already exists by name+date (case-sensitive, best effort here)
          const chave = `${evento.cliente_nome}-${evento.data_evento}`;
-         if (!setExistentes.has(chave)) {
-            novosEventos.push({
-               user_id: user.id,
-               data_evento: evento.data_evento,
-               cliente_nome: evento.cliente_nome,
-               tipo_evento: evento.tipo_evento || 'evento',
-               cidade: '', // required field
-               status: 'confirmado',
-               origem: 'ics_sync',
-               observacoes: 'Importado automaticamente do calendário externo',
-               created_at: dataHoraAtual
-            });
-            adicionados++;
+         if (!evento.uid_externo && setDataNomeExistentes.has(chave)) continue;
+
+         const novoEvento: any = {
+            user_id: user.id,
+            data_evento: evento.data_evento,
+            cliente_nome: evento.cliente_nome,
+            tipo_evento: evento.tipo_evento || 'evento',
+            cidade: '', // required field
+            status: 'confirmado',
+            origem: 'ics_sync',
+            observacoes: 'Importado automaticamente do calendário externo',
+            created_at: dataHoraAtual
+         };
+         if (evento.uid_externo) {
+           novoEvento.uid_externo = evento.uid_externo;
          }
+         novosEventos.push(novoEvento);
+         adicionados++;
       }
       
       if (novosEventos.length > 0) {
@@ -145,7 +217,15 @@ serve(async (req) => {
             .from('eventos_agenda')
             .insert(novosEventos);
             
-         if (insertError) throw insertError;
+         if (insertError) {
+           // Fallback: retry without uid_externo in case column doesn't exist yet
+           console.warn('Falha ao inserir com uid_externo, reintentando sem o campo.', insertError.message);
+           const novosSemUid = novosEventos.map(({ uid_externo, ...resto }: any) => resto);
+           const { error: insertError2 } = await supabase
+              .from('eventos_agenda')
+              .insert(novosSemUid);
+           if (insertError2) throw insertError2;
+         }
       }
     }
     

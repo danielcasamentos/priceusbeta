@@ -401,7 +401,7 @@ export async function importarEventosInteligente(
 
     const historicoId = historico.id;
 
-    // Helper: busca evento existente por uid_externo (com fallback para data+nome caso a coluna não exista)
+    // Helper: busca evento existente por uid_externo (com fallback para data+nome caso a coluna não exista ou não encontre por UID)
     const findExistente = async (evento: { data: string; nome: string; uid_externo?: string }): Promise<EventoAgenda | null> => {
       if (evento.uid_externo) {
         const { data, error } = await supabase
@@ -410,20 +410,32 @@ export async function importarEventosInteligente(
           .eq('user_id', userId)
           .eq('uid_externo', evento.uid_externo)
           .maybeSingle();
-        // Se a query teve sucesso (sem erro), retorna o resultado (pode ser null)
-        if (!error) return data;
-        // Se deu erro de coluna inexistente (400) → fallback para data+nome
-        console.warn('[findExistente] Coluna uid_externo indisponível, usando fallback data+nome.', error.message);
+        // Se encontrou o evento com o UID externo, retorna ele
+        if (!error && data) {
+          console.log(`[findExistente] Encontrado evento por UID externo: ${evento.nome} (${evento.uid_externo})`);
+          return data;
+        }
+        // Se deu erro de coluna inexistente (400) ou outro erro, registramos
+        if (error) {
+          console.warn('[findExistente] Erro ao buscar por uid_externo, tentando fallback data+nome.', error.message);
+        }
       }
-      // Fallback: busca por data_evento + cliente_nome
-      const { data: fallback } = await supabase
+      // Fallback: busca todos os eventos na data para este usuário, e compara o nome localmente (case-insensitive & trimmed)
+      const { data: eventsOnDate, error: dateError } = await supabase
         .from('eventos_agenda')
         .select('*')
         .eq('user_id', userId)
-        .eq('data_evento', evento.data)
-        .eq('cliente_nome', evento.nome)
-        .maybeSingle();
-      return fallback;
+        .eq('data_evento', evento.data);
+      
+      if (!dateError && eventsOnDate && eventsOnDate.length > 0) {
+        const targetName = evento.nome.trim().toLowerCase();
+        const found = eventsOnDate.find(e => e.cliente_nome.trim().toLowerCase() === targetName);
+        if (found) {
+          console.log(`[findExistente] Encontrado evento por data+nome (fallback local): ${evento.nome} (${evento.data})`);
+          return found;
+        }
+      }
+      return null;
     };
 
     // Helper: insere evento, com retry sem uid_externo caso a coluna não exista
@@ -521,6 +533,14 @@ export async function importarEventosInteligente(
     // Lógica para apagar eventos deletados no Google Calendar
     if (estrategia === 'mesclar_atualizar' && nomeArquivo === 'google-calendar-sync') {
       try {
+        console.log(`[Sync] Iniciando detecção de eventos órfãos. Recebidos do ICS: ${eventos.length}`);
+        
+        // Trava de segurança: se a lista recebida for vazia, não removemos nada do banco
+        if (eventos.length === 0) {
+          console.warn('[Sync] Nenhum evento recebido no feed ICS. Cancelando remoção de órfãos por segurança.');
+          return result;
+        }
+        
         // Tenta selecionar com uid_externo; se a coluna não existir, usa apenas id/data/nome
         // Busca por origem 'ics_sync' (valor atual) OU observacoes contendo 'google-calendar-sync' (compat. legado)
         let eventosSincronizados: any[] | null = null;
@@ -543,22 +563,34 @@ export async function importarEventosInteligente(
           eventosSincronizados = semUid;
         }
 
+        console.log(`[Sync] Eventos sincronizados encontrados no banco de dados: ${eventosSincronizados?.length || 0}`);
+
         if (eventosSincronizados && eventosSincronizados.length > 0) {
           // Criamos dois conjuntos para comparação resiliente:
-          // 1. Pelos UIDs únicos fornecidos pelo iCalendar
-          const setUidsICS = new Set(eventos.map(e => e.uid_externo).filter(Boolean));
-          // 2. Por data e nome como fallback (para quando uid_externo não estiver gravado no banco ou a coluna não existir)
-          const setDataNomeICS = new Set(eventos.map(e => `${e.data}-${e.nome}`));
+          // 1. Pelos UIDs únicos fornecidos pelo iCalendar (com trim)
+          const setUidsICS = new Set(eventos.map(e => e.uid_externo?.trim()).filter(Boolean));
+          // 2. Por data e nome como fallback (normalizado e case-insensitive)
+          const setDataNomeICS = new Set(eventos.map(e => `${e.data.trim()}-${e.nome.trim().toLowerCase()}`));
 
           const idsParaDeletar = eventosSincronizados
             .filter(e => {
               if (e.uid_externo) {
-                return !setUidsICS.has(e.uid_externo);
+                const hasUid = setUidsICS.has(e.uid_externo.trim());
+                if (!hasUid) {
+                  console.log(`[Sync] Evento marcado para exclusão (UID não encontrado no ICS): ${e.cliente_nome} (${e.data_evento}), UID: ${e.uid_externo}`);
+                }
+                return !hasUid;
               }
-              const chFallback = `${e.data_evento}-${e.cliente_nome}`;
-              return !setDataNomeICS.has(chFallback);
+              const chFallback = `${e.data_evento.trim()}-${e.cliente_nome.trim().toLowerCase()}`;
+              const hasFallback = setDataNomeICS.has(chFallback);
+              if (!hasFallback) {
+                console.log(`[Sync] Evento marcado para exclusão (Chave fallback '${chFallback}' não encontrada no ICS): ${e.cliente_nome} (${e.data_evento})`);
+              }
+              return !hasFallback;
             })
             .map(e => e.id);
+
+          console.log(`[Sync] Total de eventos órfãos a deletar: ${idsParaDeletar.length}`);
 
           if (idsParaDeletar.length > 0) {
             // Deleta em chunks de 50
@@ -631,38 +663,89 @@ export async function getPeriodosBloqueados(userId: string) {
   }
 }
 
-const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string }> => {
-  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string }> = [];
-  const lines = text.split('\n');
+const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> => {
+  const parseICalDate = (dateStr: string): string | null => {
+    if (!dateStr || dateStr.length < 8) return null;
+    if (dateStr.endsWith('Z') && dateStr.includes('T')) {
+      try {
+        const year = parseInt(dateStr.substring(0, 4), 10);
+        const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+        const day = parseInt(dateStr.substring(6, 8), 10);
+        const hour = parseInt(dateStr.substring(9, 11), 10);
+        const minute = parseInt(dateStr.substring(11, 13), 10);
+        const second = parseInt(dateStr.substring(13, 15), 10);
+        
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
+          const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          });
+          const parts = formatter.formatToParts(date);
+          const y = parts.find(p => p.type === 'year')?.value;
+          const m = parts.find(p => p.type === 'month')?.value;
+          const d = parts.find(p => p.type === 'day')?.value;
+          if (y && m && d) {
+            return `${y}-${m}-${d}`;
+          }
+        }
+      } catch (e) {
+        console.warn('Falha ao formatar data com fuso de Sao Paulo, usando fallback:', e);
+      }
+    }
+    
+    const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
+    if (dateMatch) {
+      return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+    }
+    return null;
+  };
 
-  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string } = {};
+  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> = [];
+  const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
+  const lines = unfoldedText.split(/\r?\n/);
+
+  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string; uid_externo?: string } = {};
   let inEvent = false;
 
   for (const line of lines) {
     const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
 
-    if (trimmedLine === 'BEGIN:VEVENT') {
+    const colonIndex = trimmedLine.indexOf(':');
+    if (colonIndex === -1) continue;
+
+    const keyWithParams = trimmedLine.substring(0, colonIndex);
+    const value = trimmedLine.substring(colonIndex + 1).trim();
+    const keyParts = keyWithParams.split(';');
+    const key = keyParts[0].trim().toUpperCase();
+
+    if (key === 'BEGIN' && value === 'VEVENT') {
       inEvent = true;
       currentEvent = { tipo_evento: 'evento' };
-    } else if (trimmedLine === 'END:VEVENT') {
+    } else if (key === 'END' && value === 'VEVENT') {
       if (currentEvent.data_evento && currentEvent.cliente_nome) {
-        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string });
+        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string });
       }
       inEvent = false;
       currentEvent = {};
     } else if (inEvent) {
-      if (trimmedLine.startsWith('DTSTART')) {
-        const dateMatch = trimmedLine.match(/(\d{4})(\d{2})(\d{2})/);
-        if (dateMatch) {
-          currentEvent.data_evento = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+      if (key === 'DTSTART') {
+        const parsedDate = parseICalDate(value);
+        if (parsedDate) {
+          currentEvent.data_evento = parsedDate;
         }
-      } else if (trimmedLine.startsWith('SUMMARY:')) {
-        currentEvent.cliente_nome = trimmedLine.substring(8).trim() || 'Evento de Calendário';
-      } else if (trimmedLine.startsWith('DESCRIPTION:')) {
-        currentEvent.tipo_evento = trimmedLine.substring(12).trim() || 'evento';
-      } else if (trimmedLine.startsWith('LOCATION:')) {
+      } else if (key === 'SUMMARY') {
+        currentEvent.cliente_nome = value || 'Evento de Calendário';
+      } else if (key === 'UID') {
+        currentEvent.uid_externo = value;
+      } else if (key === 'DESCRIPTION') {
+        currentEvent.tipo_evento = value || 'evento';
+      } else if (key === 'LOCATION') {
         if (!currentEvent.tipo_evento || currentEvent.tipo_evento === 'evento') {
-          currentEvent.tipo_evento = trimmedLine.substring(9).trim() || 'evento';
+          currentEvent.tipo_evento = value || 'evento';
         }
       }
     }
@@ -688,13 +771,13 @@ export async function uploadICSFile(icsText: string, userId: string): Promise<{s
     if (queryError) throw queryError;
     
     const setExistentes = new Set(existentes?.map(e => `${e.cliente_nome}-${e.data_evento}`));
-    const novosEventos = [];
+    const novosEventos: any[] = [];
     const dataHoraAtual = new Date().toISOString();
     
     for (const evento of parsedEventos) {
        const chave = `${evento.cliente_nome}-${evento.data_evento}`;
        if (!setExistentes.has(chave)) {
-          novosEventos.push({
+          const novoEventoPayload: any = {
              user_id: userId,
              data_evento: evento.data_evento,
              cliente_nome: evento.cliente_nome,
@@ -704,7 +787,11 @@ export async function uploadICSFile(icsText: string, userId: string): Promise<{s
              origem: 'ics_sync',
              observacoes: 'Importado manualmente do calendário externo',
              created_at: dataHoraAtual
-          });
+          };
+          if (evento.uid_externo) {
+             novoEventoPayload.uid_externo = evento.uid_externo;
+          }
+          novosEventos.push(novoEventoPayload);
           adicionados++;
        }
     }
@@ -714,7 +801,14 @@ export async function uploadICSFile(icsText: string, userId: string): Promise<{s
           .from('eventos_agenda')
           .insert(novosEventos);
           
-       if (insertError) throw insertError;
+       if (insertError) {
+          console.warn('[uploadICSFile] Falha ao inserir em lote com uid_externo, reintentando sem o campo.', insertError.message);
+          const novosSemUid = novosEventos.map(({ uid_externo, ...resto }) => resto);
+          const { error: insertError2 } = await supabase
+             .from('eventos_agenda')
+             .insert(novosSemUid);
+          if (insertError2) throw insertError2;
+       }
     }
     
     await supabase

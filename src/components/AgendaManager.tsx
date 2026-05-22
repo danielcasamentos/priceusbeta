@@ -361,39 +361,88 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   };
 
   const parseICS = (text: string): Array<{ data: string; nome: string; tipo?: string; uid_externo?: string }> => {
+    const parseICalDate = (dateStr: string): string | null => {
+      if (!dateStr || dateStr.length < 8) return null;
+      if (dateStr.endsWith('Z') && dateStr.includes('T')) {
+        try {
+          const year = parseInt(dateStr.substring(0, 4), 10);
+          const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+          const day = parseInt(dateStr.substring(6, 8), 10);
+          const hour = parseInt(dateStr.substring(9, 11), 10);
+          const minute = parseInt(dateStr.substring(11, 13), 10);
+          const second = parseInt(dateStr.substring(13, 15), 10);
+          
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
+            const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+            const formatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Sao_Paulo',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            });
+            const parts = formatter.formatToParts(date);
+            const y = parts.find(p => p.type === 'year')?.value;
+            const m = parts.find(p => p.type === 'month')?.value;
+            const d = parts.find(p => p.type === 'day')?.value;
+            if (y && m && d) {
+              return `${y}-${m}-${d}`;
+            }
+          }
+        } catch (e) {
+          console.warn('Falha ao formatar data com fuso de Sao Paulo, usando fallback:', e);
+        }
+      }
+      
+      const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
+      if (dateMatch) {
+        return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+      }
+      return null;
+    };
+
     const eventos: Array<{ data: string; nome: string; tipo?: string; uid_externo?: string }> = [];
-    const lines = text.split('\n');
+    const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
+    const lines = unfoldedText.split(/\r?\n/);
 
     let currentEvent: { data?: string; nome?: string; tipo?: string; uid_externo?: string } = {};
     let inEvent = false;
 
     for (const line of lines) {
       const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
 
-      if (trimmedLine === 'BEGIN:VEVENT') {
+      const colonIndex = trimmedLine.indexOf(':');
+      if (colonIndex === -1) continue;
+
+      const keyWithParams = trimmedLine.substring(0, colonIndex);
+      const value = trimmedLine.substring(colonIndex + 1).trim();
+      const keyParts = keyWithParams.split(';');
+      const key = keyParts[0].trim().toUpperCase();
+
+      if (key === 'BEGIN' && value === 'VEVENT') {
         inEvent = true;
         currentEvent = { tipo: 'evento' };
-      } else if (trimmedLine === 'END:VEVENT') {
+      } else if (key === 'END' && value === 'VEVENT') {
         if (currentEvent.data && currentEvent.nome) {
           eventos.push(currentEvent as { data: string; nome: string; tipo?: string; uid_externo?: string });
         }
         inEvent = false;
         currentEvent = {};
       } else if (inEvent) {
-        if (trimmedLine.startsWith('DTSTART')) {
-          const dateMatch = trimmedLine.match(/(\d{4})(\d{2})(\d{2})/);
-          if (dateMatch) {
-            currentEvent.data = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+        if (key === 'DTSTART') {
+          const parsedDate = parseICalDate(value);
+          if (parsedDate) {
+            currentEvent.data = parsedDate;
           }
-        } else if (trimmedLine.startsWith('SUMMARY:')) {
-          currentEvent.nome = trimmedLine.substring(8).trim();
-        } else if (trimmedLine.startsWith('UID:')) {
-          currentEvent.uid_externo = trimmedLine.substring(4).trim();
-        } else if (trimmedLine.startsWith('DESCRIPTION:')) {
-          currentEvent.tipo = trimmedLine.substring(12).trim() || 'evento';
-        } else if (trimmedLine.startsWith('LOCATION:')) {
+        } else if (key === 'SUMMARY') {
+          currentEvent.nome = value || 'Evento de Calendário';
+        } else if (key === 'UID') {
+          currentEvent.uid_externo = value;
+        } else if (key === 'DESCRIPTION') {
+          currentEvent.tipo = value || 'evento';
+        } else if (key === 'LOCATION') {
           if (!currentEvent.tipo || currentEvent.tipo === 'evento') {
-            currentEvent.tipo = trimmedLine.substring(9).trim() || 'evento';
+            currentEvent.tipo = value || 'evento';
           }
         }
       }
