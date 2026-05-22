@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Save, X, Settings, Upload, CheckCircle, AlertCircle, FileUp, History, Trash, ToggleLeft, ToggleRight, Flag, Plane, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -162,6 +162,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       if (!silent) setLoading(false);
     }
   };
+
+  const loadDataRef = useRef(loadData);
+  useEffect(() => {
+    loadDataRef.current = loadData;
+  });
 
   const handleAddEvento = async () => {
     if (!novoEvento.data_evento || !novoEvento.cliente_nome) {
@@ -444,9 +449,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
         const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
         
-        // Se houver mudanças, carrega silenciosamente
+        // Se houver mudanças, carrega silenciosamente usando a referência mais atualizada
         if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
-          await loadData(true);
+          await loadDataRef.current(true);
         }
 
       } catch (err) {
