@@ -544,12 +544,19 @@ export async function importarEventosInteligente(
         }
 
         if (eventosSincronizados && eventosSincronizados.length > 0) {
-          // Usa UID se disponível, senão fallback para data-nome
-          const setEventosICS = new Set(eventos.map(e => e.uid_externo ? e.uid_externo : `${e.data}-${e.nome}`));
+          // Criamos dois conjuntos para comparação resiliente:
+          // 1. Pelos UIDs únicos fornecidos pelo iCalendar
+          const setUidsICS = new Set(eventos.map(e => e.uid_externo).filter(Boolean));
+          // 2. Por data e nome como fallback (para quando uid_externo não estiver gravado no banco ou a coluna não existir)
+          const setDataNomeICS = new Set(eventos.map(e => `${e.data}-${e.nome}`));
+
           const idsParaDeletar = eventosSincronizados
             .filter(e => {
-              const ch = (e.uid_externo) ? e.uid_externo : `${e.data_evento}-${e.cliente_nome}`;
-              return !setEventosICS.has(ch);
+              if (e.uid_externo) {
+                return !setUidsICS.has(e.uid_externo);
+              }
+              const chFallback = `${e.data_evento}-${e.cliente_nome}`;
+              return !setDataNomeICS.has(chFallback);
             })
             .map(e => e.id);
 
