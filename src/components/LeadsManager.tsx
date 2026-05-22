@@ -568,8 +568,8 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
 
   const handleSolicitarAvaliacao = async (lead: LeadWithReview) => {
-    if (lead.status !== 'convertido') {
-      alert('⚠️ Apenas leads convertidos podem receber solicitação de avaliação.');
+    if (lead.status !== 'convertido' && lead.status !== 'finalizado') {
+      alert('⚠️ Apenas leads convertidos ou finalizados podem receber solicitação de avaliação.');
       return;
     }
 
@@ -1042,7 +1042,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                       >
                         <FileSignature className="w-4 h-4 inline" />
                       </button>
-                      {lead.status === 'convertido' && lead.telefone_cliente && (
+                      {(lead.status === 'convertido' || lead.status === 'finalizado') && lead.telefone_cliente && (
                         <button 
                           onClick={() => handleSolicitarAvaliacao(lead)}
                           className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300"
@@ -1329,7 +1329,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                         💬 Enviar WhatsApp
                       </button>
                     )}
-                    {selectedLead.status === 'convertido' && !selectedLead.avaliacao_id && selectedLead.telefone_cliente && (
+                     {(selectedLead.status === 'convertido' || selectedLead.status === 'finalizado') && !selectedLead.avaliacao_id && selectedLead.telefone_cliente && (
                       <button
                         onClick={() => handleSolicitarAvaliacao(selectedLead)}
                         className="flex-1 bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium flex items-center justify-center gap-2"

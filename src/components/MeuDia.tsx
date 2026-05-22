@@ -210,7 +210,6 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const day = todayObj.getDay();
     const mon = new Date(todayObj); mon.setDate(todayObj.getDate() - day + (day === 0 ? -6 : 1));
     const inicioSemana = dateStr(mon);
-    const inicioMes = `${todayObj.getFullYear()}-${pad(todayObj.getMonth() + 1)}-01`;
 
     // Hoje: só com completedAt hoje
     const hojeCount = tarefasConcluidas.filter(t => t.completedAt?.startsWith(hoje)).length;

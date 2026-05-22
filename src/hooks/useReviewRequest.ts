@@ -15,8 +15,8 @@ export function useReviewRequest() {
         return { success: false, error: 'Lead não encontrado' };
       }
 
-      if (lead.status !== 'convertido') {
-        return { success: false, error: 'Apenas leads convertidos podem ser avaliados' };
+      if (lead.status !== 'convertido' && lead.status !== 'finalizado') {
+        return { success: false, error: 'Apenas leads convertidos ou finalizados podem ser avaliados' };
       }
 
       if (lead.avaliacao_id) {
