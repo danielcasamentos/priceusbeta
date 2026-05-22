@@ -451,72 +451,83 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     return eventos;
   };
 
-  // Efeito de Auto-Sync em Background (Smart Polling com Idle Detection)
+  // Efeito de Auto-Sync em Background (disparo inteligente, sem polling agressivo)
   useEffect(() => {
     if (!configEdit.auto_sync_enabled || !configEdit.calendar_ics_url) return;
 
-    let syncInterval: NodeJS.Timeout;
+    // Cooldowns: 15 minutos ativo, 60 minutos ocioso
+    const COOLDOWN_ATIVO_MS  = 15 * 60 * 1000;  // 15 min
+    const COOLDOWN_OCIOSO_MS = 60 * 60 * 1000;  // 60 min
+    const IDLE_THRESHOLD_MS  =  5 * 60 * 1000;  //  5 min sem atividade = ocioso
+
     let lastActivity = Date.now();
+    let syncTimer: ReturnType<typeof setTimeout> | null = null;
+    let isSyncing = false; // trava para evitar concorrência
 
-    const handleActivity = () => {
-      lastActivity = Date.now();
-    };
-
-    // Registrar eventos de atividade do usuário
-    window.addEventListener('mousemove', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('touchstart', handleActivity);
-    window.addEventListener('click', handleActivity);
+    const handleActivity = () => { lastActivity = Date.now(); };
+    window.addEventListener('mousemove',  handleActivity, { passive: true });
+    window.addEventListener('keydown',    handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('click',      handleActivity, { passive: true });
 
     const performBackgroundSync = async () => {
+      if (isSyncing) return; // já sincronizando, não duplicar
+      isSyncing = true;
       try {
-        const timeSinceLastActivity = Date.now() - lastActivity;
-        const isIdle = timeSinceLastActivity > 60000; // 1 minuto ocioso
-
-        // Se ocioso, reduz frequência. Vamos bloquear se < 5 min desde o último sync no idle
-        // Se ativo, bloqueia se < 10 segundos
-        const cooldownMs = isIdle ? 300000 : 10000;
-        
-        const lastSync = localStorage.getItem('last_calendar_smart_sync');
-        if (lastSync) {
-          const diffMs = Date.now() - parseInt(lastSync);
-          if (diffMs < cooldownMs) return; // Ainda em cooldown
-        }
-
-        // Registrar a tentativa imediatamente para evitar loop infinito em caso de erro
-        localStorage.setItem('last_calendar_smart_sync', Date.now().toString());
-
         const { data, error } = await supabase.functions.invoke('fetch-calendar', {
           body: { url: configEdit.calendar_ics_url }
         });
-        
-        if (error || !data || !data.text) return;
-        if (!data.text.includes('BEGIN:VCALENDAR')) return;
 
-        const parsedEventos = parseICS(data.text);
-        if (parsedEventos.length === 0) return;
-
-        const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
-        
-        // Se houver mudanças, carrega silenciosamente usando a referência mais atualizada
-        if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
-          await loadDataRef.current(true);
+        if (!error && data?.text && data.text.includes('BEGIN:VCALENDAR')) {
+          const parsedEventos = parseICS(data.text);
+          if (parsedEventos.length > 0) {
+            const result = await importarEventosInteligente(
+              userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar'
+            );
+            // Recarregar apenas se houver mudanças reais
+            if (result.success && (result.eventos_adicionados > 0 || result.eventos_atualizados > 0 || result.eventos_removidos > 0)) {
+              await loadDataRef.current(true);
+            }
+          }
         }
-
       } catch (err) {
         console.warn('Erro silencioso no auto-sync:', err);
+      } finally {
+        isSyncing = false;
+        // Agendar próxima execução baseada no nível de atividade do usuário
+        const isIdle = Date.now() - lastActivity > IDLE_THRESHOLD_MS;
+        const nextMs = isIdle ? COOLDOWN_OCIOSO_MS : COOLDOWN_ATIVO_MS;
+        console.log(`[AutoSync] Próximo sync em ${Math.round(nextMs / 60000)} min (${isIdle ? 'ocioso' : 'ativo'})`);
+        syncTimer = setTimeout(performBackgroundSync, nextMs);
       }
     };
 
-    // Roda a checagem a cada 2 segundos (loop rápido). Ele só faz request se o cooldown permitir.
-    syncInterval = setInterval(performBackgroundSync, 2000);
+    // Sincronizar quando a aba volta ao foco após ausência longa
+    let tabHiddenAt = 0;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        tabHiddenAt = Date.now();
+      } else {
+        const awayMs = Date.now() - tabHiddenAt;
+        if (tabHiddenAt > 0 && awayMs > COOLDOWN_ATIVO_MS) {
+          // Voltou após 15+ minutos: cancela o timer agendado e sincroniza agora
+          if (syncTimer) clearTimeout(syncTimer);
+          syncTimer = setTimeout(performBackgroundSync, 2000);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Primeiro sync: 5 segundos após montagem do componente
+    syncTimer = setTimeout(performBackgroundSync, 5000);
 
     return () => {
-      clearInterval(syncInterval);
-      window.removeEventListener('mousemove', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
+      if (syncTimer) clearTimeout(syncTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('mousemove',  handleActivity);
+      window.removeEventListener('keydown',    handleActivity);
       window.removeEventListener('touchstart', handleActivity);
-      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('click',      handleActivity);
     };
   }, [configEdit.auto_sync_enabled, configEdit.calendar_ics_url, userId]);
 
