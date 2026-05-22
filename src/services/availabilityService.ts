@@ -401,22 +401,66 @@ export async function importarEventosInteligente(
 
     const historicoId = historico.id;
 
+    // Helper: busca evento existente por uid_externo (com fallback para data+nome caso a coluna não exista)
+    const findExistente = async (evento: { data: string; nome: string; uid_externo?: string }): Promise<EventoAgenda | null> => {
+      if (evento.uid_externo) {
+        const { data, error } = await supabase
+          .from('eventos_agenda')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('uid_externo', evento.uid_externo)
+          .maybeSingle();
+        // Se a query teve sucesso (sem erro), retorna o resultado (pode ser null)
+        if (!error) return data;
+        // Se deu erro de coluna inexistente (400) → fallback para data+nome
+        console.warn('[findExistente] Coluna uid_externo indisponível, usando fallback data+nome.', error.message);
+      }
+      // Fallback: busca por data_evento + cliente_nome
+      const { data: fallback } = await supabase
+        .from('eventos_agenda')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('data_evento', evento.data)
+        .eq('cliente_nome', evento.nome)
+        .maybeSingle();
+      return fallback;
+    };
+
+    // Helper: insere evento, com retry sem uid_externo caso a coluna não exista
+    const addEventoComFallback = async (payload: Partial<EventoAgenda>): Promise<EventoAgenda | null> => {
+      // Tenta inserir com uid_externo
+      const { data, error } = await supabase
+        .from('eventos_agenda')
+        .insert([payload])
+        .select()
+        .single();
+      if (!error) return data;
+
+      // Se falhou e havia uid_externo, tenta sem ele (coluna pode não existir)
+      if (payload.uid_externo) {
+        console.warn('[addEventoComFallback] Falha com uid_externo, reintentando sem o campo.', error.message);
+        const { uid_externo: _dropped, ...payloadSemUid } = payload as any;
+        const { data: data2, error: error2 } = await supabase
+          .from('eventos_agenda')
+          .insert([payloadSemUid])
+          .select()
+          .single();
+        if (!error2) return data2;
+        console.error('[addEventoComFallback] Falha definitiva ao inserir evento:', error2);
+        return null;
+      }
+
+      console.error('[addEventoComFallback] Falha ao inserir evento:', error);
+      return null;
+    };
+
     const chunkSize = 10;
     for (let i = 0; i < eventos.length; i += chunkSize) {
       const chunk = eventos.slice(i, i + chunkSize);
       await Promise.all(chunk.map(async (evento) => {
         try {
-          let queryExistente = supabase.from('eventos_agenda').select('*').eq('user_id', userId);
-          
-          if (evento.uid_externo) {
-            queryExistente = queryExistente.eq('uid_externo', evento.uid_externo);
-          } else {
-            queryExistente = queryExistente.eq('data_evento', evento.data).eq('cliente_nome', evento.nome);
-          }
-
           if (estrategia === 'adicionar_novos') {
-            const { data: existente } = await queryExistente.maybeSingle();
-
+            const existente = await findExistente(evento);
             if (existente) {
               result.eventos_ignorados++;
               return;
@@ -424,24 +468,27 @@ export async function importarEventosInteligente(
           }
 
           if (estrategia === 'mesclar_atualizar') {
-            const { data: existente } = await queryExistente.maybeSingle();
-
+            const existente = await findExistente(evento);
             if (existente) {
-              await updateEvento(existente.id, {
-                data_evento: evento.data, // Atualiza a data caso tenha sido movida
-                cliente_nome: evento.nome, // Atualiza nome caso tenha mudado
+              const updatePayload: Partial<EventoAgenda> = {
+                data_evento: evento.data,
+                cliente_nome: evento.nome,
                 tipo_evento: evento.tipo || existente.tipo_evento,
                 cidade: evento.cidade || existente.cidade,
                 observacoes: `Atualizado de ${nomeArquivo}`,
                 importacao_id: historicoId,
-                uid_externo: evento.uid_externo || existente.uid_externo
-              });
+              };
+              // Só inclui uid_externo na atualização se já existe no registro ou no evento importado
+              if (evento.uid_externo || (existente as any).uid_externo) {
+                (updatePayload as any).uid_externo = evento.uid_externo || (existente as any).uid_externo;
+              }
+              await updateEvento(existente.id, updatePayload);
               result.eventos_atualizados++;
               return;
             }
           }
 
-          const novoEvento = await addEvento({
+          const novoPayload: Partial<EventoAgenda> = {
             user_id: userId,
             data_evento: evento.data,
             cliente_nome: evento.nome,
@@ -451,8 +498,12 @@ export async function importarEventosInteligente(
             origem: nomeArquivo === 'google-calendar-sync' ? 'google-calendar-sync' : 'csv_import',
             observacoes: `Importado de ${nomeArquivo}`,
             importacao_id: historicoId,
-            uid_externo: evento.uid_externo
-          });
+          };
+          if (evento.uid_externo) {
+            (novoPayload as any).uid_externo = evento.uid_externo;
+          }
+
+          const novoEvento = await addEventoComFallback(novoPayload);
 
           if (novoEvento) {
             result.eventos_adicionados++;
@@ -468,18 +519,33 @@ export async function importarEventosInteligente(
     // Lógica para apagar eventos deletados no Google Calendar
     if (estrategia === 'mesclar_atualizar' && nomeArquivo === 'google-calendar-sync') {
       try {
-        const { data: eventosSincronizados } = await supabase
+        // Tenta selecionar com uid_externo; se a coluna não existir, usa apenas id/data/nome
+        let eventosSincronizados: any[] | null = null;
+        const { data: comUid, error: errUid } = await supabase
           .from('eventos_agenda')
           .select('id, data_evento, cliente_nome, uid_externo')
           .eq('user_id', userId)
           .or('origem.eq.google-calendar-sync,observacoes.ilike.%google-calendar-sync%');
+
+        if (!errUid) {
+          eventosSincronizados = comUid;
+        } else {
+          // Fallback: seleciona sem uid_externo
+          console.warn('[sync] uid_externo indisponível na detecção de órfãos, usando fallback.', errUid.message);
+          const { data: semUid } = await supabase
+            .from('eventos_agenda')
+            .select('id, data_evento, cliente_nome')
+            .eq('user_id', userId)
+            .or('origem.eq.google-calendar-sync,observacoes.ilike.%google-calendar-sync%');
+          eventosSincronizados = semUid;
+        }
 
         if (eventosSincronizados && eventosSincronizados.length > 0) {
           // Usa UID se disponível, senão fallback para data-nome
           const setEventosICS = new Set(eventos.map(e => e.uid_externo ? e.uid_externo : `${e.data}-${e.nome}`));
           const idsParaDeletar = eventosSincronizados
             .filter(e => {
-              const ch = e.uid_externo ? e.uid_externo : `${e.data_evento}-${e.cliente_nome}`;
+              const ch = (e.uid_externo) ? e.uid_externo : `${e.data_evento}-${e.cliente_nome}`;
               return !setEventosICS.has(ch);
             })
             .map(e => e.id);
