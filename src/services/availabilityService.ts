@@ -495,7 +495,9 @@ export async function importarEventosInteligente(
             tipo_evento: evento.tipo || 'evento',
             cidade: evento.cidade || '',
             status: 'confirmado',
-            origem: nomeArquivo === 'google-calendar-sync' ? 'google-calendar-sync' : 'csv_import',
+            // 'google-calendar-sync' viola o CHECK constraint (só aceita valores fixos).
+            // Usar 'ics_sync' que já é válido e identifica sincronização por link iCalendar.
+            origem: nomeArquivo === 'google-calendar-sync' ? 'ics_sync' : 'csv_import',
             observacoes: `Importado de ${nomeArquivo}`,
             importacao_id: historicoId,
           };
@@ -520,12 +522,13 @@ export async function importarEventosInteligente(
     if (estrategia === 'mesclar_atualizar' && nomeArquivo === 'google-calendar-sync') {
       try {
         // Tenta selecionar com uid_externo; se a coluna não existir, usa apenas id/data/nome
+        // Busca por origem 'ics_sync' (valor atual) OU observacoes contendo 'google-calendar-sync' (compat. legado)
         let eventosSincronizados: any[] | null = null;
         const { data: comUid, error: errUid } = await supabase
           .from('eventos_agenda')
           .select('id, data_evento, cliente_nome, uid_externo')
           .eq('user_id', userId)
-          .or('origem.eq.google-calendar-sync,observacoes.ilike.%google-calendar-sync%');
+          .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%');
 
         if (!errUid) {
           eventosSincronizados = comUid;
@@ -536,7 +539,7 @@ export async function importarEventosInteligente(
             .from('eventos_agenda')
             .select('id, data_evento, cliente_nome')
             .eq('user_id', userId)
-            .or('origem.eq.google-calendar-sync,observacoes.ilike.%google-calendar-sync%');
+            .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%');
           eventosSincronizados = semUid;
         }
 
