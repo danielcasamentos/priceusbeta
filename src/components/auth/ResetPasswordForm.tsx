@@ -44,7 +44,7 @@ export function ResetPasswordForm() {
       setSuccess(true);
 
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate('/dashboard/meu-dia');
       }, 2000);
     } catch (err) {
       setError('Ocorreu um erro inesperado. Por favor, tente novamente.');

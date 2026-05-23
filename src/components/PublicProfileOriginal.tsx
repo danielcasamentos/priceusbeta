@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink } from 'lucide-react';
 import { StarRating } from './StarRating';
@@ -40,6 +41,10 @@ interface PublicProfileOriginalProps {
 }
 
 export function PublicProfileOriginal({ profile, templates, reviews, averageRating }: PublicProfileOriginalProps) {
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-50 via-white to-green-50">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
@@ -148,7 +153,7 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
                 >
                   <div className="p-6 sm:p-8">
                     <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
-                      {template.nome_template}
+                       {template.nome_template}
                     </h3>
                     {template.titulo_template && (
                        <p className="text-sm font-medium text-blue-600 mb-3">{template.titulo_template}</p>
@@ -178,7 +183,7 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
               Avaliações de Clientes
             </h2>
             <div className="space-y-6">
-              {reviews.map((review) => (
+              {displayedReviews.map((review) => (
                 <div key={review.id} className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border-4 border-blue-200">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -199,6 +204,17 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
                 </div>
               ))}
             </div>
+
+            {reviews.length > 3 && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => setShowAllReviews(!showAllReviews)}
+                  className="px-8 py-3 border-2 border-blue-600 text-blue-600 rounded-full font-semibold hover:bg-blue-50 transition-all shadow-md hover:shadow-lg active:scale-95"
+                >
+                  {showAllReviews ? 'Ver menos' : 'Ver mais'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

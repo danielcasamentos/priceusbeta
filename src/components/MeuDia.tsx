@@ -383,12 +383,16 @@ export function MeuDia({ userId }: MeuDiaProps) {
       {/* ── Cards de Resumo ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { icon: Calendar, label: 'Eventos', value: String(eventos.length), color: 'blue', sub: `${eventos.filter(e => e.status === 'confirmado').length} confirmados` },
-          { icon: DollarSign, label: 'Recebido', value: fmtCurrency(receitasPagas), color: 'green', sub: `${fmtCurrency(receitasPendentes)} pendente` },
-          { icon: DollarSign, label: 'Despesas', value: fmtCurrency(despesas), color: 'red', sub: `${transacoes.filter(t => t.tipo === 'despesa').length} lançamentos` },
-          { icon: CheckSquare, label: 'Pendentes', value: String(tarefas.length), color: tarefasAtrasadas.length > 0 ? 'red' : 'purple', sub: tarefasAtrasadas.length > 0 ? `${tarefasAtrasadas.length} atrasadas!` : 'em produção' },
+          { icon: Calendar, label: 'Eventos', value: String(eventos.length), color: 'blue', sub: `${eventos.filter(e => e.status === 'confirmado').length} confirmados`, route: '/dashboard/agenda' },
+          { icon: DollarSign, label: 'Recebido', value: fmtCurrency(receitasPagas), color: 'green', sub: `${fmtCurrency(receitasPendentes)} pendente`, route: '/dashboard/empresa-transacoes' },
+          { icon: DollarSign, label: 'Despesas', value: fmtCurrency(despesas), color: 'red', sub: `${transacoes.filter(t => t.tipo === 'despesa').length} lançamentos`, route: '/dashboard/empresa-transacoes' },
+          { icon: CheckSquare, label: 'Pendentes', value: String(tarefas.length), color: tarefasAtrasadas.length > 0 ? 'red' : 'purple', sub: tarefasAtrasadas.length > 0 ? `${tarefasAtrasadas.length} atrasadas!` : 'em produção', route: '/dashboard/leads' },
         ].map(c => (
-          <div key={c.label} className="bg-white dark:bg-[#0a1628] rounded-2xl p-4 border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm">
+          <div
+            key={c.label}
+            onClick={() => navigate(c.route)}
+            className="bg-white dark:bg-[#0a1628] rounded-2xl p-4 border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
+          >
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 bg-${c.color}-100 dark:bg-${c.color}-900/20`}>
               <c.icon className={`w-5 h-5 text-${c.color}-600 dark:text-${c.color}-400`} />
             </div>
@@ -490,7 +494,11 @@ export function MeuDia({ userId }: MeuDiaProps) {
               ) : (
                 <div className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)] max-h-72 overflow-y-auto">
                   {eventos.map(ev => (
-                    <div key={ev.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)]">
+                    <button
+                      key={ev.id}
+                      onClick={() => navigate('/dashboard/agenda')}
+                      className="w-full text-left flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] cursor-pointer transition-all group"
+                    >
                       <div className="text-center shrink-0 w-10">
                         <p className="text-lg font-black text-blue-600">{new Date(ev.data_evento + 'T12:00:00').getDate()}</p>
                         <p className="text-xs text-gray-400 -mt-1">{new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short' })}</p>
@@ -500,7 +508,8 @@ export function MeuDia({ userId }: MeuDiaProps) {
                         <p className="text-xs text-gray-500 truncate">{ev.tipo_evento}{ev.cidade ? ` • ${ev.cidade}` : ''}</p>
                       </div>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusColor(ev.status)}`}>{ev.status}</span>
-                    </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 transition-colors shrink-0" />
+                    </button>
                   ))}
                 </div>
               )}
@@ -581,7 +590,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)]">
                         {transacoes.map(t => (
-                          <tr key={t.id} onClick={() => navigate('/dashboard/financeiro')}
+                          <tr key={t.id} onClick={() => navigate('/dashboard/empresa-transacoes')}
                             className="hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] cursor-pointer transition-colors">
                             <td className="px-5 py-2.5 text-gray-800 dark:text-white font-medium max-w-[200px] truncate">{t.descricao}</td>
                             <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{fmt(t.data)}</td>
@@ -598,7 +607,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
                   </div>
                   <div className="md:hidden flex flex-col p-4 gap-3">
                     {transacoes.map(t => (
-                      <div key={t.id} onClick={() => navigate('/dashboard/financeiro')}
+                      <div key={t.id} onClick={() => navigate('/dashboard/empresa-transacoes')}
                         className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] cursor-pointer">
                         <div className="flex justify-between items-start mb-2">
                           <p className="font-semibold text-gray-900 dark:text-white truncate">{t.descricao}</p>
@@ -654,7 +663,10 @@ export function MeuDia({ userId }: MeuDiaProps) {
               )}
             </div>
             {/* Entradas */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm">
+            <div
+              onClick={() => navigate('/dashboard/empresa-transacoes')}
+              className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
+            >
               <div className="flex items-center gap-2 mb-4">
                 <DollarSign className="w-5 h-5 text-emerald-600" />
                 <h4 className="font-semibold text-gray-900 dark:text-white">Entradas</h4>
@@ -678,7 +690,10 @@ export function MeuDia({ userId }: MeuDiaProps) {
               )}
             </div>
             {/* Eventos */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm">
+            <div
+              onClick={() => navigate('/dashboard/agenda')}
+              className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
+            >
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="w-5 h-5 text-blue-600" />
                 <h4 className="font-semibold text-gray-900 dark:text-white">Eventos</h4>

@@ -47,7 +47,7 @@ export function DashboardPage() {
   // Sanitiza: remove query params colados no path (ex: leads&id → leads)
   const rawUrlPage = params.page;
   const urlPage = rawUrlPage ? rawUrlPage.split(/[&?]/)[0] : undefined;
-  const [currentPage, setCurrentPage] = useState<string>(urlPage || 'templates');
+  const [currentPage, setCurrentPage] = useState<string>(urlPage || 'meu-dia');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [contractTab, setContractTab] = useState<'templates' | 'manager'>('templates');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

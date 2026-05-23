@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink } from 'lucide-react';
 import { StarRating } from './StarRating';
@@ -40,6 +41,10 @@ interface PublicProfileMinimalistProps {
 }
 
 export function PublicProfileMinimalist({ profile, templates, reviews, averageRating }: PublicProfileMinimalistProps) {
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-200 via-gray-200 to-slate-300">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
@@ -178,7 +183,7 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
               Avaliações de Clientes
             </h2>
             <div className="space-y-6">
-              {reviews.map((review) => (
+              {displayedReviews.map((review) => (
                 <div key={review.id} className="bg-slate-50 rounded-3xl shadow-2xl p-6 sm:p-8 border-4 border-slate-400">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -199,6 +204,17 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
                 </div>
               ))}
             </div>
+
+            {reviews.length > 3 && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => setShowAllReviews(!showAllReviews)}
+                  className="px-8 py-3 border-2 border-slate-800 text-slate-800 rounded-full font-light tracking-wide hover:bg-slate-100 transition-all shadow-md hover:shadow-lg active:scale-95"
+                >
+                  {showAllReviews ? 'Ver menos' : 'Ver mais'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

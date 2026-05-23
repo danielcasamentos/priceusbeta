@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
 import { StarRating } from './StarRating';
@@ -41,6 +42,10 @@ interface PublicProfileDarkStudioProps {
 }
 
 export function PublicProfileDarkStudio({ profile, templates, reviews, averageRating }: PublicProfileDarkStudioProps) {
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+
   return (
     <div
       style={{
@@ -233,7 +238,7 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
               </h2>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {reviews.map((review, i) => (
+              {displayedReviews.map((review, i) => (
                 <div
                   key={review.id}
                   style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 16, padding: '20px 24px', animation: `fadeUp .5s ease ${i * .12}s both` }}
@@ -258,6 +263,36 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
                 </div>
               ))}
             </div>
+
+            {reviews.length > 3 && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
+                <button
+                  onClick={() => setShowAllReviews(!showAllReviews)}
+                  style={{
+                    background: 'transparent',
+                    border: '2px solid #22c55e',
+                    color: '#22c55e',
+                    padding: '12px 28px',
+                    borderRadius: 12,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 4px 12px rgba(34,197,94,0.1)'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(34,197,94,0.08)';
+                    e.currentTarget.style.boxShadow = '0 6px 16px rgba(34,197,94,0.2)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(34,197,94,0.1)';
+                  }}
+                >
+                  {showAllReviews ? 'Ver menos' : 'Ver mais'}
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}

@@ -12,12 +12,12 @@ export function LoginPage() {
 
   React.useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate('/dashboard/meu-dia');
     }
   }, [user, navigate]);
 
   const handleSuccess = () => {
-    navigate('/dashboard');
+    navigate('/dashboard/meu-dia');
   };
 
   return (

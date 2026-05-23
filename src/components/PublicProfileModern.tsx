@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
 import { StarRating } from './StarRating';
@@ -40,6 +41,10 @@ interface PublicProfileModernProps {
 }
 
 export function PublicProfileModern({ profile, templates, reviews, averageRating }: PublicProfileModernProps) {
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-cyan-50 via-blue-50 to-purple-100">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
@@ -186,7 +191,7 @@ export function PublicProfileModern({ profile, templates, reviews, averageRating
               Avaliações de Clientes
             </h2>
             <div className="space-y-6">
-              {reviews.map((review) => (
+              {displayedReviews.map((review) => (
                 <div key={review.id} className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border-4 border-cyan-200">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -207,6 +212,17 @@ export function PublicProfileModern({ profile, templates, reviews, averageRating
                 </div>
               ))}
             </div>
+
+            {reviews.length > 3 && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => setShowAllReviews(!showAllReviews)}
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600 text-white rounded-full font-semibold hover:opacity-90 transition-all shadow-md hover:shadow-lg active:scale-95"
+                >
+                  {showAllReviews ? 'Ver menos' : 'Ver mais'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -103,8 +103,9 @@ export function PublicProfilePage() {
         .eq('profile_id', profileData.id)
         .eq('visivel', true)
         .gte('rating', profileData.rating_minimo_exibicao || 1)
+        .order('rating', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(50);
 
       setReviews(reviewsData || []);
 

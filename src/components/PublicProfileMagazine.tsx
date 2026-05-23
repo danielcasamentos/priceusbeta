@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Camera } from 'lucide-react';
 import { StarRating } from './StarRating';
@@ -40,6 +41,10 @@ interface PublicProfileMagazineProps {
 }
 
 export function PublicProfileMagazine({ profile, templates, reviews, averageRating }: PublicProfileMagazineProps) {
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-100 font-serif">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
@@ -198,7 +203,7 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
               <div className="h-1 w-32 bg-amber-600 mx-auto"></div>
             </div>
             <div className="space-y-6">
-              {reviews.map((review) => (
+              {displayedReviews.map((review) => (
                 <div key={review.id} className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border-4 border-amber-600">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -219,6 +224,17 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
                 </div>
               ))}
             </div>
+
+            {reviews.length > 3 && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => setShowAllReviews(!showAllReviews)}
+                  className="px-8 py-3 border-2 border-amber-700 text-amber-700 rounded-full font-bold uppercase tracking-widest hover:bg-amber-50 transition-all shadow-md hover:shadow-lg active:scale-95 text-xs font-serif"
+                >
+                  {showAllReviews ? 'Ver menos' : 'Ver mais'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
