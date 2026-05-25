@@ -67,6 +67,7 @@ interface Template {
   descricao_perfil?: string;
   ocultar_data_criacao?: boolean;
   dias_semana_bloqueados?: number[];
+  limitar_parcelas_pelo_evento?: boolean;
 }
 
 interface TemplateEditorProps {
@@ -1139,6 +1140,30 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     </div>
                   </div>
                 </label>
+
+                <div className="border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={template?.limitar_parcelas_pelo_evento || false}
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('limitar_parcelas_pelo_evento', e.target.checked)
+                      }
+                      className="w-5 h-5 text-amber-600 rounded mt-1 animate-pulse"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        📅 Limitar Parcelas pela Data do Evento
+                      </div>
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                        Quando ativado, o sistema calcula dinamicamente os meses restantes até o casamento/evento e **bloqueia parcelamentos que passem da data do evento**.
+                      </div>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 font-medium">
+                        ⚠️ Recomendado para evitar discussões e garantir o recebimento integral antes ou na data da celebração.
+                      </p>
+                    </div>
+                  </label>
+                </div>
 
                 <div className="border border-green-200 dark:border-green-900/30 bg-green-50 dark:bg-green-900/10 rounded-lg p-4">
                   <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">

@@ -106,7 +106,6 @@ export function QuotePage() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; telefone?: string }>({});
   const [camposExtrasData, setCamposExtrasData] = useState<Record<string, string>>({});
   const [selectedFormaPagamento, setSelectedFormaPagamento] = useState<string>('');
-  const [dataUltimaParcela] = useState<string>(''); // Removed unused setDataUltimaParcela
 
   // Auto-selecionar a primeira forma de pagamento disponível por padrão
   useEffect(() => {
@@ -918,6 +917,21 @@ export function QuotePage() {
     };
   };
 
+  const getDynamicMaxParcelas = (forma: any) => {
+    if (!forma) return 0;
+    let max = forma.max_parcelas;
+    if (template?.limitar_parcelas_pelo_evento && dataEvento) {
+      const hoje = new Date();
+      const [year, month, day] = dataEvento.split('-');
+      const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
+      const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
+      const diffMeses = dataEv.getMonth() - hoje.getMonth();
+      const mesesRestantes = diffAnos * 12 + diffMeses;
+      max = Math.min(max, Math.max(1, mesesRestantes));
+    }
+    return max;
+  };
+
   // ── Validações de formato de Email e Telefone ─────────────────────────
   const validateEmail = (email: string): string => {
     if (!email.trim()) return '';
@@ -1068,8 +1082,17 @@ export function QuotePage() {
       selectedProducts: selectedProdutos,
 
       // Forma de pagamento
-      paymentMethod: formaPagamento,
-      lastInstallmentDate: dataUltimaParcela,
+      paymentMethod: formaPagamento ? {
+        ...formaPagamento,
+        max_parcelas: getDynamicMaxParcelas(formaPagamento)
+      } : undefined,
+      lastInstallmentDate: (() => {
+        const maxP = getDynamicMaxParcelas(formaPagamento);
+        if (maxP <= 1) return '';
+        const date = new Date();
+        date.setMonth(date.getMonth() + maxP);
+        return date.toISOString().split('T')[0];
+      })(),
 
       // Breakdown de preços
       priceBreakdown: breakdown,
@@ -2128,9 +2151,12 @@ export function QuotePage() {
                               ? `Entrada de ${forma.entrada_valor}%`
                               : `Entrada de ${formatCurrency(forma.entrada_valor)}`}
                           </div>
-                          {forma.max_parcelas > 0 && (
-                            <div className="mt-0.5">+ {forma.max_parcelas}x parcela{forma.max_parcelas > 1 ? 's' : ''}</div>
-                          )}
+                          {(() => {
+                            const maxParcelasCalculado = getDynamicMaxParcelas(forma);
+                            return maxParcelasCalculado > 0 && (
+                              <div className="mt-0.5">+ {maxParcelasCalculado}x parcela{maxParcelasCalculado > 1 ? 's' : ''}</div>
+                            );
+                          })()}
                           {forma.acrescimo > 0 && (
                             <div className="text-orange-600 mt-0.5">(+{forma.acrescimo}% acréscimo)</div>
                           )}
@@ -2149,7 +2175,8 @@ export function QuotePage() {
                     ? (total * formaPagamento.entrada_valor) / 100
                     : formaPagamento.entrada_valor;
                   const saldoRestante = Math.max(0, total - valorEntrada);
-                  const valorParcela = formaPagamento.max_parcelas > 0 ? saldoRestante / formaPagamento.max_parcelas : 0;
+                  const maxParcelasCalculado = getDynamicMaxParcelas(formaPagamento);
+                  const valorParcela = maxParcelasCalculado > 0 ? saldoRestante / maxParcelasCalculado : 0;
 
                   return (
                     <div className="mt-4 bg-blue-50 rounded-lg p-4 sm:p-5 space-y-3">
@@ -2168,11 +2195,11 @@ export function QuotePage() {
                           )}
                         </div>
 
-                        {formaPagamento.max_parcelas > 0 && saldoRestante > 0.01 && (
+                        {maxParcelasCalculado > 0 && saldoRestante > 0.01 && (
                           <div className="bg-white rounded-lg p-3">
                             <div className={`${tema.cores.textoSecundario} text-xs mb-1`}>Parcelas:</div>
                             <div className="font-bold text-blue-600 text-lg">
-                              {formaPagamento.max_parcelas}x de {formatCurrency(valorParcela)}
+                              {maxParcelasCalculado}x de {formatCurrency(valorParcela)}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
                               Saldo restante
@@ -2364,7 +2391,8 @@ export function QuotePage() {
                             ? (total * formaPagamento.entrada_valor) / 100
                             : formaPagamento.entrada_valor;
                           const saldoRestante = Math.max(0, total - valorEntrada);
-                          const valorParcela = formaPagamento.max_parcelas > 0 ? saldoRestante / formaPagamento.max_parcelas : 0;
+                          const maxParcelasCalculado = getDynamicMaxParcelas(formaPagamento);
+                          const valorParcela = maxParcelasCalculado > 0 ? saldoRestante / maxParcelasCalculado : 0;
 
                           return (
                             <div className="mt-3 pt-3 border-t border-gray-300">
@@ -2377,10 +2405,10 @@ export function QuotePage() {
                                   <span>Entrada:</span>
                                   <span className="font-semibold">{formatCurrency(valorEntrada)}</span>
                                 </div>
-                                {formaPagamento.max_parcelas > 0 && saldoRestante > 0.01 && (
+                                {maxParcelasCalculado > 0 && saldoRestante > 0.01 && (
                                   <div className="flex justify-between items-center">
                                     <span>Parcelas:</span>
-                                    <span className="font-semibold">{formaPagamento.max_parcelas}x de {formatCurrency(valorParcela)}</span>
+                                    <span className="font-semibold">{maxParcelasCalculado}x de {formatCurrency(valorParcela)}</span>
                                   </div>
                                 )}
                               </div>

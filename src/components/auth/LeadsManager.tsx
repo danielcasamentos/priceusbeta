@@ -40,6 +40,7 @@ interface TemplateFromDB {
   sistema_sazonal_ativo: boolean;
   sistema_geografico_ativo: boolean;
   ocultar_valores_intermediarios: boolean;
+  limitar_parcelas_pelo_evento?: boolean;
 }
 
 
@@ -143,7 +144,40 @@ export function LeadsManager({ userId }: { userId: string }) {
       },
       products: savedOrcamentoDetalhe.produtos || [], // Full list of products from template
       selectedProducts: savedOrcamentoDetalhe.selectedProdutos || {}, // Map of selected products
-      paymentMethod: savedOrcamentoDetalhe.paymentMethod, // Full payment method object
+      paymentMethod: savedOrcamentoDetalhe.paymentMethod ? {
+        ...savedOrcamentoDetalhe.paymentMethod,
+        max_parcelas: (() => {
+          let max = savedOrcamentoDetalhe.paymentMethod.max_parcelas;
+          if (template?.limitar_parcelas_pelo_evento && lead.data_evento) {
+            const hoje = new Date();
+            const [year, month, day] = lead.data_evento.split('-');
+            const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
+            const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
+            const diffMeses = dataEv.getMonth() - hoje.getMonth();
+            const mesesRestantes = diffAnos * 12 + diffMeses;
+            max = Math.min(max, Math.max(1, mesesRestantes));
+          }
+          return max;
+        })()
+      } : undefined,
+      lastInstallmentDate: (() => {
+        const pMethod = savedOrcamentoDetalhe.paymentMethod;
+        if (!pMethod) return undefined;
+        let maxP = pMethod.max_parcelas;
+        if (template?.limitar_parcelas_pelo_evento && lead.data_evento) {
+          const hoje = new Date();
+          const [year, month, day] = lead.data_evento.split('-');
+          const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
+          const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
+          const diffMeses = dataEv.getMonth() - hoje.getMonth();
+          const mesesRestantes = diffAnos * 12 + diffMeses;
+          maxP = Math.min(maxP, Math.max(1, mesesRestantes));
+        }
+        if (maxP <= 1) return undefined;
+        const date = new Date();
+        date.setMonth(date.getMonth() + maxP);
+        return date.toISOString().split('T')[0];
+      })(),
       priceBreakdown: savedOrcamentoDetalhe.priceBreakdown || { // Use priceBreakdown from details
         subtotal: lead.valor_total,
         ajusteSazonal: 0,
@@ -199,7 +233,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     try {
       const { data, error } = await supabase
         .from('templates')
-        .select('id, texto_whatsapp, nome_template, sistema_sazonal_ativo, sistema_geografico_ativo, ocultar_valores_intermediarios')
+        .select('id, texto_whatsapp, nome_template, sistema_sazonal_ativo, sistema_geografico_ativo, ocultar_valores_intermediarios, limitar_parcelas_pelo_evento')
         .eq('user_id', userId);
 
       if (error) throw error;

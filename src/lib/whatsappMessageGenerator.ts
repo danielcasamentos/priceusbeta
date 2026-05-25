@@ -506,6 +506,8 @@ Vi que você criou um orçamento em nosso site e gostaria de ajudá-lo(a) a fina
 
 💰 *VALOR TOTAL:* {{TOTAL_VALUE}}
 💳 *Forma de Pagamento:* {{PAYMENT_METHOD}}
+{{DOWN_PAYMENT}}
+{{INSTALLMENTS}}
 
 Estou à disposição para esclarecer dúvidas e fechar o orçamento.
 

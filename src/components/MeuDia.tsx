@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
-  Calendar, DollarSign, CheckSquare, Clock, Sun, AlertTriangle,
-  RefreshCw, TrendingUp, Zap, Award, ChevronRight, Filter,
-  Lightbulb, Heart, Plus, ArrowRight, TrendingDown,
+  Calendar, DollarSign, CheckSquare, Clock, Sun,
+  RefreshCw, Zap, ChevronRight, Filter,
+  Plus, ArrowRight, TrendingDown,
 } from 'lucide-react';
 
 interface MeuDiaProps { userId: string; }
