@@ -197,14 +197,14 @@ export function MobileDatePicker({
             disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-400'
           } ${className}`}
         >
-          <Calendar className="w-5 h-5 text-gray-500 flex-shrink-0" />
-          <span className={`flex-1 text-left ${selectedDate ? 'text-gray-900' : 'text-gray-500'}`}>
+          <Calendar className={`w-5 h-5 flex-shrink-0 ${tema ? tema.cores.textoSecundario : 'text-gray-500'}`} />
+          <span className={`flex-1 text-left ${selectedDate ? (tema ? tema.cores.textoPrincipal : 'text-gray-900') : (tema ? tema.cores.textoSecundario : 'text-gray-500')}`}>
             {selectedDate ? formatDisplayDate(selectedDate) : 'Selecione uma data'}
           </span>
         </button>
 
         {description && (
-          <p className="text-xs text-gray-500 mt-2">{description}</p>
+          <p className={`text-xs mt-2 ${tema ? tema.cores.textoSecundario : 'text-gray-500'}`}>{description}</p>
         )}
 
         {showCalendar && !disabled && (
@@ -327,15 +327,17 @@ export function MobileDatePicker({
         disabled={disabled}
         className={`w-full px-4 py-3 text-base border ${tema ? tema.cores.borda : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation ${
           disabled ? 'bg-gray-100 cursor-not-allowed opacity-50' : tema ? tema.cores.bgCard : 'bg-white'
-        } ${className}`}
+        } ${tema ? tema.cores.textoPrincipal : 'text-gray-900'} ${className}`}
         style={{
           WebkitAppearance: 'none',
           MozAppearance: 'textfield',
+          // Force explicit text color so the browser's native date input respects dark themes
+          colorScheme: tema?.cores.textoPrincipal?.includes('white') || tema?.cores.textoPrincipal?.includes('gray-1') || tema?.cores.textoPrincipal?.includes('gray-2') || tema?.cores.textoPrincipal?.includes('gray-3') ? 'dark' : 'light',
         }}
       />
 
       {description && (
-        <p className="text-xs text-gray-500 mt-2">{description}</p>
+        <p className={`text-xs mt-2 ${tema ? tema.cores.textoSecundario : 'text-gray-500'}`}>{description}</p>
       )}
     </div>
   );

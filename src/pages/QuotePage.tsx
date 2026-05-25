@@ -921,16 +921,29 @@ export function QuotePage() {
     if (!forma) return 0;
     let max = forma.max_parcelas;
     if (template?.limitar_parcelas_pelo_evento && dataEvento) {
-      const hoje = new Date();
-      const [year, month, day] = dataEvento.split('-');
-      const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
-      const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
-      const diffMeses = dataEv.getMonth() - hoje.getMonth();
-      const mesesRestantes = diffAnos * 12 + diffMeses;
-      max = Math.min(max, Math.max(1, mesesRestantes));
+      // Cartão de crédito: fotógrafo recebe normalmente, sem risco de calote.
+      // Ignora o limite de data para formas de pagamento com "cartão" ou "credit" no nome.
+      const normalizedNome = (forma.nome || '').toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos
+      const isCartao =
+        normalizedNome.includes('cartao') ||
+        normalizedNome.includes('credit') ||
+        normalizedNome.includes('cartao de credito') ||
+        normalizedNome.includes('parcelado no cartao');
+
+      if (!isCartao) {
+        const hoje = new Date();
+        const [year, month, day] = dataEvento.split('-');
+        const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
+        const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
+        const diffMeses = dataEv.getMonth() - hoje.getMonth();
+        const mesesRestantes = diffAnos * 12 + diffMeses;
+        max = Math.min(max, Math.max(1, mesesRestantes));
+      }
     }
     return max;
   };
+
 
   // ── Validações de formato de Email e Telefone ─────────────────────────
   const validateEmail = (email: string): string => {

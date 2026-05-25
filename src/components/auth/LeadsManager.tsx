@@ -149,13 +149,18 @@ export function LeadsManager({ userId }: { userId: string }) {
         max_parcelas: (() => {
           let max = savedOrcamentoDetalhe.paymentMethod.max_parcelas;
           if (template?.limitar_parcelas_pelo_evento && lead.data_evento) {
-            const hoje = new Date();
-            const [year, month, day] = lead.data_evento.split('-');
-            const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
-            const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
-            const diffMeses = dataEv.getMonth() - hoje.getMonth();
-            const mesesRestantes = diffAnos * 12 + diffMeses;
-            max = Math.min(max, Math.max(1, mesesRestantes));
+            const normalizedNome = (savedOrcamentoDetalhe.paymentMethod.nome || '')
+              .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const isCartao = normalizedNome.includes('cartao') || normalizedNome.includes('credit');
+            if (!isCartao) {
+              const hoje = new Date();
+              const [year, month, day] = lead.data_evento.split('-');
+              const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
+              const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
+              const diffMeses = dataEv.getMonth() - hoje.getMonth();
+              const mesesRestantes = diffAnos * 12 + diffMeses;
+              max = Math.min(max, Math.max(1, mesesRestantes));
+            }
           }
           return max;
         })()
@@ -165,13 +170,18 @@ export function LeadsManager({ userId }: { userId: string }) {
         if (!pMethod) return undefined;
         let maxP = pMethod.max_parcelas;
         if (template?.limitar_parcelas_pelo_evento && lead.data_evento) {
-          const hoje = new Date();
-          const [year, month, day] = lead.data_evento.split('-');
-          const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
-          const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
-          const diffMeses = dataEv.getMonth() - hoje.getMonth();
-          const mesesRestantes = diffAnos * 12 + diffMeses;
-          maxP = Math.min(maxP, Math.max(1, mesesRestantes));
+          const normalizedNome = (pMethod.nome || '')
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const isCartao = normalizedNome.includes('cartao') || normalizedNome.includes('credit');
+          if (!isCartao) {
+            const hoje = new Date();
+            const [year, month, day] = lead.data_evento.split('-');
+            const dataEv = new Date(Number(year), Number(month) - 1, Number(day));
+            const diffAnos = dataEv.getFullYear() - hoje.getFullYear();
+            const diffMeses = dataEv.getMonth() - hoje.getMonth();
+            const mesesRestantes = diffAnos * 12 + diffMeses;
+            maxP = Math.min(maxP, Math.max(1, mesesRestantes));
+          }
         }
         if (maxP <= 1) return undefined;
         const date = new Date();
