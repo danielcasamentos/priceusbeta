@@ -287,8 +287,8 @@ export function QuotePage() {
           selectedProdutos,
           selectedFormaPagamento,
           produtos: produtos,
-          paymentMethod: formasPagamento.find(f => f.id === selectedFormaPagamento),
-          formasPagamento: formasPagamento,
+          paymentMethod: formasPagamentoProcessadas.find(f => f.id === selectedFormaPagamento),
+          formasPagamento: formasPagamentoProcessadas,
           priceBreakdown: getPriceBreakdown(),
           // Campos necessários para o LeadsManager reconstruir a mensagem
           sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
@@ -944,6 +944,12 @@ export function QuotePage() {
     return max;
   };
 
+  const formasPagamentoProcessadas = formasPagamento.map((forma) => ({
+    ...forma,
+    max_parcelas: getDynamicMaxParcelas(forma),
+  }));
+
+
 
   // ── Validações de formato de Email e Telefone ─────────────────────────
   const validateEmail = (email: string): string => {
@@ -1581,7 +1587,7 @@ export function QuotePage() {
       camposExtrasData,
       setCamposExtrasData,
       renderLocationDateFields,
-      formasPagamento,
+      formasPagamento: formasPagamentoProcessadas,
       selectedFormaPagamento,
       setSelectedFormaPagamento,
       firstProductRef,
@@ -1627,7 +1633,7 @@ export function QuotePage() {
       setCamposExtrasData,
       renderLocationDateFields,
       // Formas de pagamento (obrigatório para validação correta)
-      formasPagamento,
+      formasPagamento: formasPagamentoProcessadas,
       selectedFormaPagamento,
       setSelectedFormaPagamento,
       // Refs e dados para o FloatingTotalPanel padrão
@@ -2132,14 +2138,14 @@ export function QuotePage() {
               </div>
             </div>
 
-            {formasPagamento.length > 0 && fieldsValidation.canUsePaymentMethods && (
+            {formasPagamentoProcessadas.length > 0 && fieldsValidation.canUsePaymentMethods && (
               <div className="border-t pt-6" data-pagamento-section>
                 <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} mb-4`}>
                   Forma de Pagamento
                 </h3>
 
                 <div className="space-y-3">
-                  {formasPagamento.map((forma) => (
+                  {formasPagamentoProcessadas.map((forma) => (
                     <label
                       key={forma.id}
                       className={`flex items-start gap-3 p-4 sm:p-5 border rounded-lg cursor-pointer transition-all touch-manipulation ${
@@ -2180,7 +2186,7 @@ export function QuotePage() {
                 </div>
 
                 {selectedFormaPagamento && (() => {
-                  const formaPagamento = formasPagamento.find((f) => f.id === selectedFormaPagamento);
+                  const formaPagamento = formasPagamentoProcessadas.find((f) => f.id === selectedFormaPagamento);
                   if (!formaPagamento) return null;
 
                   const total = calculateTotal();
@@ -2396,7 +2402,7 @@ export function QuotePage() {
                           </p>
                         )}
                         {selectedFormaPagamento && (() => {
-                          const formaPagamento = formasPagamento.find((f) => f.id === selectedFormaPagamento);
+                          const formaPagamento = formasPagamentoProcessadas.find((f) => f.id === selectedFormaPagamento);
                           if (!formaPagamento) return null;
 
                           const total = calculateTotal();
