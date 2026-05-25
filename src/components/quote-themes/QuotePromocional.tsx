@@ -42,7 +42,21 @@ export function QuotePromocional(props: QuotePromocionalProps) {
   } = props;
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: '#fff7f0', color: '#1a1a1a', minHeight: '100vh' }}>
+    <div
+      className="promo-root"
+      style={{
+        fontFamily: "'Inter', sans-serif",
+        background: '#fff7f0',
+        // Diagonal stripe pattern aplicado diretamente — sem elemento extra, sem z-index conflict
+        backgroundImage: [
+          'repeating-linear-gradient(-45deg, rgba(234,88,12,.045) 0px, rgba(234,88,12,.045) 1px, transparent 1px, transparent 14px)',
+          'repeating-linear-gradient(45deg, rgba(251,191,36,.03) 0px, rgba(251,191,36,.03) 1px, transparent 1px, transparent 28px)',
+        ].join(', '),
+        backgroundSize: '28px 28px, 56px 56px',
+        color: '#1a1a1a',
+        minHeight: '100vh',
+      }}
+    >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         @keyframes promo-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(220,38,38,.4); } 70% { box-shadow:0 0 0 12px rgba(220,38,38,0); } }
@@ -93,7 +107,17 @@ export function QuotePromocional(props: QuotePromocionalProps) {
         .promo-urgency-badge {
           animation: promo-badge 2s ease-in-out infinite;
         }
+        @keyframes promo-bg-drift {
+          0%   { background-position: 0 0, 0 0; }
+          100% { background-position: 56px 56px, -56px 56px; }
+        }
+        /* Padrão de fundo da página promocional — aplicado na raiz */
+        .promo-root {
+          animation: promo-bg-drift 14s linear infinite;
+        }
       `}</style>
+
+      {/* Não há div de overlay — o fundo está inline na .promo-root abaixo */}
 
       {/* ── NAV ── */}
       <nav style={{

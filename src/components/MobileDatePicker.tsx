@@ -51,6 +51,14 @@ export function MobileDatePicker({
     const browserInfo = detectBrowser() as any;
     console.log('[MobileDatePicker] Browser detectado:', browserInfo);
 
+    // Se houver função de bloqueio de datas, SEMPRE usa o calendário customizado.
+    // O input nativo não suporta desabilitar datas individuais.
+    if (disabledDate) {
+      console.log('[MobileDatePicker] disabledDate detectado → forçando calendário customizado');
+      setUseFallback(true);
+      return;
+    }
+
     // Usar fallback para navegadores in-app problemáticos
     const needsFallback =
       browserInfo.isInAppBrowser ||
@@ -62,7 +70,7 @@ export function MobileDatePicker({
     if (needsFallback) {
       console.log('[MobileDatePicker] Usando fallback de calendário customizado');
     }
-  }, []);
+  }, [disabledDate]);
 
   // Atualizar data interna quando value externo mudar
   useEffect(() => {
@@ -126,9 +134,14 @@ export function MobileDatePicker({
   };
 
   const isDateDisabled = (date: Date): boolean => {
-    if (!min) return false;
-    const minDate = new Date(min + 'T00:00:00');
-    return date < minDate;
+    // Verificar data mínima
+    if (min) {
+      const minDate = new Date(min + 'T00:00:00');
+      if (date < minDate) return true;
+    }
+    // Verificar regra customizada (ex: dias da semana bloqueados)
+    if (disabledDate && disabledDate(date)) return true;
+    return false;
   };
 
   const isToday = (date: Date): boolean => {
