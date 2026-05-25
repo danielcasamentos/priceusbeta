@@ -30,6 +30,7 @@ interface Template {
   ocultar_data_criacao?: boolean;
   slug_template: string;
   created_at: string;
+  tema?: string;
 }
 
 interface Review {
@@ -86,7 +87,7 @@ export function PublicProfilePage() {
 
       const { data: templatesData } = await supabase
         .from('templates')
-        .select('id, nome_template, titulo_template, slug_template, created_at, ordem_exibicao, descricao_perfil, ocultar_data_criacao')
+        .select('id, nome_template, titulo_template, slug_template, created_at, ordem_exibicao, descricao_perfil, ocultar_data_criacao, tema')
         .eq('user_id', profileData.id)
         .eq('exibir_no_perfil', true)
         .not('slug_template', 'is', null)

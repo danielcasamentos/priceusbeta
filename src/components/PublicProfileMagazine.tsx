@@ -23,6 +23,7 @@ interface Template {
   descricao_perfil?: string;
   ocultar_data_criacao?: boolean;
   created_at: string;
+  tema?: string;
 }
 
 interface Review {
@@ -162,34 +163,48 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
               <div className="h-1 w-32 bg-amber-600 mx-auto"></div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {templates.map((template) => (
-                <Link
-                  key={template.id}
-                  to={`/${profile.slug_usuario}/${template.slug_template}`}
-                  className="bg-white rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group border-4 border-amber-600 hover:border-amber-700"
-                >
-                  <div className="p-6 sm:p-8">
-                    <h3 className="text-xl sm:text-2xl font-black text-amber-900 mb-1 group-hover:text-amber-700 transition-colors uppercase">
-                      {template.nome_template}
-                    </h3>
-                    {template.titulo_template && (
-                       <p className="text-sm font-bold text-amber-700 mb-3 uppercase tracking-wider">{template.titulo_template}</p>
+              {templates.map((template) => {
+                const isPromo = template.tema === 'promocional';
+                return (
+                  <Link
+                    key={template.id}
+                    to={`/${profile.slug_usuario}/${template.slug_template}`}
+                    className={`bg-white rounded-3xl shadow-2xl hover:shadow-3xl transition-all overflow-hidden group border-4 relative ${
+                      isPromo 
+                        ? 'border-red-500 hover:border-orange-500 scale-[1.02] md:scale-105' 
+                        : 'border-amber-600 hover:border-amber-700'
+                    }`}
+                  >
+                    {isPromo && (
+                      <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full animate-pulse shadow-md tracking-wider flex items-center gap-1 z-10 font-sans">
+                        🔥 OFERTA
+                      </div>
                     )}
-                    {template.descricao_perfil && (
-                       <p className="text-sm text-gray-700 mb-4 line-clamp-3 leading-relaxed italic">
-                         {template.descricao_perfil}
-                       </p>
-                    )}
-                    <div className="flex items-center justify-between text-sm text-amber-800 font-bold mt-auto pt-2">
-                      {!template.ocultar_data_criacao && (
-                        <span className="text-xs text-amber-400 font-normal">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
+                    <div className="p-6 sm:p-8">
+                      <h3 className={`text-xl sm:text-2xl font-black mb-1 transition-colors uppercase ${
+                        isPromo ? 'text-red-600 group-hover:text-orange-600' : 'text-amber-900 group-hover:text-amber-700'
+                      }`}>
+                        {template.nome_template}
+                      </h3>
+                      {template.titulo_template && (
+                         <p className={`text-sm font-bold mb-3 uppercase tracking-wider ${isPromo ? 'text-orange-600' : 'text-amber-700'}`}>{template.titulo_template}</p>
                       )}
-                      <span className="flex items-center gap-1 group-hover:text-amber-900 transition-colors uppercase ml-auto">Acessar Portfólio <ExternalLink className="w-4 h-4 ml-1" /></span>
+                      {template.descricao_perfil && (
+                         <p className="text-sm text-gray-700 mb-4 line-clamp-3 leading-relaxed italic">
+                           {template.descricao_perfil}
+                         </p>
+                      )}
+                      <div className="flex items-center justify-between text-sm font-bold mt-auto pt-2 text-amber-800">
+                        {!template.ocultar_data_criacao && (
+                          <span className="text-xs text-amber-400 font-normal">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
+                        )}
+                        <span className={`flex items-center gap-1 transition-colors uppercase ml-auto ${isPromo ? 'group-hover:text-orange-600 text-red-650' : 'group-hover:text-amber-900'}`}>Acessar Portfólio <ExternalLink className="w-4 h-4 ml-1" /></span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-gradient-to-r from-amber-600 to-orange-600 h-2"></div>
-                </Link>
-              ))}
+                    <div className={`h-2 ${isPromo ? 'bg-gradient-to-r from-red-600 to-orange-500' : 'bg-gradient-to-r from-amber-600 to-orange-600'}`}></div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}

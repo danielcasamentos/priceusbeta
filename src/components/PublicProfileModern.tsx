@@ -23,6 +23,7 @@ interface Template {
   descricao_perfil?: string;
   ocultar_data_criacao?: boolean;
   created_at: string;
+  tema?: string;
 }
 
 interface Review {
@@ -153,18 +154,33 @@ export function PublicProfileModern({ profile, templates, reviews, averageRating
               Orçamentos Disponíveis
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {templates.map((template) => (
+              {templates.map((template) => {
+                const isPromo = template.tema === 'promocional';
+                return (
                 <Link
                   key={template.id}
                   to={`/${profile.slug_usuario}/${template.slug_template}`}
-                  className="bg-white rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group border-4 border-cyan-200 hover:border-purple-300"
+                  className={`rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group ${
+                    isPromo
+                      ? 'border-4 border-red-400 hover:border-red-500 bg-white'
+                      : 'border-4 border-cyan-200 hover:border-purple-300 bg-white'
+                  }`}
                 >
+                  {isPromo && (
+                    <div style={{ background: 'linear-gradient(90deg, #dc2626, #ea580c, #f59e0b)', padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <span style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>🔥 Oferta Especial — Condições Exclusivas</span>
+                    </div>
+                  )}
                   <div className="p-6 sm:p-8">
-                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 group-hover:bg-gradient-to-r group-hover:from-cyan-600 group-hover:to-purple-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
+                    <h3 className={`text-xl sm:text-2xl font-bold mb-1 transition-all ${
+                      isPromo
+                        ? 'text-red-700 group-hover:text-red-600'
+                        : 'text-gray-900 group-hover:bg-gradient-to-r group-hover:from-cyan-600 group-hover:to-purple-600 group-hover:bg-clip-text group-hover:text-transparent'
+                    }`}>
                       {template.nome_template}
                     </h3>
                     {template.titulo_template && (
-                       <p className="text-sm font-semibold text-cyan-600 mb-3">{template.titulo_template}</p>
+                       <p className={`text-sm font-semibold mb-3 ${isPromo ? 'text-orange-500' : 'text-cyan-600'}`}>{template.titulo_template}</p>
                     )}
                     {template.descricao_perfil && (
                        <p className="text-sm text-gray-600 mb-4 line-clamp-3 leading-relaxed">
@@ -175,12 +191,19 @@ export function PublicProfileModern({ profile, templates, reviews, averageRating
                       {!template.ocultar_data_criacao && (
                         <span className="text-xs text-gray-400">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
                       )}
-                      <span className="flex items-center gap-1 group-hover:text-purple-600 transition-colors ml-auto">Visualizar Orçamento <ExternalLink className="w-4 h-4 ml-1" /></span>
+                      <span className={`flex items-center gap-1 ml-auto transition-colors ${
+                        isPromo ? 'text-red-600 group-hover:text-red-700' : 'group-hover:text-purple-600'
+                      }`}>{isPromo ? '🔥 Ver Oferta' : 'Visualizar Orçamento'} <ExternalLink className="w-4 h-4 ml-1" /></span>
                     </div>
                   </div>
-                  <div className="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600 h-2"></div>
+                  <div className={`h-2 ${
+                    isPromo
+                      ? 'bg-gradient-to-r from-red-500 via-orange-500 to-amber-400'
+                      : 'bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600'
+                  }`}></div>
                 </Link>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

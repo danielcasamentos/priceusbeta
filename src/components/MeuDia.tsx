@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import {
   Calendar, DollarSign, CheckSquare, Clock, Sun, AlertTriangle,
   RefreshCw, TrendingUp, Zap, Award, ChevronRight, Filter,
-  Lightbulb, Heart,
+  Lightbulb, Heart, Plus, ArrowRight, TrendingDown,
 } from 'lucide-react';
 
 interface MeuDiaProps { userId: string; }
@@ -319,400 +319,501 @@ export function MeuDia({ userId }: MeuDiaProps) {
   ];
 
   return (
-    <div className="space-y-6">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl shadow-md shadow-amber-200/40 dark:shadow-amber-900/20">
+    <div className="space-y-8 pb-12">
+      {/* ── Top Bar / Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/40 dark:bg-black/10 backdrop-blur-md p-4 rounded-2xl border border-gray-200/50 dark:border-white/5">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 rounded-xl shadow-lg shadow-orange-500/20 dark:shadow-orange-900/30 transform hover:scale-105 transition-all">
             <Sun className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Meu Dia</h2>
-            <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{range.label}</p>
+            <h2 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Meu Dia</h2>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{range.label}</p>
           </div>
         </div>
-        <button onClick={load} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors">
-          <RefreshCw className="w-4 h-4" /> Atualizar
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={load} 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/5 rounded-xl hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.03)] hover:shadow-sm active:scale-95 transition-all"
+          >
+            <RefreshCw className="w-4 h-4 text-gray-500" />
+            Atualizar
+          </button>
+        </div>
       </div>
 
-      {/* ── Filtros de Período ──────────────────────────────────────────────── */}
-      <div className="flex gap-2 flex-wrap">
-        {periodos.map(p => (
-          <button key={p.id} onClick={() => setPeriodo(p.id)}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${periodo === p.id ? 'bg-amber-500 text-white shadow-md' : 'bg-white dark:bg-[#0a1628] text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-[rgba(255,255,255,0.08)] hover:border-amber-300'}`}>
-            {p.label}
-          </button>
-        ))}
+      {/* ── Filtros de Período ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-2 flex-wrap bg-gray-100/80 dark:bg-[#07101f] p-1.5 rounded-2xl border border-gray-250/20">
+          {periodos.map(p => (
+            <button 
+              key={p.id} 
+              onClick={() => setPeriodo(p.id)}
+              className={`px-4.5 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-wider ${
+                periodo === p.id 
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md' 
+                  : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-white/50 dark:hover:bg-white/5'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        
         {periodo === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-lg text-sm" />
-            <span className="text-gray-400 text-sm">até</span>
-            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-lg text-sm" />
+          <div className="flex items-center gap-2 flex-wrap bg-white dark:bg-[#0a1628] p-2 rounded-2xl border border-gray-250/25">
+            <input 
+              type="date" 
+              value={customStart} 
+              onChange={e => setCustomStart(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 dark:border-white/5 dark:bg-[#07101f] dark:text-white rounded-xl text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none" 
+            />
+            <span className="text-gray-400 text-xs font-bold uppercase">até</span>
+            <input 
+              type="date" 
+              value={customEnd} 
+              onChange={e => setCustomEnd(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 dark:border-white/5 dark:bg-[#07101f] dark:text-white rounded-xl text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none" 
+            />
           </div>
         )}
       </div>
 
-      {/* ── Painel de Produtividade (paleta suave) ─────────────────────────── */}
-      <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)]">
-          <TrendingUp className="w-4 h-4 text-indigo-500" />
-          <h3 className="font-bold text-gray-900 dark:text-white text-sm">Produtividade</h3>
-          <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">Tarefas concluídas</span>
-        </div>
-        <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-[rgba(255,255,255,0.05)]">
-          {[
-            { label: 'Hoje', value: produtividade.hoje, icon: Zap, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/10' },
-            { label: 'Esta semana', value: produtividade.semana, icon: Award, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/10' },
-            { label: 'Total histórico', value: produtividade.total, icon: CheckSquare, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/10' },
-          ].map(stat => (
-            <div key={stat.label} className="flex flex-col items-center py-5 px-3 gap-1">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-1 ${stat.bg}`}>
-                <stat.icon className={`w-4 h-4 ${stat.color}`} />
-              </div>
-              <p className={`text-3xl font-black leading-none ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center leading-tight mt-0.5">{stat.label}</p>
+      {/* ── Banner de Boas-Vindas e Saúde da Empresa ── */}
+      <div className="bg-gradient-to-r from-gray-900 via-slate-900 to-zinc-900 text-white rounded-3xl p-6 sm:p-8 border border-white/5 shadow-2xl relative overflow-hidden">
+        {/* Decorative blur balls */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-4 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-bold tracking-wider text-orange-400 uppercase">
+              <Zap className="w-3 h-3 text-orange-400 animate-pulse" />
+              Painel de Desempenho
             </div>
-          ))}
+            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
+              Como está o seu negócio hoje?
+            </h3>
+            
+            <div className="space-y-2 mt-4">
+              {insights.msgs.map((m, i) => (
+                <div key={i} className="flex items-start gap-3 bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/5">
+                  <span className="text-lg leading-none shrink-0">{m.emoji}</span>
+                  <p className="text-sm text-gray-300 font-medium leading-relaxed">{m.texto}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Health index circle */}
+          <div className="shrink-0 flex flex-col items-center bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-6 text-center w-full md:w-56">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Índice de Saúde</p>
+            <div className="relative w-28 h-28 flex items-center justify-center">
+              {/* Outer Glow Ring */}
+              <div className={`absolute inset-0 rounded-full blur-lg opacity-25 ${
+                insights.score >= 80 ? 'bg-emerald-500' : insights.score >= 50 ? 'bg-amber-500' : 'bg-red-500'
+              }`}></div>
+              
+              {/* SVG circular track */}
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="56" cy="56" r="48" className="stroke-white/10 fill-none" strokeWidth="8" />
+                <circle 
+                  cx="56" 
+                  cy="56" 
+                  r="48" 
+                  className={`fill-none transition-all duration-1000 ${
+                    insights.score >= 80 ? 'stroke-emerald-500' : insights.score >= 50 ? 'stroke-amber-500' : 'stroke-red-500'
+                  }`} 
+                  strokeWidth="8" 
+                  strokeDasharray={2 * Math.PI * 48} 
+                  strokeDashoffset={2 * Math.PI * 48 * (1 - insights.score / 100)} 
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center">
+                <span className="text-3xl font-black tracking-tight">{insights.score}%</span>
+                <span className="text-[10px] font-bold uppercase text-gray-400 mt-0.5">{insights.saudeLabel}</span>
+              </div>
+            </div>
+            
+            <div className="w-full mt-4 flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 font-bold uppercase">Conclusões</span>
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-orange-500 rounded-full transition-all duration-700" 
+                  style={{ width: `${insights.taxaConclusao}%` }}
+                ></div>
+              </div>
+              <span className="text-xs font-black">{insights.taxaConclusao}%</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── Cards de Resumo ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* ── Ações Rápidas (CRM Core) ── */}
+      <div className="bg-white dark:bg-[#0a1628] rounded-3xl p-6 border border-gray-200/50 dark:border-white/5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-orange-500" />
+          Ações Rápidas do CRM
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <button 
+            onClick={() => navigate('/dashboard/leads?new=true')}
+            className="flex items-center justify-between p-4 bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl hover:shadow-lg hover:shadow-indigo-500/20 active:scale-98 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-white/10 rounded-xl">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Novo Lead</p>
+                <p className="text-[10px] text-white/70 font-medium">Cadastrar contato comercial</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" />
+          </button>
+
+          <button 
+            onClick={() => navigate('/dashboard/empresa-transacoes?new=true')}
+            className="flex items-center justify-between p-4 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl hover:shadow-lg hover:shadow-emerald-500/20 active:scale-98 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-white/10 rounded-xl">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Nova Transação</p>
+                <p className="text-[10px] text-white/70 font-medium">Lançar receita ou despesa</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" />
+          </button>
+
+          <button 
+            onClick={() => navigate('/dashboard/agenda?new=true')}
+            className="flex items-center justify-between p-4 bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-2xl hover:shadow-lg hover:shadow-orange-500/20 active:scale-98 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-white/10 rounded-xl">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Novo Compromisso</p>
+                <p className="text-[10px] text-white/70 font-medium">Agendar ensaio ou reunião</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── KPIs de Negócio ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Calendar, label: 'Eventos', value: String(eventos.length), color: 'blue', sub: `${eventos.filter(e => e.status === 'confirmado').length} confirmados`, route: '/dashboard/agenda' },
-          { icon: DollarSign, label: 'Recebido', value: fmtCurrency(receitasPagas), color: 'green', sub: `${fmtCurrency(receitasPendentes)} pendente`, route: '/dashboard/empresa-transacoes' },
-          { icon: DollarSign, label: 'Despesas', value: fmtCurrency(despesas), color: 'red', sub: `${transacoes.filter(t => t.tipo === 'despesa').length} lançamentos`, route: '/dashboard/empresa-transacoes' },
-          { icon: CheckSquare, label: 'Pendentes', value: String(tarefas.length), color: tarefasAtrasadas.length > 0 ? 'red' : 'purple', sub: tarefasAtrasadas.length > 0 ? `${tarefasAtrasadas.length} atrasadas!` : 'em produção', route: '/dashboard/leads' },
+          { icon: Calendar, label: 'Eventos', value: String(eventos.length), color: 'indigo', sub: `${eventos.filter(e => e.status === 'confirmado').length} confirmados`, bg: 'from-indigo-500/10 to-blue-500/5', iconBg: 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30', route: '/dashboard/agenda' },
+          { icon: DollarSign, label: 'Recebido', value: fmtCurrency(receitasPagas), color: 'emerald', sub: `${fmtCurrency(receitasPendentes)} pendente`, bg: 'from-emerald-500/10 to-teal-500/5', iconBg: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30', route: '/dashboard/empresa-transacoes' },
+          { icon: TrendingDown, label: 'Despesas', value: fmtCurrency(despesas), color: 'red', sub: `${transacoes.filter(t => t.tipo === 'despesa').length} lançamentos`, bg: 'from-red-500/10 to-rose-500/5', iconBg: 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30', route: '/dashboard/empresa-transacoes' },
+          { icon: CheckSquare, label: 'Pendentes', value: String(tarefas.length), color: tarefasAtrasadas.length > 0 ? 'red' : 'amber', sub: tarefasAtrasadas.length > 0 ? `${tarefasAtrasadas.length} atrasadas!` : 'em produção', bg: 'from-amber-500/10 to-yellow-500/5', iconBg: 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30', route: '/dashboard/leads' },
         ].map(c => (
           <div
             key={c.label}
             onClick={() => navigate(c.route)}
-            className="bg-white dark:bg-[#0a1628] rounded-2xl p-4 border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
+            className="bg-white dark:bg-[#0a1628] rounded-3xl p-5 border border-gray-200/50 dark:border-white/5 shadow-sm cursor-pointer hover:-translate-y-1 hover:shadow-md active:scale-98 transition-all relative overflow-hidden"
           >
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 bg-${c.color}-100 dark:bg-${c.color}-900/20`}>
-              <c.icon className={`w-5 h-5 text-${c.color}-600 dark:text-${c.color}-400`} />
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-20 pointer-events-none rounded-full blur-2xl"></div>
+            
+            <div className="flex items-center justify-between mb-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.iconBg}`}>
+                <c.icon className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Painel</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">{c.value}</p>
-            <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-0.5">{c.label}</p>
-            <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,0.3)] mt-1">{c.sub}</p>
+            
+            <p className="text-2xl font-black text-gray-900 dark:text-white leading-tight tracking-tight">{c.value}</p>
+            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-1">{c.label}</p>
+            <p className={`text-[10px] font-semibold mt-2.5 ${c.color === 'red' ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>{c.sub}</p>
           </div>
         ))}
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-amber-500" />
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-orange-500" />
         </div>
       ) : (
-        <div className="space-y-6">
-
-          {/* ── Insights & Saúde da Empresa ──────────────────────────────────── */}
-          <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)]">
-              <Lightbulb className="w-4 h-4 text-amber-400" />
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm">Insights & Saúde</h3>
-              {/* Badge de saúde */}
-              <span className={`ml-auto flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${insights.saudeBg} ${insights.saudeColor}`}>
-                <Heart className="w-3 h-3" />
-                {insights.saudeEmoji} {insights.saudeLabel}
-              </span>
-            </div>
-
-            <div className="px-5 py-4 space-y-2.5">
-              {/* Barra de taxa de conclusão */}
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Taxa de conclusão</span>
-                <div className="flex-1 h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${insights.taxaConclusao >= 70 ? 'bg-emerald-500' : insights.taxaConclusao >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
-                    style={{ width: `${insights.taxaConclusao}%` }}
-                  />
-                </div>
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 shrink-0">{insights.taxaConclusao}%</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* ── COLUNA ESQUERDA: Produção e Foco (7 cols) ── */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* Urgência Filter Tabs */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Filter className="w-4 h-4 text-orange-500" />
+                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Tarefas por Prazo</h3>
               </div>
-
-              {/* Mensagens de insight */}
-              {insights.msgs.map((m, i) => (
-                <div key={i} className="flex items-start gap-2.5 text-sm text-gray-600 dark:text-gray-300">
-                  <span className="text-base leading-none mt-0.5 shrink-0">{m.emoji}</span>
-                  <p className="leading-snug">{m.texto}</p>
-                </div>
-              ))}
-
-              {/* Mini analytics financeiro */}
-              {(receitaMes > 0 || receitaAno > 0) && (
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[rgba(255,255,255,0.05)] grid grid-cols-2 gap-3">
-                  <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-xl px-3 py-2">
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">Receita do mês</p>
-                    <p className="text-sm font-black text-emerald-700 dark:text-emerald-300 mt-0.5">{fmtCurrency(receitaMes)}</p>
-                  </div>
-                  <div className="bg-indigo-50 dark:bg-indigo-900/10 rounded-xl px-3 py-2">
-                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">Receita do ano</p>
-                    <p className="text-sm font-black text-indigo-700 dark:text-indigo-300 mt-0.5">{fmtCurrency(receitaAno)}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Mini Painel de Cronograma ────────────────────────────────────── */}
-          <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)]">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm">Tarefas por Prazo</h3>
-              {filtroUrgencia !== 'todos' && (
-                <button onClick={() => setFiltroUrgencia('todos')} className="ml-auto text-xs text-amber-600 dark:text-amber-400 hover:underline font-semibold">
-                  Ver todas
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4">
-              {filtros.map(f => (
-                <button key={f.id}
-                  onClick={() => setFiltroUrgencia(prev => prev === f.id ? 'todos' : f.id)}
-                  className={`rounded-xl border p-3 text-center transition-all hover:scale-105 active:scale-95 ${f.bg} ${filtroUrgencia === f.id ? `ring-2 ring-offset-1 ${f.active} scale-105 shadow-sm` : ''}`}>
-                  <p className={`text-2xl font-black leading-none ${f.color}`}>{f.count}</p>
-                  <p className={`text-xs font-semibold mt-1 ${f.color}`}>{f.label}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* ── Eventos ──────────────────────────────────────────────────── */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)]">
-                <Calendar className="w-5 h-5 text-blue-600" />
-                <h3 className="font-bold text-gray-900 dark:text-white">Eventos ({eventos.length})</h3>
+              
+              <div className="flex flex-wrap gap-2">
+                {filtros.map(f => (
+                  <button 
+                    key={f.id}
+                    onClick={() => setFiltroUrgencia(prev => prev === f.id ? 'todos' : f.id)}
+                    className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-bold tracking-wide transition-all hover:scale-102 active:scale-95 ${
+                      filtroUrgencia === f.id 
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-sm' 
+                        : 'bg-gray-50 dark:bg-[#07101f] text-gray-600 dark:text-gray-400 border-gray-200/50 dark:border-white/5'
+                    }`}
+                  >
+                    <span>{f.label}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      filtroUrgencia === f.id 
+                        ? 'bg-white text-orange-600' 
+                        : 'bg-gray-200/60 dark:bg-white/10 text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {f.count}
+                    </span>
+                  </button>
+                ))}
               </div>
-              {eventos.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 text-sm">Nenhum evento no período</div>
-              ) : (
-                <div className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)] max-h-72 overflow-y-auto">
-                  {eventos.map(ev => (
-                    <button
-                      key={ev.id}
-                      onClick={() => navigate('/dashboard/agenda')}
-                      className="w-full text-left flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] cursor-pointer transition-all group"
-                    >
-                      <div className="text-center shrink-0 w-10">
-                        <p className="text-lg font-black text-blue-600">{new Date(ev.data_evento + 'T12:00:00').getDate()}</p>
-                        <p className="text-xs text-gray-400 -mt-1">{new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short' })}</p>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{ev.cliente_nome}</p>
-                        <p className="text-xs text-gray-500 truncate">{ev.tipo_evento}{ev.cidade ? ` • ${ev.cidade}` : ''}</p>
-                      </div>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusColor(ev.status)}`}>{ev.status}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 transition-colors shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* ── Tarefas Pendentes ─────────────────────────────────────────── */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)]">
-                <CheckSquare className="w-5 h-5 text-violet-600" />
-                <h3 className="font-bold text-gray-900 dark:text-white">
-                  Tarefas Pendentes ({tarefasFiltradas.length}{filtroUrgencia !== 'todos' ? ` / ${tarefas.length}` : ''})
-                </h3>
-                {tarefasAtrasadas.length > 0 && (
-                  <span className="ml-auto flex items-center gap-1 text-xs text-red-600 font-semibold">
-                    <AlertTriangle className="w-3.5 h-3.5" />{tarefasAtrasadas.length}
+            {/* List of Tasks */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-150 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="w-5 h-5 text-indigo-500" />
+                  <h3 className="font-bold text-gray-900 dark:text-white">Foco na Produção</h3>
+                </div>
+                {tarefasFiltradas.length > 0 && (
+                  <span className="text-xs font-bold text-gray-500 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full">
+                    {tarefasFiltradas.length} pendentes
                   </span>
                 )}
               </div>
+
               {tarefasFiltradas.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 text-sm">
-                  {filtroUrgencia !== 'todos' ? 'Nenhuma nesta categoria 🎉' : 'Sem tarefas pendentes 🎉'}
+                <div className="py-16 text-center text-gray-400 text-sm flex flex-col items-center justify-center gap-3">
+                  <CheckSquare className="w-10 h-10 text-gray-300 dark:text-gray-700" />
+                  <p className="font-medium">Nenhuma tarefa pendente nesta categoria 🎉</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)] max-h-96 overflow-y-auto">
+                <div className="divide-y divide-gray-150 dark:divide-white/5 max-h-[500px] overflow-y-auto">
                   {tarefasFiltradas.map(t => {
                     const pi = prazoInfo(t.prazo);
                     const isHoje = pi.urgencia === 'hoje';
                     const isAtrasada = pi.urgencia === 'atrasadas';
+                    
                     return (
-                      <button
+                      <div
                         key={`${t.leadId}-${t.stepId}`}
                         onClick={() => navigate(`/dashboard/leads?tab=producao&leadId=${t.leadId}&stepId=${t.stepId}`)}
-                        className={`w-full text-left flex items-center gap-3 px-4 py-3 transition-all group ${
-                          isHoje
-                            ? 'bg-gradient-to-r from-amber-50 to-amber-50/30 dark:from-amber-950/15 dark:to-transparent border-l-4 border-amber-400 dark:border-amber-500'
-                            : isAtrasada
-                            ? 'bg-red-50/50 dark:bg-[rgba(239,68,68,0.03)] border-l-4 border-red-300 dark:border-red-700'
-                            : 'hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)]'
-                        }`}>
-                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${pi.dotColor}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,0.35)] truncate">{t.leadNome}</p>
-                          <p className={`font-semibold text-sm truncate ${isHoje ? 'text-amber-800 dark:text-amber-200' : 'text-gray-900 dark:text-white'}`}>
-                            {t.stepNome}
-                          </p>
-                          {isHoje && <span className="text-xs font-bold text-amber-600 dark:text-amber-400">⚠️ Vence hoje</span>}
+                        className={`group w-full flex items-center justify-between gap-4 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all border-l-4 ${
+                          isHoje 
+                            ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-950/5' 
+                            : isAtrasada 
+                            ? 'border-red-500 bg-red-50/10 dark:bg-red-950/2' 
+                            : 'border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${pi.dotColor}`} />
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider truncate mb-0.5">{t.leadNome}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate group-hover:text-orange-500 transition-colors">
+                              {t.stepNome}
+                            </p>
+                          </div>
                         </div>
-                        <div className={`text-xs shrink-0 font-semibold flex items-center gap-1 ${pi.colorClass}`}>
-                          <Clock className="w-3 h-3" />{pi.texto}
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                            isHoje 
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400' 
+                              : isAtrasada 
+                              ? 'bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400' 
+                              : 'bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-400'
+                          }`}>
+                            <Clock className="w-3 h-3" />
+                            {pi.texto}
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform" />
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 transition-colors shrink-0" />
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
               )}
             </div>
 
-            {/* ── Financeiro ───────────────────────────────────────────────── */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] shadow-sm overflow-hidden lg:col-span-2">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)]">
-                <DollarSign className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-gray-900 dark:text-white">Movimentações Financeiras ({transacoes.length})</h3>
-              </div>
-              {transacoes.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 text-sm">Nenhuma transação no período</div>
-              ) : (
-                <div className="max-h-64 overflow-y-auto">
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] uppercase">
-                        <tr>
-                          <th className="px-5 py-2 text-left">Descrição</th>
-                          <th className="px-5 py-2 text-left">Data</th>
-                          <th className="px-5 py-2 text-right">Valor</th>
-                          <th className="px-5 py-2 text-left">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-[rgba(255,255,255,0.03)]">
-                        {transacoes.map(t => (
-                          <tr key={t.id} onClick={() => navigate('/dashboard/empresa-transacoes')}
-                            className="hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.02)] cursor-pointer transition-colors">
-                            <td className="px-5 py-2.5 text-gray-800 dark:text-white font-medium max-w-[200px] truncate">{t.descricao}</td>
-                            <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{fmt(t.data)}</td>
-                            <td className={`px-5 py-2.5 font-bold text-right whitespace-nowrap ${t.tipo === 'receita' ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {t.tipo === 'despesa' ? '- ' : '+ '}{fmtCurrency(t.valor)}
-                            </td>
-                            <td className="px-5 py-2.5">
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor(t.status)}`}>{t.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="md:hidden flex flex-col p-4 gap-3">
-                    {transacoes.map(t => (
-                      <div key={t.id} onClick={() => navigate('/dashboard/empresa-transacoes')}
-                        className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] cursor-pointer">
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="font-semibold text-gray-900 dark:text-white truncate">{t.descricao}</p>
-                          <p className={`font-bold shrink-0 ml-2 ${t.tipo === 'receita' ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {t.tipo === 'despesa' ? '- ' : '+ '}{fmtCurrency(t.valor)}
-                          </p>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-500">{fmt(t.data)}</span>
-                          <span className={`font-semibold px-2 py-0.5 rounded-full ${statusColor(t.status)}`}>{t.status}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Previsão Amanhã ─────────────────────────────────────────────────── */}
-      {!loading && (
-        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-[rgba(255,255,255,0.05)]">
-          <div className="flex items-center gap-2 mb-6">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">O que temos para amanhã?</h3>
-            <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-xs font-semibold px-2.5 py-1 rounded-full">Preview</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Trabalhos */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <CheckSquare className="w-5 h-5 text-violet-600" />
-                <h4 className="font-semibold text-gray-900 dark:text-white">Trabalhos</h4>
-                <span className="ml-auto text-sm font-bold text-gray-500 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded-full">{tarefasAmanha.length}</span>
+          {/* ── COLUNA DIREITA: Agenda, Caixa e Preview Amanhã (5 cols) ── */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* O Que Temos Para Amanhã Preview Card */}
+            <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-zinc-950 text-white rounded-3xl p-6 border border-white/5 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
+              
+              <div className="flex items-center gap-2 mb-5">
+                <h3 className="text-base font-black uppercase tracking-wider text-white">Amanhã</h3>
+                <span className="bg-indigo-500/35 border border-indigo-500/30 text-indigo-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">Preview</span>
               </div>
-              {tarefasAmanha.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Nenhum prazo para amanhã</p>
-              ) : (
-                <div className="space-y-2">
-                  {tarefasAmanha.map(t => (
-                    <button key={`${t.leadId}-${t.stepId}`}
-                      onClick={() => navigate(`/dashboard/leads?tab=producao&leadId=${t.leadId}&stepId=${t.stepId}`)}
-                      className="w-full text-left bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.04)] transition-colors group">
-                      <p className="text-xs text-violet-600 font-semibold truncate">{t.leadNome}</p>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{t.stepNome}</p>
-                        <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 shrink-0" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* Entradas */}
-            <div
-              onClick={() => navigate('/dashboard/empresa-transacoes')}
-              className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="w-5 h-5 text-emerald-600" />
-                <h4 className="font-semibold text-gray-900 dark:text-white">Entradas</h4>
-                <span className="ml-auto text-sm font-bold text-gray-500 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded-full">{transacoesAmanha.filter(t => t.tipo === 'receita').length}</span>
-              </div>
-              {transacoesAmanha.filter(t => t.tipo === 'receita').length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Nenhuma entrada agendada</p>
-              ) : (
-                <div className="space-y-2">
-                  {transacoesAmanha.filter(t => t.tipo === 'receita').map(t => (
-                    <div key={t.id} className="bg-emerald-50 dark:bg-[rgba(34,197,94,0.05)] border border-emerald-100 dark:border-[rgba(34,197,94,0.1)] p-3 rounded-lg flex justify-between items-center">
-                      <p className="text-sm text-gray-900 dark:text-white font-medium truncate pr-2">{t.descricao}</p>
-                      <p className="text-sm font-bold text-emerald-600 shrink-0">{fmtCurrency(t.valor)}</p>
-                    </div>
-                  ))}
-                  <div className="pt-2 border-t border-gray-100 dark:border-[rgba(255,255,255,0.05)] flex justify-between">
-                    <span className="text-xs font-semibold text-gray-500">Total a receber:</span>
-                    <span className="font-bold text-emerald-600 text-sm">{fmtCurrency(transacoesAmanha.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0))}</span>
+
+              <div className="space-y-4">
+                {/* Tarefas */}
+                <div className="bg-white/5 rounded-2xl p-3.5 border border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5 text-indigo-400" /> Tarefas</span>
+                    <span className="text-xs font-black text-indigo-400">{tarefasAmanha.length}</span>
                   </div>
+                  {tarefasAmanha.length === 0 ? (
+                    <p className="text-xs text-gray-400">Nenhuma tarefa programada.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {tarefasAmanha.slice(0, 2).map(t => (
+                        <p key={`${t.leadId}-${t.stepId}`} className="text-xs font-medium text-gray-200 truncate">• {t.stepNome}</p>
+                      ))}
+                      {tarefasAmanha.length > 2 && <p className="text-[10px] text-indigo-400 font-bold">+ {tarefasAmanha.length - 2} tarefas</p>}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {/* Eventos */}
-            <div
-              onClick={() => navigate('/dashboard/agenda')}
-              className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.05)] p-4 shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar className="w-5 h-5 text-blue-600" />
-                <h4 className="font-semibold text-gray-900 dark:text-white">Eventos</h4>
-                <span className="ml-auto text-sm font-bold text-gray-500 bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded-full">{eventosAmanha.length}</span>
+
+                {/* Financeiro */}
+                <div className="bg-white/5 rounded-2xl p-3.5 border border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Caixa</span>
+                    <span className="text-xs font-black text-emerald-400">
+                      {fmtCurrency(transacoesAmanha.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0))}
+                    </span>
+                  </div>
+                  {transacoesAmanha.filter(t => t.tipo === 'receita').length === 0 ? (
+                    <p className="text-xs text-gray-400">Nenhum pagamento agendado.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {transacoesAmanha.filter(t => t.tipo === 'receita').slice(0, 2).map(t => (
+                        <p key={t.id} className="text-xs font-medium text-gray-200 truncate">• {t.descricao}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Eventos */}
+                <div className="bg-white/5 rounded-2xl p-3.5 border border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-orange-400" /> Agenda</span>
+                    <span className="text-xs font-black text-orange-400">{eventosAmanha.length}</span>
+                  </div>
+                  {eventosAmanha.length === 0 ? (
+                    <p className="text-xs text-gray-400">Nenhum evento agendado.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {eventosAmanha.slice(0, 2).map(ev => (
+                        <p key={ev.id} className="text-xs font-medium text-gray-200 truncate">• {ev.cliente_nome}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              {eventosAmanha.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Nenhum evento na agenda</p>
+            </div>
+
+            {/* Eventos do Período */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4.5 border-b border-gray-150 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-blue-500" />
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Próximos Eventos</h3>
+                </div>
+                <button 
+                  onClick={() => navigate('/dashboard/agenda')} 
+                  className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1"
+                >
+                  Ver todos
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {eventos.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-xs font-medium">
+                  Sem compromissos no período
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {eventosAmanha.map(ev => (
-                    <div key={ev.id} className="bg-blue-50 dark:bg-[rgba(59,130,246,0.05)] border border-blue-100 dark:border-[rgba(59,130,246,0.1)] p-3 rounded-lg">
-                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{ev.cliente_nome}</p>
-                      <p className="text-xs text-blue-600 font-medium truncate mt-0.5">{ev.tipo_evento}{ev.cidade ? ` • ${ev.cidade}` : ''}</p>
+                <div className="divide-y divide-gray-150 dark:divide-white/5 max-h-60 overflow-y-auto">
+                  {eventos.map(ev => (
+                    <div 
+                      key={ev.id} 
+                      onClick={() => navigate('/dashboard/agenda')}
+                      className="px-6 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-white/2 cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="text-center w-8 shrink-0">
+                          <p className="text-sm font-black text-blue-600">{new Date(ev.data_evento + 'T12:00:00').getDate()}</p>
+                          <p className="text-[9px] text-gray-400 uppercase font-bold -mt-0.5">{new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short' })}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-800 dark:text-gray-200 text-xs truncate">{ev.cliente_nome}</p>
+                          <p className="text-[10px] text-gray-400 truncate">{ev.tipo_evento}{ev.cidade ? ` • ${ev.cidade}` : ''}</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${statusColor(ev.status)}`}>
+                        {ev.status}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Financeiro do Período */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4.5 border-b border-gray-150 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-500" />
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Caixa Recente</h3>
+                </div>
+                <button 
+                  onClick={() => navigate('/dashboard/empresa-transacoes')} 
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider flex items-center gap-1"
+                >
+                  Ir para Caixa
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {transacoes.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-xs font-medium">
+                  Sem movimentações no período
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-150 dark:divide-white/5 max-h-64 overflow-y-auto">
+                  {transacoes.map(t => (
+                    <div 
+                      key={t.id} 
+                      onClick={() => navigate('/dashboard/empresa-transacoes')}
+                      className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-white/2 cursor-pointer transition-all"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-800 dark:text-gray-200 text-xs truncate">{t.descricao}</p>
+                        <p className="text-[10px] text-gray-400">{fmt(t.data)}</p>
+                      </div>
+                      
+                      <div className="text-right shrink-0 flex items-center gap-2">
+                        <span className={`text-xs font-black ${
+                          t.tipo === 'receita' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+                        }`}>
+                          {t.tipo === 'despesa' ? '- ' : '+ '}{fmtCurrency(t.valor)}
+                        </span>
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${statusColor(t.status)}`}>
+                          {t.status === 'pago' ? 'pago' : 'pend'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
+
         </div>
       )}
     </div>

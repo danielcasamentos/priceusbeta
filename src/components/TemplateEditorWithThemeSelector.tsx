@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Palette, Sparkles, Check, ExternalLink, Eye, Moon, Leaf, Image } from 'lucide-react';
+import { Palette, Sparkles, Check, ExternalLink, Eye, Moon, Leaf, Image, Flame } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface TemplateEditorWithThemeSelectorProps {
@@ -7,7 +7,7 @@ interface TemplateEditorWithThemeSelectorProps {
   onThemeChange?: (theme: QuoteTheme) => void;
 }
 
-export type QuoteTheme = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'darkstudio';
+export type QuoteTheme = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'darkstudio' | 'promocional';
 
 export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: TemplateEditorWithThemeSelectorProps) {
   const [selectedTheme, setSelectedTheme] = useState<QuoteTheme>('moderno');
@@ -172,6 +172,16 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
       textColor: 'text-green-500',
       bgColor: 'bg-gray-900',
       borderColor: 'border-green-500',
+    },
+    {
+      id: 'promocional' as QuoteTheme,
+      name: '🔥 Oferta Especial',
+      description: 'Alta conversão com cores de urgência e promoção',
+      icon: Flame,
+      color: 'from-red-600 to-amber-500',
+      textColor: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-500',
     },
   ];
 

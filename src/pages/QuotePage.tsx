@@ -19,6 +19,7 @@ import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
 import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
 import { detectBrowser, getReferrer, logBrowserInfo } from '../lib/browserDetection';
 import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
+import { QuotePromocional } from '../components/quote-themes/QuotePromocional';
 
 interface Produto {
   id: string;
@@ -310,6 +311,25 @@ export function QuotePage() {
         timestamp: new Date().toISOString(),
       });
 
+      // Interceptar e evitar chamadas desnecessárias se o dia da semana estiver bloqueado no template
+      const dateObj = parseLocalYMD(dataEvento);
+      const dayOfWeek = dateObj.getDay();
+      if (template?.dias_semana_bloqueados?.includes(dayOfWeek)) {
+        console.log('[QuotePage] 🚫 Dia da semana bloqueado localmente no template:', dayOfWeek);
+        setDisponibilidade({
+          disponivel: false,
+          status: 'bloqueada',
+          eventos_atual: 0,
+          eventos_max: 0,
+          modo_aviso: 'restritivo',
+          bloqueada: true,
+          mensagem: 'Este dia da semana não está disponível para este orçamento.',
+          cor_status: 'bg-red-500 text-white'
+        });
+        setCheckingAvailability(false);
+        return;
+      }
+
       setDisponibilidade(null);
       setCheckingAvailability(true);
 
@@ -342,7 +362,7 @@ export function QuotePage() {
     return () => {
       isCancelled = true;
     };
-  }, [dataEvento, template?.user_id]);
+  }, [dataEvento, template?.user_id, template?.dias_semana_bloqueados]);
 
   useEffect(() => {
     if (formData.nome_cliente) analytics?.trackFieldFilled('nome_cliente', true);
@@ -1073,6 +1093,13 @@ export function QuotePage() {
 
   // FUNÇÃO COMPLETA: Desabilita datas no calendário com base nas regras do agendaConfig
   const isDateDisabled = (date: Date): boolean => {
+    const dayOfWeek = date.getDay(); // 0 (Dom) a 6 (Sáb)
+
+    // Bloqueio específico do template
+    if (template?.dias_semana_bloqueados?.includes(dayOfWeek)) {
+      return true;
+    }
+
     if (!agendaConfig) return false;
 
     // **MELHORIA**: Verifica se a data selecionada é a mesma que está sendo checada.
@@ -1082,7 +1109,6 @@ export function QuotePage() {
     }
 
     const dayOfMonth = date.getDate();
-    const dayOfWeek = date.getDay(); // 0 (Dom) a 6 (Sáb)
   
     // Se as regras em massa estiverem desativadas, não aplique as regras abaixo.
     if (!agendaConfig.regras_massa_ativas) {
@@ -1502,6 +1528,51 @@ export function QuotePage() {
   }
 
   // ── Dark Studio: componente premium dedicado ──────────────────────────
+  if (template?.tema === 'promocional' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      fieldErrors,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+      formasPagamento,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
+    };
+    return (
+      <>
+        <CookieBanner />
+        <QuotePromocional {...commonProps} />
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="promocional"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
+      </>
+    );
+  }
+
   if (template?.tema === 'darkstudio' && !loading && template && profile) {
     const commonProps = {
       template,

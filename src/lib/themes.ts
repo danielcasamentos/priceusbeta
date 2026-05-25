@@ -5,7 +5,7 @@
  * sem afetar funcionalidades. Cada tema tem sua paleta e estilo único.
  */
 
-export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio' | 'escuro' | 'studio';
+export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio' | 'escuro' | 'studio' | 'promocional';
 
 export interface TemaConfig {
   nome: string;
@@ -360,6 +360,41 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
     estilos: {
       borderRadius: 'rounded-xl',
       borderWidth: 'border',
+      shadow: 'shadow-lg',
+      shadowHover: 'hover:shadow-xl',
+      fontFamily: 'font-sans',
+      fontHeading: 'font-bold',
+    },
+  },
+
+  promocional: {
+    nome: '🔥 Oferta Especial',
+    descricao: 'Tema de alta conversão com cores de urgência e promoção',
+    emoji: '🔥',
+    cores: {
+      primaria: 'bg-red-600',
+      primariaHover: 'hover:bg-red-700',
+      primariaDark: 'bg-red-800',
+      secundaria: 'bg-orange-50',
+      secundariaHover: 'hover:bg-orange-100',
+      acento: 'bg-amber-500',
+      acentoHover: 'hover:bg-amber-600',
+
+      bgPrincipal: 'bg-gradient-to-br from-red-50 via-orange-50 to-amber-50',
+      bgSecundario: 'bg-orange-50',
+      bgCard: 'bg-white',
+      bgHover: 'hover:bg-red-50',
+
+      textoPrincipal: 'text-gray-900',
+      textoSecundario: 'text-gray-700',
+      textoDestaque: 'text-red-600',
+
+      borda: 'border-red-200',
+      divisor: 'divide-red-200',
+    },
+    estilos: {
+      borderRadius: 'rounded-xl',
+      borderWidth: 'border-2',
       shadow: 'shadow-lg',
       shadowHover: 'hover:shadow-xl',
       fontFamily: 'font-sans',

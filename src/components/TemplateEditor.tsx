@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, BarChart3, Image, Send, Loader2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, BarChart3, Image, Send, Loader2, Calendar } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkTemplateSlugAvailability } from '../lib/slugUtils';
 import { ProductList } from './ProductList';
 import { PaymentMethodEditor } from './PaymentMethodEditor';
@@ -66,12 +66,23 @@ interface Template {
   exibir_painel_flutuante?: boolean;
   descricao_perfil?: string;
   ocultar_data_criacao?: boolean;
+  dias_semana_bloqueados?: number[];
 }
 
 interface TemplateEditorProps {
   templateId: string;
   onBack: () => void;
 }
+
+const DIAS_SEMANA = [
+  { value: 0, label: 'Domingo' },
+  { value: 1, label: 'Segunda' },
+  { value: 2, label: 'Terça' },
+  { value: 3, label: 'Quarta' },
+  { value: 4, label: 'Quinta' },
+  { value: 5, label: 'Sexta' },
+  { value: 6, label: 'Sábado' },
+];
 
 export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'analytics' | 'config'>('produtos');
@@ -950,6 +961,45 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </div>
                     </div>
                   </label>
+                </div>
+
+                <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    Bloqueio de Dias da Semana
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Selecione quais dias da semana você deseja <strong>bloquear</strong> para este orçamento. O cliente não conseguirá selecionar estas datas no calendário.
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {DIAS_SEMANA.map((dia) => {
+                      const isBlocked = template?.dias_semana_bloqueados?.includes(dia.value) ?? false;
+                      return (
+                        <button
+                          key={dia.value}
+                          type="button"
+                          onClick={() => {
+                            const current = template?.dias_semana_bloqueados || [];
+                            const newBlocked = isBlocked
+                              ? current.filter(d => d !== dia.value)
+                              : [...current, dia.value];
+                            handleUpdateTemplateConfig('dias_semana_bloqueados', newBlocked);
+                          }}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium border-2 transition-all ${
+                            isBlocked
+                              ? 'bg-red-50 dark:bg-red-950/20 border-red-500 text-red-700 dark:text-red-400'
+                              : 'bg-gray-50 dark:bg-[#0a1628] border-gray-200 dark:border-[rgba(255,255,255,.08)] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-[rgba(255,255,255,.2)]'
+                          }`}
+                        >
+                          {dia.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                    Os dias marcados em vermelho estarão desabilitados para o cliente final.
+                  </p>
                 </div>
 
                 <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-gray-50 dark:bg-[#07101f] rounded-lg p-4">

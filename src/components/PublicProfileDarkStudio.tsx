@@ -24,6 +24,7 @@ interface Template {
   descricao_perfil?: string;
   ocultar_data_criacao?: boolean;
   created_at: string;
+  tema?: string;
 }
 
 interface Review {
@@ -180,46 +181,63 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 24 }}>
-              {templates.map((template, i) => (
-                <Link
-                  key={template.id}
-                  to={`/${profile.slug_usuario}/${template.slug_template}`}
-                  style={{ textDecoration: 'none', animation: `fadeUp .5s ease ${i * .1 + .2}s both` }}
-                >
-                  <div
-                    className="ds-card"
-                    style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.09)', borderRadius: 20, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}
+              {templates.map((template, i) => {
+                const isPromo = template.tema === 'promocional';
+                return (
+                  <Link
+                    key={template.id}
+                    to={`/${profile.slug_usuario}/${template.slug_template}`}
+                    style={{ textDecoration: 'none', animation: `fadeUp .5s ease ${i * .1 + .2}s both` }}
                   >
-                    <div style={{ flex: 1, padding: '24px 24px 20px' }}>
-                      <h3 style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4, lineHeight: 1.2 }}>
-                        {template.nome_template}
-                      </h3>
-                      {template.titulo_template && (
-                        <p style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>
-                          {template.titulo_template}
-                        </p>
+                    <div
+                      className="ds-card"
+                      style={{ 
+                        background: isPromo ? 'rgba(220,38,38,.07)' : 'rgba(255,255,255,.04)', 
+                        border: isPromo ? '2px solid #dc2626' : '1px solid rgba(255,255,255,.09)', 
+                        borderRadius: 20, 
+                        overflow: 'hidden', 
+                        height: '100%', 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        position: 'relative' 
+                      }}
+                    >
+                      {isPromo && (
+                        <div style={{ position: 'absolute', top: 12, right: 12, background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 999, letterSpacing: '1px' }}>
+                          🔥 OFERTA
+                        </div>
                       )}
-                      {template.descricao_perfil && (
-                        <p style={{ fontSize: 14, color: 'rgba(255,255,255,.5)', lineHeight: 1.6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                          {template.descricao_perfil}
-                        </p>
-                      )}
-                    </div>
-                    <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      {!template.ocultar_data_criacao && (
-                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,.25)' }}>
-                          {new Date(template.created_at).toLocaleDateString('pt-BR')}
+                      <div style={{ flex: 1, padding: '24px 24px 20px' }}>
+                        <h3 style={{ fontSize: 20, fontWeight: 800, color: isPromo ? '#ff8a8a' : '#fff', marginBottom: 4, lineHeight: 1.2 }}>
+                          {template.nome_template}
+                        </h3>
+                        {template.titulo_template && (
+                          <p style={{ fontSize: 12, fontWeight: 700, color: isPromo ? '#f97316' : '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>
+                            {template.titulo_template}
+                          </p>
+                        )}
+                        {template.descricao_perfil && (
+                          <p style={{ fontSize: 14, color: 'rgba(255,255,255,.5)', lineHeight: 1.6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                            {template.descricao_perfil}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        {!template.ocultar_data_criacao && (
+                          <span style={{ fontSize: 11, color: 'rgba(255,255,255,.25)' }}>
+                            {new Date(template.created_at).toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: isPromo ? '#ef4444' : '#22c55e' }}>
+                          {isPromo ? 'Ver Oferta' : 'Ver Orçamento'} <ExternalLink size={14} />
                         </span>
-                      )}
-                      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: '#22c55e' }}>
-                        Ver Orçamento <ExternalLink size={14} />
-                      </span>
+                      </div>
+                      {/* bottom accent */}
+                      <div style={{ height: 3, background: isPromo ? 'linear-gradient(90deg, #dc2626, #f97316)' : 'linear-gradient(90deg, #16a34a, #22c55e)' }} />
                     </div>
-                    {/* green bottom accent */}
-                    <div style={{ height: 3, background: 'linear-gradient(90deg, #16a34a, #22c55e)' }} />
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>

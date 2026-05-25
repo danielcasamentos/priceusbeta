@@ -23,6 +23,7 @@ interface Template {
   descricao_perfil?: string;
   ocultar_data_criacao?: boolean;
   created_at: string;
+  tema?: string;
 }
 
 interface Review {
@@ -145,34 +146,48 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
               Orçamentos Disponíveis
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {templates.map((template) => (
-                <Link
-                  key={template.id}
-                  to={`/${profile.slug_usuario}/${template.slug_template}`}
-                  className="bg-slate-50 rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group border-4 border-slate-400 hover:border-slate-500"
-                >
-                  <div className="p-6 sm:p-8">
-                    <h3 className="text-xl sm:text-2xl font-light tracking-wide text-slate-900 mb-1 group-hover:text-slate-800 transition-colors">
-                      {template.nome_template}
-                    </h3>
-                    {template.titulo_template && (
-                       <p className="text-sm font-medium text-slate-600 mb-3">{template.titulo_template}</p>
+              {templates.map((template) => {
+                const isPromo = template.tema === 'promocional';
+                return (
+                  <Link
+                    key={template.id}
+                    to={`/${profile.slug_usuario}/${template.slug_template}`}
+                    className={`bg-slate-50 rounded-3xl shadow-2xl hover:shadow-3xl transition-all overflow-hidden group border-4 relative ${
+                      isPromo 
+                        ? 'border-red-500 hover:border-orange-500 scale-[1.02] md:scale-105' 
+                        : 'border-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    {isPromo && (
+                      <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full animate-pulse shadow-md tracking-wider flex items-center gap-1 z-10">
+                        🔥 OFERTA
+                      </div>
                     )}
-                    {template.descricao_perfil && (
-                       <p className="text-sm text-slate-600 mb-4 line-clamp-3 font-light leading-relaxed">
-                         {template.descricao_perfil}
-                       </p>
-                    )}
-                    <div className="flex items-center justify-between text-sm text-slate-700 font-light mt-auto pt-2">
-                      {!template.ocultar_data_criacao && (
-                        <span className="text-xs text-slate-400">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
+                    <div className="p-6 sm:p-8">
+                      <h3 className={`text-xl sm:text-2xl font-light tracking-wide mb-1 transition-colors ${
+                        isPromo ? 'text-red-600 group-hover:text-orange-600 font-bold' : 'text-slate-900 group-hover:text-slate-800'
+                      }`}>
+                        {template.nome_template}
+                      </h3>
+                      {template.titulo_template && (
+                         <p className={`text-sm font-medium mb-3 ${isPromo ? 'text-orange-600' : 'text-slate-600'}`}>{template.titulo_template}</p>
                       )}
-                      <span className="flex items-center gap-1 group-hover:text-slate-800 transition-colors ml-auto">Detalhes do Pacote <ExternalLink className="w-4 h-4 ml-1" /></span>
+                      {template.descricao_perfil && (
+                         <p className="text-sm text-slate-600 mb-4 line-clamp-3 font-light leading-relaxed">
+                           {template.descricao_perfil}
+                         </p>
+                      )}
+                      <div className="flex items-center justify-between text-sm text-slate-700 font-light mt-auto pt-2">
+                        {!template.ocultar_data_criacao && (
+                          <span className="text-xs text-slate-400">{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
+                        )}
+                        <span className={`flex items-center gap-1 transition-colors ml-auto ${isPromo ? 'group-hover:text-orange-600 text-red-600' : 'group-hover:text-slate-800'}`}>Detalhes do Pacote <ExternalLink className="w-4 h-4 ml-1" /></span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-slate-800 h-2"></div>
-                </Link>
-              ))}
+                    <div className={`h-2 ${isPromo ? 'bg-gradient-to-r from-red-600 to-orange-500' : 'bg-slate-800'}`}></div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
