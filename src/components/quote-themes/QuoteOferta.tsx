@@ -668,11 +668,11 @@ export function QuoteOferta(props: QuoteOfertaProps) {
       )}
 
       {/* ── FOOTER ── */}
-      {!(profile?.status_assinatura === 'active' || profile?.status_assinatura === 'trial') && (
+      {!(profile?.status_assinatura === 'active') && (
         <footer style={{ background: '#fff', borderTop: '2px solid #ffedd5', padding: '28px', textAlign: 'center' }}>
           <p style={{ fontSize: 13, color: '#9ca3af' }}>
             Powered by{' '}
-            <a href="/" style={{ color: '#ea580c', fontWeight: 800, textDecoration: 'none' }}>PriceUs</a>
+            <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#ea580c', fontWeight: 800, textDecoration: 'none' }}>PriceUs</a>
           </p>
         </footer>
       )}

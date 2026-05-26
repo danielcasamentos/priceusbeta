@@ -304,14 +304,14 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
         )}
       </div>
 
-      {!(profile.status_assinatura === 'active' || profile.status_assinatura === 'trial') && (
+      {!(profile.status_assinatura === 'active') && (
         <footer className="bg-gradient-to-r from-amber-900 via-orange-900 to-amber-800 text-white py-10 mt-16">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <p className="text-amber-200 font-bold">
               Powered by{' '}
-              <Link to="/" className="text-amber-100 hover:text-white font-black">
+              <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" className="text-amber-100 hover:text-white font-black">
                 PriceU$
-              </Link>
+              </a>
             </p>
           </div>
         </footer>

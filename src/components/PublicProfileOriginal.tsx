@@ -284,14 +284,14 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
         )}
       </div>
 
-      {!(profile.status_assinatura === 'active' || profile.status_assinatura === 'trial') && (
+      {!(profile.status_assinatura === 'active') && (
         <footer className="bg-gray-900 text-white py-10 mt-16">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <p className="text-gray-400">
               Powered by{' '}
-              <Link to="/" className="text-blue-400 hover:text-blue-300 font-semibold">
+              <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-semibold">
                 PriceU$
-              </Link>
+              </a>
             </p>
           </div>
         </footer>

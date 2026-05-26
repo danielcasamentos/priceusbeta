@@ -643,11 +643,11 @@ export function QuotePromocional(props: QuotePromocionalProps) {
       )}
 
       {/* ── FOOTER ── */}
-      {!(profile?.status_assinatura === 'active' || profile?.status_assinatura === 'trial') && (
+      {!(profile?.status_assinatura === 'active') && (
         <footer style={{ background: '#fff', borderTop: '2px solid #fee2e2', padding: '24px', textAlign: 'center' }}>
           <p style={{ fontSize: 12, color: '#9ca3af' }}>
             Powered by{' '}
-            <a href="/" style={{ color: '#dc2626', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
+            <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#dc2626', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
           </p>
         </footer>
       )}

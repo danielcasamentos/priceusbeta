@@ -284,14 +284,14 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
         )}
       </div>
 
-      {!(profile.status_assinatura === 'active' || profile.status_assinatura === 'trial') && (
+      {!(profile.status_assinatura === 'active') && (
         <footer className="bg-slate-900 text-white py-10 mt-16">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <p className="text-slate-400 font-light">
               Powered by{' '}
-              <Link to="/" className="text-slate-300 hover:text-white font-normal">
+              <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white font-normal">
                 PriceU$
-              </Link>
+              </a>
             </p>
           </div>
         </footer>

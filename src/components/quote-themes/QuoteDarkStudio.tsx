@@ -624,11 +624,11 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
       )}
 
       {/* ── FOOTER ── */}
-      {!(profile?.status_assinatura === 'active' || profile?.status_assinatura === 'trial') && (
+      {!(profile?.status_assinatura === 'active') && (
         <footer style={{ background: '#04090f', padding: '28px 24px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,.25)' }}>
             Powered by{' '}
-            <a href="/" style={{ color: '#22c55e', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
+            <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
           </p>
         </footer>
       )}

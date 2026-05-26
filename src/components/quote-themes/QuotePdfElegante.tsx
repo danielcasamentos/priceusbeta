@@ -41,7 +41,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
     totalSectionRef,
   } = props;
 
-  const isPremium = profile?.status_assinatura === 'active' || profile?.status_assinatura === 'trial';
+  const isPremium = profile?.status_assinatura === 'active';
 
   return (
     <div
@@ -145,7 +145,24 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
       {/* Unified Column Container */}
       <div className="max-w-xl mx-auto px-4 py-8 space-y-8">
         
-        {/* 1. Photographer Profile Section */}
+        {/* 1. Vertical Cover Photo (borderless, vertical aspect ratio, optimized for mobile) */}
+        <div className="w-full relative overflow-hidden rounded-lg my-4" style={{ margin: '16px auto' }}>
+          {template?.cover_image_url ? (
+            <img
+              src={template.cover_image_url}
+              alt={template.titulo_template || 'Capa da proposta'}
+              className="w-full h-auto object-cover rounded-lg aspect-[3/4]"
+            />
+          ) : (
+            <div className="w-full aspect-[3/4] bg-neutral-50 flex flex-col items-center justify-center text-center p-8 border border-neutral-200 rounded-lg">
+              <Award className="w-12 h-12 text-neutral-300 mb-3" />
+              <p className="text-xs pdf-sans uppercase tracking-[0.2em] text-neutral-400">PROPOSTA COMERCIAL</p>
+              <p className="text-[10px] text-neutral-500 mt-2 pdf-sans">(Imagem de capa editável na aba Aparência)</p>
+            </div>
+          )}
+        </div>
+
+        {/* 2. Photographer Profile Section */}
         {profile && (
           <div className="flex flex-col items-center text-center pb-6 border-b border-neutral-100">
             {profile.profile_image_url && (
@@ -207,7 +224,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
           </div>
         )}
 
-        {/* 2. Proposal Title (explanatory, simple, sans-serif) */}
+        {/* 3. Proposal Title (explanatory, simple, sans-serif) */}
         <div className="text-center">
           <h1 className="pdf-sans font-medium text-neutral-800 text-lg tracking-normal">
             {template?.titulo_template || template?.nome_template}
@@ -215,23 +232,6 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
           <p className="pdf-sans text-xs text-neutral-500 mt-1">
             Orçamento personalizado elaborado exclusivamente para você.
           </p>
-        </div>
-
-        {/* 3. Vertical Cover Photo (borderless, vertical aspect ratio, optimized for mobile) */}
-        <div className="w-full relative overflow-hidden rounded-lg my-4" style={{ margin: '16px auto' }}>
-          {template?.cover_image_url ? (
-            <img
-              src={template.cover_image_url}
-              alt={template.titulo_template || 'Capa da proposta'}
-              className="w-full h-auto object-cover rounded-lg aspect-[3/4]"
-            />
-          ) : (
-            <div className="w-full aspect-[3/4] bg-neutral-50 flex flex-col items-center justify-center text-center p-8 border border-neutral-200 rounded-lg">
-              <Award className="w-12 h-12 text-neutral-300 mb-3" />
-              <p className="text-xs pdf-sans uppercase tracking-[0.2em] text-neutral-400">PROPOSTA COMERCIAL</p>
-              <p className="text-[10px] text-neutral-500 mt-2 pdf-sans">(Imagem de capa editável na aba Aparência)</p>
-            </div>
-          )}
         </div>
 
         {/* 4. Proposal Body */}
@@ -585,7 +585,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
         <footer style={{ background: '#fafafa', padding: '24px', borderTop: '1px solid #e2e8f0', textAlign: 'center', marginTop: '32px' }}>
           <p className="pdf-sans" style={{ fontSize: 11, color: '#94a3b8' }}>
             Powered by{' '}
-            <a href="/" style={{ color: '#1a1a1a', fontWeight: 600, textDecoration: 'none' }}>PriceUs</a>
+            <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#1a1a1a', fontWeight: 600, textDecoration: 'none' }}>PriceUs</a>
           </p>
         </footer>
       )}

@@ -362,13 +362,13 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
       )}
 
       {/* ── FOOTER ── */}
-      {!(profile.status_assinatura === 'active' || profile.status_assinatura === 'trial') && (
+      {!(profile.status_assinatura === 'active') && (
         <footer style={{ background: '#04090f', padding: '32px 24px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,.3)' }}>
             Powered by{' '}
-            <Link to="/" style={{ color: '#22c55e', fontWeight: 700, textDecoration: 'none' }}>
+            <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e', fontWeight: 700, textDecoration: 'none' }}>
               PriceUs
-            </Link>
+            </a>
           </p>
         </footer>
       )}
