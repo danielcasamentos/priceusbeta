@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
+import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
 import {
   X, User, Mail, Phone, Calendar, MapPin, DollarSign,
-  Briefcase, Tag, MessageSquare, Loader2, UserPlus, ChevronDown,
+  Briefcase, Tag, MessageSquare, Loader2, UserPlus, ChevronDown, Check, AlertTriangle, Info
 } from 'lucide-react';
 
 interface TemplateOption {
@@ -59,18 +61,134 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   const [status, setStatus] = useState<LeadStatus>('novo');
   const [notas, setNotas] = useState('');
 
+  // Disponibilidade
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
+
+  // Produtos do template
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [templateProducts, setTemplateProducts] = useState<Product[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
+  const [isManualValueOverride, setIsManualValueOverride] = useState(false);
+
+  // Carrega templates ao abrir
   useEffect(() => {
-    supabase
-      .from('templates')
-      .select('id, nome_template')
-      .eq('user_id', userId)
-      .order('nome_template')
-      .then(({ data }) => {
-        if (data) setTemplates(data);
-      });
+    async function loadTemplates() {
+      const { data } = await supabase
+        .from('templates')
+        .select('id, nome_template')
+        .eq('user_id', userId)
+        .order('nome_template');
+      if (data) setTemplates(data);
+    }
+    loadTemplates();
   }, [userId]);
 
-  // Auto-fill tipoEvento when a template is selected
+  // Verifica disponibilidade da agenda quando a data muda
+  useEffect(() => {
+    if (!dataEvento) {
+      setDisponibilidade(null);
+      return;
+    }
+
+    let isMounted = true;
+    async function checkDate() {
+      setCheckingAvailability(true);
+      try {
+        const res = await checkAvailability(userId, dataEvento);
+        if (isMounted) {
+          setDisponibilidade(res);
+        }
+      } catch (err) {
+        console.error('Erro ao verificar disponibilidade no modal:', err);
+      } finally {
+        if (isMounted) {
+          setCheckingAvailability(false);
+        }
+      }
+    }
+    checkDate();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, dataEvento]);
+
+  // Carrega produtos do template selecionado
+  useEffect(() => {
+    if (!templateId) {
+      setTemplateProducts([]);
+      setSelectedProducts({});
+      if (!isManualValueOverride) {
+        setValor('');
+      }
+      return;
+    }
+
+    let isMounted = true;
+    async function loadTemplateProducts() {
+      setLoadingProducts(true);
+      try {
+        const { data, error: prodErr } = await supabase
+          .from('produtos')
+          .select('*')
+          .eq('template_id', templateId)
+          .order('ordem');
+        
+        if (!isMounted) return;
+
+        if (prodErr) {
+          console.error('Erro ao buscar produtos:', prodErr);
+          return;
+        }
+
+        if (data) {
+          const prods = data as Product[];
+          setTemplateProducts(prods);
+          
+          // Por padrão, seleciona todos os produtos do template
+          const initialSelection: Record<string, number> = {};
+          let totalSum = 0;
+          prods.forEach((p) => {
+            initialSelection[p.id] = 1;
+            totalSum += p.valor;
+          });
+          setSelectedProducts(initialSelection);
+          
+          if (!isManualValueOverride) {
+            setValor((totalSum * 100).toString());
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao carregar produtos do template:', err);
+      } finally {
+        if (isMounted) {
+          setLoadingProducts(false);
+        }
+      }
+    }
+
+    loadTemplateProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [templateId]);
+
+  // Recalcula o valor total baseado nos produtos selecionados caso não tenha override manual
+  useEffect(() => {
+    if (isManualValueOverride || templateProducts.length === 0) return;
+
+    let subtotal = 0;
+    templateProducts.forEach((p) => {
+      const qty = selectedProducts[p.id] || 0;
+      subtotal += p.valor * qty;
+    });
+
+    setValor((subtotal * 100).toString());
+  }, [selectedProducts, templateProducts, isManualValueOverride]);
+
+  // Auto-fill tipoEvento ao selecionar template
   const handleTemplateChange = (id: string) => {
     setTemplateId(id);
     if (id) {
@@ -80,9 +198,42 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   };
 
   const handleValorChange = (raw: string) => {
-    // Accept only digits, then format as BRL
     const digits = raw.replace(/\D/g, '');
     setValor(digits);
+    setIsManualValueOverride(true);
+  };
+
+  const resetManualValue = () => {
+    setIsManualValueOverride(false);
+    if (templateProducts.length > 0) {
+      let subtotal = 0;
+      templateProducts.forEach((p) => {
+        const qty = selectedProducts[p.id] || 0;
+        subtotal += p.valor * qty;
+      });
+      setValor((subtotal * 100).toString());
+    } else {
+      setValor('');
+    }
+  };
+
+  const handleToggleProduct = (productId: string, checked: boolean) => {
+    setSelectedProducts((prev) => {
+      const next = { ...prev };
+      if (checked) {
+        next[productId] = 1;
+      } else {
+        delete next[productId];
+      }
+      return next;
+    });
+  };
+
+  const handleQtyChange = (productId: string, qty: number) => {
+    setSelectedProducts((prev) => ({
+      ...prev,
+      [productId]: Math.max(1, qty),
+    }));
   };
 
   const valorNumerico = valor ? parseInt(valor, 10) / 100 : 0;
@@ -105,6 +256,22 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     setError('');
 
     try {
+      // Monta priceBreakdown
+      let subtotal = 0;
+      templateProducts.forEach((p) => {
+        const qty = selectedProducts[p.id] || 0;
+        subtotal += p.valor * qty;
+      });
+
+      const priceBreakdown: PriceBreakdown = {
+        subtotal: subtotal,
+        ajusteSazonal: 0,
+        ajusteGeografico: { percentual: 0, taxa: 0 },
+        acrescimoFormaPagamento: 0,
+        descontoCupom: 0,
+        total: valorNumerico || subtotal,
+      };
+
       const payload: Record<string, any> = {
         user_id: userId,
         nome_cliente: nome.trim(),
@@ -114,13 +281,18 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
         tipo_evento: tipoEvento.trim() || null,
         data_evento: dataEvento || null,
         cidade_evento: cidade.trim() || null,
-        valor_total: valorNumerico || 0,
+        valor_total: valorNumerico || subtotal || 0,
         status,
         origem: origem || 'manual',
         orcamento_detalhe: {
           notas: notas.trim() || null,
           origem_canal: origem,
           cadastro_manual: true,
+          selectedProdutos: selectedProducts,
+          produtos: templateProducts,
+          priceBreakdown,
+          customFields: [],
+          customFieldsData: {},
         },
       };
 
@@ -138,7 +310,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#0a1628] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col border dark:border-[rgba(255,255,255,0.06)] overflow-hidden">
+      <div className="bg-white dark:bg-[#0a1628] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col border dark:border-[rgba(255,255,255,0.06)] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
 
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-indigo-600 to-blue-600 flex items-center justify-between shrink-0">
@@ -260,13 +432,38 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                   <label className={labelCls}>
                     <Calendar className="w-3 h-3" /> Data do Evento
                   </label>
-                  <input
-                    type="date"
-                    id="new-lead-data"
-                    value={dataEvento}
-                    onChange={(e) => setDataEvento(e.target.value)}
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <input
+                      type="date"
+                      id="new-lead-data"
+                      value={dataEvento}
+                      onChange={(e) => setDataEvento(e.target.value)}
+                      className={`${inputCls} pr-10`}
+                    />
+                    {checkingAvailability && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Status de Disponibilidade */}
+                  {disponibilidade && (
+                    <div className={`mt-2 flex items-center gap-1.5 p-2.5 rounded-lg border text-xs font-semibold ${
+                      disponibilidade.status === 'disponivel'
+                        ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/20 dark:border-green-900/50 dark:text-green-400'
+                        : disponibilidade.status === 'parcial'
+                        ? 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-900/50 dark:text-yellow-400'
+                        : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-900/50 dark:text-red-400'
+                    }`}>
+                      {disponibilidade.status === 'disponivel' ? (
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>{disponibilidade.mensagem} ({disponibilidade.eventos_atual}/{disponibilidade.eventos_max})</span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>
@@ -282,10 +479,99 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                   />
                 </div>
               </div>
+
+              {/* Seção de seleção de produtos do Template */}
+              {templateId && (
+                <div className="mt-3 p-3 bg-white dark:bg-[rgba(255,255,255,0.02)] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.06)]">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-2">
+                    Produtos / Pacotes do Template
+                  </label>
+                  
+                  {loadingProducts ? (
+                    <div className="py-4 flex justify-center items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                      <span className="text-xs text-gray-400">Carregando produtos...</span>
+                    </div>
+                  ) : templateProducts.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic py-1">Nenhum produto cadastrado neste template.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {templateProducts.map((p) => {
+                        const isSelected = !!selectedProducts[p.id];
+                        const qty = selectedProducts[p.id] || 0;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`flex items-center justify-between p-2 rounded-lg border text-sm transition-colors ${
+                              isSelected
+                                ? 'bg-indigo-50/50 border-indigo-150 dark:bg-indigo-950/10 dark:border-indigo-900/50'
+                                : 'bg-gray-50 border-gray-100 dark:bg-transparent dark:border-[rgba(255,255,255,0.04)]'
+                            }`}
+                          >
+                            <label className="flex items-center gap-2 cursor-pointer flex-1">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => handleToggleProduct(p.id, e.target.checked)}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                              />
+                              <div>
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{p.nome}</span>
+                                <span className="text-xs text-gray-400 ml-2">
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor)}
+                                </span>
+                              </div>
+                            </label>
+
+                            {p.permite_multiplos && isSelected && (
+                              <div className="flex items-center gap-1 bg-white dark:bg-[#07101f] border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleQtyChange(p.id, qty - 1)}
+                                  className="px-2 py-0.5 bg-gray-50 dark:bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-bold"
+                                >
+                                  -
+                                </button>
+                                <span className="px-2 text-xs font-bold text-gray-700 dark:text-gray-300 min-w-[20px] text-center">
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQtyChange(p.id, qty + 1)}
+                                  className="px-2 py-0.5 bg-gray-50 dark:bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-bold"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className={labelCls}>
-                  <DollarSign className="w-3 h-3" /> Valor do Orçamento (R$)
-                </label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
+                    <DollarSign className="w-3 h-3 inline mr-1" /> Valor do Orçamento
+                  </label>
+                  {isManualValueOverride && (
+                    <button
+                      type="button"
+                      onClick={resetManualValue}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <Info className="w-3 h-3" /> Resetar para soma dos produtos
+                    </button>
+                  )}
+                </div>
+                {isManualValueOverride && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mb-1">
+                    ⚠️ Valor editado manualmente (sobrescreve cálculo do template)
+                  </p>
+                )}
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[rgba(255,255,255,0.4)] text-sm font-medium">
                     R$
@@ -297,7 +583,11 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                     value={formatValorDisplay()}
                     onChange={(e) => handleValorChange(e.target.value)}
                     placeholder="0,00"
-                    className={`${inputCls} pl-9`}
+                    className={`${inputCls} pl-9 font-semibold ${
+                      isManualValueOverride
+                        ? 'border-amber-400 bg-amber-50/30 text-amber-700 focus:ring-amber-500'
+                        : 'text-indigo-600 dark:text-indigo-400 font-bold'
+                    }`}
                   />
                 </div>
               </div>
