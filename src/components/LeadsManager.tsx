@@ -13,6 +13,7 @@ import { useReviewRequest } from '../hooks/useReviewRequest';
 import { WorkflowStepper } from './WorkflowStepper';
 import { WorkflowStep } from '../types/workflow';
 import { checkAndCreateWorkflowNotifications, notifyLeadFinalizado } from '../hooks/useWorkflowSla';
+import { NewLeadModal } from './NewLeadModal';
 
 // Define interfaces for better type safety
 
@@ -80,12 +81,16 @@ export function LeadsManager({ userId }: { userId: string }) {
   // Aba principal: 'leads' | 'producao' | 'finalizados'
   const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
   const [leadsViewMode, setLeadsViewMode] = useState<'list' | 'grid'>('list');
+  const [showNewLeadModal, setShowNewLeadModal] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'producao') {
       setMainTab('producao');
-      // Limpa os params da URL sem recarregar a página
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    if (params.get('new') === 'true') {
+      setShowNewLeadModal(true);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -976,7 +981,16 @@ export function LeadsManager({ userId }: { userId: string }) {
             Excluir ({selectedIds.length})
           </button>
         )}
-        <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg ml-auto">
+        {/* Botão Novo Lead */}
+        <button
+          id="btn-novo-lead"
+          onClick={() => setShowNewLeadModal(true)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg font-semibold text-sm transition-all shadow-sm ml-auto"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+          Novo Lead
+        </button>
+        <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg">
           <button 
             onClick={() => setLeadsViewMode('grid')}
             className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
@@ -1608,6 +1622,18 @@ export function LeadsManager({ userId }: { userId: string }) {
             setConvertModal(null);
             setMainTab('producao');
             loadLeads();
+          }}
+        />
+      )}
+
+      {/* Modal de Cadastro Manual de Lead */}
+      {showNewLeadModal && (
+        <NewLeadModal
+          userId={userId}
+          onClose={() => setShowNewLeadModal(false)}
+          onSuccess={async () => {
+            setShowNewLeadModal(false);
+            await loadLeads();
           }}
         />
       )}
