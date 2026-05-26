@@ -128,14 +128,11 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
           height: 64,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
           position: 'sticky',
           top: 0,
           zIndex: 100,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/Logo Price Us.png" alt="PriceUs" style={{ height: 26, filter: 'brightness(0) invert(1)' }} />
-          </div>
           <div className="pdf-sans" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>
             PROPOSTA COMERCIAL
           </div>

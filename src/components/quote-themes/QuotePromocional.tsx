@@ -128,14 +128,11 @@ export function QuotePromocional(props: QuotePromocionalProps) {
         height: 60,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-end',
         position: 'sticky',
         top: 0,
         zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/Logo Price Us.png" alt="PriceUs" style={{ height: 28 }} />
-        </div>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
           background: 'linear-gradient(135deg,#dc2626,#ea580c)',

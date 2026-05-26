@@ -82,14 +82,11 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
         height: 60,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-end',
         position: 'sticky',
         top: 0,
         zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/Logo Price Us.png" alt="PriceUs" style={{ height: 28 }} />
-        </div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,.3)', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
           Orçamento Profissional
         </div>

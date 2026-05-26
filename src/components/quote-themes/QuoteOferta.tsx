@@ -130,15 +130,12 @@ export function QuoteOferta(props: QuoteOfertaProps) {
         height: 70,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-end',
         position: 'sticky',
         top: 0,
         zIndex: 100,
         boxShadow: '0 4px 20px rgba(234,88,12,.08)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/Logo Price Us.png" alt="PriceUs" style={{ height: 38 }} />
-        </div>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           background: 'linear-gradient(135deg,#ea580c,#ef4444)',
