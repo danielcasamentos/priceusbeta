@@ -48,6 +48,24 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-100 font-serif">
+      <style>{`
+        @keyframes swing {
+          0%, 100% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+        }
+        @keyframes border-glow-orange {
+          0%, 100% { border-color: #ea580c; box-shadow: 0 0 10px rgba(234, 88, 12, 0.3); }
+          50% { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        }
+        .oferta-chamativa-card {
+          animation: border-glow-orange 3s infinite ease-in-out;
+          border-width: 4px;
+        }
+        .oferta-swing-tag {
+          animation: swing 2.5s infinite ease-in-out;
+          transform-origin: top center;
+        }
+      `}</style>
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-12 border-4 border-amber-600">
           <div className="relative bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 h-32 flex items-center justify-center">
@@ -164,18 +182,43 @@ export function PublicProfileMagazine({ profile, templates, reviews, averageRati
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               {templates.map((template) => {
-                const isPromo = template.tema === 'promocional';
+                const isPromo = template.tema === 'promocional' || template.tema === 'oferta';
+                const isOferta = template.tema === 'oferta';
                 return (
                   <Link
                     key={template.id}
                     to={`/${profile.slug_usuario}/${template.slug_template}`}
                     className={`bg-white rounded-3xl shadow-2xl hover:shadow-3xl transition-all overflow-hidden group border-4 relative ${
-                      isPromo 
-                        ? 'border-red-500 hover:border-orange-500 scale-[1.02] md:scale-105' 
-                        : 'border-amber-600 hover:border-amber-700'
+                      isOferta
+                        ? 'oferta-chamativa-card scale-[1.02] md:scale-105'
+                        : isPromo 
+                          ? 'border-red-500 hover:border-orange-500 scale-[1.02] md:scale-105' 
+                          : 'border-amber-600 hover:border-amber-700'
                     }`}
                   >
-                    {isPromo && (
+                    {isOferta && (
+                      <div className="absolute -top-1 right-6 z-10 oferta-swing-tag" style={{ width: 44, height: 70, pointerEvents: 'none' }}>
+                        <div style={{ width: 2, height: 16, backgroundColor: '#ea580c', margin: '0 auto' }} />
+                        <div style={{
+                          width: 44,
+                          height: 54,
+                          background: 'linear-gradient(135deg, #ea580c, #ef4444)',
+                          borderRadius: '4px 4px 8px 8px',
+                          boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative',
+                          border: '1px solid #fed7aa'
+                        }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#fff', position: 'absolute', top: 4, left: 19 }} />
+                          <span style={{ color: '#fff', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 8, lineHeight: 1 }}>SUPER</span>
+                          <span style={{ color: '#fff', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: 1 }}>OFERTA</span>
+                        </div>
+                      </div>
+                    )}
+                    {isPromo && !isOferta && (
                       <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full animate-pulse shadow-md tracking-wider flex items-center gap-1 z-10 font-sans">
                         🔥 OFERTA
                       </div>

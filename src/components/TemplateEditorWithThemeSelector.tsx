@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Palette, Sparkles, Check, ExternalLink, Eye, Moon, Leaf, Image, Flame } from 'lucide-react';
+import { Palette, Sparkles, Check, ExternalLink, Eye, Moon, Leaf, Image, Flame, BookOpen, Upload, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ImageUploadService, UploadProgress } from '../services/imageUploadService';
+import { ImageWithFallback } from './ImageWithFallback';
 
 interface TemplateEditorWithThemeSelectorProps {
   templateId: string;
   onThemeChange?: (theme: QuoteTheme) => void;
 }
 
-export type QuoteTheme = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'darkstudio' | 'promocional';
+export type QuoteTheme = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'darkstudio' | 'promocional' | 'oferta' | 'pdf-elegante';
 
 export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: TemplateEditorWithThemeSelectorProps) {
   const [selectedTheme, setSelectedTheme] = useState<QuoteTheme>('moderno');
@@ -15,6 +17,14 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
   const [saveMessage, setSaveMessage] = useState('');
   const [templateSlug, setTemplateSlug] = useState<string | null>(null);
   const [userSlug, setUserSlug] = useState<string | null>(null);
+
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [footerImageUrl, setFooterImageUrl] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingFooter, setUploadingFooter] = useState(false);
+  const [progressCover, setProgressCover] = useState<UploadProgress | null>(null);
+  const [progressFooter, setProgressFooter] = useState<UploadProgress | null>(null);
 
   useEffect(() => {
     loadCurrentTheme();
@@ -26,7 +36,7 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
 
       const { data: templateData, error: templateError } = await supabase
         .from('templates')
-        .select('tema, slug_template, user_id')
+        .select('tema, slug_template, user_id, cover_image_url, footer_image_url')
         .eq('id', templateId)
         .maybeSingle();
 
@@ -45,7 +55,20 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
           setTemplateSlug(templateData.slug_template);
         }
 
+        if (templateData.cover_image_url) {
+          setCoverImageUrl(templateData.cover_image_url);
+        } else {
+          setCoverImageUrl(null);
+        }
+
+        if (templateData.footer_image_url) {
+          setFooterImageUrl(templateData.footer_image_url);
+        } else {
+          setFooterImageUrl(null);
+        }
+
         if (templateData.user_id) {
+          setUserId(templateData.user_id);
           const { data: profileData } = await supabase
             .from('profiles')
             .select('slug_usuario')
@@ -99,6 +122,103 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
       setTimeout(() => setSaveMessage(''), 3000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (file: File, type: 'cover' | 'footer') => {
+    if (!userId) {
+      alert('Usuário não identificado.');
+      return;
+    }
+    
+    if (type === 'cover') {
+      setUploadingCover(true);
+    } else {
+      setUploadingFooter(true);
+    }
+
+    try {
+      const uploadService = new ImageUploadService((progressData) => {
+        if (type === 'cover') {
+          setProgressCover(progressData);
+        } else {
+          setProgressFooter(progressData);
+        }
+      });
+
+      const result = await uploadService.uploadImage(file, userId, {
+        maxSizeMB: 2,
+        maxWidthPx: 1920,
+        maxHeightPx: 1080,
+        quality: 0.85,
+        allowedFormats: ['image/jpeg', 'image/png'],
+        folder: 'templates',
+      });
+
+      if (!result.success) {
+        alert(`Erro no upload: ${result.error}`);
+        return;
+      }
+
+      const updateData = type === 'cover' 
+        ? { cover_image_url: result.url } 
+        : { footer_image_url: result.url };
+
+      const { error } = await supabase
+        .from('templates')
+        .update(updateData)
+        .eq('id', templateId);
+
+      if (error) throw error;
+
+      if (type === 'cover') {
+        setCoverImageUrl(result.url || null);
+      } else {
+        setFooterImageUrl(result.url || null);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar imagem no banco de dados.');
+    } finally {
+      if (type === 'cover') {
+        setUploadingCover(false);
+        setProgressCover(null);
+      } else {
+        setUploadingFooter(false);
+        setProgressFooter(null);
+      }
+    }
+  };
+
+  const handleRemoveImage = async (type: 'cover' | 'footer') => {
+    const imageUrl = type === 'cover' ? coverImageUrl : footerImageUrl;
+    if (!imageUrl) return;
+
+    if (!confirm('⚠️ Deseja remover esta imagem?')) return;
+
+    try {
+      const uploadService = new ImageUploadService();
+      await uploadService.deleteImage(imageUrl);
+
+      const updateData = type === 'cover' 
+        ? { cover_image_url: null } 
+        : { footer_image_url: null };
+
+      const { error } = await supabase
+        .from('templates')
+        .update(updateData)
+        .eq('id', templateId);
+
+      if (error) throw error;
+
+      if (type === 'cover') {
+        setCoverImageUrl(null);
+      } else {
+        setFooterImageUrl(null);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao remover imagem.');
     }
   };
 
@@ -183,6 +303,26 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
       bgColor: 'bg-red-50',
       borderColor: 'border-red-500',
     },
+    {
+      id: 'oferta' as QuoteTheme,
+      name: '⚡ Oferta Chamativa',
+      description: 'Design ultra chamativo em tons de laranja para alta conversão',
+      icon: Flame,
+      color: 'from-orange-500 to-red-600',
+      textColor: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      borderColor: 'border-orange-500',
+    },
+    {
+      id: 'pdf-elegante' as QuoteTheme,
+      name: 'PDF Elegante 📖',
+      description: 'Livreto premium de 3 páginas (Capa, Proposta, Rodapé) com fundo branco e tons sóbrios',
+      icon: BookOpen,
+      color: 'from-zinc-950 to-amber-600',
+      textColor: 'text-amber-800 dark:text-amber-200',
+      bgColor: 'bg-zinc-950',
+      borderColor: 'border-amber-600',
+    },
   ];
 
   const getPreviewUrl = () => {
@@ -249,6 +389,151 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
             );
           })}
         </div>
+
+        {/* Seção específica de imagens para o tema PDF Elegante */}
+        {selectedTheme === 'pdf-elegante' && (
+          <div className="mt-8 border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-6 space-y-6">
+            <div>
+              <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-amber-600" />
+                Imagens do Orçamento (Tema PDF Elegante)
+              </h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Este tema exibe uma imagem de capa elegante no início (Página 1) e uma imagem de encerramento no rodapé (Página 3).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Imagem de Capa */}
+              <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.08)] rounded-xl p-4 bg-gray-50 dark:bg-white/5 space-y-4">
+                <div>
+                  <h5 className="font-semibold text-sm text-gray-900 dark:text-white">Imagem de Capa (Página 1)</h5>
+                  <p className="text-xs text-gray-500 mt-0.5">Exibida no topo/capa da proposta comercial.</p>
+                </div>
+
+                {coverImageUrl ? (
+                  <div className="relative">
+                    <ImageWithFallback
+                      src={coverImageUrl}
+                      alt="Capa do orçamento"
+                      className="w-full h-40 object-cover rounded-lg border border-gray-300 dark:border-[rgba(255,255,255,0.08)]"
+                      fallbackClassName="w-full h-40 rounded-lg border border-gray-300 dark:border-[rgba(255,255,255,0.08)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage('cover')}
+                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg transition-colors"
+                      title="Remover imagem"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      id="pdf-cover-upload"
+                      accept="image/jpeg,image/png"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, 'cover');
+                      }}
+                      className="hidden"
+                      disabled={uploadingCover}
+                    />
+                    <label
+                      htmlFor="pdf-cover-upload"
+                      className={`border-2 border-dashed border-gray-300 dark:border-[rgba(255,255,255,0.12)] rounded-lg p-6 text-center cursor-pointer hover:border-amber-600 dark:hover:border-amber-500 transition-colors flex flex-col items-center justify-center gap-2 ${
+                        uploadingCover ? 'opacity-65 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {uploadingCover ? (
+                        <div className="space-y-2 text-center">
+                          <Loader2 className="w-8 h-8 text-amber-600 animate-spin mx-auto" />
+                          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                            {progressCover ? progressCover.message : 'Enviando imagem de capa...'}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 text-gray-400 mx-auto" />
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            <span className="font-semibold text-amber-600 hover:text-amber-700">Selecione uma imagem</span> de capa
+                            <p className="text-[10px] text-gray-400 mt-1">JPG, PNG até 2MB</p>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Imagem de Rodapé */}
+              <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.08)] rounded-xl p-4 bg-gray-50 dark:bg-white/5 space-y-4">
+                <div>
+                  <h5 className="font-semibold text-sm text-gray-900 dark:text-white">Imagem de Rodapé (Página 3)</h5>
+                  <p className="text-xs text-gray-500 mt-0.5">Exibida no encerramento da proposta comercial.</p>
+                </div>
+
+                {footerImageUrl ? (
+                  <div className="relative">
+                    <ImageWithFallback
+                      src={footerImageUrl}
+                      alt="Rodapé do orçamento"
+                      className="w-full h-40 object-cover rounded-lg border border-gray-300 dark:border-[rgba(255,255,255,0.08)]"
+                      fallbackClassName="w-full h-40 rounded-lg border border-gray-300 dark:border-[rgba(255,255,255,0.08)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage('footer')}
+                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg transition-colors"
+                      title="Remover imagem"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      id="pdf-footer-upload"
+                      accept="image/jpeg,image/png"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, 'footer');
+                      }}
+                      className="hidden"
+                      disabled={uploadingFooter}
+                    />
+                    <label
+                      htmlFor="pdf-footer-upload"
+                      className={`border-2 border-dashed border-gray-300 dark:border-[rgba(255,255,255,0.12)] rounded-lg p-6 text-center cursor-pointer hover:border-amber-600 dark:hover:border-amber-500 transition-colors flex flex-col items-center justify-center gap-2 ${
+                        uploadingFooter ? 'opacity-65 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {uploadingFooter ? (
+                        <div className="space-y-2 text-center">
+                          <Loader2 className="w-8 h-8 text-amber-600 animate-spin mx-auto" />
+                          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                            {progressFooter ? progressFooter.message : 'Enviando imagem de rodapé...'}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 text-gray-400 mx-auto" />
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            <span className="font-semibold text-amber-600 hover:text-amber-700">Selecione uma imagem</span> de rodapé
+                            <p className="text-[10px] text-gray-400 mt-1">JPG, PNG até 2MB</p>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {saveMessage && (
           <div className={`mt-6 p-4 rounded-lg border-2 ${saveMessage.includes('sucesso')

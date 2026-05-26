@@ -5,7 +5,7 @@
  * sem afetar funcionalidades. Cada tema tem sua paleta e estilo único.
  */
 
-export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio' | 'escuro' | 'studio' | 'promocional';
+export type TemaType = 'moderno' | 'classico' | 'romantico' | 'vibrante' | 'natural' | 'minimalista' | 'pretoebranco' | 'darkstudio' | 'escuro' | 'studio' | 'promocional' | 'oferta' | 'pdf-elegante';
 
 export interface TemaConfig {
   nome: string;
@@ -402,6 +402,41 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
     },
   },
 
+  oferta: {
+    nome: '⚡ Oferta Chamativa',
+    descricao: 'Tema ultra chamativo em tons de laranja vibrante para alta conversão',
+    emoji: '⚡',
+    cores: {
+      primaria: 'bg-orange-600',
+      primariaHover: 'hover:bg-orange-700',
+      primariaDark: 'bg-orange-800',
+      secundaria: 'bg-orange-50',
+      secundariaHover: 'hover:bg-orange-100',
+      acento: 'bg-orange-500',
+      acentoHover: 'hover:bg-orange-600',
+
+      bgPrincipal: 'bg-gradient-to-br from-orange-500 via-amber-500 to-red-500',
+      bgSecundario: 'bg-orange-50',
+      bgCard: 'bg-white',
+      bgHover: 'hover:bg-orange-50',
+
+      textoPrincipal: 'text-gray-900',
+      textoSecundario: 'text-gray-700',
+      textoDestaque: 'text-orange-600',
+
+      borda: 'border-orange-200',
+      divisor: 'divide-orange-200',
+    },
+    estilos: {
+      borderRadius: 'rounded-2xl',
+      borderWidth: 'border-2',
+      shadow: 'shadow-xl',
+      shadowHover: 'hover:shadow-2xl',
+      fontFamily: 'font-sans',
+      fontHeading: 'font-extrabold',
+    },
+  },
+
   darkstudio: {
     nome: 'Dark Studio ✨',
     descricao: 'Premium dark com acentos verdes neon',
@@ -434,6 +469,41 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       shadowHover: 'hover:shadow-2xl',
       fontFamily: 'font-sans',
       fontHeading: 'font-bold',
+    },
+  },
+
+  'pdf-elegante': {
+    nome: 'PDF Elegante 📖',
+    descricao: 'Livreto premium de 3 páginas (Capa, Proposta, Rodapé) em tons de carvão e dourado suave',
+    emoji: '📖',
+    cores: {
+      primaria: 'bg-neutral-900',
+      primariaHover: 'hover:bg-neutral-800',
+      primariaDark: 'bg-black',
+      secundaria: 'bg-neutral-100',
+      secundariaHover: 'hover:bg-neutral-200',
+      acento: 'bg-amber-600',
+      acentoHover: 'hover:bg-amber-700',
+
+      bgPrincipal: 'bg-white',
+      bgSecundario: 'bg-neutral-50',
+      bgCard: 'bg-white',
+      bgHover: 'hover:bg-neutral-50',
+
+      textoPrincipal: 'text-neutral-900',
+      textoSecundario: 'text-neutral-500',
+      textoDestaque: 'text-amber-800',
+
+      borda: 'border-neutral-200',
+      divisor: 'divide-neutral-200',
+    },
+    estilos: {
+      borderRadius: 'rounded-none',
+      borderWidth: 'border',
+      shadow: 'shadow-md',
+      shadowHover: 'hover:shadow-lg',
+      fontFamily: 'font-serif',
+      fontHeading: 'font-bold font-serif',
     },
   },
 };

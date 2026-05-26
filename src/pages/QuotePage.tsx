@@ -20,6 +20,8 @@ import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
 import { detectBrowser, getReferrer, logBrowserInfo } from '../lib/browserDetection';
 import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
 import { QuotePromocional } from '../components/quote-themes/QuotePromocional';
+import { QuoteOferta } from '../components/quote-themes/QuoteOferta';
+import { QuotePdfElegante } from '../components/quote-themes/QuotePdfElegante';
 
 interface Produto {
   id: string;
@@ -1615,6 +1617,94 @@ export function QuotePage() {
     );
   }
 
+  if (template?.tema === 'oferta' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      fieldErrors,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+      formasPagamento: formasPagamentoProcessadas,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
+    };
+    return (
+      <>
+        <CookieBanner />
+        <QuoteOferta {...commonProps} />
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="oferta"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
+      </>
+    );
+  }
+  if (template?.tema === 'pdf-elegante' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      fieldErrors,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+      formasPagamento: formasPagamentoProcessadas,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
+    };
+    return (
+      <>
+        <CookieBanner />
+        <QuotePdfElegante {...commonProps} />
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="pdf-elegante"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
+      </>
+    );
+  }
   if (template?.tema === 'darkstudio' && !loading && template && profile) {
     const commonProps = {
       template,

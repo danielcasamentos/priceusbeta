@@ -61,6 +61,14 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
         @keyframes glow { 0%,100% { box-shadow:0 0 20px rgba(34,197,94,.2); } 50% { box-shadow:0 0 40px rgba(34,197,94,.4); } }
         @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.03); } }
+        @keyframes swing {
+          0%, 100% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+        }
+        @keyframes border-glow-orange {
+          0%, 100% { border-color: #ea580c; box-shadow: 0 0 10px rgba(234, 88, 12, 0.3); }
+          50% { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        }
         .ds-card { transition: transform .25s ease, box-shadow .25s ease; }
         .ds-card:hover { transform: translateY(-4px); box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(34,197,94,.2); }
         .ds-badge { animation: fadeUp .5s ease both; }
@@ -68,6 +76,14 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
         .ds-name { animation: fadeUp .6s ease .2s both; }
         .ds-bio { animation: fadeUp .6s ease .35s both; }
         .ds-btns { animation: fadeUp .6s ease .45s both; }
+        .oferta-chamativa-card-ds {
+          animation: border-glow-orange 3s infinite ease-in-out;
+          border: 2px solid #ea580c !important;
+        }
+        .oferta-swing-tag {
+          animation: swing 2.5s infinite ease-in-out;
+          transform-origin: top center;
+        }
       `}</style>
 
       {/* ── NAV ── */}
@@ -182,7 +198,8 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 24 }}>
               {templates.map((template, i) => {
-                const isPromo = template.tema === 'promocional';
+                const isPromo = template.tema === 'promocional' || template.tema === 'oferta';
+                const isOferta = template.tema === 'oferta';
                 return (
                   <Link
                     key={template.id}
@@ -190,10 +207,10 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
                     style={{ textDecoration: 'none', animation: `fadeUp .5s ease ${i * .1 + .2}s both` }}
                   >
                     <div
-                      className="ds-card"
+                      className={isOferta ? "ds-card oferta-chamativa-card-ds" : "ds-card"}
                       style={{ 
-                        background: isPromo ? 'rgba(220,38,38,.07)' : 'rgba(255,255,255,.04)', 
-                        border: isPromo ? '2px solid #dc2626' : '1px solid rgba(255,255,255,.09)', 
+                        background: isOferta ? 'rgba(234,88,12,.08)' : isPromo ? 'rgba(220,38,38,.07)' : 'rgba(255,255,255,.04)', 
+                        border: isOferta ? '2px solid #ea580c' : isPromo ? '2px solid #dc2626' : '1px solid rgba(255,255,255,.09)', 
                         borderRadius: 20, 
                         overflow: 'hidden', 
                         height: '100%', 
@@ -202,7 +219,29 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
                         position: 'relative' 
                       }}
                     >
-                      {isPromo && (
+                      {isOferta && (
+                        <div className="absolute -top-1 right-6 z-10 oferta-swing-tag" style={{ width: 44, height: 70, pointerEvents: 'none' }}>
+                          <div style={{ width: 2, height: 16, backgroundColor: '#ea580c', margin: '0 auto' }} />
+                          <div style={{
+                            width: 44,
+                            height: 54,
+                            background: 'linear-gradient(135deg, #ea580c, #ef4444)',
+                            borderRadius: '4px 4px 8px 8px',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative',
+                            border: '1px solid #fed7aa'
+                          }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#fff', position: 'absolute', top: 4, left: 19 }} />
+                            <span style={{ color: '#fff', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 8, lineHeight: 1 }}>SUPER</span>
+                            <span style={{ color: '#fff', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: 1 }}>OFERTA</span>
+                          </div>
+                        </div>
+                      )}
+                      {isPromo && !isOferta && (
                         <div style={{ position: 'absolute', top: 12, right: 12, background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 999, letterSpacing: '1px' }}>
                           🔥 OFERTA
                         </div>

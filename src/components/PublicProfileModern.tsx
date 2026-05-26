@@ -48,6 +48,25 @@ export function PublicProfileModern({ profile, templates, reviews, averageRating
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-cyan-50 via-blue-50 to-purple-100">
+      <style>{`
+        @keyframes swing {
+          0%, 100% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+        }
+        @keyframes border-glow-orange {
+          0%, 100% { border-color: #ea580c; box-shadow: 0 0 10px rgba(234, 88, 12, 0.3); }
+          50% { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        }
+        .oferta-chamativa-card {
+          animation: border-glow-orange 3s infinite ease-in-out;
+          border-width: 4px;
+          background-color: #fff;
+        }
+        .oferta-swing-tag {
+          animation: swing 2.5s infinite ease-in-out;
+          transform-origin: top center;
+        }
+      `}</style>
       <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 md:py-16">
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-12 relative border-4 border-cyan-200">
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-400/20 to-purple-400/20 rounded-full blur-3xl"></div>
@@ -155,18 +174,43 @@ export function PublicProfileModern({ profile, templates, reviews, averageRating
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               {templates.map((template) => {
-                const isPromo = template.tema === 'promocional';
+                const isPromo = template.tema === 'promocional' || template.tema === 'oferta';
+                const isOferta = template.tema === 'oferta';
                 return (
                 <Link
                   key={template.id}
                   to={`/${profile.slug_usuario}/${template.slug_template}`}
-                  className={`rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group ${
-                    isPromo
-                      ? 'border-4 border-red-400 hover:border-red-500 bg-white'
-                      : 'border-4 border-cyan-200 hover:border-purple-300 bg-white'
+                  className={`rounded-3xl shadow-2xl hover:shadow-2xl transition-all overflow-hidden group relative ${
+                    isOferta
+                      ? 'oferta-chamativa-card scale-[1.02] md:scale-105'
+                      : isPromo
+                        ? 'border-4 border-red-400 hover:border-red-500 bg-white scale-[1.02] md:scale-105'
+                        : 'border-4 border-cyan-200 hover:border-purple-300 bg-white'
                   }`}
                 >
-                  {isPromo && (
+                  {isOferta && (
+                    <div className="absolute -top-1 right-6 z-10 oferta-swing-tag" style={{ width: 44, height: 70, pointerEvents: 'none' }}>
+                      <div style={{ width: 2, height: 16, backgroundColor: '#ea580c', margin: '0 auto' }} />
+                      <div style={{
+                        width: 44,
+                        height: 54,
+                        background: 'linear-gradient(135deg, #ea580c, #ef4444)',
+                        borderRadius: '4px 4px 8px 8px',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        border: '1px solid #fed7aa'
+                      }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#fff', position: 'absolute', top: 4, left: 19 }} />
+                        <span style={{ color: '#fff', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 8, lineHeight: 1 }}>SUPER</span>
+                        <span style={{ color: '#fff', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: 1 }}>OFERTA</span>
+                      </div>
+                    </div>
+                  )}
+                  {isPromo && !isOferta && (
                     <div style={{ background: 'linear-gradient(90deg, #dc2626, #ea580c, #f59e0b)', padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                       <span style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>🔥 Oferta Especial — Condições Exclusivas</span>
                     </div>
