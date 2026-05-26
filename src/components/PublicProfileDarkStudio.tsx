@@ -14,6 +14,7 @@ interface Profile {
   email_recebimento: string;
   slug_usuario: string;
   meta_description: string;
+  status_assinatura?: string | null;
 }
 
 interface Template {
@@ -361,14 +362,16 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
       )}
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: '#04090f', padding: '32px 24px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,.3)' }}>
-          Powered by{' '}
-          <Link to="/" style={{ color: '#22c55e', fontWeight: 700, textDecoration: 'none' }}>
-            PriceUs
-          </Link>
-        </p>
-      </footer>
+      {!(profile.status_assinatura === 'active' || profile.status_assinatura === 'trial') && (
+        <footer style={{ background: '#04090f', padding: '32px 24px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,.3)' }}>
+            Powered by{' '}
+            <Link to="/" style={{ color: '#22c55e', fontWeight: 700, textDecoration: 'none' }}>
+              PriceUs
+            </Link>
+          </p>
+        </footer>
+      )}
     </div>
   );
 }

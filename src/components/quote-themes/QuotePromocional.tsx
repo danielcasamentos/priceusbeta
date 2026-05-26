@@ -643,12 +643,14 @@ export function QuotePromocional(props: QuotePromocionalProps) {
       )}
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: '#fff', borderTop: '2px solid #fee2e2', padding: '24px', textAlign: 'center' }}>
-        <p style={{ fontSize: 12, color: '#9ca3af' }}>
-          Powered by{' '}
-          <a href="/" style={{ color: '#dc2626', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
-        </p>
-      </footer>
+      {!(profile?.status_assinatura === 'active' || profile?.status_assinatura === 'trial') && (
+        <footer style={{ background: '#fff', borderTop: '2px solid #fee2e2', padding: '24px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: '#9ca3af' }}>
+            Powered by{' '}
+            <a href="/" style={{ color: '#dc2626', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
+          </p>
+        </footer>
+      )}
     </div>
   );
 }

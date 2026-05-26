@@ -13,6 +13,7 @@ interface Profile {
   whatsapp_principal: string;
   email_recebimento: string;
   slug_usuario: string;
+  status_assinatura?: string | null;
 }
 
 interface Template {
@@ -283,16 +284,18 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
         )}
       </div>
 
-      <footer className="bg-slate-900 text-white py-10 mt-16">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-slate-400 font-light">
-            Powered by{' '}
-            <Link to="/" className="text-slate-300 hover:text-white font-normal">
-              PriceU$
-            </Link>
-          </p>
-        </div>
-      </footer>
+      {!(profile.status_assinatura === 'active' || profile.status_assinatura === 'trial') && (
+        <footer className="bg-slate-900 text-white py-10 mt-16">
+          <div className="max-w-6xl mx-auto px-4 text-center">
+            <p className="text-slate-400 font-light">
+              Powered by{' '}
+              <Link to="/" className="text-slate-300 hover:text-white font-normal">
+                PriceU$
+              </Link>
+            </p>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

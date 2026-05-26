@@ -152,7 +152,7 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
         maxHeightPx: 1080,
         quality: 0.85,
         allowedFormats: ['image/jpeg', 'image/png'],
-        folder: 'templates',
+        folder: 'uploads',
       });
 
       if (!result.success) {
