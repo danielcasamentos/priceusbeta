@@ -38,7 +38,10 @@ const leadPayloadSchemaFinal = z.object({
         })
       )
       .min(1, { message: 'Pelo menos um produto deve ser selecionado' }),
-    forma_pagamento_id: z.string().uuid().optional().nullable(),
+    forma_pagamento_id: z.preprocess(
+      (val) => (val === '' ? null : val),
+      z.string().uuid().optional().nullable()
+    ),
     priceBreakdown: z.record(z.any()).optional(),
   }),
   valorTotal: z.number(),

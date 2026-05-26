@@ -1476,7 +1476,7 @@ export function QuotePage() {
                 produto_id,
                 quantidade: Number(quantidade),
               })),
-              forma_pagamento_id: selectedFormaPagamento,
+              forma_pagamento_id: selectedFormaPagamento || null,
               priceBreakdown: getPriceBreakdown(),
             },
             valorTotal: calculateTotal(),

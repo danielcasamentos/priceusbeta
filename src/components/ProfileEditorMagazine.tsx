@@ -166,7 +166,7 @@ export function ProfileEditorMagazine({ userId }: ProfileEditorMagazineProps) {
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}/${Date.now()}.${fileExt}`;
+      const fileName = `profile/${userId}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('images')
