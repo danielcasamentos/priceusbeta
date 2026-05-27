@@ -19,7 +19,24 @@ type GrowthTab = 'sazonal' | 'clientes' | 'whatsapp' | 'redes' | 'parcerias';
 interface EventoAgenda {
   id: string; data_evento: string; tipo_evento: string;
   cliente_nome: string; cidade?: string; status: string;
+  lead_id?: string | null;
+  leads?: {
+    telefone_cliente: string | null;
+  } | null;
 }
+interface ClientRecommendation {
+  clienteNome: string;
+  tipoEvento: string;
+  dataEvento: string;
+  diasPassados: number;
+  telefone: string;
+  tipoSugestao: 'album' | 'ensaios' | '15anos_followup' | 'geral_6m' | 'geral_1y';
+  titulo: string;
+  dica: string;
+  tag: string;
+  mensagemWhatsapp: string;
+}
+
 interface Transacao {
   id: string; descricao: string; valor: number; data: string;
   status: string; tipo: string; forma_pagamento?: string;
@@ -47,9 +64,15 @@ interface SeasonalEvent {
   dica: string; emoji: string; urgency: 'high' | 'medium' | 'low';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+function cleanPhone(phone: string) {
+  if (!phone) return '';
+  const cleaned = phone.replace(/\D/g, '');
+  if ((cleaned.length === 10 || cleaned.length === 11) && !cleaned.startsWith('55')) {
+    return '55' + cleaned;
+  }
+  return cleaned;
+}
+
 function fmt(d: string) {
   if (!d) return '';
   const p = new Date(d + 'T12:00:00');
@@ -237,6 +260,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [tarefasAmanha, setTarefasAmanha] = useState<TarefaWorkflow[]>([]);
   const [receitaMes, setReceitaMes] = useState(0);
   const [receitaAno, setReceitaAno] = useState(0);
+  const [allEventos, setAllEventos] = useState<EventoAgenda[]>([]);
 
   // ── Company Tasks (new) ───────────────────────────────────────────────────
   const [companyTasks, setCompanyTasks] = useState<CompanyTask[]>([]);
@@ -257,7 +281,108 @@ export function MeuDia({ userId }: MeuDiaProps) {
 
   const range = getRangeForPeriodo(periodo, customStart, customEnd);
 
-  // ── Main Load ──────────────────────────────────────────────────────────────
+  const clientRecommendations = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const recs: ClientRecommendation[] = [];
+
+    allEventos.forEach(ev => {
+      if (ev.status !== 'confirmado' && ev.status !== 'realizado') return;
+      if (!ev.data_evento) return;
+
+      const evDate = new Date(ev.data_evento + 'T12:00:00');
+      if (isNaN(evDate.getTime())) return;
+      if (evDate >= today) return;
+
+      const diffTime = Math.abs(today.getTime() - evDate.getTime());
+      const diasPassados = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      const tipoLower = (ev.tipo_evento || '').toLowerCase();
+      const telefone = ev.leads?.telefone_cliente || '';
+
+      const isCasamento = tipoLower.includes('casamento') || tipoLower.includes('wedding') || tipoLower.includes('noiv');
+      const isEnsaio = tipoLower.includes('ensaio') || tipoLower.includes('shoot') || tipoLower.includes('sess') || tipoLower.includes('book') || tipoLower.includes('portrait');
+      const is15Anos = tipoLower.includes('15 anos') || tipoLower.includes('debutante') || tipoLower.includes('15anos') || tipoLower.includes('sweet 15') || tipoLower.includes('sweet15');
+
+      let tipoSugestao: ClientRecommendation['tipoSugestao'] | null = null;
+      let titulo = '';
+      let dica = '';
+      let tag = '';
+      let mensagemWhatsapp = '';
+
+      if (isCasamento) {
+        if (diasPassados >= 25 && diasPassados <= 60) {
+          tipoSugestao = 'album';
+          titulo = 'Venda de Álbum Premium';
+          dica = `Faz ${Math.round(diasPassados / 30) || 1} mês que o casamento aconteceu. A empolgação com as fotos digitais está no auge, o timing perfeito para oferecer a diagramação de um álbum físico impresso.`;
+          tag = 'Álbum / Upsell';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Como estão os primeiros dias de casados? ❤️ Passando para avisar que a seleção de fotos de vocês ficou incrível! Sabia que nós criamos álbuns premium personalizados? Suas fotos merecem ser eternizadas em papel. Quer que eu te mande nosso catálogo de capas de couro e linho?`;
+        } else if (diasPassados >= 340 && diasPassados <= 380) {
+          tipoSugestao = 'ensaios';
+          titulo = 'Bodas de Papel (1 Ano)';
+          dica = `Aniversário de 1 ano de casamento chegando! Ofereça um ensaio romântico comemorativo para registrar o primeiro ano de vida a dois.`;
+          tag = 'Bodas de Papel';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Feliz aniversário de 1 ano de casados chegando! ✨ Que ano especial, né? Para comemorar essa data tão linda das Bodas de Papel, o que vocês acham de fazermos um ensaio fotográfico romântico rápido para celebrar? Tenho duas datas para esse mês, vamos aproveitar?`;
+        }
+      } else if (isEnsaio) {
+        if (diasPassados >= 170 && diasPassados <= 200) {
+          tipoSugestao = 'ensaios';
+          titulo = 'Atualização de Fotos (6 Meses)';
+          dica = `Já faz 6 meses desde o ensaio anterior. Sugira uma nova sessão temática ou atualização de fotos profissionais/pessoais para o novo semestre.`;
+          tag = 'Novas Fotos';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Tudo bem? Já se passaram 6 meses desde o nosso ensaio fotográfico! 📸 Passando para ver como você está e sugerir que fizéssemos uma nova sessão para atualizar seu feed/porta-retratos, talvez um ensaio de temporada ou estilo urbano. Vamos agendar para as próximas semanas?`;
+        } else if (diasPassados >= 340 && diasPassados <= 380) {
+          tipoSugestao = 'ensaios';
+          titulo = 'Ensaio Anual da Família';
+          dica = `Faz 1 ano que o cliente fotografou com você. Excelente momento para fidelizar e oferecer um cupom de desconto exclusivo para manter a tradição de fotos anuais.`;
+          tag = 'Fidelização';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Já faz 1 ano inteiro desde que fizemos aquelas fotos lindas! O tempo voa de pressa... Que tal fazermos um novo ensaio anual para registrar essa nova fase da sua vida ou da sua família? Tenho um cupom de 10% de desconto especial para clientes recorrentes esse mês. Vamos conversar?`;
+        }
+      } else if (is15Anos) {
+        if (diasPassados >= 340 && diasPassados <= 380) {
+          tipoSugestao = '15anos_followup';
+          titulo = 'Ensaio Sweet 16 (1 Ano)';
+          dica = `Completa 1 ano do aniversário de 15 anos. Ofereça um ensaio de estilo urban/fashion para comemorar os 16 anos.`;
+          tag = 'Sweet 16';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Faz 1 ano daquela festa de 15 anos maravilhosa! Que saudade daquele dia incrível. O que você acha de fazermos um ensaio de aniversário de 16 anos, mais focado em estilo de moda e street style para atualizar as fotos e redes sociais? Seria incrível!`;
+        }
+      }
+
+      if (!tipoSugestao) {
+        if (diasPassados >= 170 && diasPassados <= 200) {
+          tipoSugestao = 'geral_6m';
+          titulo = 'Reativação (6 Meses)';
+          dica = `Faz 6 meses desde o evento de ${ev.tipo_evento}. Excelente oportunidade para mandar uma mensagem, quebrar o gelo e ver se precisam de novos registros.`;
+          tag = 'Reativação';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Passando para te mandar um abraço e ver se está tudo bem! Já faz 6 meses desde as fotos de ${ev.tipo_evento}. Se precisar de algum novo registro fotográfico ou ensaio para este semestre, estou por aqui!`;
+        } else if (diasPassados >= 340 && diasPassados <= 380) {
+          tipoSugestao = 'geral_1y';
+          titulo = 'Aniversário de Parceria';
+          dica = `Completa 1 ano desde o último serviço. Envie uma mensagem comemorativa e ofereça uma vantagem de fidelidade.`;
+          tag = 'Retenção';
+          mensagemWhatsapp = `Oi ${ev.cliente_nome}! Tudo bem? Passando para te dar um oi e comemorar 1 ano desde o nosso último trabalho juntos no evento de ${ev.tipo_evento}! Como agradecimento pela confiança, tenho uma condição especial para o seu próximo ensaio este mês. Vamos conversar?`;
+        }
+      }
+
+      if (tipoSugestao) {
+        recs.push({
+          clienteNome: ev.cliente_nome,
+          tipoEvento: ev.tipo_evento,
+          dataEvento: ev.data_evento,
+          diasPassados,
+          telefone,
+          tipoSugestao,
+          titulo,
+          dica,
+          tag,
+          mensagemWhatsapp
+        });
+      }
+    });
+
+    return recs;
+  }, [allEventos]);
+
   const load = useCallback(async () => {
     setLoading(true);
     const hoje = getToday();
@@ -278,7 +403,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       if (range.end?.trim()) trQuery = trQuery.lte('data', range.end);
       trQuery = trQuery.order('data');
 
-      const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes, trMesRes, trAnoRes, cashflowRes, profileRes] =
+      const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes] =
         await Promise.all([
           evQuery,
           trQuery,
@@ -289,6 +414,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioAno).lte('data', hoje),
           supabase.from('company_transactions').select('id, descricao, valor, data, status, tipo').eq('user_id', userId).gte('data', inicioMes).lte('data', fim3Meses).order('data'),
           supabase.from('profiles').select('lucro_desejado').eq('id', userId).maybeSingle(),
+          supabase.from('eventos_agenda').select('id, data_evento, tipo_evento, cliente_nome, status, lead_id, leads(telefone_cliente)').eq('user_id', userId).order('data_evento', { ascending: false }),
         ]);
 
       setEventos(evRes.data || []);
@@ -296,6 +422,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       setEventosAmanha(evAmanhaRes.data || []);
       setTransacoesAmanha(trAmanhaRes.data || []);
       setCashflowTr((cashflowRes.data as Transacao[]) || []);
+      setAllEventos((allEvRes.data as any[]) || []);
 
       const pd = profileRes.data as { lucro_desejado?: number } | null;
       if (pd?.lucro_desejado) setLucroDesejado(pd.lucro_desejado);
@@ -1073,6 +1200,74 @@ export function MeuDia({ userId }: MeuDiaProps) {
                   ))}
                 </div>
               )}
+            </div>
+          ) : growthTab === 'clientes' ? (
+            <div className="space-y-8">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-violet-400 mb-4 flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 animate-pulse" />
+                  Oportunidades de Reativação por Cliente
+                </h4>
+                {clientRecommendations.length === 0 ? (
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-gray-400 text-xs">
+                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    Nenhuma sugestão automatizada de remarketing baseada nas datas de eventos passados no momento.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {clientRecommendations.map((rec, i) => (
+                      <div key={i} className="bg-gradient-to-br from-violet-950/20 to-slate-900/40 rounded-2xl p-5 border border-violet-500/20 flex flex-col justify-between hover:border-violet-500/40 transition-colors">
+                        <div>
+                          <div className="flex items-start justify-between mb-2">
+                            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded bg-violet-500/20 text-violet-300 uppercase tracking-wider">
+                              {rec.tag}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-medium">
+                              Há {rec.diasPassados} dias
+                            </span>
+                          </div>
+                          <h5 className="font-black text-white text-sm mb-1 truncate">{rec.clienteNome}</h5>
+                          <p className="text-[10px] text-gray-500 mb-3">
+                            {rec.tipoEvento} · {fmt(rec.dataEvento)}
+                          </p>
+                          <p className="text-xs font-bold text-violet-200 mb-1.5">{rec.titulo}</p>
+                          <p className="text-[11px] text-gray-300 leading-relaxed mb-4">{rec.dica}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const waUrl = rec.telefone 
+                              ? `https://wa.me/${cleanPhone(rec.telefone)}?text=${encodeURIComponent(rec.mensagemWhatsapp)}`
+                              : `https://wa.me/?text=${encodeURIComponent(rec.mensagemWhatsapp)}`;
+                            window.open(waUrl, '_blank');
+                          }}
+                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors mt-auto shadow-sm"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          Enviar Script no WhatsApp
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-6 border-t border-white/10">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+                  💡 Estratégias Gerais de Remarketing
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {GROWTH_TIPS.clientes.map((tip, i) => (
+                    <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/10 hover:bg-white/8 transition-colors">
+                      <div className="flex items-start justify-between mb-3">
+                        <span className="text-2xl">{tip.emoji}</span>
+                        <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-violet-500/20 text-violet-300">{tip.tag}</span>
+                      </div>
+                      <p className="font-black text-white text-sm mb-2">{tip.titulo}</p>
+                      <p className="text-xs text-gray-300 leading-relaxed">{tip.dica}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
