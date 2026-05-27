@@ -170,6 +170,415 @@ function SaveTemplateModal({
   );
 }
 
+// ── Modal Gerenciar Templates ─────────────────────────────
+interface ManageTemplatesModalProps {
+  userId: string;
+  onClose: () => void;
+  onTemplatesChanged?: () => void;
+}
+
+function ManageTemplatesModal({
+  userId,
+  onClose,
+  onTemplatesChanged,
+}: ManageTemplatesModalProps) {
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | null>(null);
+  
+  // Editor state
+  const [editNome, setEditNome] = useState('');
+  const [editEtapas, setEditEtapas] = useState<WorkflowTemplateStep[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('workflow_templates')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setTemplates((data as WorkflowTemplate[]) || []);
+    } catch (err) {
+      console.error('Erro ao carregar modelos:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectTemplate = (t: WorkflowTemplate) => {
+    setSelectedTemplate(t);
+    setEditNome(t.nome);
+    setEditEtapas(JSON.parse(JSON.stringify(t.etapas))); // Deep clone stages
+    setSaveSuccess(false);
+  };
+
+  const handleAddStep = () => {
+    setEditEtapas([...editEtapas, { label: 'Nova etapa', description: '' }]);
+  };
+
+  const handleRemoveStep = (index: number) => {
+    setEditEtapas(editEtapas.filter((_, i) => i !== index));
+  };
+
+  const handleMoveStep = (index: number, direction: 'up' | 'down') => {
+    const newEtapas = [...editEtapas];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newEtapas.length) return;
+    
+    // Swap
+    const temp = newEtapas[index];
+    newEtapas[index] = newEtapas[targetIndex];
+    newEtapas[targetIndex] = temp;
+    setEditEtapas(newEtapas);
+  };
+
+  const handleStepChange = (index: number, field: 'label' | 'description', val: string) => {
+    const newEtapas = [...editEtapas];
+    newEtapas[index] = {
+      ...newEtapas[index],
+      [field]: val,
+    };
+    setEditEtapas(newEtapas);
+  };
+
+  const handleSave = async () => {
+    if (!selectedTemplate || !editNome.trim()) return;
+    setSaving(true);
+    setSaveSuccess(false);
+    try {
+      const { error } = await supabase
+        .from('workflow_templates')
+        .update({
+          nome: editNome.trim(),
+          etapas: editEtapas,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedTemplate.id);
+
+      if (error) throw error;
+      
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      
+      await loadTemplates();
+      
+      // Update selected template local representation
+      const updated = {
+        ...selectedTemplate,
+        nome: editNome.trim(),
+        etapas: editEtapas,
+      };
+      setSelectedTemplate(updated);
+      
+      if (onTemplatesChanged) {
+        onTemplatesChanged();
+      }
+    } catch (err) {
+      console.error('Erro ao salvar alterações do modelo:', err);
+      alert('Erro ao salvar alterações.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir permanentemente este modelo?')) return;
+    try {
+      const { error } = await supabase
+        .from('workflow_templates')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (selectedTemplate?.id === id) {
+        setSelectedTemplate(null);
+        setEditNome('');
+        setEditEtapas([]);
+      }
+
+      await loadTemplates();
+      
+      if (onTemplatesChanged) {
+        onTemplatesChanged();
+      }
+    } catch (err) {
+      console.error('Erro ao excluir modelo:', err);
+      alert('Erro ao excluir modelo.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-[#0a1628] border dark:border-white/10 rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+        
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Gerenciar Modelos de Workflows</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Renomeie, edite etapas ou remova modelos personalizados.</p>
+          </div>
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content Container */}
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+          
+          {/* Left Column: Templates List */}
+          <div className="w-full md:w-80 border-r border-gray-200 dark:border-white/10 flex flex-col min-h-0 bg-gray-50/20 dark:bg-black/10">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01]">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Modelos Disponíveis ({templates.length})
+              </span>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-400 dark:text-gray-500">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                  <span className="text-xs">Carregando modelos...</span>
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="text-center py-12 text-xs text-gray-400 dark:text-gray-500">
+                  Nenhum modelo personalizado salvo ainda.
+                </div>
+              ) : (
+                templates.map((t) => {
+                  const isSelected = selectedTemplate?.id === t.id;
+                  return (
+                    <div 
+                      key={t.id}
+                      onClick={() => handleSelectTemplate(t)}
+                      className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border border-blue-200/50 dark:border-blue-500/20' 
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="text-sm truncate font-medium">{t.nome}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500">
+                          {t.etapas.length} {t.etapas.length === 1 ? 'etapa' : 'etapas'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md transition-all flex-shrink-0"
+                        title="Excluir Modelo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Editor Space */}
+          <div className="flex-1 flex flex-col min-h-0 bg-gray-50/50 dark:bg-[#07101f]/10">
+            {!selectedTemplate ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-950/20 flex items-center justify-center text-blue-500 mb-4 shadow-inner">
+                  <FolderOpen className="w-8 h-8" />
+                </div>
+                <h4 className="text-base font-bold text-gray-900 dark:text-white mb-1">Selecione um Modelo</h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
+                  Escolha um modelo de workflow na lista lateral para editar suas etapas, renomeá-lo ou excluí-lo.
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Form Body - Scrollable */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  
+                  {/* Name Input */}
+                  <div className="bg-white dark:bg-[#091424] border dark:border-white/5 p-4 rounded-xl shadow-sm space-y-2">
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Nome do Modelo
+                    </label>
+                    <input
+                      type="text"
+                      value={editNome}
+                      onChange={(e) => setEditNome(e.target.value)}
+                      placeholder="Ex: Workflow de Gestão Completo"
+                      className="w-full border border-gray-300 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                    />
+                  </div>
+
+                  {/* Steps List */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Etapas do Fluxo ({editEtapas.length})
+                      </span>
+                    </div>
+
+                    {editEtapas.length === 0 ? (
+                      <div className="text-center py-8 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-sm text-gray-400 dark:text-gray-500 bg-white dark:bg-[#091424]">
+                        Nenhuma etapa neste modelo. Adicione pelo menos uma.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {editEtapas.map((step, idx) => (
+                          <div 
+                            key={idx}
+                            className="bg-white dark:bg-[#091424] border border-gray-200 dark:border-white/5 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative flex gap-3"
+                          >
+                            {/* Drag Indicator & Order */}
+                            <div className="flex flex-col items-center justify-start gap-1 pt-1.5 flex-shrink-0 text-gray-400 dark:text-gray-500">
+                              <span className="text-xs font-bold w-6 h-6 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-600 dark:text-gray-300">
+                                {idx + 1}
+                              </span>
+                              <div className="flex flex-col gap-0.5 mt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveStep(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="Mover para Cima"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveStep(idx, 'down')}
+                                  disabled={idx === editEtapas.length - 1}
+                                  className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="Mover para Baixo"
+                                >
+                                  <ChevronDown className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Inputs */}
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                  Nome da Etapa
+                                </span>
+                                <input
+                                  type="text"
+                                  value={step.label}
+                                  onChange={(e) => handleStepChange(idx, 'label', e.target.value)}
+                                  placeholder="Ex: Reunião de Alinhamento"
+                                  className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                  Descrição
+                                </span>
+                                <input
+                                  type="text"
+                                  value={step.description}
+                                  onChange={(e) => handleStepChange(idx, 'description', e.target.value)}
+                                  placeholder="Ex: Explicar prazos e entregar briefing"
+                                  className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Action: Delete Step */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveStep(idx)}
+                              className="self-center p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors flex-shrink-0"
+                              title="Remover Etapa"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add Step Button */}
+                    <button
+                      type="button"
+                      onClick={handleAddStep}
+                      className="w-full py-2 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" /> Adicionar Etapa ao Modelo
+                    </button>
+                  </div>
+
+                </div>
+
+                {/* Form Footer */}
+                <div className="px-6 py-4 border-t border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#081220] flex items-center justify-between flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(selectedTemplate.id)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Excluir Modelo
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    {saveSuccess && (
+                      <span className="text-xs text-green-600 dark:text-green-400 font-semibold">
+                        ✓ Salvo com sucesso!
+                      </span>
+                    )}
+                    
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTemplate(selectedTemplate)}
+                      className="px-4 py-2 text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-semibold transition-colors"
+                    >
+                      Descartar
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={!editNome.trim() || editEtapas.length === 0 || saving}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 shadow"
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          Salvar Alterações
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ── WorkflowStepper (componente principal) ───────────────
 export function WorkflowStepper({
   leadId,
@@ -183,6 +592,7 @@ export function WorkflowStepper({
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showManageTemplates, setShowManageTemplates] = useState(false);
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [highlightedStepId, setHighlightedStepId] = useState<string | null>(null);
@@ -340,7 +750,13 @@ export function WorkflowStepper({
               <FolderOpen className="w-3.5 h-3.5" /> Usar Modelo
             </button>
             {showTemplateMenu && (
-              <TemplateMenu templates={templates} onApply={applyTemplate} onDelete={deleteTemplate} onClose={() => setShowTemplateMenu(false)} />
+              <TemplateMenu 
+                templates={templates} 
+                onApply={applyTemplate} 
+                onDelete={deleteTemplate} 
+                onClose={() => setShowTemplateMenu(false)} 
+                onManage={() => setShowManageTemplates(true)}
+              />
             )}
           </div>
         </div>
@@ -523,6 +939,7 @@ export function WorkflowStepper({
               onApply={applyTemplate}
               onDelete={deleteTemplate}
               onClose={() => setShowTemplateMenu(false)}
+              onManage={() => setShowManageTemplates(true)}
             />
           )}
         </div>
@@ -534,7 +951,16 @@ export function WorkflowStepper({
           userId={userId}
           workflow={workflow}
           onClose={() => setShowSaveTemplate(false)}
-          onSaved={() => {}}
+          onSaved={loadTemplates}
+        />
+      )}
+
+      {/* Modal Gerenciar Templates */}
+      {showManageTemplates && (
+        <ManageTemplatesModal
+          userId={userId}
+          onClose={() => setShowManageTemplates(false)}
+          onTemplatesChanged={loadTemplates}
         />
       )}
     </div>
@@ -547,11 +973,13 @@ function TemplateMenu({
   onApply,
   onDelete,
   onClose,
+  onManage,
 }: {
   templates: WorkflowTemplate[];
   onApply: (t: WorkflowTemplate) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  onManage: () => void;
 }) {
   return (
     <div className="absolute bottom-full left-0 mb-1 w-64 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
