@@ -165,12 +165,12 @@ export function DashboardPage() {
             <img
               src="/Logo Price Us Dark.png"
               alt="Price Us"
-              className="h-[40px] sm:h-[50px] w-auto hidden dark:block"
+              className="h-[50px] sm:h-[63px] w-auto hidden dark:block"
             />
             <img
               src="/Logo Price Us.png"
               alt="Price Us"
-              className="h-[40px] sm:h-[50px] w-auto dark:hidden block"
+              className="h-[50px] sm:h-[63px] w-auto dark:hidden block"
             />
           </div>
 
