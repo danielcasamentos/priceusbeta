@@ -759,6 +759,13 @@ export function WorkflowStepper({
               />
             )}
           </div>
+          <button
+            onClick={() => { setShowManageTemplates(true); loadTemplates(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
+            title="Gerenciar Modelos de Workflow"
+          >
+            ⚙️ Gerenciar Modelos
+          </button>
         </div>
       </div>
     );
@@ -943,6 +950,14 @@ export function WorkflowStepper({
             />
           )}
         </div>
+
+        <button
+          onClick={() => { setShowManageTemplates(true); loadTemplates(); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+          title="Gerenciar Modelos de Workflow"
+        >
+          ⚙️ Gerenciar Modelos
+        </button>
       </div>
 
       {/* Modal Salvar Template */}
