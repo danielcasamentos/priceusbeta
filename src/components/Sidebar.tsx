@@ -28,6 +28,7 @@ interface SidebarProps {
   onPageChange: (page: string) => void;
   userEmail?: string;
   userName?: string;
+  userPhoto?: string;
   isMobile?: boolean;
   isOpen?: boolean;
   onClose?: () => void;
@@ -38,6 +39,7 @@ export function Sidebar({
   onPageChange,
   userEmail,
   userName,
+  userPhoto,
   isMobile = false,
   isOpen = true,
   onClose
@@ -131,10 +133,15 @@ export function Sidebar({
                 <button
                   onClick={() => handleItemClick('profile')}
                   title="Ir para Meu Perfil"
-                  className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity rounded-lg p-1 hover:ring-2 hover:ring-green-400/50 hover:ring-offset-1"
+                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-full p-0.5 hover:ring-2 hover:ring-green-500/50"
                 >
-                  <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
-                  <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                  {userPhoto ? (
+                    <img src={userPhoto} alt={userName} className="h-12 w-12 rounded-full object-cover border border-green-500/30" />
+                  ) : (
+                    <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 font-bold">
+                      {(userName || userEmail || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
                 </button>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</h2>
@@ -284,10 +291,15 @@ export function Sidebar({
                 <button
                   onClick={() => handleItemClick('profile')}
                   title="Ir para Meu Perfil"
-                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-lg p-1 hover:ring-2 hover:ring-green-400/50"
+                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-full p-0.5 hover:ring-2 hover:ring-green-500/50"
                 >
-                  <img src="/Logo Price Us Dark.png" alt="Price Us" className="h-[46px] w-auto hidden dark:block" />
-                  <img src="/Logo Price Us.png" alt="Price Us" className="h-[46px] w-auto block dark:hidden" />
+                  {userPhoto ? (
+                    <img src={userPhoto} alt={userName} className="h-11 w-11 rounded-full object-cover border border-green-500/30" />
+                  ) : (
+                    <div className="h-11 w-11 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 font-bold">
+                      {(userName || userEmail || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
                 </button>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</p>

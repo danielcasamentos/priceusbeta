@@ -52,17 +52,19 @@ export function DashboardPage() {
   const [contractTab, setContractTab] = useState<'templates' | 'manager'>('templates');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userName, setUserName] = useState<string>('');
+  const [userPhoto, setUserPhoto] = useState<string>('');
 
-  // Busca o nome profissional do perfil
+  // Busca o nome profissional e foto do perfil
   useEffect(() => {
     if (!user?.id) return;
     supabase
       .from('profiles')
-      .select('nome_profissional')
+      .select('nome_profissional, profile_image_url')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
         if (data?.nome_profissional) setUserName(data.nome_profissional);
+        if (data?.profile_image_url) setUserPhoto(data.profile_image_url);
       });
   }, [user?.id]);
 
@@ -157,7 +159,21 @@ export function DashboardPage() {
       )}
 
       <header className="bg-white dark:bg-[#0a1628] border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] shadow-sm dark:shadow-none sticky top-0 z-40">
-        <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 relative">
+          {/* PriceUs Logo in the absolute center of top bar */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none">
+            <img
+              src="/Logo Price Us Dark.png"
+              alt="Price Us"
+              className="h-8 sm:h-10 w-auto hidden dark:block"
+            />
+            <img
+              src="/Logo Price Us.png"
+              alt="Price Us"
+              className="h-8 sm:h-10 w-auto dark:hidden block"
+            />
+          </div>
+
           <div className="flex items-center gap-4">
             {/* Botão hamburger só aparece em desktop (não em mobile) */}
             {!isMobile && (
@@ -168,22 +184,25 @@ export function DashboardPage() {
                 <Menu className="w-6 h-6" />
               </button>
             )}
-            {/* Logo e título - oculto em desktop (aparece na sidebar) */}
+            {/* Foto de perfil e título - oculto em desktop (aparece na sidebar) */}
             {isMobile && (
-              <div className="flex items-center gap-3">
-                <img
-                  src="/Logo Price Us Dark.png"
-                  alt="Price Us"
-                  className="h-[46px] w-auto block dark:block hidden"
-                />
-                <img
-                  src="/Logo Price Us.png"
-                  alt="Price Us"
-                  className="h-[46px] w-auto dark:hidden block"
-                />
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-none">Seja bem-vindo,</p>
-                  <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
+              <div className="flex items-center gap-2 relative z-10">
+                <button
+                  onClick={() => handlePageChange('profile')}
+                  title="Ir para Meu Perfil"
+                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-full p-0.5 hover:ring-2 hover:ring-green-500/50"
+                >
+                  {userPhoto ? (
+                    <img src={userPhoto} alt={userName} className="h-10 w-10 rounded-full object-cover border border-green-500/30" />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 text-xs font-bold">
+                      {(userName || user?.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </button>
+                <div className="hidden xs:block">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-none">Seja bem-vindo,</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                     {userName || user?.email?.split('@')[0]}
                   </p>
                 </div>
@@ -212,6 +231,7 @@ export function DashboardPage() {
         onPageChange={handlePageChange}
         userEmail={user.email}
         userName={userName}
+        userPhoto={userPhoto}
         // Sidebar mobile só aparece quando NÃO é mobile (para não conflitar com BottomNavigation)
         isMobile={!isMobile}
         isOpen={mobileMenuOpen}
@@ -226,6 +246,7 @@ export function DashboardPage() {
             onPageChange={handlePageChange}
             userEmail={user.email}
             userName={userName}
+            userPhoto={userPhoto}
           />
         )}
 
