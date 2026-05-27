@@ -718,7 +718,21 @@ export function WorkflowStepper({
       deadline: '',
       status: 'pendente',
     }));
-    updateWorkflow([...workflow, ...novasEtapas]);
+
+    if (workflow.length > 0) {
+      const confirmReplace = window.confirm(
+        `Deseja SUBSTITUIR todo o workflow atual deste cliente pelo modelo "${tmpl.nome}"?\n\n` +
+        `• Clique em [OK] para SUBSTITUIR (o progresso e prazos atuais desse cliente serão reiniciados).\n` +
+        `• Clique em [Cancelar] para apenas ADICIONAR as novas etapas no final.`
+      );
+      if (confirmReplace) {
+        updateWorkflow(novasEtapas);
+      } else {
+        updateWorkflow([...workflow, ...novasEtapas]);
+      }
+    } else {
+      updateWorkflow(novasEtapas);
+    }
     setShowTemplateMenu(false);
   };
 
