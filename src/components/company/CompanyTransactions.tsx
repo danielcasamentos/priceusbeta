@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download, Copy, LayoutGrid, List, Search } from 'lucide-react';
 import { ExportModal } from '../ExportModal';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDate } from '../../lib/utils';
 import { useCompanyTransactions, CompanyTransaction, CompanyCategory } from '../../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
 import { TransactionFormModal } from '../TransactionFormModal';
@@ -523,7 +523,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-[rgba(255,255,255,0.8)]">
-                      {new Date(transaction.data).toLocaleDateString('pt-BR')}
+                      {formatDate(transaction.data)}
                     </td>
                     <td className="px-4 py-3">
                       <div>
@@ -618,7 +618,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                       {transaction.is_installment && ` (${transaction.installment_number}/${transaction.total_installments})`}
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {new Date(transaction.data).toLocaleDateString('pt-BR')}
+                      {formatDate(transaction.data)}
                       {transaction.documento_fiscal && ` • CPF/CNPJ: ${transaction.documento_fiscal}`}
                     </p>
                   </div>
@@ -678,7 +678,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                 </span>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
-                <span>📅 {new Date(t.data).toLocaleDateString('pt-BR')}</span>
+                <span>📅 {formatDate(t.data)}</span>
                 <span>🏷️ {getCategoryName(t.categoria_id)}</span>
                 {t.forma_pagamento && <span>💳 {t.forma_pagamento}</span>}
                 {t.documento_fiscal && <span>👤 CPF/CNPJ: {t.documento_fiscal}</span>}

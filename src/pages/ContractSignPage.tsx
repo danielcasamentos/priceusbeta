@@ -214,6 +214,21 @@ export function ContractSignPage() {
       return;
     }
 
+    if (!clientData.documento.trim()) {
+      alert('Por favor, preencha seu CPF ou CNPJ');
+      return;
+    }
+
+    if (!isValidDocument(clientData.documento)) {
+      alert('O CPF/CNPJ informado não é válido. Corrija o documento.');
+      return;
+    }
+
+    if (showRg && !clientData.rg.trim()) {
+      alert('Por favor, preencha seu RG');
+      return;
+    }
+
     if (!clientData.data_nascimento) {
       alert('Por favor, preencha sua Data de Nascimento');
       return;
@@ -233,9 +248,38 @@ export function ContractSignPage() {
       return;
     }
 
-    // CPF/CNPJ é opcional — valida apenas se preenchido
-    if (clientData.documento && !isValidDocument(clientData.documento)) {
-      alert('O CPF/CNPJ informado não é válido. Corrija ou deixe em branco.');
+    if (!clientData.endereco_completo.trim()) {
+      alert('Por favor, preencha seu Endereço Completo');
+      return;
+    }
+
+    if (!clientData.cep.trim()) {
+      alert('Por favor, preencha seu CEP');
+      return;
+    }
+
+    if (!clientData.data_evento) {
+      alert('Por favor, preencha a Data do Evento');
+      return;
+    }
+
+    if (!clientData.cidade_evento.trim()) {
+      alert('Por favor, preencha a Cidade do Evento');
+      return;
+    }
+
+    if (!clientData.local_evento.trim()) {
+      alert('Por favor, preencha o Local do Evento');
+      return;
+    }
+
+    if (!clientData.endereco_evento.trim()) {
+      alert('Por favor, preencha o Endereço do Evento');
+      return;
+    }
+
+    if (!clientData.horario_inicio) {
+      alert('Por favor, preencha o Horário de Início do Evento');
       return;
     }
 
@@ -361,7 +405,7 @@ export function ContractSignPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CPF ou CNPJ <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CPF ou CNPJ *</label>
                   <input
                     type="tel"
                     autoComplete="off"
@@ -373,17 +417,19 @@ export function ContractSignPage() {
                         : 'border-gray-300 focus:ring-blue-500 hover:border-gray-400'
                     }`}
                     placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    required
                   />
                 </div>
 
                 {showRg && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">RG</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">RG *</label>
                     <input
                       type="text"
                       value={clientData.rg}
                       onChange={(e) => setClientData({ ...clientData, rg: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                      required
                     />
                   </div>
                 )}
@@ -400,75 +446,85 @@ export function ContractSignPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Data do Evento</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Data do Evento *</label>
                   <input
                     type="date"
                     value={clientData.data_evento}
                     onChange={(e) => setClientData({ ...clientData, data_evento: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Cidade do Evento</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cidade do Evento *</label>
                   <input
                     type="text"
                     value={clientData.cidade_evento}
                     onChange={(e) => setClientData({ ...clientData, cidade_evento: e.target.value })}
                     placeholder="Ex: São Paulo"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    required
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Endereço Completo</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Endereço Completo (do Contratante) *</label>
                   <input
                     type="text"
                     value={clientData.endereco_completo}
                     onChange={(e) => setClientData({ ...clientData, endereco_completo: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    placeholder="Rua, número, bairro..."
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CEP *</label>
                   <input
                     type="tel"
                     value={clientData.cep}
                     onChange={(e) => setClientData({ ...clientData, cep: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
                     placeholder="00000-000"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Local do Evento</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Local do Evento *</label>
                   <input
                     type="text"
                     value={clientData.local_evento}
                     onChange={(e) => setClientData({ ...clientData, local_evento: e.target.value })}
+                    placeholder="Ex: Espaço das Américas, Igreja Matriz..."
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    required
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Endereço do Evento</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Endereço do Evento *</label>
                   <input
                     type="text"
                     value={clientData.endereco_evento}
                     onChange={(e) => setClientData({ ...clientData, endereco_evento: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    placeholder="Rua, número, bairro do local do evento..."
+                    required
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Horário de Início</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Horário de Início *</label>
                   <input
                     type="time"
                     value={clientData.horario_inicio}
                     onChange={(e) => setClientData({ ...clientData, horario_inicio: e.target.value })}
                     placeholder="HH:MM"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
+                    required
                   />
                 </div>
 

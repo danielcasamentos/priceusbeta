@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatDate } from '../lib/utils';
 import { CompanyTransaction, CompanyCategory } from '../hooks/useCompanyTransactions';
 
 interface ReportData {
@@ -203,7 +203,7 @@ export async function generateCompanyReport(data: ReportData) {
         yPos = 20;
       }
 
-      const date = new Date(transaction.data).toLocaleDateString('pt-BR');
+      const date = formatDate(transaction.data);
 
       const valor = formatCurrency(Number(transaction.valor));
 

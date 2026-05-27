@@ -697,7 +697,7 @@ ALTER TABLE templates
 
 
 -- ==========================================
--- UPDATE MIGRATION HISTORY
+-- UPDATE MIGRATION HISTORY (Pre-new migrations)
 -- ==========================================
 INSERT INTO supabase_migrations.schema_migrations (version) VALUES
 ('20260416'),
@@ -717,3 +717,127 @@ INSERT INTO supabase_migrations.schema_migrations (version) VALUES
 ('20260526110000'),
 ('20260526130000')
 ON CONFLICT (version) DO NOTHING;
+
+
+-- ==========================================
+-- Migration: 20260527140000_contract_signed_agenda_trigger
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION public.handle_contract_signed()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_lead_nome text;
+  v_tipo_evento text;
+  v_cidade text;
+  v_data_evento date;
+BEGIN
+  -- Só dispara se o status mudou para 'signed'
+  IF NEW.status = 'signed' AND (OLD.status IS NULL OR OLD.status != 'signed') THEN
+    
+    -- Tenta pegar a data do evento do client_data_json ou lead_data_json
+    v_data_evento := COALESCE(
+      (NEW.client_data_json->>'data_evento')::date,
+      (NEW.lead_data_json->>'data_evento')::date
+    );
+
+    IF v_data_evento IS NOT NULL THEN
+      -- Evitar duplicados para o mesmo lead_id na agenda
+      IF NOT EXISTS (
+        SELECT 1 FROM public.eventos_agenda 
+        WHERE lead_id = NEW.lead_id AND data_evento = v_data_evento
+      ) THEN
+        
+        v_lead_nome := COALESCE(NEW.lead_data_json->>'nome_cliente', NEW.client_data_json->>'nome_completo', 'Cliente');
+        v_tipo_evento := COALESCE(NEW.lead_data_json->>'tipo_evento', 'Evento');
+        v_cidade := COALESCE(NEW.client_data_json->>'cidade_evento', NEW.lead_data_json->>'cidade_evento', '');
+
+        INSERT INTO public.eventos_agenda (
+          user_id,
+          lead_id,
+          data_evento,
+          tipo_evento,
+          cliente_nome,
+          cidade,
+          status,
+          origem,
+          observacoes
+        ) VALUES (
+          NEW.user_id,
+          NEW.lead_id,
+          v_data_evento,
+          v_tipo_evento,
+          v_lead_nome,
+          v_cidade,
+          'confirmado',
+          'lead_convertido',
+          'Gerado via assinatura do contrato pelo cliente'
+        );
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_contract_signed ON public.contracts;
+CREATE TRIGGER trg_contract_signed
+  AFTER UPDATE ON public.contracts
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_contract_signed();
+
+
+-- ==========================================
+-- Migration: 20260527150000_create_company_tasks
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.company_tasks (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  descricao    TEXT NOT NULL,
+  prioridade   TEXT CHECK (prioridade IN ('baixa', 'media', 'alta')) NOT NULL DEFAULT 'media',
+  data_limite  DATE,
+  concluida    BOOLEAN NOT NULL DEFAULT false,
+  concluida_em TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Row Level Security
+ALTER TABLE public.company_tasks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own company tasks"
+  ON public.company_tasks
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Performance indexes
+CREATE INDEX IF NOT EXISTS idx_company_tasks_user_id
+  ON public.company_tasks(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_company_tasks_concluida
+  ON public.company_tasks(user_id, concluida);
+
+-- Auto-update updated_at trigger
+CREATE OR REPLACE FUNCTION public.set_company_tasks_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_company_tasks_updated_at ON public.company_tasks;
+CREATE TRIGGER trg_company_tasks_updated_at
+  BEFORE UPDATE ON public.company_tasks
+  FOR EACH ROW EXECUTE FUNCTION public.set_company_tasks_updated_at();
+
+
+-- ==========================================
+-- UPDATE NEW MIGRATIONS HISTORY
+-- ==========================================
+INSERT INTO supabase_migrations.schema_migrations (version) VALUES
+('20260527140000'),
+('20260527150000')
+ON CONFLICT (version) DO NOTHING;
+

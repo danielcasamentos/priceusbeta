@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DollarSign, TrendingUp, Clock, PiggyBank, Plus, Calendar } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDate } from '../../lib/utils';
 import { useCompanyTransactions } from '../../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
 import { HourValuePanel } from './HourValuePanel';
@@ -350,7 +350,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
                 <div className="flex-1">
                   <p className="font-medium dark:text-white">{transaction.descricao}</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(transaction.data).toLocaleDateString('pt-BR')}
+                    {formatDate(transaction.data)}
                   </p>
                 </div>
                 <div className="text-right">
