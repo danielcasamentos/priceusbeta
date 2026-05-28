@@ -1,4 +1,4 @@
-import { Send, Lock, MessageCircle, Instagram, Mail, Award } from 'lucide-react';
+import { Lock, MessageCircle, Instagram, Mail, Award } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';

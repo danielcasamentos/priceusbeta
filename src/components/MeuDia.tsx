@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Lead } from '../lib/supabase';
 import {
-  Calendar, DollarSign, CheckSquare, Clock, Sun, RefreshCw,
-  Zap, ChevronRight, Filter, Plus, ArrowRight, TrendingDown,
-  TrendingUp, Target, Trash2, BarChart2, MessageCircle, Users,
-  Share2, Link, AlertCircle, Star, Sliders, X,
+  Calendar, DollarSign, CheckSquare, Sun, RefreshCw,
+  Zap, ChevronRight, Plus, ArrowRight, Trash2, MessageCircle, Users,
+  AlertCircle, Star, Sliders,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,6 +21,14 @@ const periodos: { id: Periodo; label: string }[] = [
   { id: 'mes', label: 'Mês' },
   { id: 'ano', label: 'Ano' },
   { id: 'custom', label: 'Período' },
+];
+
+const growthTabs: { id: GrowthTab; label: string; emoji: string }[] = [
+  { id: 'sazonal', label: 'Sazonalidade', emoji: '📅' },
+  { id: 'clientes', label: 'Clientes Antigos', emoji: '👥' },
+  { id: 'whatsapp', label: 'WhatsApp', emoji: '💬' },
+  { id: 'redes', label: 'Redes Sociais', emoji: '📱' },
+  { id: 'parcerias', label: 'Parcerias B2B', emoji: '🤝' },
 ];
 
 interface ReviewPendente {
@@ -138,7 +145,7 @@ function fmtTimestamp(iso: string) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function getFollowUpLabel(lead: Lead) {
+export function getFollowUpLabel(lead: Lead) {
   const dateToCheck = lead.data_ultimo_contato ? new Date(lead.data_ultimo_contato) : new Date(lead.created_at);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - dateToCheck.getTime()) / (1000 * 60 * 60 * 24));
@@ -146,7 +153,7 @@ function getFollowUpLabel(lead: Lead) {
   return `${prefix} ${diffDays} dia${diffDays !== 1 ? 's' : ''}`;
 }
 
-function getLeadStatusBadge(status: Lead['status']) {
+export function getLeadStatusBadge(status: Lead['status']) {
   const styles: Record<Lead['status'], string> = {
     novo: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
     contatado: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
@@ -312,33 +319,23 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [loading, setLoading] = useState(true);
-  const [filtroUrgencia, setFiltroUrgencia] = useState<FiltroUrgencia>('todos');
 
   // ── CRM data ───────────────────────────────────────────────────────────────
   const [abaAgenda, setAbaAgenda] = useState<'hoje' | 'amanha' | 'semana'>('hoje');
   const [abaTarefaPeriodo, setAbaTarefaPeriodo] = useState<'hoje' | 'amanha' | 'proximos3' | 'semana' | 'mes' | 'ano' | 'periodo'>('hoje');
   
-  const [eventos, setEventos] = useState<EventoAgenda[]>([]);
-  const [transacoes, setTransacoes] = useState<Transacao[]>([]);
-  const [tarefas, setTarefas] = useState<TarefaWorkflow[]>([]);
   const [todasTarefas, setTodasTarefas] = useState<TarefaWorkflow[]>([]);
   const [tarefasConcluidas, setTarefasConcluidas] = useState<TarefaWorkflow[]>([]);
-  const [eventosAmanha, setEventosAmanha] = useState<EventoAgenda[]>([]);
-  const [transacoesAmanha, setTransacoesAmanha] = useState<Transacao[]>([]);
-  const [tarefasAmanha, setTarefasAmanha] = useState<TarefaWorkflow[]>([]);
   const [receitaMes, setReceitaMes] = useState(0);
   const [receitaAno, setReceitaAno] = useState(0);
   const [allEventos, setAllEventos] = useState<EventoAgenda[]>([]);
 
   // ── CRM Feed data (new) ───────────────────────────────────────────────────
-  const [ultimosLeads, setUltimosLeads] = useState<Lead[]>([]);
-  const [leadsFollowup, setLeadsFollowup] = useState<Lead[]>([]);
   const [avaliacoesPendentes, setAvaliacoesPendentes] = useState<ReviewPendente[]>([]);
 
   // ── Company Tasks (new) ───────────────────────────────────────────────────
   const [companyTasks, setCompanyTasks] = useState<CompanyTask[]>([]);
   const [newTaskText, setNewTaskText] = useState('');
-  const [taskFilter, setTaskFilter] = useState<'pendentes' | 'todas'>('pendentes');
 
   // ── Cashflow & Profile (new) ──────────────────────────────────────────────
   const [cashflowTr, setCashflowTr] = useState<Transacao[]>([]);
@@ -459,62 +456,26 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const load = useCallback(async () => {
     setLoading(true);
     const hoje = getToday();
-    const amanha = getAmanha();
     const todayObj = new Date();
     const inicioMes = `${todayObj.getFullYear()}-${pad(todayObj.getMonth() + 1)}-01`;
     const inicioAno = `${todayObj.getFullYear()}-01-01`;
     const fim3Meses = dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() + 4, 0));
 
     try {
-      let evQuery = supabase.from('eventos_agenda').select('*').eq('user_id', userId);
-      if (range.start?.trim()) evQuery = evQuery.gte('data_evento', range.start);
-      if (range.end?.trim()) evQuery = evQuery.lte('data_evento', range.end);
-      evQuery = evQuery.order('data_evento');
-
-      let trQuery = supabase.from('company_transactions').select('*').eq('user_id', userId);
-      if (range.start?.trim()) trQuery = trQuery.gte('data', range.start);
-      if (range.end?.trim()) trQuery = trQuery.lte('data', range.end);
-      trQuery = trQuery.order('data');
-
-      const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes, ultimosLeadsRes, activeLeadsRes, avaliacoesPendentesRes] =
+      const [leadsRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes, avaliacoesPendentesRes] =
         await Promise.all([
-          evQuery,
-          trQuery,
           supabase.from('leads').select('id, nome_cliente, workflow').eq('user_id', userId).eq('status', 'convertido'),
-          supabase.from('eventos_agenda').select('*').eq('user_id', userId).eq('data_evento', amanha),
-          supabase.from('company_transactions').select('*').eq('user_id', userId).eq('data', amanha),
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioMes).lte('data', hoje),
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioAno).lte('data', hoje),
           supabase.from('company_transactions').select('id, descricao, valor, data, status, tipo').eq('user_id', userId).gte('data', inicioMes).lte('data', fim3Meses).order('data'),
           supabase.from('profiles').select('lucro_desejado').eq('id', userId).maybeSingle(),
           supabase.from('eventos_agenda').select('id, data_evento, tipo_evento, cliente_nome, status, lead_id, leads(telefone_cliente)').eq('user_id', userId).order('data_evento', { ascending: false }),
-          supabase.from('leads').select('id, nome_cliente, tipo_evento, valor_total, created_at, status').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
-          supabase.from('leads').select('id, nome_cliente, tipo_evento, valor_total, created_at, status, data_ultimo_contato').eq('user_id', userId).in('status', ['novo', 'contatado', 'em_negociacao', 'fazer_followup', 'abandonado']).order('created_at', { ascending: false }),
           supabase.from('avaliacoes').select('id, rating, comentario, nome_cliente, created_at, tipo_evento').eq('profile_id', userId).eq('visivel', false).order('created_at', { ascending: false }).limit(10),
         ]);
 
-      setEventos(evRes.data || []);
-      setTransacoes(trRes.data || []);
-      setEventosAmanha(evAmanhaRes.data || []);
-      setTransacoesAmanha(trAmanhaRes.data || []);
       setCashflowTr((cashflowRes.data as Transacao[]) || []);
       setAllEventos((allEvRes.data as any[]) || []);
-      setUltimosLeads((ultimosLeadsRes.data as Lead[]) || []);
       setAvaliacoesPendentes((avaliacoesPendentesRes.data as ReviewPendente[]) || []);
-
-      // Filtrar em memória os leads para follow-up (~7 dias)
-      // Janela de 5 a 9 dias inclusive desde o último contato ou criação
-      const nowTime = new Date();
-      const listActive = (activeLeadsRes.data as Lead[]) || [];
-      const followUpLeads = listActive.filter(lead => {
-        const dateToCheck = lead.data_ultimo_contato ? new Date(lead.data_ultimo_contato) : new Date(lead.created_at);
-        if (isNaN(dateToCheck.getTime())) return false;
-        
-        const diffTime = Math.abs(nowTime.getTime() - dateToCheck.getTime());
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays >= 5 && diffDays <= 9;
-      }).slice(0, 10);
-      setLeadsFollowup(followUpLeads);
 
       const pd = profileRes.data as { lucro_desejado?: number } | null;
       if (pd?.lucro_desejado) setLucroDesejado(pd.lucro_desejado);
@@ -524,9 +485,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       setReceitaMes(calcReceita((trMesRes.data as { tipo: string; status: string; valor: number }[]) || []));
       setReceitaAno(calcReceita((trAnoRes.data as { tipo: string; status: string; valor: number }[]) || []));
 
-      const tarefasRaw: TarefaWorkflow[] = [];
       const todasTarefasRaw: TarefaWorkflow[] = [];
-      const tarefasAmanhaRaw: TarefaWorkflow[] = [];
       const concluidasRaw: TarefaWorkflow[] = [];
 
       for (const lead of (leadsRes.data || [])) {
@@ -540,13 +499,6 @@ export function MeuDia({ userId }: MeuDiaProps) {
           } else {
             const taskItem = { leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome, status: step.status, prazo, completedAt };
             todasTarefasRaw.push(taskItem);
-            const inRange = !prazo || (prazo >= range.start && prazo <= range.end);
-            if (inRange || periodo === 'hoje') {
-              tarefasRaw.push(taskItem);
-            }
-            if (prazo === amanha) {
-              tarefasAmanhaRaw.push(taskItem);
-            }
           }
         }
       }
@@ -558,15 +510,12 @@ export function MeuDia({ userId }: MeuDiaProps) {
         return new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
       };
 
-      tarefasRaw.sort(sortFunc);
       todasTarefasRaw.sort(sortFunc);
 
-      setTarefas(tarefasRaw);
       setTodasTarefas(todasTarefasRaw);
-      setTarefasAmanha(tarefasAmanhaRaw);
       setTarefasConcluidas(concluidasRaw);
     } finally { setLoading(false); }
-  }, [userId, range.start, range.end, periodo]);
+  }, [userId]);
 
   const loadCompanyTasks = useCallback(async () => {
     try {
@@ -724,7 +673,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const anoCRM = todasTarefas.filter(t => t.prazo && t.prazo >= inicioAno && t.prazo <= fimAno);
     const anoCompany = companyTasks.filter(t => !t.concluida && t.data_limite && t.data_limite >= inicioAno && t.data_limite <= fimAno);
 
-    const periodoCRM = tarefas;
+    const periodoCRM = todasTarefas.filter(t => !t.prazo || (t.prazo >= range.start && t.prazo <= range.end));
     const periodoCompany = companyTasks.filter(t => !t.concluida && (!t.data_limite || (t.data_limite >= range.start && t.data_limite <= range.end)));
 
     const concluidaCompanyCount = companyTasks.filter(t => t.concluida).length;
@@ -754,7 +703,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
         totaisGeral
       }
     };
-  }, [todasTarefas, companyTasks, tarefasConcluidas, tarefas, range.start, range.end]);
+  }, [todasTarefas, companyTasks, tarefasConcluidas, range.start, range.end]);
 
   const tarefasCombinadas = useMemo(() => {
     const currentPeriod = tarefasPorPeriodo[abaTarefaPeriodo];
@@ -805,16 +754,16 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const agrupamento = useMemo(() => {
     const hoje = getToday(); const amanha = getAmanha(); const depoisAmanha = getDepoisAmanha();
     return {
-      atrasadas: tarefas.filter(t => t.prazo && t.prazo < hoje),
-      hoje: tarefas.filter(t => t.prazo === hoje),
-      amanha: tarefas.filter(t => t.prazo === amanha),
-      depois_amanha: tarefas.filter(t => t.prazo === depoisAmanha),
-      futuras: tarefas.filter(t => !t.prazo || t.prazo > depoisAmanha),
+      atrasadas: todasTarefas.filter(t => t.prazo && t.prazo < hoje),
+      hoje: todasTarefas.filter(t => t.prazo === hoje),
+      amanha: todasTarefas.filter(t => t.prazo === amanha),
+      depois_amanha: todasTarefas.filter(t => t.prazo === depoisAmanha),
+      futuras: todasTarefas.filter(t => !t.prazo || t.prazo > depoisAmanha),
     };
-  }, [tarefas]);
+  }, [todasTarefas]);
 
   const insights = useMemo(() => {
-    const totalPendentes = tarefas.length;
+    const totalPendentes = todasTarefas.length;
     const totalConcluidas = tarefasConcluidas.length;
     const totalGeral = totalPendentes + totalConcluidas;
     const taxaConclusao = totalGeral > 0 ? Math.round((totalConcluidas / totalGeral) * 100) : 100;
@@ -836,16 +785,9 @@ export function MeuDia({ userId }: MeuDiaProps) {
     if (totalPendentes === 0) msgs.push({ emoji: '🎉', texto: 'Nenhuma tarefa pendente no período. Aproveite para planejar os próximos passos!' });
     if (receitaMes > 0 && msgs.length < 3) msgs.push({ emoji: '💰', texto: `${fmtCurrency(receitaMes)} confirmados este mês.${receitaAno > receitaMes ? ` Total no ano: ${fmtCurrency(receitaAno)}.` : ''}` });
     return { score, taxaConclusao, saudeLabel, saudeColor, saudeEmoji, msgs: msgs.slice(0, 3) };
-  }, [tarefas, tarefasConcluidas, agrupamento, produtividade.hoje, receitaMes, receitaAno]);
+  }, [todasTarefas, tarefasConcluidas, agrupamento, produtividade.hoje, receitaMes, receitaAno]);
 
-  const tarefasFiltradas = useMemo(() => {
-    if (filtroUrgencia === 'todos') return tarefas;
-    return tarefas.filter(t => prazoInfo(t.prazo).urgencia === filtroUrgencia);
-  }, [tarefas, filtroUrgencia]);
 
-  const filteredCompanyTasks = useMemo(() =>
-    taskFilter === 'pendentes' ? companyTasks.filter(t => !t.concluida) : companyTasks,
-    [companyTasks, taskFilter]);
 
   // ── JSX ────────────────────────────────────────────────────────────────────
   return (
@@ -1114,13 +1056,42 @@ export function MeuDia({ userId }: MeuDiaProps) {
                     Ver tudo <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                {/* Abas da Agenda */}
+                <div className="px-6 py-3.5 bg-gray-50/50 dark:bg-white/1 border-b border-gray-100 dark:border-white/5 flex gap-1.5 overflow-x-auto">
+                  {[
+                    { id: 'hoje', label: 'Hoje', count: agendaFiltrada.hoje.length },
+                    { id: 'amanha', label: 'Amanhã', count: agendaFiltrada.amanha.length },
+                    { id: 'semana', label: 'Esta Semana', count: agendaFiltrada.semana.length },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setAbaAgenda(tab.id as any)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
+                        abaAgenda === tab.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                          : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {tab.label}
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                        abaAgenda === tab.id
+                          ? 'bg-white/20 text-white'
+                          : 'bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
                 <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
-                  {agendaFiltrada.length === 0 ? (
+                  {agendaFiltrada[abaAgenda].length === 0 ? (
                     <div className="py-10 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
                       <Calendar className="w-10 h-10 text-gray-200 dark:text-gray-700" />
-                      <p className="font-medium">Sem compromissos neste período</p>
+                      <p className="font-medium">Sem compromissos para este período</p>
                     </div>
-                  ) : agendaFiltrada.map(ev => (
+                  ) : agendaFiltrada[abaAgenda].map(ev => (
                     <div key={ev.id}
                       onClick={() => navigate(`/dashboard/agenda?id=${ev.id}`)}
                       className="flex items-center gap-3 px-6 py-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/2 transition-all group">
@@ -1180,6 +1151,28 @@ export function MeuDia({ userId }: MeuDiaProps) {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Meta de Lucro Mensal */}
+                <div className="px-6 py-4 bg-gray-50/50 dark:bg-white/1 border-t border-gray-100 dark:border-white/5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-500 dark:text-gray-400">🎯 Meta Mensal ({fmtCurrency(lucroDesejado)})</span>
+                    <span className="font-black text-blue-600 dark:text-blue-400">{metaProgress.toFixed(0)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, metaProgress)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-gray-400 font-medium">
+                    <span>{fmtCurrency(cashflow.mes.lucro)} alcançados</span>
+                    {cashflow.mes.lucro >= lucroDesejado ? (
+                      <span className="text-emerald-500 font-bold">Meta batida! 🎉</span>
+                    ) : (
+                      <span>Faltam {fmtCurrency(Math.max(0, lucroDesejado - cashflow.mes.lucro))}</span>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -834,10 +834,22 @@ CREATE TRIGGER trg_company_tasks_updated_at
 
 
 -- ==========================================
+-- Migration: 20260528100000_add_lead_id_to_eventos_agenda
+-- ==========================================
+ALTER TABLE public.eventos_agenda 
+  ADD COLUMN IF NOT EXISTS lead_id UUID REFERENCES public.leads(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_eventos_agenda_lead_id ON public.eventos_agenda(lead_id);
+
+COMMENT ON COLUMN public.eventos_agenda.lead_id IS 'ID do lead associado a este evento de agenda (CRM)';
+
+
+-- ==========================================
 -- UPDATE NEW MIGRATIONS HISTORY
 -- ==========================================
 INSERT INTO supabase_migrations.schema_migrations (version) VALUES
 ('20260527140000'),
-('20260527150000')
+('20260527150000'),
+('20260528100000')
 ON CONFLICT (version) DO NOTHING;
 

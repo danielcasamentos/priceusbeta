@@ -769,7 +769,6 @@ export function WorkflowStepper({
                 onApply={applyTemplate} 
                 onDelete={deleteTemplate} 
                 onClose={() => setShowTemplateMenu(false)} 
-                onManage={() => setShowManageTemplates(true)}
               />
             )}
           </div>
@@ -960,7 +959,6 @@ export function WorkflowStepper({
               onApply={applyTemplate}
               onDelete={deleteTemplate}
               onClose={() => setShowTemplateMenu(false)}
-              onManage={() => setShowManageTemplates(true)}
             />
           )}
         </div>
@@ -1002,13 +1000,11 @@ function TemplateMenu({
   onApply,
   onDelete,
   onClose,
-  onManage,
 }: {
   templates: WorkflowTemplate[];
   onApply: (t: WorkflowTemplate) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
-  onManage: () => void;
 }) {
   return (
     <div className="absolute bottom-full left-0 mb-1 w-64 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">

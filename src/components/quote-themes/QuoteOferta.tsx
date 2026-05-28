@@ -455,7 +455,7 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                         </div>
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyBetween: 'space-between', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
                           <h4 style={{ fontSize: 16, fontWeight: 800, color: '#1a1a1a', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
                           {isSelected && (
                             <span style={{
@@ -479,7 +479,7 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                     </div>
 
                     <div style={{
-                      display: 'flex', alignItems: 'center', justifyBetween: 'space-between',
+                      display: 'flex', alignItems: 'center',
                       background: '#fff7ed', borderRadius: 12, padding: '12px 16px',
                       justifyContent: 'space-between'
                     }}>
