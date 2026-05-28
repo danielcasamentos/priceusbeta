@@ -810,28 +810,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
         </button>
       </div>
 
-      {/* ── Filtros de Período Geral ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-2 flex-wrap bg-gray-100/80 dark:bg-[#07101f] p-1.5 rounded-2xl border border-gray-250/20">
-          {periodos.map(p => (
-            <button key={p.id} onClick={() => setPeriodo(p.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-wider ${periodo === p.id
-                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
-                : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-white/50 dark:hover:bg-white/5'}`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {periodo === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap bg-white dark:bg-[#0a1628] p-2 rounded-2xl border border-gray-250/25">
-            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 dark:border-white/5 dark:bg-[#07101f] dark:text-white rounded-xl text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none" />
-            <span className="text-gray-400 text-xs font-bold uppercase">até</span>
-            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 dark:border-white/5 dark:bg-[#07101f] dark:text-white rounded-xl text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none" />
-          </div>
-        )}
-      </div>
+
 
       {loading ? (
         <div className="flex items-center justify-center py-32">
@@ -928,7 +907,6 @@ export function MeuDia({ userId }: MeuDiaProps) {
                       { id: 'semana', label: 'Semana', count: tarefasPorPeriodo.semana.count },
                       { id: 'mes', label: 'Mês', count: tarefasPorPeriodo.mes.count },
                       { id: 'ano', label: 'Ano', count: tarefasPorPeriodo.ano.count },
-                      { id: 'periodo', label: 'Período', count: tarefasPorPeriodo.periodo.count },
                     ].map(tab => (
                       <button key={tab.id}
                         onClick={() => setAbaTarefaPeriodo(tab.id as any)}
