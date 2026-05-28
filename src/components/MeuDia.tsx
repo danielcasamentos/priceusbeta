@@ -16,6 +16,14 @@ type Periodo = 'hoje' | 'semana' | 'mes' | 'ano' | 'custom';
 type FiltroUrgencia = 'todos' | 'atrasadas' | 'hoje' | 'amanha' | 'depois_amanha' | 'futuras';
 type GrowthTab = 'sazonal' | 'clientes' | 'whatsapp' | 'redes' | 'parcerias';
 
+const periodos: { id: Periodo; label: string }[] = [
+  { id: 'hoje', label: 'Hoje' },
+  { id: 'semana', label: 'Semana' },
+  { id: 'mes', label: 'Mês' },
+  { id: 'ano', label: 'Ano' },
+  { id: 'custom', label: 'Período' },
+];
+
 interface ReviewPendente {
   id: string;
   rating: number;
