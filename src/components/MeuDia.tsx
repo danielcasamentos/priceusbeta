@@ -1189,7 +1189,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
                     </span>
                   </div>
                   <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
-                    {clientRecommendations.slice(0, 5).map((rec, i) => (
+                    {clientRecommendations.map((rec, i) => (
                       <div key={i} className="px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-white/2 transition-all">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
