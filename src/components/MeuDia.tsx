@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, Lead } from '../lib/supabase';
 import {
   Calendar, DollarSign, CheckSquare, Clock, Sun, RefreshCw,
   Zap, ChevronRight, Filter, Plus, ArrowRight, TrendingDown,
@@ -15,6 +15,15 @@ interface MeuDiaProps { userId: string; }
 type Periodo = 'hoje' | 'semana' | 'mes' | 'ano' | 'custom';
 type FiltroUrgencia = 'todos' | 'atrasadas' | 'hoje' | 'amanha' | 'depois_amanha' | 'futuras';
 type GrowthTab = 'sazonal' | 'clientes' | 'whatsapp' | 'redes' | 'parcerias';
+
+interface ReviewPendente {
+  id: string;
+  rating: number;
+  comentario: string;
+  nome_cliente: string;
+  created_at: string;
+  tipo_evento: string | null;
+}
 
 interface EventoAgenda {
   id: string; data_evento: string; tipo_evento: string;
@@ -109,6 +118,50 @@ function prazoInfo(prazo: string | null | undefined): {
   if (prazo === depoisAmanha) return { texto: 'Depois de amanhã', colorClass: 'text-violet-500 dark:text-violet-400', dotColor: 'bg-violet-400', urgencia: 'depois_amanha' };
   const dias = Math.round((new Date(prazo + 'T00:00:00').getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000);
   return { texto: `${dias}d restantes`, colorClass: 'text-emerald-600 dark:text-emerald-400', dotColor: 'bg-emerald-500', urgencia: 'futuras' };
+}
+
+function fmtTimestamp(iso: string) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getFollowUpLabel(lead: Lead) {
+  const dateToCheck = lead.data_ultimo_contato ? new Date(lead.data_ultimo_contato) : new Date(lead.created_at);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - dateToCheck.getTime()) / (1000 * 60 * 60 * 24));
+  const prefix = lead.data_ultimo_contato ? 'Contato há' : 'Criado há';
+  return `${prefix} ${diffDays} dia${diffDays !== 1 ? 's' : ''}`;
+}
+
+function getLeadStatusBadge(status: Lead['status']) {
+  const styles: Record<Lead['status'], string> = {
+    novo: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+    contatado: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+    convertido: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+    perdido: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+    abandonado: 'bg-gray-500/10 text-gray-400 border border-gray-500/20',
+    em_negociacao: 'bg-violet-500/10 text-violet-400 border border-violet-500/20',
+    fazer_followup: 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
+    finalizado: 'bg-teal-500/10 text-teal-400 border border-teal-500/20',
+  };
+  const labels: Record<string, string> = {
+    novo: '🆕 Novo',
+    contatado: '💬 Contatado',
+    convertido: '✅ Fechado',
+    perdido: '❌ Perdido',
+    abandonado: '⏸️ Abandonado',
+    em_negociacao: '🤝 Negociação',
+    fazer_followup: '📞 Follow-up',
+    finalizado: '🏁 Finalizado',
+  };
+  
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${styles[status] || 'bg-gray-500/10 text-gray-400'}`}>
+      {labels[status] || status}
+    </span>
+  );
 }
 
 function getRangeForPeriodo(periodo: Periodo, customStart: string, customEnd: string) {
@@ -262,6 +315,11 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [receitaAno, setReceitaAno] = useState(0);
   const [allEventos, setAllEventos] = useState<EventoAgenda[]>([]);
 
+  // ── CRM Feed data (new) ───────────────────────────────────────────────────
+  const [ultimosLeads, setUltimosLeads] = useState<Lead[]>([]);
+  const [leadsFollowup, setLeadsFollowup] = useState<Lead[]>([]);
+  const [avaliacoesPendentes, setAvaliacoesPendentes] = useState<ReviewPendente[]>([]);
+
   // ── Company Tasks (new) ───────────────────────────────────────────────────
   const [companyTasks, setCompanyTasks] = useState<CompanyTask[]>([]);
   const [newTaskText, setNewTaskText] = useState('');
@@ -403,7 +461,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       if (range.end?.trim()) trQuery = trQuery.lte('data', range.end);
       trQuery = trQuery.order('data');
 
-      const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes] =
+      const [evRes, trRes, leadsRes, evAmanhaRes, trAmanhaRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes, ultimosLeadsRes, activeLeadsRes, avaliacoesPendentesRes] =
         await Promise.all([
           evQuery,
           trQuery,
@@ -415,6 +473,9 @@ export function MeuDia({ userId }: MeuDiaProps) {
           supabase.from('company_transactions').select('id, descricao, valor, data, status, tipo').eq('user_id', userId).gte('data', inicioMes).lte('data', fim3Meses).order('data'),
           supabase.from('profiles').select('lucro_desejado').eq('id', userId).maybeSingle(),
           supabase.from('eventos_agenda').select('id, data_evento, tipo_evento, cliente_nome, status, lead_id, leads(telefone_cliente)').eq('user_id', userId).order('data_evento', { ascending: false }),
+          supabase.from('leads').select('id, nome_cliente, tipo_evento, valor_total, created_at, status').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
+          supabase.from('leads').select('id, nome_cliente, tipo_evento, valor_total, created_at, status, data_ultimo_contato').eq('user_id', userId).in('status', ['novo', 'contatado', 'em_negociacao', 'fazer_followup', 'abandonado']).order('created_at', { ascending: false }),
+          supabase.from('avaliacoes').select('id, rating, comentario, nome_cliente, created_at, tipo_evento').eq('profile_id', userId).eq('visivel', false).order('created_at', { ascending: false }).limit(10),
         ]);
 
       setEventos(evRes.data || []);
@@ -423,6 +484,22 @@ export function MeuDia({ userId }: MeuDiaProps) {
       setTransacoesAmanha(trAmanhaRes.data || []);
       setCashflowTr((cashflowRes.data as Transacao[]) || []);
       setAllEventos((allEvRes.data as any[]) || []);
+      setUltimosLeads((ultimosLeadsRes.data as Lead[]) || []);
+      setAvaliacoesPendentes((avaliacoesPendentesRes.data as ReviewPendente[]) || []);
+
+      // Filtrar em memória os leads para follow-up (~7 dias)
+      // Janela de 5 a 9 dias inclusive desde o último contato ou criação
+      const nowTime = new Date();
+      const listActive = (activeLeadsRes.data as Lead[]) || [];
+      const followUpLeads = listActive.filter(lead => {
+        const dateToCheck = lead.data_ultimo_contato ? new Date(lead.data_ultimo_contato) : new Date(lead.created_at);
+        if (isNaN(dateToCheck.getTime())) return false;
+        
+        const diffTime = Math.abs(nowTime.getTime() - dateToCheck.getTime());
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays >= 5 && diffDays <= 9;
+      }).slice(0, 10);
+      setLeadsFollowup(followUpLeads);
 
       const pd = profileRes.data as { lucro_desejado?: number } | null;
       if (pd?.lucro_desejado) setLucroDesejado(pd.lucro_desejado);
@@ -1028,6 +1105,100 @@ export function MeuDia({ userId }: MeuDiaProps) {
                 </div>
               )}
             </div>
+
+            {/* Últimos 10 Leads */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  <h3 className="font-bold text-gray-900 dark:text-white">Últimos Leads Recebidos</h3>
+                </div>
+                <button onClick={() => navigate('/dashboard/leads')} className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1">
+                  Ver todos <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {ultimosLeads.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                  <Users className="w-10 h-10 text-gray-300 dark:text-gray-700" />
+                  <p className="font-medium">Nenhum lead recebido ainda.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[380px] overflow-y-auto">
+                  {ultimosLeads.map(lead => (
+                    <div key={lead.id}
+                      onClick={() => navigate(`/dashboard/leads?leadId=${lead.id}`)}
+                      className="group w-full flex items-center justify-between gap-4 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate group-hover:text-orange-500 transition-colors">
+                              {lead.nome_cliente || 'Cliente sem nome'}
+                            </p>
+                            {getLeadStatusBadge(lead.status)}
+                          </div>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider truncate">
+                            {lead.tipo_evento || 'Tipo não definido'} · {fmtTimestamp(lead.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs font-black text-gray-900 dark:text-white">
+                          {fmtCurrency(lead.valor_total)}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Leads para Follow-up (~7 dias) */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-orange-500" />
+                  <h3 className="font-bold text-gray-900 dark:text-white">Leads para Follow-up (~7 dias)</h3>
+                </div>
+                <button onClick={() => navigate('/dashboard/leads')} className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1">
+                  Ver todos <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {leadsFollowup.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                  <Clock className="w-10 h-10 text-gray-300 dark:text-gray-700" />
+                  <p className="font-medium">Nenhum lead com follow-up pendente para hoje.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[380px] overflow-y-auto">
+                  {leadsFollowup.map(lead => (
+                    <div key={lead.id}
+                      onClick={() => navigate(`/dashboard/leads?leadId=${lead.id}`)}
+                      className="group w-full flex items-center justify-between gap-4 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate group-hover:text-orange-500 transition-colors">
+                              {lead.nome_cliente || 'Cliente sem nome'}
+                            </p>
+                            {getLeadStatusBadge(lead.status)}
+                          </div>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider truncate">
+                            {lead.tipo_evento || 'Tipo não definido'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                          {getFollowUpLabel(lead)}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── RIGHT COLUMN: Tomorrow + Events + Finances ── */}
@@ -1127,6 +1298,50 @@ export function MeuDia({ userId }: MeuDiaProps) {
                       <span className={`text-xs font-black shrink-0 ${tr.tipo === 'receita' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
                         {tr.tipo === 'receita' ? '+' : '-'}{fmtK(tr.valor)}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Avaliações Pendentes */}
+            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
+                <div className="flex items-center gap-2">
+                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Avaliações Pendentes</h3>
+                </div>
+                <button onClick={() => navigate('/dashboard/avaliacoes')} className="text-xs font-bold text-yellow-600 hover:text-yellow-500 uppercase tracking-wider flex items-center gap-1">
+                  Moderar <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {avaliacoesPendentes.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                  <Star className="w-10 h-10 text-gray-200 dark:text-gray-700" />
+                  <p className="font-medium">Nenhuma avaliação pendente. Tudo aprovado! 🎉</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[300px] overflow-y-auto">
+                  {avaliacoesPendentes.map(review => (
+                    <div key={review.id}
+                      onClick={() => navigate('/dashboard/avaliacoes')}
+                      className="group w-full flex flex-col gap-1 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-xs text-gray-800 dark:text-gray-200 group-hover:text-yellow-500 transition-colors">
+                          {review.nome_cliente}
+                        </span>
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`w-3.5 h-3.5 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 dark:text-gray-700'}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 italic leading-relaxed">
+                        "{review.comentario && review.comentario.length > 100 ? review.comentario.slice(0, 100) + '...' : review.comentario}"
+                      </p>
+                      <p className="text-[9px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider mt-1">
+                        {review.tipo_evento || 'Evento'} · {fmtTimestamp(review.created_at)}
+                      </p>
                     </div>
                   ))}
                 </div>

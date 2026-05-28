@@ -95,6 +95,35 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   }, []);
 
+  // Seleciona o lead automaticamente via parâmetro na URL (?leadId=...)
+  useEffect(() => {
+    if (leads.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlLeadId = params.get('leadId');
+    if (urlLeadId) {
+      const found = leads.find(l => l.id === urlLeadId);
+      if (found) {
+        setSelectedLead(found);
+        
+        // Ajusta a aba ativa com base no status do lead
+        if (found.status === 'convertido') {
+          setMainTab('producao');
+        } else if (found.status === 'finalizado') {
+          setMainTab('finalizados');
+        } else {
+          setMainTab('leads');
+        }
+        
+        // Limpa o parâmetro da URL de forma limpa
+        const newParams = new URLSearchParams(window.location.search);
+        newParams.delete('leadId');
+        const queryStr = newParams.toString();
+        const newUrl = window.location.pathname + (queryStr ? `?${queryStr}` : '');
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [leads]);
+
   // Estado do modal de conversão financeira
   const [convertModal, setConvertModal] = useState<{ lead: Lead; orcamentoDetalhe: any | null; fromContract?: boolean } | null>(null);
 
