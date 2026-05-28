@@ -65,8 +65,11 @@ interface CashflowPeriod {
   saidas: number; lucro: number;
 }
 interface Cashflow {
-  hoje: CashflowPeriod; semana: CashflowPeriod;
-  mes: CashflowPeriod; futuro: CashflowPeriod;
+  hoje: CashflowPeriod;
+  amanha: CashflowPeriod;
+  semana: CashflowPeriod;
+  mes: CashflowPeriod;
+  proximoMes: CashflowPeriod;
 }
 interface SeasonalEvent {
   data: string; nome: string; daysAway: number;
@@ -304,9 +307,13 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [filtroUrgencia, setFiltroUrgencia] = useState<FiltroUrgencia>('todos');
 
   // ── CRM data ───────────────────────────────────────────────────────────────
+  const [abaAgenda, setAbaAgenda] = useState<'hoje' | 'amanha' | 'semana'>('hoje');
+  const [abaTarefaPeriodo, setAbaTarefaPeriodo] = useState<'hoje' | 'amanha' | 'proximos3' | 'semana' | 'mes' | 'ano' | 'periodo'>('hoje');
+  
   const [eventos, setEventos] = useState<EventoAgenda[]>([]);
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
   const [tarefas, setTarefas] = useState<TarefaWorkflow[]>([]);
+  const [todasTarefas, setTodasTarefas] = useState<TarefaWorkflow[]>([]);
   const [tarefasConcluidas, setTarefasConcluidas] = useState<TarefaWorkflow[]>([]);
   const [eventosAmanha, setEventosAmanha] = useState<EventoAgenda[]>([]);
   const [transacoesAmanha, setTransacoesAmanha] = useState<Transacao[]>([]);
@@ -510,6 +517,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       setReceitaAno(calcReceita((trAnoRes.data as { tipo: string; status: string; valor: number }[]) || []));
 
       const tarefasRaw: TarefaWorkflow[] = [];
+      const todasTarefasRaw: TarefaWorkflow[] = [];
       const tarefasAmanhaRaw: TarefaWorkflow[] = [];
       const concluidasRaw: TarefaWorkflow[] = [];
 
@@ -522,25 +530,31 @@ export function MeuDia({ userId }: MeuDiaProps) {
           if (step.status === 'concluido') {
             concluidasRaw.push({ leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome, status: step.status, prazo, completedAt });
           } else {
+            const taskItem = { leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome, status: step.status, prazo, completedAt };
+            todasTarefasRaw.push(taskItem);
             const inRange = !prazo || (prazo >= range.start && prazo <= range.end);
             if (inRange || periodo === 'hoje') {
-              tarefasRaw.push({ leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome, status: step.status, prazo, completedAt });
+              tarefasRaw.push(taskItem);
             }
             if (prazo === amanha) {
-              tarefasAmanhaRaw.push({ leadId: lead.id, leadNome: lead.nome_cliente, stepId: step.id, stepNome, status: step.status, prazo, completedAt });
+              tarefasAmanhaRaw.push(taskItem);
             }
           }
         }
       }
 
-      tarefasRaw.sort((a, b) => {
+      const sortFunc = (a: TarefaWorkflow, b: TarefaWorkflow) => {
         if (!a.prazo && !b.prazo) return 0;
         if (!a.prazo) return 1;
         if (!b.prazo) return -1;
         return new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
-      });
+      };
+
+      tarefasRaw.sort(sortFunc);
+      todasTarefasRaw.sort(sortFunc);
 
       setTarefas(tarefasRaw);
+      setTodasTarefas(todasTarefasRaw);
       setTarefasAmanha(tarefasAmanhaRaw);
       setTarefasConcluidas(concluidasRaw);
     } finally { setLoading(false); }
@@ -593,19 +607,24 @@ export function MeuDia({ userId }: MeuDiaProps) {
   // ── Computed: Cashflow Matrix ──────────────────────────────────────────────
   const cashflow = useMemo((): Cashflow => {
     const hoje = getToday();
+    const amanha = getAmanha();
     const todayObj = new Date();
     const day = todayObj.getDay();
     const mon = new Date(todayObj); mon.setDate(todayObj.getDate() - day + (day === 0 ? -6 : 1));
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     const inicioMes = `${todayObj.getFullYear()}-${pad(todayObj.getMonth() + 1)}-01`;
     const fimMes = dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() + 1, 0));
-    const inicioFuturo = dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() + 1, 1));
-    const fim3Meses = dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() + 4, 0));
+    
+    const nextMonthObj = new Date(todayObj.getFullYear(), todayObj.getMonth() + 1, 1);
+    const inicioProximoMes = `${nextMonthObj.getFullYear()}-${pad(nextMonthObj.getMonth() + 1)}-01`;
+    const fimProximoMes = dateStr(new Date(nextMonthObj.getFullYear(), nextMonthObj.getMonth() + 2, 0));
+
     return {
       hoje: calcCashflowPeriod(cashflowTr, hoje, hoje),
+      amanha: calcCashflowPeriod(cashflowTr, amanha, amanha),
       semana: calcCashflowPeriod(cashflowTr, dateStr(mon), dateStr(sun)),
       mes: calcCashflowPeriod(cashflowTr, inicioMes, fimMes),
-      futuro: calcCashflowPeriod(cashflowTr, inicioFuturo, fim3Meses),
+      proximoMes: calcCashflowPeriod(cashflowTr, inicioProximoMes, fimProximoMes),
     };
   }, [cashflowTr]);
 
@@ -624,6 +643,23 @@ export function MeuDia({ userId }: MeuDiaProps) {
     return { leads, contratos, faturamento, roi };
   }, [roiInvestimento, roiTicket, roiConversao]);
 
+  const agendaFiltrada = useMemo(() => {
+    const hoje = getToday();
+    const amanha = getAmanha();
+    const todayObj = new Date();
+    const day = todayObj.getDay();
+    const mon = new Date(todayObj); mon.setDate(todayObj.getDate() - day + (day === 0 ? -6 : 1));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const inicioSemana = dateStr(mon);
+    const fimSemana = dateStr(sun);
+
+    return {
+      hoje: allEventos.filter(e => e.data_evento === hoje),
+      amanha: allEventos.filter(e => e.data_evento === amanha),
+      semana: allEventos.filter(e => e.data_evento >= inicioSemana && e.data_evento <= fimSemana),
+    };
+  }, [allEventos]);
+
   const seasonalEvents = useMemo(() => getUpcomingSeasonalEvents(), []);
 
   // ── Computed: Productivity & Urgency ──────────────────────────────────────
@@ -641,6 +677,122 @@ export function MeuDia({ userId }: MeuDiaProps) {
     }).length;
     return { hoje: hojeCount, semana: semanaCount, total: tarefasConcluidas.length };
   }, [tarefasConcluidas]);
+
+  const tarefasPorPeriodo = useMemo(() => {
+    const hoje = getToday();
+    const amanha = getAmanha();
+    const todayObj = new Date();
+    
+    const d3 = new Date(todayObj); d3.setDate(todayObj.getDate() + 2);
+    const fim3Dias = dateStr(d3);
+
+    const day = todayObj.getDay();
+    const mon = new Date(todayObj); mon.setDate(todayObj.getDate() - day + (day === 0 ? -6 : 1));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const inicioSemana = dateStr(mon);
+    const fimSemana = dateStr(sun);
+
+    const inicioMes = `${todayObj.getFullYear()}-${pad(todayObj.getMonth() + 1)}-01`;
+    const fimMes = dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() + 1, 0));
+
+    const inicioAno = `${todayObj.getFullYear()}-01-01`;
+    const fimAno = `${todayObj.getFullYear()}-12-31`;
+
+    const hojeCRM = todasTarefas.filter(t => t.prazo === hoje);
+    const hojeCompany = companyTasks.filter(t => !t.concluida && t.data_limite === hoje);
+
+    const amanhaCRM = todasTarefas.filter(t => t.prazo === amanha);
+    const amanhaCompany = companyTasks.filter(t => !t.concluida && t.data_limite === amanha);
+
+    const proximo3CRM = todasTarefas.filter(t => t.prazo && t.prazo >= hoje && t.prazo <= fim3Dias);
+    const proximo3Company = companyTasks.filter(t => !t.concluida && t.data_limite && t.data_limite >= hoje && t.data_limite <= fim3Dias);
+
+    const semanaCRM = todasTarefas.filter(t => t.prazo && t.prazo >= inicioSemana && t.prazo <= fimSemana);
+    const semanaCompany = companyTasks.filter(t => !t.concluida && t.data_limite && t.data_limite >= inicioSemana && t.data_limite <= fimSemana);
+
+    const mesCRM = todasTarefas.filter(t => t.prazo && t.prazo >= inicioMes && t.prazo <= fimMes);
+    const mesCompany = companyTasks.filter(t => !t.concluida && t.data_limite && t.data_limite >= inicioMes && t.data_limite <= fimMes);
+
+    const anoCRM = todasTarefas.filter(t => t.prazo && t.prazo >= inicioAno && t.prazo <= fimAno);
+    const anoCompany = companyTasks.filter(t => !t.concluida && t.data_limite && t.data_limite >= inicioAno && t.data_limite <= fimAno);
+
+    const periodoCRM = tarefas;
+    const periodoCompany = companyTasks.filter(t => !t.concluida && (!t.data_limite || (t.data_limite >= range.start && t.data_limite <= range.end)));
+
+    const concluidaCompanyCount = companyTasks.filter(t => t.concluida).length;
+    const concluidaCRMCount = tarefasConcluidas.length;
+    const executadasTotais = concluidaCompanyCount + concluidaCRMCount;
+
+    const hojeCount = hojeCRM.length + hojeCompany.length;
+    const amanhaCount = amanhaCRM.length + amanhaCompany.length;
+    const semanaCount = semanaCRM.length + semanaCompany.length;
+    const mesCount = mesCRM.length + mesCompany.length;
+    const totaisGeral = todasTarefas.length + companyTasks.filter(t => !t.concluida).length;
+
+    return {
+      hoje: { crm: hojeCRM, company: hojeCompany, count: hojeCount },
+      amanha: { crm: amanhaCRM, company: amanhaCompany, count: amanhaCount },
+      proximos3: { crm: proximo3CRM, company: proximo3Company, count: proximo3CRM.length + proximo3Company.length },
+      semana: { crm: semanaCRM, company: semanaCompany, count: semanaCount },
+      mes: { crm: mesCRM, company: mesCompany, count: mesCount },
+      ano: { crm: anoCRM, company: anoCompany, count: anoCRM.length + anoCompany.length },
+      periodo: { crm: periodoCRM, company: periodoCompany, count: periodoCRM.length + periodoCompany.length },
+      stats: {
+        executadasTotais,
+        hojeCount,
+        amanhaCount,
+        semanaCount,
+        mesCount,
+        totaisGeral
+      }
+    };
+  }, [todasTarefas, companyTasks, tarefasConcluidas, tarefas, range.start, range.end]);
+
+  const tarefasCombinadas = useMemo(() => {
+    const currentPeriod = tarefasPorPeriodo[abaTarefaPeriodo];
+    const list: {
+      tipo: 'crm' | 'company';
+      id: string;
+      nome: string;
+      subnome?: string;
+      prazo?: string | null;
+      concluida: boolean;
+      prioridade?: 'baixa' | 'media' | 'alta';
+      taskObject?: any;
+    }[] = [];
+
+    currentPeriod.crm.forEach(t => {
+      list.push({
+        tipo: 'crm',
+        id: `${t.leadId}-${t.stepId}`,
+        nome: t.stepNome,
+        subnome: t.leadNome,
+        prazo: t.prazo,
+        concluida: false,
+        taskObject: t
+      });
+    });
+
+    currentPeriod.company.forEach(t => {
+      list.push({
+        tipo: 'company',
+        id: t.id,
+        nome: t.descricao,
+        subnome: 'Administrativo',
+        prazo: t.data_limite,
+        concluida: t.concluida,
+        prioridade: t.prioridade,
+        taskObject: t
+      });
+    });
+
+    return list.sort((a, b) => {
+      if (!a.prazo && !b.prazo) return 0;
+      if (!a.prazo) return 1;
+      if (!b.prazo) return -1;
+      return new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
+    });
+  }, [tarefasPorPeriodo, abaTarefaPeriodo]);
 
   const agrupamento = useMemo(() => {
     const hoje = getToday(); const amanha = getAmanha(); const depoisAmanha = getDepoisAmanha();
@@ -687,42 +839,9 @@ export function MeuDia({ userId }: MeuDiaProps) {
     taskFilter === 'pendentes' ? companyTasks.filter(t => !t.concluida) : companyTasks,
     [companyTasks, taskFilter]);
 
-  const receitasPagas = transacoes.filter(t => t.tipo === 'receita' && t.status === 'pago').reduce((s, t) => s + t.valor, 0);
-  const receitasPendentes = transacoes.filter(t => t.tipo === 'receita' && t.status === 'pendente').reduce((s, t) => s + t.valor, 0);
-  const despesasPeriodo = transacoes.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0);
-  const tarefasAtrasadas = agrupamento.atrasadas;
-
-  const statusColor = (s: string) => ({
-    confirmado: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-    pendente: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-    concluido: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    cancelado: 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-400',
-  }[s] || 'bg-gray-100 text-gray-600');
-
-  const periodos: { id: Periodo; label: string }[] = [
-    { id: 'hoje', label: 'Hoje' }, { id: 'semana', label: 'Semana' },
-    { id: 'mes', label: 'Mês' }, { id: 'ano', label: 'Ano' }, { id: 'custom', label: 'Período' },
-  ];
-
-  const filtros = [
-    { id: 'atrasadas' as FiltroUrgencia, label: 'Atrasadas', count: agrupamento.atrasadas.length, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30' },
-    { id: 'hoje' as FiltroUrgencia, label: 'Hoje', count: agrupamento.hoje.length, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
-    { id: 'amanha' as FiltroUrgencia, label: 'Amanhã', count: agrupamento.amanha.length, color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30' },
-    { id: 'depois_amanha' as FiltroUrgencia, label: 'Depois', count: agrupamento.depois_amanha.length, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-50 dark:bg-violet-900/10 border-violet-200 dark:border-violet-800/30' },
-    { id: 'futuras' as FiltroUrgencia, label: 'Futuras', count: agrupamento.futuras.length, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30' },
-  ];
-
-  const growthTabs: { id: GrowthTab; label: string; icon: React.ElementType; emoji: string }[] = [
-    { id: 'sazonal', label: 'Sazonalidade', icon: Calendar, emoji: '📅' },
-    { id: 'clientes', label: 'Clientes Antigos', icon: Users, emoji: '♻️' },
-    { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, emoji: '💬' },
-    { id: 'redes', label: 'Redes Sociais', icon: Share2, emoji: '📱' },
-    { id: 'parcerias', label: 'Parcerias B2B', icon: Link, emoji: '🤝' },
-  ];
-
   // ── JSX ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 text-gray-900 dark:text-gray-100">
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/40 dark:bg-black/10 backdrop-blur-md p-4 rounded-2xl border border-gray-200/50 dark:border-white/5">
@@ -741,7 +860,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
         </button>
       </div>
 
-      {/* ── Filtros de Período ── */}
+      {/* ── Filtros de Período Geral ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-2 flex-wrap bg-gray-100/80 dark:bg-[#07101f] p-1.5 rounded-2xl border border-gray-250/20">
           {periodos.map(p => (
@@ -764,544 +883,74 @@ export function MeuDia({ userId }: MeuDiaProps) {
         )}
       </div>
 
-      {/* ── Health Banner ── */}
-      <div className="bg-gradient-to-r from-gray-900 via-slate-900 to-zinc-900 text-white rounded-3xl p-6 sm:p-8 border border-white/5 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-4 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-bold tracking-wider text-orange-400 uppercase">
-              <Zap className="w-3 h-3 text-orange-400 animate-pulse" />
-              Painel de Desempenho
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">Como está o seu negócio hoje?</h3>
-            <div className="space-y-2 mt-4">
-              {insights.msgs.map((m, i) => (
-                <div key={i} className="flex items-start gap-3 bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/5">
-                  <span className="text-lg leading-none shrink-0">{m.emoji}</span>
-                  <p className="text-sm text-gray-300 font-medium leading-relaxed">{m.texto}</p>
-                </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-32">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-orange-500" />
+        </div>
+      ) : (
+        <div className="space-y-8">
+
+          {/* ═══════════════════════════════════════════════════════════════════════
+              BLOQUE 2: AÇÕES RÁPIDAS
+              ═══════════════════════════════════════════════════════════════════════ */}
+          <div className="bg-white dark:bg-[#0a1628] rounded-3xl p-6 border border-gray-200/50 dark:border-white/5 shadow-sm">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-orange-500" /> Ações Rápidas do CRM
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                { label: 'Novo Lead', sub: 'Cadastrar contato comercial', color: 'from-indigo-500 to-blue-600', shadow: 'shadow-indigo-500/20', route: '/dashboard/leads?new=true' },
+                { label: 'Nova Transação', sub: 'Lançar receita ou despesa', color: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/20', route: '/dashboard/empresa-transacoes?new=true' },
+                { label: 'Novo Compromisso', sub: 'Agendar ensaio ou reunião', color: 'from-orange-500 to-amber-600', shadow: 'shadow-orange-500/20', route: '/dashboard/agenda?new=true' },
+              ].map(btn => (
+                <button key={btn.label} onClick={() => navigate(btn.route)}
+                  className={`flex items-center justify-between p-4 bg-gradient-to-br ${btn.color} text-white rounded-2xl hover:shadow-lg hover:${btn.shadow} active:scale-98 transition-all group`}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-white/10 rounded-xl"><Plus className="w-5 h-5" /></div>
+                    <div className="text-left">
+                      <p className="font-bold text-sm">{btn.label}</p>
+                      <p className="text-[10px] text-white/70 font-medium">{btn.sub}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" />
+                </button>
               ))}
             </div>
           </div>
-          <div className="shrink-0 flex flex-col items-center bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-6 text-center w-full md:w-56">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Índice de Saúde</p>
-            <div className="relative w-28 h-28 flex items-center justify-center">
-              <div className={`absolute inset-0 rounded-full blur-lg opacity-25 ${insights.score >= 80 ? 'bg-emerald-500' : insights.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} />
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="56" cy="56" r="48" className="stroke-white/10 fill-none" strokeWidth="8" />
-                <circle cx="56" cy="56" r="48" className={`fill-none transition-all duration-1000 ${insights.score >= 80 ? 'stroke-emerald-500' : insights.score >= 50 ? 'stroke-amber-500' : 'stroke-red-500'}`}
-                  strokeWidth="8" strokeDasharray={2 * Math.PI * 48} strokeDashoffset={2 * Math.PI * 48 * (1 - insights.score / 100)} strokeLinecap="round" />
-              </svg>
-              <div className="absolute flex flex-col items-center justify-center">
-                <span className="text-3xl font-black tracking-tight">{insights.score}%</span>
-                <span className="text-[10px] font-bold uppercase text-gray-400 mt-0.5">{insights.saudeLabel}</span>
-              </div>
-            </div>
-            <div className="w-full mt-4 flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold uppercase">Conclusões</span>
-              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-orange-500 rounded-full transition-all duration-700" style={{ width: `${insights.taxaConclusao}%` }} />
-              </div>
-              <span className="text-xs font-black">{insights.taxaConclusao}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* ── Cashflow Matrix (NEW) ── */}
-      <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gradient-to-r from-emerald-50/50 to-teal-50/30 dark:from-emerald-900/10 dark:to-teal-900/5">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-emerald-500/15 rounded-xl">
-              <BarChart2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <h3 className="font-black text-gray-900 dark:text-white text-sm">💰 Fluxo de Caixa Consolidado</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Entradas, saídas e lucro líquido por período</p>
-            </div>
-          </div>
-          {/* Monthly goal progress */}
-          <div className="flex items-center gap-3 mt-3 sm:mt-0 min-w-[200px]">
-            <div className="flex-1">
-              <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                <span className="font-bold uppercase tracking-wider">Meta Mensal</span>
-                <span className="font-black">{Math.round(metaProgress)}% de {fmtK(lucroDesejado)}</span>
-              </div>
-              <div className="h-2 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${metaProgress >= 100 ? 'bg-emerald-500' : metaProgress >= 60 ? 'bg-amber-400' : 'bg-orange-500'}`}
-                  style={{ width: `${Math.min(100, metaProgress)}%` }}
-                />
-              </div>
-              {metaProgress >= 100 && <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">🎉 Meta atingida!</p>}
-            </div>
-          </div>
-        </div>
+          {/* ── SEÇÃO PRINCIPAL EM GRID (BLOQUE 1 E BLOQUE 3) ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-        {/* Matrix Grid */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[500px]">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-white/5">
-                <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest w-32">Período</th>
-                {[
-                  { label: '☀️ Hoje', period: cashflow.hoje },
-                  { label: '📅 Semana', period: cashflow.semana },
-                  { label: '🗓️ Este Mês', period: cashflow.mes },
-                  { label: '🔮 Próx. 3 Meses', period: cashflow.futuro },
-                ].map(col => (
-                  <th key={col.label} className="px-4 py-3 text-center text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">{col.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Entradas (pagas) */}
-              <tr className="border-b border-gray-50 dark:border-white/3 hover:bg-gray-50/50 dark:hover:bg-white/2 transition-colors">
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">⬆️ Entradas</span>
-                  </div>
-                </td>
-                {[cashflow.hoje, cashflow.semana, cashflow.mes, cashflow.futuro].map((p, i) => (
-                  <td key={i} className="px-4 py-4 text-center">
-                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{fmtK(p.entradas)}</p>
-                    {p.entradasPendentes > 0 && (
-                      <p className="text-[10px] text-amber-500 font-semibold mt-0.5">+{fmtK(p.entradasPendentes)} pend.</p>
-                    )}
-                  </td>
-                ))}
-              </tr>
-              {/* Saídas */}
-              <tr className="border-b border-gray-50 dark:border-white/3 hover:bg-gray-50/50 dark:hover:bg-white/2 transition-colors">
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-400" />
-                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">⬇️ Saídas</span>
-                  </div>
-                </td>
-                {[cashflow.hoje, cashflow.semana, cashflow.mes, cashflow.futuro].map((p, i) => (
-                  <td key={i} className="px-4 py-4 text-center">
-                    <p className="text-sm font-black text-red-500 dark:text-red-400">{fmtK(p.saidas)}</p>
-                  </td>
-                ))}
-              </tr>
-              {/* Lucro Líquido */}
-              <tr className="bg-gradient-to-r from-gray-50/80 to-transparent dark:from-white/3 dark:to-transparent">
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-xs font-black text-gray-700 dark:text-gray-200">💎 Lucro Líq.</span>
-                  </div>
-                </td>
-                {[cashflow.hoje, cashflow.semana, cashflow.mes, cashflow.futuro].map((p, i) => (
-                  <td key={i} className="px-4 py-4 text-center">
-                    <p className={`text-sm font-black ${p.lucro >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {fmtK(p.lucro)}
-                    </p>
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Ações Rápidas ── */}
-      <div className="bg-white dark:bg-[#0a1628] rounded-3xl p-6 border border-gray-200/50 dark:border-white/5 shadow-sm">
-        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-orange-500" />Ações Rápidas do CRM
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: 'Novo Lead', sub: 'Cadastrar contato comercial', color: 'from-indigo-500 to-blue-600', shadow: 'shadow-indigo-500/20', route: '/dashboard/leads?new=true' },
-            { label: 'Nova Transação', sub: 'Lançar receita ou despesa', color: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/20', route: '/dashboard/empresa-transacoes?new=true' },
-            { label: 'Novo Compromisso', sub: 'Agendar ensaio ou reunião', color: 'from-orange-500 to-amber-600', shadow: 'shadow-orange-500/20', route: '/dashboard/agenda?new=true' },
-          ].map(btn => (
-            <button key={btn.label} onClick={() => navigate(btn.route)}
-              className={`flex items-center justify-between p-4 bg-gradient-to-br ${btn.color} text-white rounded-2xl hover:shadow-lg hover:${btn.shadow} active:scale-98 transition-all group`}>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/10 rounded-xl"><Plus className="w-5 h-5" /></div>
-                <div className="text-left">
-                  <p className="font-bold text-sm">{btn.label}</p>
-                  <p className="text-[10px] text-white/70 font-medium">{btn.sub}</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── KPIs ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { icon: Calendar, label: 'Eventos', value: String(eventos.length), sub: `${eventos.filter(e => e.status === 'confirmado').length} confirmados`, iconBg: 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30', route: '/dashboard/agenda' },
-          { icon: DollarSign, label: 'Recebido', value: fmtK(receitasPagas), sub: `${fmtK(receitasPendentes)} pendente`, iconBg: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30', route: '/dashboard/empresa-transacoes' },
-          { icon: TrendingDown, label: 'Despesas', value: fmtK(despesasPeriodo), sub: `${transacoes.filter(t => t.tipo === 'despesa').length} lançamentos`, iconBg: 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30', route: '/dashboard/empresa-transacoes' },
-          { icon: CheckSquare, label: 'Pendentes', value: String(tarefas.length), sub: tarefasAtrasadas.length > 0 ? `${tarefasAtrasadas.length} atrasadas!` : 'em produção', iconBg: 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30', route: '/dashboard/leads' },
-        ].map(c => (
-          <div key={c.label} onClick={() => navigate(c.route)}
-            className="bg-white dark:bg-[#0a1628] rounded-3xl p-5 border border-gray-200/50 dark:border-white/5 shadow-sm cursor-pointer hover:-translate-y-1 hover:shadow-md active:scale-98 transition-all relative overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.iconBg}`}><c.icon className="w-5 h-5" /></div>
-              <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Painel</span>
-            </div>
-            <p className="text-2xl font-black text-gray-900 dark:text-white leading-tight tracking-tight">{c.value}</p>
-            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-1">{c.label}</p>
-            <p className={`text-[10px] font-semibold mt-2.5 ${c.label === 'Pendentes' && tarefasAtrasadas.length > 0 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>{c.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-orange-500" />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-          {/* ── LEFT COLUMN: Company Tasks + CRM Production ── */}
-          <div className="lg:col-span-7 space-y-6">
-
-            {/* Company Tasks Quick Add (NEW) */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-violet-500/10 rounded-xl">
-                    <CheckSquare className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-gray-900 dark:text-white text-sm">📋 Tarefas da Empresa</h3>
-                    <p className="text-[10px] text-gray-400">Gestão administrativa e tarefas avulsas</p>
-                  </div>
-                </div>
-                <div className="flex gap-1.5">
-                  {(['pendentes', 'todas'] as const).map(f => (
-                    <button key={f} onClick={() => setTaskFilter(f)}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${taskFilter === f ? 'bg-violet-500 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5'}`}>
-                      {f === 'pendentes' ? 'Pendentes' : 'Todas'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Quick Add Input */}
-              <div className="px-6 pt-4 pb-3">
-                <div className="flex gap-2">
-                  <input
-                    value={newTaskText}
-                    onChange={e => setNewTaskText(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addTask()}
-                    placeholder="Adicionar tarefa rápida... (Enter para confirmar)"
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-sm font-medium text-gray-800 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
-                  />
-                  <button onClick={addTask}
-                    className="px-4 py-2.5 bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-xl hover:shadow-md hover:shadow-violet-500/20 active:scale-95 transition-all flex items-center gap-1.5 text-sm font-bold">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Tasks List */}
-              <div className="max-h-64 overflow-y-auto divide-y divide-gray-50 dark:divide-white/3">
-                {filteredCompanyTasks.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-gray-400">
-                    <CheckSquare className="w-8 h-8 mx-auto mb-2 text-gray-200 dark:text-gray-700" />
-                    {taskFilter === 'pendentes' ? 'Nenhuma tarefa pendente. Tudo em dia! 🎉' : 'Nenhuma tarefa cadastrada ainda.'}
-                  </div>
-                ) : (
-                  filteredCompanyTasks.map(task => (
-                    <div key={task.id} className={`flex items-center gap-3 px-6 py-3 hover:bg-gray-50/50 dark:hover:bg-white/2 transition-colors group ${task.concluida ? 'opacity-50' : ''}`}>
-                      <button onClick={() => toggleTask(task.id, task.concluida)}
-                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${task.concluida ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 dark:border-white/20 hover:border-violet-400'}`}>
-                        {task.concluida && <span className="text-white text-[10px]">✓</span>}
-                      </button>
-                      <p className={`flex-1 text-sm font-medium ${task.concluida ? 'line-through text-gray-400 dark:text-gray-600' : 'text-gray-800 dark:text-gray-200'}`}>
-                        {task.descricao}
-                      </p>
-                      <button onClick={() => deleteTask(task.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-500 transition-all">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+            {/* ═══════════════════════════════════════════════════════════════════════
+                BLOQUE 1: CENTRAL DE TAREFAS & PRODUTIVIDADE (Takes 7/12 cols)
+                ═══════════════════════════════════════════════════════════════════════ */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden p-6 space-y-6">
+                
+                {/* Cabeçalho */}
+                <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-white/5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-indigo-500/10 rounded-xl">
+                      <CheckSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                  ))
-                )}
-              </div>
-
-              {companyTasks.filter(t => t.concluida).length > 0 && (
-                <div className="px-6 py-3 border-t border-gray-50 dark:border-white/3">
-                  <p className="text-[10px] text-gray-400 font-semibold">
-                    ✅ {companyTasks.filter(t => t.concluida).length} tarefa{companyTasks.filter(t => t.concluida).length > 1 ? 's' : ''} concluída{companyTasks.filter(t => t.concluida).length > 1 ? 's' : ''} hoje
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* CRM Tasks Filter */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Filter className="w-4 h-4 text-orange-500" />
-                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Tarefas de Clientes por Prazo</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {filtros.map(f => (
-                  <button key={f.id} onClick={() => setFiltroUrgencia(prev => prev === f.id ? 'todos' : f.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold tracking-wide transition-all active:scale-95 ${filtroUrgencia === f.id
-                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-sm'
-                      : 'bg-gray-50 dark:bg-[#07101f] text-gray-600 dark:text-gray-400 border-gray-200/50 dark:border-white/5'}`}>
-                    <span>{f.label}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${filtroUrgencia === f.id ? 'bg-white text-orange-600' : 'bg-gray-200/60 dark:bg-white/10 text-gray-700 dark:text-gray-300'}`}>
-                      {f.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* CRM Task List */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
-                <div className="flex items-center gap-2">
-                  <CheckSquare className="w-5 h-5 text-indigo-500" />
-                  <h3 className="font-bold text-gray-900 dark:text-white">Foco na Produção</h3>
-                </div>
-                {tarefasFiltradas.length > 0 && (
-                  <span className="text-xs font-bold text-gray-500 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full">{tarefasFiltradas.length} pendentes</span>
-                )}
-              </div>
-              {tarefasFiltradas.length === 0 ? (
-                <div className="py-16 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
-                  <CheckSquare className="w-10 h-10 text-gray-300 dark:text-gray-700" />
-                  <p className="font-medium">Nenhuma tarefa pendente nesta categoria 🎉</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[420px] overflow-y-auto">
-                  {tarefasFiltradas.map(t => {
-                    const pi = prazoInfo(t.prazo);
-                    const isHoje = pi.urgencia === 'hoje';
-                    const isAtrasada = pi.urgencia === 'atrasadas';
-                    return (
-                      <div key={`${t.leadId}-${t.stepId}`}
-                        onClick={() => navigate(`/dashboard/leads?tab=producao&leadId=${t.leadId}&stepId=${t.stepId}`)}
-                        className={`group w-full flex items-center justify-between gap-4 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all border-l-4 ${isHoje ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-950/5' : isAtrasada ? 'border-red-500 bg-red-50/10 dark:bg-red-950/2' : 'border-transparent'}`}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${pi.dotColor}`} />
-                          <div className="min-w-0">
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider truncate mb-0.5">{t.leadNome}</p>
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate group-hover:text-orange-500 transition-colors">{t.stepNome}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${isHoje ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400' : isAtrasada ? 'bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400' : 'bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-400'}`}>
-                            <Clock className="w-3 h-3" />{pi.texto}
-                          </span>
-                          <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform" />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Últimos 10 Leads */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
-                <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-blue-500" />
-                  <h3 className="font-bold text-gray-900 dark:text-white">Últimos Leads Recebidos</h3>
-                </div>
-                <button onClick={() => navigate('/dashboard/leads')} className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1">
-                  Ver todos <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              {ultimosLeads.length === 0 ? (
-                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
-                  <Users className="w-10 h-10 text-gray-300 dark:text-gray-700" />
-                  <p className="font-medium">Nenhum lead recebido ainda.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[380px] overflow-y-auto">
-                  {ultimosLeads.map(lead => (
-                    <div key={lead.id}
-                      onClick={() => navigate(`/dashboard/leads?leadId=${lead.id}`)}
-                      className="group w-full flex items-center justify-between gap-4 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate group-hover:text-orange-500 transition-colors">
-                              {lead.nome_cliente || 'Cliente sem nome'}
-                            </p>
-                            {getLeadStatusBadge(lead.status)}
-                          </div>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider truncate">
-                            {lead.tipo_evento || 'Tipo não definido'} · {fmtTimestamp(lead.created_at)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs font-black text-gray-900 dark:text-white">
-                          {fmtCurrency(lead.valor_total)}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform" />
-                      </div>
+                    <div>
+                      <h3 className="font-black text-gray-900 dark:text-white text-base">📋 Central de Tarefas & Produtividade</h3>
+                      <p className="text-[11px] text-gray-400">Gestão operacional de clientes, escritório e saúde</p>
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Leads para Follow-up (~7 dias) */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-orange-500" />
-                  <h3 className="font-bold text-gray-900 dark:text-white">Leads para Follow-up (~7 dias)</h3>
-                </div>
-                <button onClick={() => navigate('/dashboard/leads')} className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1">
-                  Ver todos <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              {leadsFollowup.length === 0 ? (
-                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
-                  <Clock className="w-10 h-10 text-gray-300 dark:text-gray-700" />
-                  <p className="font-medium">Nenhum lead com follow-up pendente para hoje.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[380px] overflow-y-auto">
-                  {leadsFollowup.map(lead => (
-                    <div key={lead.id}
-                      onClick={() => navigate(`/dashboard/leads?leadId=${lead.id}`)}
-                      className="group w-full flex items-center justify-between gap-4 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate group-hover:text-orange-500 transition-colors">
-                              {lead.nome_cliente || 'Cliente sem nome'}
-                            </p>
-                            {getLeadStatusBadge(lead.status)}
-                          </div>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider truncate">
-                            {lead.tipo_evento || 'Tipo não definido'}
-                          </p>
-                        </div>
+                {/* Saúde da Empresa Integrada */}
+                <div className="bg-gradient-to-r from-gray-900 via-slate-900 to-zinc-900 text-white rounded-2xl p-5 border border-white/5 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-5">
+                    <div className="space-y-2.5 flex-1">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-[10px] font-bold tracking-wider text-orange-400 uppercase">
+                        <Zap className="w-3 h-3 text-orange-400 animate-pulse" />
+                        Saúde do Estúdio
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                          {getFollowUpLabel(lead)}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── RIGHT COLUMN: Tomorrow + Events + Finances ── */}
-          <div className="lg:col-span-5 space-y-6">
-
-            {/* Tomorrow Preview */}
-            <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-zinc-950 text-white rounded-3xl p-6 border border-white/5 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-              <div className="flex items-center gap-2 mb-5">
-                <h3 className="text-base font-black uppercase tracking-wider text-white">Amanhã</h3>
-                <span className="bg-indigo-500/35 border border-indigo-500/30 text-indigo-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">Preview</span>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { icon: CheckSquare, label: 'Tarefas', count: tarefasAmanha.length, color: 'text-indigo-400', items: tarefasAmanha.slice(0, 2).map(t => t.stepNome), total: tarefasAmanha.length },
-                  { icon: DollarSign, label: 'Caixa', count: null, color: 'text-emerald-400', items: transacoesAmanha.filter(t => t.tipo === 'receita').slice(0, 2).map(t => t.descricao), total: transacoesAmanha.filter(t => t.tipo === 'receita').length, value: fmtCurrency(transacoesAmanha.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0)) },
-                  { icon: Calendar, label: 'Agenda', count: eventosAmanha.length, color: 'text-orange-400', items: eventosAmanha.slice(0, 2).map(e => e.cliente_nome), total: eventosAmanha.length },
-                ].map(item => (
-                  <div key={item.label} className="bg-white/5 rounded-2xl p-3.5 border border-white/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5`}>
-                        <item.icon className={`w-3.5 h-3.5 ${item.color}`} />
-                        {item.label}
-                      </span>
-                      <span className={`text-xs font-black ${item.color}`}>{item.value || item.total}</span>
-                    </div>
-                    {item.items.length === 0 ? (
-                      <p className="text-xs text-gray-400">Nada agendado.</p>
-                    ) : (
                       <div className="space-y-1">
-                        {item.items.map((it, idx) => <p key={idx} className="text-xs font-medium text-gray-200 truncate">• {it}</p>)}
-                        {item.total > 2 && <p className="text-[10px] text-indigo-400 font-bold">+ {item.total - 2} mais</p>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Events */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-blue-500" />
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Próximos Eventos</h3>
-                </div>
-                <button onClick={() => navigate('/dashboard/agenda')} className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1">
-                  Ver todos <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-              {eventos.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 text-xs font-medium">Sem compromissos no período</div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-52 overflow-y-auto">
-                  {eventos.map(ev => (
-                    <div key={ev.id} onClick={() => navigate('/dashboard/agenda')}
-                      className="px-6 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-white/2 cursor-pointer transition-all">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="text-center w-8 shrink-0">
-                          <p className="text-sm font-black text-blue-600">{new Date(ev.data_evento + 'T12:00:00').getDate()}</p>
-                          <p className="text-[9px] text-gray-400 uppercase font-bold -mt-0.5">{new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short' })}</p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-gray-800 dark:text-gray-200 text-xs truncate">{ev.cliente_nome}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{ev.tipo_evento}{ev.cidade ? ` • ${ev.cidade}` : ''}</p>
-                        </div>
-                      </div>
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${statusColor(ev.status)}`}>{ev.status}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Financeiro do período */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-500" />
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Caixa do Período</h3>
-                </div>
-                <button onClick={() => navigate('/dashboard/empresa-transacoes')} className="text-xs font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider flex items-center gap-1">
-                  Ver tudo <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-              {transacoes.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 text-xs font-medium">Sem movimentações no período</div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-52 overflow-y-auto">
-                  {transacoes.slice(0, 8).map(tr => (
-                    <div key={tr.id} onClick={() => navigate('/dashboard/empresa-transacoes')}
-                      className="px-6 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-white/2 cursor-pointer transition-all">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 dark:text-gray-200 text-xs truncate">{tr.descricao}</p>
-                        <p className="text-[10px] text-gray-400">{fmt(tr.data)} · {tr.status}</p>
-                      </div>
-                      <span className={`text-xs font-black shrink-0 ${tr.tipo === 'receita' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                        {tr.tipo === 'receita' ? '+' : '-'}{fmtK(tr.valor)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Avaliações Pendentes */}
