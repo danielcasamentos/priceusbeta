@@ -918,30 +918,15 @@ export function MeuDia({ userId }: MeuDiaProps) {
             </div>
           </div>
 
-          {/* ── SEÇÃO PRINCIPAL EM GRID (BLOQUE 1 E BLOQUE 3) ── */}
+          {/* ═════ GRID: BLOCO 1 (7 cols) + BLOCO 3 (5 cols) ═════ */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            {/* ═══════════════════════════════════════════════════════════════════════
-                BLOQUE 1: CENTRAL DE TAREFAS & PRODUTIVIDADE (Takes 7/12 cols)
-                ═══════════════════════════════════════════════════════════════════════ */}
+            {/* ── BLOCO 1: CENTRAL DE TAREFAS (7 cols) ── */}
             <div className="lg:col-span-7 space-y-6">
-              
-              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden p-6 space-y-6">
-                
-                {/* Cabeçalho */}
-                <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-white/5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-indigo-500/10 rounded-xl">
-                      <CheckSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-gray-900 dark:text-white text-base">📋 Central de Tarefas & Produtividade</h3>
-                      <p className="text-[11px] text-gray-400">Gestão operacional de clientes, escritório e saúde</p>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Saúde da Empresa Integrada */}
+              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden p-6 space-y-6">
+
+                {/* Saúde da Empresa */}
                 <div className="bg-gradient-to-r from-gray-900 via-slate-900 to-zinc-900 text-white rounded-2xl p-5 border border-white/5 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
                   <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-5">
@@ -951,176 +936,409 @@ export function MeuDia({ userId }: MeuDiaProps) {
                         Saúde do Estúdio
                       </div>
                       <div className="space-y-1">
-            </div>
-
-            {/* Avaliações Pendentes */}
-            <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
-                <div className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Avaliações Pendentes</h3>
+                        {insights.msgs.map((m, i) => (
+                          <p key={i} className="text-sm text-gray-300 flex items-start gap-2">
+                            <span>{m.emoji}</span><span className="leading-snug">{m.texto}</span>
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <div className={`text-5xl font-black ${insights.saudeColor}`}>{insights.score}</div>
+                      <div className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Score</div>
+                      <div className={`text-sm font-bold ${insights.saudeColor}`}>{insights.saudeEmoji} {insights.saudeLabel}</div>
+                    </div>
+                  </div>
                 </div>
-                <button onClick={() => navigate('/dashboard/avaliacoes')} className="text-xs font-bold text-yellow-600 hover:text-yellow-500 uppercase tracking-wider flex items-center gap-1">
-                  Moderar <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+
+                {/* Stats Rápidas */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                  {[
+                    { label: 'Executadas', value: tarefasPorPeriodo.stats.executadasTotais, color: 'text-emerald-600' },
+                    { label: 'Hoje', value: tarefasPorPeriodo.stats.hojeCount, color: 'text-amber-600' },
+                    { label: 'Amanhã', value: tarefasPorPeriodo.stats.amanhaCount, color: 'text-orange-500' },
+                    { label: 'Semana', value: tarefasPorPeriodo.stats.semanaCount, color: 'text-blue-600' },
+                    { label: 'Mês', value: tarefasPorPeriodo.stats.mesCount, color: 'text-violet-600' },
+                    { label: 'Total', value: tarefasPorPeriodo.stats.totaisGeral, color: 'text-gray-700 dark:text-gray-300' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-gray-50 dark:bg-white/3 rounded-2xl p-3 text-center border border-gray-100 dark:border-white/5">
+                      <div className={`text-2xl font-black ${s.color} dark:brightness-125`}>{s.value}</div>
+                      <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mt-0.5">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Period Tabs */}
+                <div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-2">
+                    {[
+                      { id: 'hoje', label: 'Hoje', count: tarefasPorPeriodo.hoje.count },
+                      { id: 'amanha', label: 'Amanhã', count: tarefasPorPeriodo.amanha.count },
+                      { id: 'proximos3', label: '3 dias', count: tarefasPorPeriodo.proximos3.count },
+                      { id: 'semana', label: 'Semana', count: tarefasPorPeriodo.semana.count },
+                      { id: 'mes', label: 'Mês', count: tarefasPorPeriodo.mes.count },
+                      { id: 'ano', label: 'Ano', count: tarefasPorPeriodo.ano.count },
+                      { id: 'periodo', label: 'Período', count: tarefasPorPeriodo.periodo.count },
+                    ].map(tab => (
+                      <button key={tab.id}
+                        onClick={() => setAbaTarefaPeriodo(tab.id as any)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${abaTarefaPeriodo === tab.id
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                          : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
+                        {tab.label}
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${abaTarefaPeriodo === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400'}`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                    {tarefasCombinadas.length === 0 ? (
+                      <div className="text-center py-10 text-gray-400">
+                        <CheckSquare className="w-10 h-10 mx-auto mb-2 text-gray-200 dark:text-gray-700" />
+                        <p className="text-sm font-medium">Nenhuma tarefa neste período</p>
+                      </div>
+                    ) : tarefasCombinadas.map(t => {
+                      const pi = prazoInfo(t.prazo);
+                      return (
+                        <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all group ${t.concluida ? 'opacity-50 bg-gray-50 dark:bg-white/2 border-gray-100 dark:border-white/3' : 'bg-white dark:bg-white/3 border-gray-100 dark:border-white/5 hover:border-indigo-200 dark:hover:border-indigo-500/30'}`}>
+                          {t.tipo === 'company' ? (
+                            <input type="checkbox" checked={t.concluida}
+                              onChange={() => toggleTask(t.id, t.concluida)}
+                              className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0" />
+                          ) : (
+                            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${pi.dotColor}`} />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold truncate ${t.concluida ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>{t.nome}</p>
+                            {t.subnome && <p className="text-[10px] text-gray-400 truncate">{t.subnome}</p>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-[10px] font-bold ${pi.colorClass}`}>{pi.texto}</span>
+                            {t.tipo === 'crm' && (
+                              <button onClick={() => navigate(`/dashboard/leads?id=${t.taskObject?.leadId}`)}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-all">
+                                <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
+                              </button>
+                            )}
+                            {t.tipo === 'company' && (
+                              <button onClick={() => deleteTask(t.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all">
+                                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <input value={newTaskText} onChange={e => setNewTaskText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addTask()}
+                      placeholder="Nova tarefa administrativa..."
+                      className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                    <button onClick={addTask}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
-              {avaliacoesPendentes.length === 0 ? (
-                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
-                  <Star className="w-10 h-10 text-gray-200 dark:text-gray-700" />
-                  <p className="font-medium">Nenhuma avaliação pendente. Tudo aprovado! 🎉</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[300px] overflow-y-auto">
-                  {avaliacoesPendentes.map(review => (
-                    <div key={review.id}
-                      onClick={() => navigate('/dashboard/avaliacoes')}
-                      className="group w-full flex flex-col gap-1 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-xs text-gray-800 dark:text-gray-200 group-hover:text-yellow-500 transition-colors">
-                          {review.nome_cliente}
-                        </span>
-                        <div className="flex items-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} className={`w-3.5 h-3.5 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 dark:text-gray-700'}`} />
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 italic leading-relaxed">
-                        "{review.comentario && review.comentario.length > 100 ? review.comentario.slice(0, 100) + '...' : review.comentario}"
-                      </p>
-                      <p className="text-[9px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider mt-1">
-                        {review.tipo_evento || 'Evento'} · {fmtTimestamp(review.created_at)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          GROWTH HUB & MARKETING ADVISOR (NEW)
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="bg-gradient-to-br from-gray-900 via-slate-900 to-zinc-950 text-white rounded-3xl border border-white/5 shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="relative px-6 sm:px-8 pt-8 pb-6">
-          <div className="absolute top-0 right-0 w-96 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/20 border border-violet-500/30 text-violet-300 text-xs font-bold tracking-wider uppercase mb-3">
-              <Star className="w-3 h-3" />
-              Growth Hub & Marketing Advisor
-            </div>
-            <h3 className="text-2xl font-black tracking-tight">Seu Consultor de Crescimento</h3>
-            <p className="text-sm text-gray-400 mt-1">Estratégias práticas e acionáveis para crescer seu estúdio</p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="px-6 sm:px-8 overflow-x-auto">
-          <div className="flex gap-2 border-b border-white/10 pb-0 min-w-max">
-            {growthTabs.map(tab => (
-              <button key={tab.id} onClick={() => setGrowthTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${growthTab === tab.id
-                  ? 'border-violet-400 text-violet-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
-                <span>{tab.emoji}</span>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        <div className="px-6 sm:px-8 py-6">
-          {growthTab === 'sazonal' ? (
-            <div>
-              {seasonalEvents.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">Nenhum evento sazonal importante nos próximos 90 dias.</p>
+              {/* Avaliações Pendentes */}
+              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">Avaliações Pendentes</h3>
+                  </div>
+                  <button onClick={() => navigate('/dashboard/avaliacoes')} className="text-xs font-bold text-yellow-600 hover:text-yellow-500 uppercase tracking-wider flex items-center gap-1">
+                    Moderar <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {seasonalEvents.map(ev => (
-                    <div key={ev.nome} className={`rounded-2xl p-5 border ${ev.urgency === 'high' ? 'bg-rose-900/20 border-rose-500/30' : ev.urgency === 'medium' ? 'bg-amber-900/15 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <span className="text-2xl">{ev.emoji}</span>
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${ev.urgency === 'high' ? 'bg-rose-500/30 text-rose-300' : ev.urgency === 'medium' ? 'bg-amber-500/25 text-amber-300' : 'bg-white/10 text-gray-400'}`}>
-                          {ev.daysAway === 0 ? 'Hoje!' : `${ev.daysAway}d`}
-                        </span>
-                      </div>
-                      <p className="font-black text-white text-sm mb-1">{ev.nome}</p>
-                      <p className="text-[10px] text-gray-400 mb-3">{fmt(ev.data)}</p>
-                      <p className="text-xs text-gray-300 leading-relaxed">{ev.dica}</p>
-                      {ev.urgency === 'high' && (
-                        <div className="mt-3 flex items-center gap-1.5 text-rose-400">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                          <p className="text-[10px] font-bold">Ação urgente — comece hoje!</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : growthTab === 'clientes' ? (
-            <div className="space-y-8">
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-violet-400 mb-4 flex items-center gap-1.5">
-                  <Star className="w-3.5 h-3.5 animate-pulse" />
-                  Oportunidades de Reativação por Cliente
-                </h4>
-                {clientRecommendations.length === 0 ? (
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-gray-400 text-xs">
-                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    Nenhuma sugestão automatizada de remarketing baseada nas datas de eventos passados no momento.
+                {avaliacoesPendentes.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                    <Star className="w-10 h-10 text-gray-200 dark:text-gray-700" />
+                    <p className="font-medium">Nenhuma avaliação pendente. Tudo aprovado! 🎉</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {clientRecommendations.map((rec, i) => (
-                      <div key={i} className="bg-gradient-to-br from-violet-950/20 to-slate-900/40 rounded-2xl p-5 border border-violet-500/20 flex flex-col justify-between hover:border-violet-500/40 transition-colors">
-                        <div>
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded bg-violet-500/20 text-violet-300 uppercase tracking-wider">
-                              {rec.tag}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-medium">
-                              Há {rec.diasPassados} dias
-                            </span>
+                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[300px] overflow-y-auto">
+                    {avaliacoesPendentes.map(review => (
+                      <div key={review.id}
+                        onClick={() => navigate('/dashboard/avaliacoes')}
+                        className="group w-full flex flex-col gap-1 px-6 py-4 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-white/2 transition-all">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs text-gray-800 dark:text-gray-200 group-hover:text-yellow-500 transition-colors">
+                            {review.nome_cliente}
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className={`w-3.5 h-3.5 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 dark:text-gray-700'}`} />
+                            ))}
                           </div>
-                          <h5 className="font-black text-white text-sm mb-1 truncate">{rec.clienteNome}</h5>
-                          <p className="text-[10px] text-gray-500 mb-3">
-                            {rec.tipoEvento} · {fmt(rec.dataEvento)}
-                          </p>
-                          <p className="text-xs font-bold text-violet-200 mb-1.5">{rec.titulo}</p>
-                          <p className="text-[11px] text-gray-300 leading-relaxed mb-4">{rec.dica}</p>
                         </div>
-                        <button
-                          onClick={() => {
-                            const waUrl = rec.telefone 
-                              ? `https://wa.me/${cleanPhone(rec.telefone)}?text=${encodeURIComponent(rec.mensagemWhatsapp)}`
-                              : `https://wa.me/?text=${encodeURIComponent(rec.mensagemWhatsapp)}`;
-                            window.open(waUrl, '_blank');
-                          }}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors mt-auto shadow-sm"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          Enviar Script no WhatsApp
-                        </button>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic leading-relaxed">
+                          "{review.comentario && review.comentario.length > 100 ? review.comentario.slice(0, 100) + '...' : review.comentario}"
+                        </p>
+                        <p className="text-[9px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider mt-1">
+                          {review.tipo_evento || 'Evento'} · {fmtTimestamp(review.created_at)}
+                        </p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="pt-6 border-t border-white/10">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
-                  💡 Estratégias Gerais de Remarketing
-                </h4>
+            {/* ── BLOCO 3: EMPRESA & OPERAÇÕES (5 cols) ── */}
+            <div className="lg:col-span-5 space-y-6">
+
+              {/* Agenda */}
+              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-500" />
+                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">🗓️ Agenda</h3>
+                  </div>
+                  <button onClick={() => navigate('/dashboard/agenda')} className="text-xs font-bold text-blue-500 hover:text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                    Ver tudo <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
+                  {agendaFiltrada.length === 0 ? (
+                    <div className="py-10 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                      <Calendar className="w-10 h-10 text-gray-200 dark:text-gray-700" />
+                      <p className="font-medium">Sem compromissos neste período</p>
+                    </div>
+                  ) : agendaFiltrada.map(ev => (
+                    <div key={ev.id}
+                      onClick={() => navigate(`/dashboard/agenda?id=${ev.id}`)}
+                      className="flex items-center gap-3 px-6 py-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/2 transition-all group">
+                      <div className="flex flex-col items-center bg-blue-500/10 rounded-xl p-2 w-12 shrink-0 text-center">
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase">
+                          {new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}
+                        </span>
+                        <span className="text-lg font-black text-blue-700 dark:text-blue-300 leading-none">
+                          {new Date(ev.data_evento + 'T12:00:00').getDate()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-500 transition-colors">{ev.cliente_nome}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{ev.tipo_evento}{ev.cidade ? ` · ${ev.cidade}` : ''}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cashflow */}
+              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">💰 Fluxo de Caixa</h3>
+                  </div>
+                  <button onClick={() => navigate('/dashboard/empresa-transacoes')} className="text-xs font-bold text-emerald-600 hover:text-emerald-500 uppercase tracking-wider flex items-center gap-1">
+                    Ver tudo <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-white/5">
+                  {(['hoje', 'amanha', 'semana', 'mes', 'proximoMes'] as const).map(key => {
+                    const labels: Record<string, string> = { hoje: '📅 Hoje', amanha: '⏭️ Amanhã', semana: '📆 Esta Semana', mes: '📊 Este Mês', proximoMes: '🔮 Próximo Mês' };
+                    const period = cashflow[key];
+                    return (
+                      <div key={key} className="px-6 py-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">{labels[key]}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-wide mb-0.5">Entradas</p>
+                            <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{fmtK(period.entradas)}</p>
+                            {period.entradasPendentes > 0 && (
+                              <p className="text-[9px] text-amber-500">+{fmtK(period.entradasPendentes)} pend.</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide mb-0.5">Saídas</p>
+                            <p className="text-sm font-black text-red-500 dark:text-red-400">{fmtK(period.saidas)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-blue-500 font-bold uppercase tracking-wide mb-0.5">Lucro</p>
+                            <p className={`text-sm font-black ${period.lucro >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500'}`}>{fmtK(period.lucro)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Follow-ups Sugeridos */}
+              {clientRecommendations.length > 0 && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5 text-green-500" />
+                      <h3 className="font-bold text-gray-900 dark:text-white text-sm">💬 Follow-ups Sugeridos</h3>
+                    </div>
+                    <span className="text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                      {clientRecommendations.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
+                    {clientRecommendations.slice(0, 5).map((rec, i) => (
+                      <div key={i} className="px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-white/2 transition-all">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">{rec.clienteNome}</p>
+                            <p className="text-[11px] text-gray-400 truncate">{rec.titulo}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{rec.dica}</p>
+                          </div>
+                          <a href={`https://wa.me/${cleanPhone(rec.telefone)}?text=${encodeURIComponent(rec.mensagemWhatsapp)}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="shrink-0 p-2 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all active:scale-95">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-white/5 text-[10px] font-bold text-gray-500 rounded-full">{rec.tag}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── BLOCO 4: GROWTH HUB ── */}
+          <div className="bg-gradient-to-br from-gray-900 via-slate-900 to-zinc-950 text-white rounded-3xl border border-white/5 shadow-2xl overflow-hidden">
+            <div className="relative px-6 sm:px-8 pt-8 pb-6">
+              <div className="absolute top-0 right-0 w-96 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/20 border border-violet-500/30 text-violet-300 text-xs font-bold tracking-wider uppercase mb-3">
+                  <Star className="w-3 h-3" />
+                  Growth Hub &amp; Marketing Advisor
+                </div>
+                <h3 className="text-2xl font-black tracking-tight">Seu Consultor de Crescimento</h3>
+                <p className="text-sm text-gray-400 mt-1">Estratégias práticas e acionáveis para crescer seu estúdio</p>
+              </div>
+            </div>
+            <div className="px-6 sm:px-8 overflow-x-auto">
+              <div className="flex gap-2 border-b border-white/10 pb-0 min-w-max">
+                {growthTabs.map(tab => (
+                  <button key={tab.id} onClick={() => setGrowthTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${growthTab === tab.id
+                      ? 'border-violet-400 text-violet-300'
+                      : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+                    <span>{tab.emoji}</span>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="px-6 sm:px-8 py-6">
+              {growthTab === 'sazonal' ? (
+                <div>
+                  {seasonalEvents.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">Nenhum evento sazonal importante nos próximos 90 dias.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {seasonalEvents.map(ev => (
+                        <div key={ev.nome} className={`rounded-2xl p-5 border ${ev.urgency === 'high' ? 'bg-rose-900/20 border-rose-500/30' : ev.urgency === 'medium' ? 'bg-amber-900/15 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
+                          <div className="flex items-start justify-between mb-3">
+                            <span className="text-2xl">{ev.emoji}</span>
+                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${ev.urgency === 'high' ? 'bg-rose-500/30 text-rose-300' : ev.urgency === 'medium' ? 'bg-amber-500/25 text-amber-300' : 'bg-white/10 text-gray-400'}`}>
+                              {ev.daysAway === 0 ? 'Hoje!' : `${ev.daysAway}d`}
+                            </span>
+                          </div>
+                          <p className="font-black text-white text-sm mb-1">{ev.nome}</p>
+                          <p className="text-[10px] text-gray-400 mb-3">{fmt(ev.data)}</p>
+                          <p className="text-xs text-gray-300 leading-relaxed">{ev.dica}</p>
+                          {ev.urgency === 'high' && (
+                            <div className="mt-3 flex items-center gap-1.5 text-rose-400">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <p className="text-[10px] font-bold">Ação urgente — comece hoje!</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : growthTab === 'clientes' ? (
+                <div className="space-y-8">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-violet-400 mb-4 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 animate-pulse" />
+                      Oportunidades de Reativação por Cliente
+                    </h4>
+                    {clientRecommendations.length === 0 ? (
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-gray-400 text-xs">
+                        <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        Nenhuma sugestão automatizada de remarketing baseada nas datas de eventos passados no momento.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {clientRecommendations.map((rec, i) => (
+                          <div key={i} className="bg-gradient-to-br from-violet-950/20 to-slate-900/40 rounded-2xl p-5 border border-violet-500/20 flex flex-col justify-between hover:border-violet-500/40 transition-colors">
+                            <div>
+                              <div className="flex items-start justify-between mb-2">
+                                <span className="text-xs font-extrabold px-2.5 py-0.5 rounded bg-violet-500/20 text-violet-300 uppercase tracking-wider">
+                                  {rec.tag}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  Há {rec.diasPassados} dias
+                                </span>
+                              </div>
+                              <h5 className="font-black text-white text-sm mb-1 truncate">{rec.clienteNome}</h5>
+                              <p className="text-[10px] text-gray-500 mb-3">
+                                {rec.tipoEvento} · {fmt(rec.dataEvento)}
+                              </p>
+                              <p className="text-xs font-bold text-violet-200 mb-1.5">{rec.titulo}</p>
+                              <p className="text-[11px] text-gray-300 leading-relaxed mb-4">{rec.dica}</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const waUrl = rec.telefone
+                                  ? `https://wa.me/${cleanPhone(rec.telefone)}?text=${encodeURIComponent(rec.mensagemWhatsapp)}`
+                                  : `https://wa.me/?text=${encodeURIComponent(rec.mensagemWhatsapp)}`;
+                                window.open(waUrl, '_blank');
+                              }}
+                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors mt-auto shadow-sm"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              Enviar Script no WhatsApp
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="pt-6 border-t border-white/10">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+                      💡 Estratégias Gerais de Remarketing
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {GROWTH_TIPS.clientes.map((tip, i) => (
+                        <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/10 hover:bg-white/8 transition-colors">
+                          <div className="flex items-start justify-between mb-3">
+                            <span className="text-2xl">{tip.emoji}</span>
+                            <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-violet-500/20 text-violet-300">{tip.tag}</span>
+                          </div>
+                          <p className="font-black text-white text-sm mb-2">{tip.titulo}</p>
+                          <p className="text-xs text-gray-300 leading-relaxed">{tip.dica}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {GROWTH_TIPS.clientes.map((tip, i) => (
+                  {GROWTH_TIPS[growthTab].map((tip, i) => (
                     <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/10 hover:bg-white/8 transition-colors">
                       <div className="flex items-start justify-between mb-3">
                         <span className="text-2xl">{tip.emoji}</span>
@@ -1131,126 +1349,103 @@ export function MeuDia({ userId }: MeuDiaProps) {
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {GROWTH_TIPS[growthTab].map((tip, i) => (
-                <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/10 hover:bg-white/8 transition-colors">
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-2xl">{tip.emoji}</span>
-                    <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-violet-500/20 text-violet-300">{tip.tag}</span>
-                  </div>
-                  <p className="font-black text-white text-sm mb-2">{tip.titulo}</p>
-                  <p className="text-xs text-gray-300 leading-relaxed">{tip.dica}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          ROI SIMULATOR (NEW)
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-        <div className="px-6 sm:px-8 pt-6 pb-4 border-b border-gray-100 dark:border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl">
-              <Sliders className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-black text-gray-900 dark:text-white text-base">📊 Simulador de ROI em Anúncios</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Simule o retorno de investimentos em anúncios pagos (Meta, Google)</p>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="px-6 sm:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Sliders */}
-            <div className="space-y-6">
-              {/* Investimento */}
-              <div>
-                <div className="flex justify-between items-baseline mb-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-200">💸 Investimento mensal em anúncios</label>
-                  <span className="text-lg font-black text-orange-500">{fmtCurrency(roiInvestimento)}</span>
+          {/* ── ROI SIMULATOR ── */}
+          <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+            <div className="px-6 sm:px-8 pt-6 pb-4 border-b border-gray-100 dark:border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl">
+                  <Sliders className="w-5 h-5 text-white" />
                 </div>
-                <input type="range" min={200} max={5000} step={100} value={roiInvestimento}
-                  onChange={e => setRoiInvestimento(Number(e.target.value))}
-                  className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-orange-500 cursor-pointer" />
-                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                  <span>R$ 200</span><span>R$ 5.000</span>
-                </div>
-              </div>
-
-              {/* Ticket Médio */}
-              <div>
-                <div className="flex justify-between items-baseline mb-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-200">🎯 Ticket médio dos seus serviços</label>
-                  <span className="text-lg font-black text-blue-500">{fmtCurrency(roiTicket)}</span>
-                </div>
-                <input type="range" min={800} max={25000} step={200} value={roiTicket}
-                  onChange={e => setRoiTicket(Number(e.target.value))}
-                  className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-blue-500 cursor-pointer" />
-                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                  <span>R$ 800</span><span>R$ 25.000</span>
-                </div>
-              </div>
-
-              {/* Taxa de Conversão */}
-              <div>
-                <div className="flex justify-between items-baseline mb-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-200">📈 Taxa de conversão de leads</label>
-                  <span className="text-lg font-black text-emerald-500">{roiConversao}%</span>
-                </div>
-                <input type="range" min={2} max={20} step={1} value={roiConversao}
-                  onChange={e => setRoiConversao(Number(e.target.value))}
-                  className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-emerald-500 cursor-pointer" />
-                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                  <span>2% (conservador)</span><span>20% (agressivo)</span>
+                <div>
+                  <h3 className="font-black text-gray-900 dark:text-white text-base">📊 Simulador de ROI em Anúncios</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Simule o retorno de investimentos em anúncios pagos (Meta, Google)</p>
                 </div>
               </div>
             </div>
-
-            {/* Results */}
-            <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-2xl p-6 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl pointer-events-none" />
-              <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-5">Projeção estimada / mês</p>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-300">Leads gerados</span>
-                  <span className="text-2xl font-black text-white">{roiCalc.leads}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-300">Contratos estimados</span>
-                  <span className="text-2xl font-black text-white">{roiCalc.contratos.toFixed(1)}</span>
-                </div>
-                <div className="h-px bg-white/10" />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-300">Faturamento estimado</span>
-                  <span className="text-2xl font-black text-emerald-400">{fmtK(roiCalc.faturamento)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-300">Lucro líquido estimado</span>
-                  <span className="text-xl font-black text-blue-400">{fmtK(roiCalc.faturamento - roiInvestimento)}</span>
-                </div>
-                <div className="bg-white/5 rounded-xl p-4 border border-white/10 mt-2">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-bold text-gray-300">ROI estimado</span>
-                    <span className={`text-3xl font-black ${roiCalc.roi >= 200 ? 'text-emerald-400' : roiCalc.roi >= 100 ? 'text-amber-400' : 'text-orange-400'}`}>
-                      {Math.round(roiCalc.roi)}%
-                    </span>
+            <div className="px-6 sm:px-8 py-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between items-baseline mb-2">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">💸 Investimento mensal em anúncios</label>
+                      <span className="text-lg font-black text-orange-500">{fmtCurrency(roiInvestimento)}</span>
+                    </div>
+                    <input type="range" min={200} max={5000} step={100} value={roiInvestimento}
+                      onChange={e => setRoiInvestimento(Number(e.target.value))}
+                      className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-orange-500 cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                      <span>R$ 200</span><span>R$ 5.000</span>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-gray-500 leading-relaxed">
-                    * Estimativa baseada em benchmarks de mercado para fotografia. Resultados reais variam conforme qualidade dos anúncios, segmentação e sazonalidade.
-                  </p>
+                  <div>
+                    <div className="flex justify-between items-baseline mb-2">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">🎯 Ticket médio dos seus serviços</label>
+                      <span className="text-lg font-black text-blue-500">{fmtCurrency(roiTicket)}</span>
+                    </div>
+                    <input type="range" min={800} max={25000} step={200} value={roiTicket}
+                      onChange={e => setRoiTicket(Number(e.target.value))}
+                      className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-blue-500 cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                      <span>R$ 800</span><span>R$ 25.000</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-baseline mb-2">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">📈 Taxa de conversão de leads</label>
+                      <span className="text-lg font-black text-emerald-500">{roiConversao}%</span>
+                    </div>
+                    <input type="range" min={2} max={20} step={1} value={roiConversao}
+                      onChange={e => setRoiConversao(Number(e.target.value))}
+                      className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-emerald-500 cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                      <span>2% (conservador)</span><span>20% (agressivo)</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-2xl p-6 text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl pointer-events-none" />
+                  <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-5">Projeção estimada / mês</p>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-300">Leads gerados</span>
+                      <span className="text-2xl font-black text-white">{roiCalc.leads}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-300">Contratos estimados</span>
+                      <span className="text-2xl font-black text-white">{roiCalc.contratos.toFixed(1)}</span>
+                    </div>
+                    <div className="h-px bg-white/10" />
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-300">Faturamento estimado</span>
+                      <span className="text-2xl font-black text-emerald-400">{fmtK(roiCalc.faturamento)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-300">Lucro líquido estimado</span>
+                      <span className="text-xl font-black text-blue-400">{fmtK(roiCalc.faturamento - roiInvestimento)}</span>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10 mt-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-bold text-gray-300">ROI estimado</span>
+                        <span className={`text-3xl font-black ${roiCalc.roi >= 200 ? 'text-emerald-400' : roiCalc.roi >= 100 ? 'text-amber-400' : 'text-orange-400'}`}>
+                          {Math.round(roiCalc.roi)}%
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 leading-relaxed">
+                        * Estimativa baseada em benchmarks de mercado para fotografia. Resultados reais variam conforme qualidade dos anúncios, segmentação e sazonalidade.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+
         </div>
-      </div>
+      )}
 
     </div>
   );
