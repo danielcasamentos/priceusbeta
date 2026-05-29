@@ -415,7 +415,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
           </div>
 
           {/* Payment conditions */}
-          {formasPagamento.length > 0 && fieldsValidation.canUsePaymentMethods && (
+          {formasPagamento.length > 0 && (
             <div className="space-y-3">
               <h3 className="pdf-sans text-xs font-bold uppercase tracking-wider text-neutral-700 border-b border-neutral-100 pb-1.5">
                 Condições de Faturamento

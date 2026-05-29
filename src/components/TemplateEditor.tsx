@@ -36,6 +36,7 @@ interface FormaPagamento {
   entrada_valor: number;
   max_parcelas: number;
   acrescimo: number;
+  is_default?: boolean;
 }
 
 interface CampoExtra {
@@ -333,6 +334,29 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     setFormasPagamento(formasPagamento.filter((_, i) => i !== index));
   };
 
+  // Define uma forma como padrão (pré-selecionada) e desmarca todas as outras
+  const handleSetFormaPagamentoDefault = async (index: number) => {
+    const updatedFormas = formasPagamento.map((f, i) => ({
+      ...f,
+      is_default: i === index,
+    }));
+    setFormasPagamento(updatedFormas);
+
+    // Persiste imediatamente via Supabase
+    try {
+      for (const forma of updatedFormas) {
+        if (forma.id) {
+          await supabase
+            .from('formas_pagamento')
+            .update({ is_default: forma.is_default })
+            .eq('id', forma.id);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao definir forma padrão:', error);
+    }
+  };
+
   const handleSaveFormasPagamento = async () => {
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -347,6 +371,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           entrada_valor: forma.entrada_valor,
           max_parcelas: forma.max_parcelas,
           acrescimo: forma.acrescimo,
+          is_default: forma.is_default || false,
         };
 
         if (forma.id) {
@@ -649,6 +674,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                   paymentMethod={forma}
                   onChange={(field, value) => handleUpdateFormaPagamento(index, field, value)}
                   onRemove={() => handleRemoveFormaPagamento(index)}
+                  onSetDefault={() => handleSetFormaPagamentoDefault(index)}
                   totalValue={calculateTotalValue()}
                 />
               ))}

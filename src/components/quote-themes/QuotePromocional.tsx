@@ -496,7 +496,7 @@ export function QuotePromocional(props: QuotePromocionalProps) {
           </div>
 
           {/* Formas de Pagamento */}
-          {formasPagamento.length > 0 && fieldsValidation.canUsePaymentMethods && (
+          {formasPagamento.length > 0 && (
             <div
               className="promo-card"
               style={{ background: '#fff', border: '2px solid #fecaca', borderRadius: 16, padding: '24px', boxShadow: '0 4px 16px rgba(220,38,38,.06)' }}

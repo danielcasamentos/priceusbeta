@@ -521,7 +521,7 @@ export function QuoteOferta(props: QuoteOfertaProps) {
           </div>
 
           {/* Formas de Pagamento */}
-          {formasPagamento.length > 0 && fieldsValidation.canUsePaymentMethods && (
+          {formasPagamento.length > 0 && (
             <div
               className="oferta-card"
               style={{ background: '#fff', border: '2px solid #ffedd5', borderRadius: 18, padding: '28px', boxShadow: '0 6px 20px rgba(234,88,12,.05)' }}

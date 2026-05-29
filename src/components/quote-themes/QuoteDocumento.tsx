@@ -254,7 +254,7 @@ export function QuoteDocumento(props: any) {
             </div>
 
             {/* Formas de Pagamento */}
-            {formasPagamento.length > 0 && fieldsValidation.canUsePaymentMethods && (
+            {formasPagamento.length > 0 && (
               <div className="border-t border-gray-300 pt-8">
                 <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} mb-4`}>Forma de Pagamento</h3>
                 <div className="space-y-3">

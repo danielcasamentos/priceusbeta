@@ -15,6 +15,37 @@ interface FloatingTotalPanelProps {
   breakdown?: any; // Recebido para exibição detalhada
 }
 
+// ─── Detecção inteligente de contraste ──────────────────────────────────────
+/**
+ * Analisa uma classe Tailwind de background (ex: "bg-blue-600", "bg-gray-100")
+ * e retorna true se o background for claro o suficiente para precisar de texto escuro.
+ *
+ * Regras:
+ *  - Escalas 50–300 → claro → texto escuro
+ *  - Escalas 400+   → escuro → texto claro (branco)
+ *  - "bg-white"     → claro
+ *  - "bg-black"     → escuro
+ *  - "bg-white/X"   → transparente sobre fundo escuro → tratar como escuro
+ */
+function isTailwindBgLight(bgClass: string): boolean {
+  if (!bgClass) return false;
+  // bg-white puro
+  if (bgClass === 'bg-white') return true;
+  // bg-black puro
+  if (bgClass === 'bg-black') return false;
+  // bg-white/X (ex: darkstudio usa bg-white/5) — contexto escuro
+  if (/bg-white\/\d/.test(bgClass)) return false;
+  // Extrai a escala numérica no final da classe: bg-blue-600 → 600
+  const scaleMatch = bgClass.match(/-(\d{2,3})$/);
+  if (scaleMatch) {
+    const scale = parseInt(scaleMatch[1], 10);
+    // 50, 100, 200, 300 são tons claros que exigem texto escuro
+    return scale <= 300;
+  }
+  // Fallback: considera escuro (texto branco é mais seguro)
+  return false;
+}
+
 export function FloatingTotalPanel({
   calculateTotal,
   selectedProdutos,
@@ -78,14 +109,19 @@ export function FloatingTotalPanel({
 
   // Lógica de Design baseado no Tema
   const isPillShape = ['classico', 'revista', 'documento'].includes(temaNome);
-  
-  // Extrai a classe de BG da cor secundária do tema (se existir) ou usa uma fallback
-  const bgClass = tema?.cores?.secundaria || 'bg-blue-600';
-  const hoverClass = bgClass.replace('500', '600').replace('600', '700');
 
-  // Ajuste do nível de contraste da fonte
-  const isLightBg = bgClass.includes('50 ') || bgClass.includes('100') || bgClass.includes('200') || bgClass.includes('300');
-  const textColor = isLightBg ? 'text-gray-900 drop-shadow-sm' : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]';
+  // Usa a cor primária do tema (sempre uma cor de ação saturada e visível).
+  // Evita usar secundaria, que em muitos temas é um tom pastel claro demais para um botão flutuante.
+  const bgClass = tema?.cores?.primaria || 'bg-blue-600';
+
+  // Classe de hover direto do tema (já inclui o prefixo "hover:")
+  const hoverClass = tema?.cores?.primariaHover || 'hover:bg-blue-700';
+
+  // Contraste inteligente: texto claro em fundos escuros, texto escuro em fundos claros
+  const isLightBg = isTailwindBgLight(bgClass);
+  const textColor = isLightBg
+    ? 'text-gray-900'
+    : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]';
   const mutedTextColor = isLightBg ? 'text-gray-700' : 'text-gray-100 opacity-90';
 
   return (

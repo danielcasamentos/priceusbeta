@@ -416,7 +416,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
           </div>
 
           {/* Formas de Pagamento */}
-          {formasPagamento.length > 0 && fieldsValidation.canUsePaymentMethods && (
+          {formasPagamento.length > 0 && (
             <div
               className="ds-card"
               style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 16, padding: '24px' }}

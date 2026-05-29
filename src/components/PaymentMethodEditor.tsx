@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DollarSign, Percent, Info, Trash2 } from 'lucide-react';
+import { DollarSign, Percent, Info, Trash2, Star } from 'lucide-react';
 import { NumberInput } from './ui/NumberInput';
 
 /**
@@ -13,12 +13,14 @@ interface PaymentMethod {
   entrada_valor: number;
   max_parcelas: number;
   acrescimo: number;
+  is_default?: boolean;
 }
 
 interface PaymentMethodEditorProps {
   paymentMethod: PaymentMethod;
   onChange: (field: keyof PaymentMethod, value: any) => void;
   onRemove: () => void;
+  onSetDefault: () => void;
   totalValue?: number; // Para calcular preview quando percentual
 }
 
@@ -34,6 +36,7 @@ export function PaymentMethodEditor({
   paymentMethod,
   onChange,
   onRemove,
+  onSetDefault,
   totalValue = 0,
 }: PaymentMethodEditorProps) {
   const [showInfo, setShowInfo] = useState(false);
@@ -62,20 +65,47 @@ export function PaymentMethodEditor({
 
   const validationError = validateEntrada();
 
+  const isDefault = paymentMethod.is_default === true;
+
   return (
-    <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-white shadow-sm">
-      {/* Nome da Forma de Pagamento */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Nome da Forma de Pagamento *
-        </label>
-        <input
-          type="text"
-          value={paymentMethod.nome}
-          onChange={(e) => onChange('nome', e.target.value)}
-          placeholder="Ex: PIX, Cartão de Crédito, Boleto"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
+    <div className={`rounded-lg p-4 space-y-4 bg-white shadow-sm border-2 transition-colors ${
+      isDefault ? 'border-green-500 ring-2 ring-green-100' : 'border-gray-200'
+    }`}>
+      {/* Banner padrão */}
+      {isDefault && (
+        <div className="flex items-center gap-2 px-3 py-1.5 -mx-4 -mt-4 mb-0 bg-green-500 rounded-t-lg text-xs text-white font-semibold">
+          <Star className="w-3 h-3 fill-white" />
+          Forma de Pagamento Padrão — Pré-selecionada para o cliente
+        </div>
+      )}
+
+      {/* Cabeçalho: Nome + Botão Padrão */}
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Nome da Forma de Pagamento *
+          </label>
+          <input
+            type="text"
+            value={paymentMethod.nome}
+            onChange={(e) => onChange('nome', e.target.value)}
+            placeholder="Ex: PIX, Cartão de Crédito, Boleto"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onSetDefault}
+          title={isDefault ? 'Esta é a forma padrão' : 'Marcar como padrão (pré-selecionada ao abrir o orçamento)'}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 font-medium text-xs transition-all whitespace-nowrap ${
+            isDefault
+              ? 'bg-green-500 border-green-500 text-white shadow-md'
+              : 'bg-white border-gray-300 text-gray-500 hover:border-green-400 hover:text-green-600'
+          }`}
+        >
+          <Star className={`w-3.5 h-3.5 ${isDefault ? 'fill-white' : ''}`} />
+          {isDefault ? 'Padrão ✓' : 'Definir padrão'}
+        </button>
       </div>
 
       {/* Toggle: Percentual vs Valor Fixo */}
