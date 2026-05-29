@@ -206,13 +206,145 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
     setIsUpdating(false);
   };
 
-  const totalReceitas = filteredTransactions
-    .filter((t: CompanyTransaction) => t.tipo === 'receita' && t.status === 'pago')
-    .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+  // Transações filtradas sem o filtro de status para obtermos a visão completa do mês/ano/etc.
+  const baseFilteredTransactions = useMemo(() => {
+    return transactions.filter((t: CompanyTransaction) => {
+      if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
+      if (filterInstallment === 'installment' && !t.is_installment) return false;
+      if (filterInstallment === 'single' && t.is_installment) return false;
 
-  const totalDespesas = filteredTransactions
-    .filter((t: CompanyTransaction) => t.tipo === 'despesa' && t.status === 'pago')
-    .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+      if (t.data) {
+        const [year, month, day] = t.data.split('-');
+        if (filterYear !== 'all' && year !== filterYear) return false;
+        if (filterMonth !== 'all' && Number(month) !== Number(filterMonth)) return false;
+        if (filterDay !== 'all' && Number(day) !== Number(filterDay)) return false;
+      }
+
+      if (filterSearch.trim() !== '') {
+        const query = filterSearch.toLowerCase();
+        if (!t.descricao.toLowerCase().includes(query)) return false;
+      }
+
+      return true;
+    });
+  }, [transactions, filterTipo, filterInstallment, filterYear, filterMonth, filterDay, filterSearch]);
+
+  const metrics = useMemo(() => {
+    const receitasPago = baseFilteredTransactions
+      .filter((t: CompanyTransaction) => t.tipo === 'receita' && t.status === 'pago')
+      .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+
+    const receitasPendente = baseFilteredTransactions
+      .filter((t: CompanyTransaction) => t.tipo === 'receita' && t.status === 'pendente')
+      .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+
+    const despesasPago = baseFilteredTransactions
+      .filter((t: CompanyTransaction) => t.tipo === 'despesa' && t.status === 'pago')
+      .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+
+    const despesasPendente = baseFilteredTransactions
+      .filter((t: CompanyTransaction) => t.tipo === 'despesa' && t.status === 'pendente')
+      .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+
+    const receitasCancelado = baseFilteredTransactions
+      .filter((t: CompanyTransaction) => t.tipo === 'receita' && t.status === 'cancelado')
+      .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+
+    const despesasCancelado = baseFilteredTransactions
+      .filter((t: CompanyTransaction) => t.tipo === 'despesa' && t.status === 'cancelado')
+      .reduce((sum: number, t: CompanyTransaction) => sum + Number(t.valor), 0);
+
+    return {
+      receitasPago,
+      receitasPendente,
+      despesasPago,
+      despesasPendente,
+      receitasCancelado,
+      despesasCancelado,
+    };
+  }, [baseFilteredTransactions]);
+
+  const {
+    totalReceitas,
+    totalDespesas,
+    labelReceitasSub,
+    valueReceitasSub,
+    labelDespesasSub,
+    valueDespesasSub,
+    labelSaldo,
+    totalSaldo,
+    labelSaldoSub,
+    valueSaldoSub,
+  } = useMemo(() => {
+    let tRec = 0;
+    let tDes = 0;
+    let lRecSub = '';
+    let vRecSub = 0;
+    let lDesSub = '';
+    let vDesSub = 0;
+    let lSal = 'Saldo';
+    let tSal = 0;
+    let lSalSub = '';
+    let vSalSub = 0;
+
+    if (filterStatus === 'pago') {
+      tRec = metrics.receitasPago;
+      tDes = metrics.despesasPago;
+      lRecSub = 'A receber (Pendente)';
+      vRecSub = metrics.receitasPendente;
+      lDesSub = 'A pagar (Pendente)';
+      vDesSub = metrics.despesasPendente;
+      tSal = tRec - tDes;
+      lSal = 'Saldo Pago';
+      lSalSub = 'Pendente';
+      vSalSub = vRecSub - vDesSub;
+    } else if (filterStatus === 'pendente') {
+      tRec = metrics.receitasPendente;
+      tDes = metrics.despesasPendente;
+      lRecSub = 'Recebido (Pago)';
+      vRecSub = metrics.receitasPago;
+      lDesSub = 'Pago (Despesa)';
+      vDesSub = metrics.despesasPago;
+      tSal = tRec - tDes;
+      lSal = 'Saldo Pendente';
+      lSalSub = 'Pago';
+      vSalSub = vRecSub - vDesSub;
+    } else if (filterStatus === 'cancelado') {
+      tRec = metrics.receitasCancelado;
+      tDes = metrics.despesasCancelado;
+      lRecSub = 'Pago';
+      vRecSub = metrics.receitasPago;
+      lDesSub = 'Pago (Despesa)';
+      vDesSub = metrics.despesasPago;
+      tSal = tRec - tDes;
+      lSal = 'Saldo Cancelado';
+    } else {
+      // 'all'
+      tRec = metrics.receitasPago;
+      tDes = metrics.despesasPago;
+      lRecSub = 'A receber (Pendente)';
+      vRecSub = metrics.receitasPendente;
+      lDesSub = 'A pagar (Pendente)';
+      vDesSub = metrics.despesasPendente;
+      tSal = tRec - tDes;
+      lSal = 'Saldo Real';
+      lSalSub = 'Projetado (Real + Pendente)';
+      vSalSub = (metrics.receitasPago + metrics.receitasPendente) - (metrics.despesasPago + metrics.despesasPendente);
+    }
+
+    return {
+      totalReceitas: tRec,
+      totalDespesas: tDes,
+      labelReceitasSub: lRecSub,
+      valueReceitasSub: vRecSub,
+      labelDespesasSub: lDesSub,
+      valueDespesasSub: vDesSub,
+      labelSaldo: lSal,
+      totalSaldo: tSal,
+      labelSaldoSub: lSalSub,
+      valueSaldoSub: vSalSub,
+    };
+  }, [filterStatus, metrics]);
 
   if (loading) {
     return (
@@ -413,9 +545,14 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
             <div className="p-3 bg-green-500 rounded-full">
               <TrendingUp className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-green-700 dark:text-green-400 font-medium">Total Receitas</p>
               <p className="text-2xl font-bold text-green-900 dark:text-green-300">{formatCurrency(totalReceitas)}</p>
+              {labelReceitasSub && valueReceitasSub > 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold mt-1">
+                  ⏳ {labelReceitasSub}: {formatCurrency(valueReceitasSub)}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -425,35 +562,47 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
             <div className="p-3 bg-red-500 rounded-full">
               <TrendingDown className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-red-700 dark:text-red-400 font-medium">Total Despesas</p>
               <p className="text-2xl font-bold text-red-900 dark:text-red-300">{formatCurrency(totalDespesas)}</p>
+              {labelDespesasSub && valueDespesasSub > 0 && (
+                <p className="text-xs text-red-500 dark:text-red-400 font-semibold mt-1">
+                  ⏳ {labelDespesasSub}: {formatCurrency(valueDespesasSub)}
+                </p>
+              )}
             </div>
           </div>
         </div>
 
         <div className={`bg-gradient-to-br p-4 rounded-lg border ${
-          totalReceitas - totalDespesas >= 0
+          totalSaldo >= 0
             ? 'from-blue-50 to-blue-100 border-blue-200 dark:from-[rgba(59,130,246,0.1)] dark:to-[rgba(59,130,246,0.15)] dark:border-[rgba(59,130,246,0.2)]'
             : 'from-orange-50 to-orange-100 border-orange-200 dark:from-[rgba(249,115,22,0.1)] dark:to-[rgba(249,115,22,0.15)] dark:border-[rgba(249,115,22,0.2)]'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`p-3 rounded-full ${
-              totalReceitas - totalDespesas >= 0 ? 'bg-blue-500' : 'bg-orange-500'
+              totalSaldo >= 0 ? 'bg-blue-500' : 'bg-orange-500'
             }`}>
               <DollarSign className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className={`text-sm font-medium ${
-                totalReceitas - totalDespesas >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-orange-700 dark:text-orange-400'
+                totalSaldo >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-orange-700 dark:text-orange-400'
               }`}>
-                Saldo
+                {labelSaldo}
               </p>
               <p className={`text-2xl font-bold ${
-                totalReceitas - totalDespesas >= 0 ? 'text-blue-900 dark:text-blue-300' : 'text-orange-900 dark:text-orange-300'
+                totalSaldo >= 0 ? 'text-blue-900 dark:text-blue-300' : 'text-orange-900 dark:text-orange-300'
               }`}>
-                {formatCurrency(totalReceitas - totalDespesas)}
+                {formatCurrency(totalSaldo)}
               </p>
+              {labelSaldoSub && (
+                <p className={`text-xs font-semibold mt-1 ${
+                  valueSaldoSub >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-orange-700 dark:text-orange-400'
+                }`}>
+                  {labelSaldoSub}: {formatCurrency(valueSaldoSub)}
+                </p>
+              )}
             </div>
           </div>
         </div>
