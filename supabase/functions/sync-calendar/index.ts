@@ -6,65 +6,139 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const parseICalDate = (dateStr: string): string | null => {
-  if (!dateStr || dateStr.length < 8) return null;
-  // Handle UTC datetime (ends with Z), convert to America/Sao_Paulo date
-  if (dateStr.endsWith('Z') && dateStr.includes('T')) {
-    try {
-      const year = parseInt(dateStr.substring(0, 4), 10);
-      const month = parseInt(dateStr.substring(4, 6), 10) - 1;
-      const day = parseInt(dateStr.substring(6, 8), 10);
-      const hour = parseInt(dateStr.substring(9, 11), 10);
-      const minute = parseInt(dateStr.substring(11, 13), 10);
-      const second = parseInt(dateStr.substring(13, 15), 10);
+interface ParsedDateTime {
+  date: string;
+  time: string | null;
+  rawDate: Date | null;
+}
 
-      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
-        const utcMs = Date.UTC(year, month, day, hour, minute, second);
-        // America/Sao_Paulo is UTC-3 (or UTC-2 during DST)
-        // Use Intl if available in Deno, otherwise offset manually by -3h
+const parseICalDateTime = (dateStr: string): ParsedDateTime | null => {
+  if (!dateStr || dateStr.length < 8) return null;
+  const isDateTime = dateStr.includes('T');
+  try {
+    const year = parseInt(dateStr.substring(0, 4), 10);
+    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+    const day = parseInt(dateStr.substring(6, 8), 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+
+    if (isDateTime) {
+      const tIndex = dateStr.indexOf('T');
+      const timePart = dateStr.substring(tIndex + 1);
+      const hour = parseInt(timePart.substring(0, 2), 10);
+      const minute = parseInt(timePart.substring(2, 4), 10);
+      const second = parseInt(timePart.substring(4, 6), 10) || 0;
+
+      if (!isNaN(hour) && !isNaN(minute)) {
+        let dateObj: Date;
+        if (dateStr.endsWith('Z')) {
+          dateObj = new Date(Date.UTC(year, month, day, hour, minute, second));
+        } else {
+          dateObj = new Date(year, month, day, hour, minute, second);
+        }
+
         try {
           const formatter = new Intl.DateTimeFormat('en-US', {
             timeZone: 'America/Sao_Paulo',
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
           });
-          const parts = formatter.formatToParts(new Date(utcMs));
-          const y = parts.find((p: {type: string; value: string}) => p.type === 'year')?.value;
-          const m = parts.find((p: {type: string; value: string}) => p.type === 'month')?.value;
-          const d = parts.find((p: {type: string; value: string}) => p.type === 'day')?.value;
-          if (y && m && d) return `${y}-${m}-${d}`;
+
+          const parts = formatter.formatToParts(dateObj);
+          const y = parts.find(p => p.type === 'year')?.value;
+          const m = parts.find(p => p.type === 'month')?.value;
+          const d = parts.find(p => p.type === 'day')?.value;
+          const hr = parts.find(p => p.type === 'hour')?.value;
+          const min = parts.find(p => p.type === 'minute')?.value;
+          const sec = parts.find(p => p.type === 'second')?.value;
+
+          if (y && m && d && hr && min) {
+            const normalizedHour = hr === '24' ? '00' : hr;
+            return {
+              date: `${y}-${m}-${d}`,
+              time: `${normalizedHour}:${min}:${sec || '00'}`,
+              rawDate: dateObj,
+            };
+          }
         } catch (_) {
-          // Deno fallback: manual offset -3h
+          // Manual fallback if Intl fails in Deno environment
+          const utcMs = Date.UTC(year, month, day, hour, minute, second);
           const localMs = utcMs - 3 * 60 * 60 * 1000;
           const localDate = new Date(localMs);
           const y = localDate.getUTCFullYear();
           const m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
           const d = String(localDate.getUTCDate()).padStart(2, '0');
-          return `${y}-${m}-${d}`;
+          const hr = String(localDate.getUTCHours()).padStart(2, '0');
+          const min = String(localDate.getUTCMinutes()).padStart(2, '0');
+          const sec = String(localDate.getUTCSeconds()).padStart(2, '0');
+          return {
+            date: `${y}-${m}-${d}`,
+            time: `${hr}:${min}:${sec}`,
+            rawDate: new Date(localMs),
+          };
         }
       }
-    } catch (_) {
-      // fall through to digit-extraction below
     }
-  }
 
-  // Handles date-only format YYYYMMDD or datetime without Z
-  const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
-  if (dateMatch) {
-    return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+    const rawDate = new Date(year, month, day);
+    const mStr = String(month + 1).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    return {
+      date: `${year}-${mStr}-${dStr}`,
+      time: null,
+      rawDate,
+    };
+  } catch (_) {
+    const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
+    if (dateMatch) {
+      return {
+        date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
+        time: null,
+        rawDate: null,
+      };
+    }
   }
   return null;
 };
 
-const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> => {
-  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> = [];
-  // RFC 5545 line unfolding: CRLF followed by whitespace is a continuation
+const parseICalDuration = (durationStr: string): number | null => {
+  try {
+    const regex = /PT?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+    const match = durationStr.match(regex);
+    if (match) {
+      const hours = parseInt(match[1] || '0', 10);
+      const minutes = parseInt(match[2] || '0', 10);
+      const seconds = parseInt(match[3] || '0', 10);
+      return hours * 60 + minutes + Math.round(seconds / 60);
+    }
+  } catch (_) {}
+  return null;
+};
+
+interface EventoImportado {
+  data_evento: string;
+  cliente_nome: string;
+  tipo_evento?: string;
+  uid_externo?: string;
+  horario_inicio?: string | null;
+  duracao_minutos?: number | null;
+  horario_fim?: string | null;
+}
+
+const parseICS = (text: string): Array<EventoImportado> => {
+  const eventos: Array<EventoImportado> = [];
   const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
   const lines = unfoldedText.split(/\r?\n/);
 
-  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string; uid_externo?: string } = {};
+  let currentEvent: EventoImportado = { data_evento: '', cliente_nome: '' };
   let inEvent = false;
+  let dtstartVal = '';
+  let dtendVal = '';
+  let durationVal = '';
 
   for (const line of lines) {
     const trimmedLine = line.trim();
@@ -73,24 +147,55 @@ const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: stri
     const colonIndex = trimmedLine.indexOf(':');
     if (colonIndex === -1) continue;
 
-    // Split key (may have params like SUMMARY;CHARSET=UTF-8) from value
     const keyWithParams = trimmedLine.substring(0, colonIndex);
     const value = trimmedLine.substring(colonIndex + 1).trim();
     const key = keyWithParams.split(';')[0].trim().toUpperCase();
 
     if (key === 'BEGIN' && value === 'VEVENT') {
       inEvent = true;
-      currentEvent = { tipo_evento: 'evento' };
+      currentEvent = { data_evento: '', cliente_nome: '', tipo_evento: 'evento' };
+      dtstartVal = '';
+      dtendVal = '';
+      durationVal = '';
     } else if (key === 'END' && value === 'VEVENT') {
+      if (dtstartVal) {
+        const startParsed = parseICalDateTime(dtstartVal);
+        if (startParsed) {
+          currentEvent.data_evento = startParsed.date;
+          currentEvent.horario_inicio = startParsed.time;
+
+          let calculatedDuration: number | null = null;
+          if (dtendVal) {
+            const endParsed = parseICalDateTime(dtendVal);
+            if (endParsed && startParsed.rawDate && endParsed.rawDate && startParsed.time && endParsed.time) {
+              const diffMs = endParsed.rawDate.getTime() - startParsed.rawDate.getTime();
+              const diffMin = Math.round(diffMs / (1000 * 60));
+              if (diffMin > 0) {
+                calculatedDuration = diffMin;
+              }
+            }
+          } else if (durationVal) {
+            calculatedDuration = parseICalDuration(durationVal);
+          }
+
+          if (calculatedDuration !== null) {
+            currentEvent.duracao_minutos = calculatedDuration;
+          }
+        }
+      }
+
       if (currentEvent.data_evento && currentEvent.cliente_nome) {
-        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string });
+        eventos.push(currentEvent);
       }
       inEvent = false;
-      currentEvent = {};
+      currentEvent = { data_evento: '', cliente_nome: '' };
     } else if (inEvent) {
       if (key === 'DTSTART') {
-        const parsedDate = parseICalDate(value);
-        if (parsedDate) currentEvent.data_evento = parsedDate;
+        dtstartVal = value;
+      } else if (key === 'DTEND') {
+        dtendVal = value;
+      } else if (key === 'DURATION') {
+        durationVal = value;
       } else if (key === 'SUMMARY') {
         currentEvent.cliente_nome = value || 'Evento de Calendário';
       } else if (key === 'UID') {
@@ -203,7 +308,9 @@ serve(async (req) => {
             status: 'confirmado',
             origem: 'ics_sync',
             observacoes: 'Importado automaticamente do calendário externo',
-            created_at: dataHoraAtual
+            created_at: dataHoraAtual,
+            horario_inicio: (evento as any).horario_inicio || null,
+            duracao_minutos: (evento as any).duracao_minutos || null
          };
          if (evento.uid_externo) {
            novoEvento.uid_externo = evento.uid_externo;

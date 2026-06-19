@@ -4,6 +4,7 @@ import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
+import { PortfolioSection } from '../PortfolioSection';
 
 interface QuotePdfEleganteProps {
   template: any;
@@ -27,6 +28,7 @@ interface QuotePdfEleganteProps {
   totalSectionRef?: React.RefObject<HTMLDivElement>;
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
+  upsellSection?: React.ReactNode;
 }
 
 export function QuotePdfElegante(props: QuotePdfEleganteProps) {
@@ -134,7 +136,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
           zIndex: 100,
         }}>
           <div className="pdf-sans" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>
-            PROPOSTA COMERCIAL
+            PROPOSTA
           </div>
         </nav>
       )}
@@ -143,17 +145,17 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
       <div className="max-w-xl mx-auto px-4 py-8 space-y-8">
         
         {/* 1. Vertical Cover Photo (borderless, vertical aspect ratio, optimized for mobile) */}
-        <div className="w-full relative overflow-hidden rounded-lg my-4" style={{ margin: '16px auto' }}>
+        <div className="w-full relative overflow-hidden rounded-none my-4" style={{ margin: '16px auto' }}>
           {template?.cover_image_url ? (
             <img
               src={template.cover_image_url}
               alt={template.titulo_template || 'Capa da proposta'}
-              className="w-full h-auto object-cover rounded-lg aspect-[3/4]"
+              className="w-full h-auto object-cover rounded-none aspect-[3/4]"
             />
           ) : (
-            <div className="w-full aspect-[3/4] bg-neutral-50 flex flex-col items-center justify-center text-center p-8 border border-neutral-200 rounded-lg">
+            <div className="w-full aspect-[3/4] bg-neutral-50 flex flex-col items-center justify-center text-center p-8 border border-neutral-200 rounded-none">
               <Award className="w-12 h-12 text-neutral-300 mb-3" />
-              <p className="text-xs pdf-sans uppercase tracking-[0.2em] text-neutral-400">PROPOSTA COMERCIAL</p>
+              <p className="text-xs pdf-sans uppercase tracking-[0.2em] text-neutral-400">PROPOSTA</p>
               <p className="text-[10px] text-neutral-500 mt-2 pdf-sans">(Imagem de capa editável na aba Aparência)</p>
             </div>
           )}
@@ -167,7 +169,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                 <img
                   src={profile.profile_image_url}
                   alt={profile.nome_profissional}
-                  style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0' }}
+                  style={{ width: 88, height: 88, borderRadius: '0px', objectFit: 'cover', border: '2px solid #e2e8f0' }}
                 />
               </div>
             )}
@@ -218,6 +220,11 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                 </a>
               )}
             </div>
+            <PortfolioSection
+              portfolioLink={profile.portfolio_link}
+              portfolioFotos={profile.portfolio_fotos}
+              isDark={false}
+            />
           </div>
         )}
 
@@ -344,7 +351,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                     <div className="flex flex-col sm:flex-row gap-4 items-start">
                       {/* Product image */}
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                        <div className="w-20 h-20 rounded border border-neutral-100 overflow-hidden flex-shrink-0 mx-auto sm:mx-0">
+                        <div className="w-20 h-20 rounded-none border border-neutral-100 overflow-hidden flex-shrink-0 mx-auto sm:mx-0">
                           {produto.imagens?.length > 0 ? (
                             <ProductGalleryCarousel
                               images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
@@ -355,8 +362,8 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                             <ImageWithFallback
                               src={produto.imagem_url}
                               alt={produto.nome}
-                              className="w-full h-full object-cover"
-                              fallbackClassName="w-full h-full"
+                              className="w-full h-full object-cover rounded-none"
+                              fallbackClassName="w-full h-full rounded-none"
                             />
                           )}
                         </div>
@@ -414,13 +421,29 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
             </div>
           </div>
 
+          {props.upsellSection}
+
           {/* Payment conditions */}
           {formasPagamento.length > 0 && (
             <div className="space-y-3">
               <h3 className="pdf-sans text-xs font-bold uppercase tracking-wider text-neutral-700 border-b border-neutral-100 pb-1.5">
                 Condições de Faturamento
               </h3>
-              
+              {!selectedFormaPagamento && (
+                <div style={{
+                  marginBottom: 12, padding: '10px 12px', borderRadius: 6,
+                  fontSize: 12, background: template?.forma_pagamento_obrigatoria ? '#fef2f2' : '#fffbeb',
+                  color: template?.forma_pagamento_obrigatoria ? '#991b1b' : '#92400e',
+                  border: `1px solid ${template?.forma_pagamento_obrigatoria ? '#fee2e2' : '#fef3c7'}`,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontFamily: "'Montserrat', sans-serif"
+                }}>
+                  <span>⚠️</span>
+                  <span>
+                    <strong>{template?.forma_pagamento_obrigatoria ? 'Escolha Obrigatória:' : 'Atenção:'}</strong> Selecione uma das opções abaixo para prosseguir.
+                  </span>
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 {formasPagamento.map((forma) => {
                   const total = calculateTotal();
@@ -553,21 +576,25 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                 profileName={profile.nome_profissional}
                 aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
                 aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
+                theme={{
+                  primaryColor: 'zinc',
+                  buttonColor: 'bg-neutral-900 hover:bg-neutral-800 text-white font-medium tracking-widest text-xs uppercase py-4 rounded-md'
+                }}
               />
             </div>
           )}
         </form>
 
         {/* 7. Large Footer Photo (borderless, vertical aspect ratio, at the bottom) */}
-        <div className="w-full relative overflow-hidden rounded-lg my-6" style={{ margin: '24px auto' }}>
+        <div className="w-full relative overflow-hidden rounded-none my-6" style={{ margin: '24px auto' }}>
           {template?.footer_image_url ? (
             <img
               src={template.footer_image_url}
               alt="Encerramento"
-              className="w-full h-auto object-cover rounded-lg aspect-[3/4]"
+              className="w-full h-auto object-cover rounded-none aspect-[3/4]"
             />
           ) : (
-            <div className="w-full aspect-[3/4] bg-neutral-50 flex flex-col items-center justify-center text-center p-8 border border-neutral-200 rounded-lg">
+            <div className="w-full aspect-[3/4] bg-neutral-50 flex flex-col items-center justify-center text-center p-8 border border-neutral-200 rounded-none">
               <Award className="w-12 h-12 text-neutral-300 mb-3" />
               <p className="text-xs pdf-sans uppercase tracking-[0.2em] text-neutral-400">AGRADECEMOS A PREFERÊNCIA</p>
               <p className="text-[10px] text-neutral-500 mt-2 pdf-sans">(Imagem de rodapé editável na aba Aparência)</p>

@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import { Send, Lock, Tag, Flame, MessageCircle, Instagram, Mail, Star, Clock, Zap } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
+import { PortfolioSection } from '../PortfolioSection';
 
 interface QuotePromocionalProps {
   template: any;
@@ -27,6 +29,7 @@ interface QuotePromocionalProps {
   totalSectionRef?: React.RefObject<HTMLDivElement>;
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
+  upsellSection?: React.ReactNode;
 }
 
 export function QuotePromocional(props: QuotePromocionalProps) {
@@ -40,6 +43,21 @@ export function QuotePromocional(props: QuotePromocionalProps) {
     firstProductRef,
     totalSectionRef,
   } = props;
+
+  const [timeLeft, setTimeLeft] = useState(900); // 15 minutos em segundos
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 900));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div
@@ -147,20 +165,36 @@ export function QuotePromocional(props: QuotePromocionalProps) {
       {/* ── HERO BANNER ── */}
       <div style={{
         background: 'linear-gradient(135deg, #dc2626 0%, #ea580c 50%, #f59e0b 100%)',
-        padding: '8px 24px',
+        padding: '10px 24px',
         textAlign: 'center',
         color: '#fff',
-        fontSize: 13,
-        fontWeight: 700,
+        fontSize: 14,
+        fontWeight: 800,
         letterSpacing: '0.5px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        flexWrap: 'wrap',
+        gap: 12,
+        boxShadow: '0 2px 10px rgba(220,38,38,0.2)'
       }}>
-        <Zap size={14} />
-        {template?.titulo_template ? `🔥 ${template.titulo_template}` : '🔥 Oferta por Tempo Limitado — Aproveite Agora!'}
-        <Zap size={14} />
+        <Zap size={15} className="animate-pulse" />
+        <span>{template?.titulo_template ? `🔥 ${template.titulo_template}` : '🔥 Oferta por Tempo Limitado — Aproveite Agora!'}</span>
+        <span style={{
+          background: 'rgba(0,0,0,0.25)',
+          padding: '3px 10px',
+          borderRadius: 8,
+          fontWeight: 900,
+          fontFamily: 'monospace',
+          border: '1px solid rgba(255,255,255,0.2)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6
+        }}>
+          <Clock size={13} className="animate-spin" style={{ animationDuration: '4s' }} />
+          {formatTime(timeLeft)}
+        </span>
+        <Zap size={15} className="animate-pulse" />
       </div>
 
       {/* ── HERO / PROFILE ── */}
@@ -262,6 +296,11 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                 </a>
               )}
             </div>
+            <PortfolioSection
+              portfolioLink={profile.portfolio_link}
+              portfolioFotos={profile.portfolio_fotos}
+              isDark={false}
+            />
           </div>
         </section>
       )}
@@ -403,13 +442,20 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                     key={produto.id}
                     className={`promo-prod${isSelected ? ' selected' : ''}`}
                     style={{
-                      border: '2px solid #fee2e2',
+                      border: produto.destacar_produto ? '3px solid #dc2626' : '2px solid #fee2e2',
                       borderRadius: 12,
                       padding: '16px',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 12,
                       background: '#fff',
+                      ...(produto.destacar_produto
+                        ? {
+                            boxShadow: '0 8px 30px rgba(220,38,38,0.18)',
+                            transform: 'scale(1.01)',
+                            position: 'relative' as const,
+                          }
+                        : {}),
                     }}
                   >
                     <div ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -432,6 +478,25 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                         </div>
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            background: 'linear-gradient(135deg,#dc2626,#f59e0b)',
+                            borderRadius: 999,
+                            padding: '2px 10px',
+                            marginBottom: 6,
+                            fontSize: 10,
+                            fontWeight: 900,
+                            color: '#fff',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            boxShadow: '0 2px 10px rgba(220,38,38,.3)',
+                          }}>
+                            🔥 {produto.destaque_texto}
+                          </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                           <h4 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
                           {isSelected && (
@@ -495,6 +560,8 @@ export function QuotePromocional(props: QuotePromocionalProps) {
             </div>
           </div>
 
+          {props.upsellSection}
+
           {/* Formas de Pagamento */}
           {formasPagamento.length > 0 && (
             <div
@@ -504,6 +571,20 @@ export function QuotePromocional(props: QuotePromocionalProps) {
               <h3 style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 16 }}>
                 💳 Forma de Pagamento
               </h3>
+              {!selectedFormaPagamento && (
+                <div style={{
+                  marginBottom: 16, padding: '12px 16px', borderRadius: 10,
+                  fontSize: 13, background: template?.forma_pagamento_obrigatoria ? '#fef2f2' : '#fffbeb',
+                  color: template?.forma_pagamento_obrigatoria ? '#991b1b' : '#92400e',
+                  border: `1.5px solid ${template?.forma_pagamento_obrigatoria ? '#fee2e2' : '#fef3c7'}`,
+                  display: 'flex', alignItems: 'center', gap: 8
+                }}>
+                  <span>⚠️</span>
+                  <span>
+                    <strong>{template?.forma_pagamento_obrigatoria ? 'Escolha Obrigatória:' : 'Atenção:'}</strong> Selecione uma das opções abaixo para prosseguir.
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {formasPagamento.map((forma) => {
                   const total = calculateTotal();
@@ -635,6 +716,10 @@ export function QuotePromocional(props: QuotePromocionalProps) {
             profileName={profile.nome_profissional}
             aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
             aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
+            theme={{
+              primaryColor: 'red',
+              buttonColor: 'bg-red-600 hover:bg-red-700 text-white'
+            }}
           />
         </div>
       )}

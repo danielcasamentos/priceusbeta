@@ -134,8 +134,10 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                 {produtos.map((produto) => (
                   <div
                     key={produto.id}
-                    className={`border-2 rounded-xl p-4 transition-all ${
-                      selectedProdutos[produto.id] ? 'border-amber-600 bg-amber-50' : 'border-amber-300 hover:border-amber-400'
+                    className={`border-2 rounded-xl p-4 transition-all relative ${
+                      produto.destacar_produto
+                        ? 'border-amber-700 bg-amber-50/40 shadow-lg scale-[1.01] border-[3px]'
+                        : selectedProdutos[produto.id] ? 'border-amber-600 bg-amber-50' : 'border-amber-300 hover:border-amber-400'
                     }`}
                   >
                     <div className="flex items-center gap-4">
@@ -158,6 +160,11 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                         </div>
                       )}
                       <div className="flex-1">
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-amber-700 text-white rounded px-2 py-0.5 text-[9px] font-black tracking-widest uppercase mb-1.5 shadow-sm">
+                            ★ {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 className="font-black text-lg text-amber-900 uppercase">{produto.nome}</h4>
                         {produto.resumo && <p className="text-sm text-amber-700 mt-1 italic">{produto.resumo}</p>}
                         {!template.ocultar_valores_intermediarios && (

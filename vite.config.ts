@@ -33,10 +33,15 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 5000000
+      },
+      devOptions: {
+        enabled: false
       }
     })
   ],
   optimizeDeps: {
-    exclude: ['lucide-react'],
+    // Pre-bundle lucide-react so the browser loads a SINGLE bundled file
+    // instead of hundreds of individual icon ESM files (fixes ERR_INSUFFICIENT_RESOURCES).
+    include: ['lucide-react'],
   },
 });

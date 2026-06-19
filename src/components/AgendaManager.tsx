@@ -360,52 +360,128 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     return eventos;
   };
 
-  const parseICS = (text: string): Array<{ data: string; nome: string; tipo?: string; uid_externo?: string }> => {
-    const parseICalDate = (dateStr: string): string | null => {
+  const parseICS = (text: string): Array<{ data: string; nome: string; tipo?: string; uid_externo?: string; horario_inicio?: string | null; duracao_minutos?: number | null }> => {
+    interface ParsedDateTime {
+      date: string;
+      time: string | null;
+      rawDate: Date | null;
+    }
+
+    const parseICalDateTime = (dateStr: string): ParsedDateTime | null => {
       if (!dateStr || dateStr.length < 8) return null;
-      if (dateStr.endsWith('Z') && dateStr.includes('T')) {
-        try {
-          const year = parseInt(dateStr.substring(0, 4), 10);
-          const month = parseInt(dateStr.substring(4, 6), 10) - 1;
-          const day = parseInt(dateStr.substring(6, 8), 10);
-          const hour = parseInt(dateStr.substring(9, 11), 10);
-          const minute = parseInt(dateStr.substring(11, 13), 10);
-          const second = parseInt(dateStr.substring(13, 15), 10);
-          
-          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
-            const date = new Date(Date.UTC(year, month, day, hour, minute, second));
-            const formatter = new Intl.DateTimeFormat('en-US', {
-              timeZone: 'America/Sao_Paulo',
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-            });
-            const parts = formatter.formatToParts(date);
-            const y = parts.find(p => p.type === 'year')?.value;
-            const m = parts.find(p => p.type === 'month')?.value;
-            const d = parts.find(p => p.type === 'day')?.value;
-            if (y && m && d) {
-              return `${y}-${m}-${d}`;
+      const isDateTime = dateStr.includes('T');
+      try {
+        const year = parseInt(dateStr.substring(0, 4), 10);
+        const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+        const day = parseInt(dateStr.substring(6, 8), 10);
+        if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+
+        if (isDateTime) {
+          const tIndex = dateStr.indexOf('T');
+          const timePart = dateStr.substring(tIndex + 1);
+          const hour = parseInt(timePart.substring(0, 2), 10);
+          const minute = parseInt(timePart.substring(2, 4), 10);
+          const second = parseInt(timePart.substring(4, 6), 10) || 0;
+
+          if (!isNaN(hour) && !isNaN(minute)) {
+            let dateObj: Date;
+            if (dateStr.endsWith('Z')) {
+              dateObj = new Date(Date.UTC(year, month, day, hour, minute, second));
+            } else {
+              dateObj = new Date(year, month, day, hour, minute, second);
+            }
+
+            try {
+              const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/Sao_Paulo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+              });
+
+              const parts = formatter.formatToParts(dateObj);
+              const y = parts.find(p => p.type === 'year')?.value;
+              const m = parts.find(p => p.type === 'month')?.value;
+              const d = parts.find(p => p.type === 'day')?.value;
+              const hr = parts.find(p => p.type === 'hour')?.value;
+              const min = parts.find(p => p.type === 'minute')?.value;
+              const sec = parts.find(p => p.type === 'second')?.value;
+
+              if (y && m && d && hr && min) {
+                const normalizedHour = hr === '24' ? '00' : hr;
+                return {
+                  date: `${y}-${m}-${d}`,
+                  time: `${normalizedHour}:${min}:${sec || '00'}`,
+                  rawDate: dateObj,
+                };
+              }
+            } catch (_) {
+              const utcMs = Date.UTC(year, month, day, hour, minute, second);
+              const localMs = utcMs - 3 * 60 * 60 * 1000;
+              const localDate = new Date(localMs);
+              const y = localDate.getUTCFullYear();
+              const m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+              const d = String(localDate.getUTCDate()).padStart(2, '0');
+              const hr = String(localDate.getUTCHours()).padStart(2, '0');
+              const min = String(localDate.getUTCMinutes()).padStart(2, '0');
+              const sec = String(localDate.getUTCSeconds()).padStart(2, '0');
+              return {
+                date: `${y}-${m}-${d}`,
+                time: `${hr}:${min}:${sec}`,
+                rawDate: new Date(localMs),
+              };
             }
           }
-        } catch (e) {
-          console.warn('Falha ao formatar data com fuso de Sao Paulo, usando fallback:', e);
         }
-      }
-      
-      const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
-      if (dateMatch) {
-        return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+
+        const rawDate = new Date(year, month, day);
+        const mStr = String(month + 1).padStart(2, '0');
+        const dStr = String(day).padStart(2, '0');
+        return {
+          date: `${year}-${mStr}-${dStr}`,
+          time: null,
+          rawDate,
+        };
+      } catch (_) {
+        const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
+        if (dateMatch) {
+          return {
+            date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
+            time: null,
+            rawDate: null,
+          };
+        }
       }
       return null;
     };
 
-    const eventos: Array<{ data: string; nome: string; tipo?: string; uid_externo?: string }> = [];
+    const parseICalDuration = (durationStr: string): number | null => {
+      try {
+        const regex = /PT?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+        const match = durationStr.match(regex);
+        if (match) {
+          const hours = parseInt(match[1] || '0', 10);
+          const minutes = parseInt(match[2] || '0', 10);
+          const seconds = parseInt(match[3] || '0', 10);
+          return hours * 60 + minutes + Math.round(seconds / 60);
+        }
+      } catch (_) {}
+      return null;
+    };
+
+    const eventos: Array<{ data: string; nome: string; tipo?: string; uid_externo?: string; horario_inicio?: string | null; duracao_minutos?: number | null }> = [];
     const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
     const lines = unfoldedText.split(/\r?\n/);
 
-    let currentEvent: { data?: string; nome?: string; tipo?: string; uid_externo?: string } = {};
+    let currentEvent: { data?: string; nome?: string; tipo?: string; uid_externo?: string; horario_inicio?: string | null; duracao_minutos?: number | null } = {};
     let inEvent = false;
+    let dtstartVal = '';
+    let dtendVal = '';
+    let durationVal = '';
 
     for (const line of lines) {
       const trimmedLine = line.trim();
@@ -416,24 +492,53 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
       const keyWithParams = trimmedLine.substring(0, colonIndex);
       const value = trimmedLine.substring(colonIndex + 1).trim();
-      const keyParts = keyWithParams.split(';');
-      const key = keyParts[0].trim().toUpperCase();
+      const key = keyWithParams.split(';')[0].trim().toUpperCase();
 
       if (key === 'BEGIN' && value === 'VEVENT') {
         inEvent = true;
         currentEvent = { tipo: 'evento' };
+        dtstartVal = '';
+        dtendVal = '';
+        durationVal = '';
       } else if (key === 'END' && value === 'VEVENT') {
+        if (dtstartVal) {
+          const startParsed = parseICalDateTime(dtstartVal);
+          if (startParsed) {
+            currentEvent.data = startParsed.date;
+            currentEvent.horario_inicio = startParsed.time;
+
+            let calculatedDuration: number | null = null;
+            if (dtendVal) {
+              const endParsed = parseICalDateTime(dtendVal);
+              if (endParsed && startParsed.rawDate && endParsed.rawDate && startParsed.time && endParsed.time) {
+                const diffMs = endParsed.rawDate.getTime() - startParsed.rawDate.getTime();
+                const diffMin = Math.round(diffMs / (1000 * 60));
+                if (diffMin > 0) {
+                  calculatedDuration = diffMin;
+                }
+              }
+            } else if (durationVal) {
+              calculatedDuration = parseICalDuration(durationVal);
+            }
+
+            if (calculatedDuration !== null) {
+              currentEvent.duracao_minutos = calculatedDuration;
+            }
+          }
+        }
+
         if (currentEvent.data && currentEvent.nome) {
-          eventos.push(currentEvent as { data: string; nome: string; tipo?: string; uid_externo?: string });
+          eventos.push(currentEvent as { data: string; nome: string; tipo?: string; uid_externo?: string; horario_inicio?: string | null; duracao_minutos?: number | null });
         }
         inEvent = false;
         currentEvent = {};
       } else if (inEvent) {
         if (key === 'DTSTART') {
-          const parsedDate = parseICalDate(value);
-          if (parsedDate) {
-            currentEvent.data = parsedDate;
-          }
+          dtstartVal = value;
+        } else if (key === 'DTEND') {
+          dtendVal = value;
+        } else if (key === 'DURATION') {
+          durationVal = value;
         } else if (key === 'SUMMARY') {
           currentEvent.nome = value || 'Evento de Calendário';
         } else if (key === 'UID') {

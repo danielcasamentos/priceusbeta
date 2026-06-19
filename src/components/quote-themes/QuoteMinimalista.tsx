@@ -115,8 +115,12 @@ export function QuoteMinimalista(props: QuoteMinimalistaProps) {
                 {produtos.map((produto) => (
                   <div
                     key={produto.id}
-                    className={`border-2 rounded-xl p-4 transition-all ${
-                      selectedProdutos[produto.id] ? 'border-slate-600 bg-slate-100' : 'border-slate-300 hover:border-slate-400 bg-white'
+                    className={`border-2 rounded-xl p-4 transition-all relative ${
+                      produto.destacar_produto
+                        ? 'border-slate-800 bg-slate-50/50 shadow-md ring-1 ring-slate-800/10 scale-[1.01]'
+                        : selectedProdutos[produto.id]
+                        ? 'border-slate-600 bg-slate-100'
+                        : 'border-slate-300 hover:border-slate-400 bg-white'
                     }`}
                   >
                     <div className="flex items-center gap-4">
@@ -139,6 +143,11 @@ export function QuoteMinimalista(props: QuoteMinimalistaProps) {
                         </div>
                       )}
                       <div className="flex-1">
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-slate-800 text-white rounded-md px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase mb-1 shadow-sm">
+                            ✦ {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 className="font-light text-lg text-slate-900">{produto.nome}</h4>
                         {produto.resumo && <p className="text-sm text-slate-600 font-light mt-1">{produto.resumo}</p>}
                         {!template.ocultar_valores_intermediarios && (

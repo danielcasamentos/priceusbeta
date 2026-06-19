@@ -20,6 +20,7 @@ export function RatePhotographerButton({
   profileName,
   aceitaAvaliacoes = true,
   aprovacaoAutomatica = false,
+  theme,
 }: RatePhotographerButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const [rating, setRating] = useState(0);
@@ -78,7 +79,9 @@ export function RatePhotographerButton({
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold text-sm sm:text-base transition-colors shadow-md hover:shadow-lg"
+        className={`w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 rounded-lg font-semibold text-sm sm:text-base transition-colors shadow-md hover:shadow-lg ${
+          theme?.buttonColor || "bg-gray-200 hover:bg-gray-300 text-gray-800"
+        }`}
         data-fixed-button
       >
         <Star className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -202,7 +205,9 @@ export function RatePhotographerButton({
                       <button
                         type="submit"
                         disabled={submitting || rating === 0}
-                        className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className={`flex-1 px-6 py-3 text-white rounded-lg font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                          theme?.buttonColor ? theme.buttonColor.split(' ')[0] : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
                       >
                         {submitting ? 'Enviando...' : 'Enviar Avaliação'}
                       </button>

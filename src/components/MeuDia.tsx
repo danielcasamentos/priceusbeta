@@ -15,13 +15,7 @@ type Periodo = 'hoje' | 'semana' | 'mes' | 'ano' | 'custom';
 type FiltroUrgencia = 'todos' | 'atrasadas' | 'hoje' | 'amanha' | 'depois_amanha' | 'futuras';
 type GrowthTab = 'sazonal' | 'clientes' | 'whatsapp' | 'redes' | 'parcerias';
 
-const periodos: { id: Periodo; label: string }[] = [
-  { id: 'hoje', label: 'Hoje' },
-  { id: 'semana', label: 'Semana' },
-  { id: 'mes', label: 'Mês' },
-  { id: 'ano', label: 'Ano' },
-  { id: 'custom', label: 'Período' },
-];
+
 
 const growthTabs: { id: GrowthTab; label: string; emoji: string }[] = [
   { id: 'sazonal', label: 'Sazonalidade', emoji: '📅' },
@@ -315,9 +309,9 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const navigate = useNavigate();
 
   // ── Period ─────────────────────────────────────────────────────────────────
-  const [periodo, setPeriodo] = useState<Periodo>('hoje');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [periodo] = useState<Periodo>('hoje');
+  const [customStart] = useState('');
+  const [customEnd] = useState('');
   const [loading, setLoading] = useState(true);
 
   // ── CRM data ───────────────────────────────────────────────────────────────
@@ -336,6 +330,8 @@ export function MeuDia({ userId }: MeuDiaProps) {
   // ── Company Tasks (new) ───────────────────────────────────────────────────
   const [companyTasks, setCompanyTasks] = useState<CompanyTask[]>([]);
   const [newTaskText, setNewTaskText] = useState('');
+  const [newTaskDate, setNewTaskDate] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState<'baixa' | 'media' | 'alta'>('media');
 
   // ── Cashflow & Profile (new) ──────────────────────────────────────────────
   const [cashflowTr, setCashflowTr] = useState<Transacao[]>([]);
@@ -537,14 +533,22 @@ export function MeuDia({ userId }: MeuDiaProps) {
     try {
       const { data, error } = await supabase
         .from('company_tasks')
-        .insert({ user_id: userId, descricao: text, prioridade: 'media', concluida: false })
+        .insert({
+          user_id: userId,
+          descricao: text,
+          prioridade: newTaskPriority,
+          data_limite: newTaskDate || null,
+          concluida: false
+        })
         .select().single();
       if (!error && data) {
         setCompanyTasks(prev => [data as CompanyTask, ...prev]);
         setNewTaskText('');
+        setNewTaskDate('');
+        setNewTaskPriority('media');
       }
     } catch { /* table may not exist yet */ }
-  }, [newTaskText, userId]);
+  }, [newTaskText, newTaskDate, newTaskPriority, userId]);
 
   const toggleTask = useCallback(async (id: string, current: boolean) => {
     const next = !current;
@@ -943,6 +947,15 @@ export function MeuDia({ userId }: MeuDiaProps) {
                             {t.subnome && <p className="text-[10px] text-gray-400 truncate">{t.subnome}</p>}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
+                            {t.tipo === 'company' && t.prioridade && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-black uppercase ${
+                                t.prioridade === 'alta' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                                t.prioridade === 'media' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20' :
+                                'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                              }`}>
+                                {t.prioridade}
+                              </span>
+                            )}
                             <span className={`text-[10px] font-bold ${pi.colorClass}`}>{pi.texto}</span>
                             {t.tipo === 'crm' && (
                               <button onClick={() => navigate(`/dashboard/leads?id=${t.taskObject?.leadId}`)}
@@ -962,15 +975,41 @@ export function MeuDia({ userId }: MeuDiaProps) {
                     })}
                   </div>
 
-                  <div className="mt-4 flex gap-2">
-                    <input value={newTaskText} onChange={e => setNewTaskText(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addTask()}
-                      placeholder="Nova tarefa administrativa..."
-                      className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                    <button onClick={addTask}
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
-                      <Plus className="w-4 h-4" />
-                    </button>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex gap-2">
+                      <input value={newTaskText} onChange={e => setNewTaskText(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addTask()}
+                        placeholder="Nova tarefa administrativa..."
+                        className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                      <button onClick={addTask}
+                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1.5 shrink-0">
+                        <Plus className="w-4 h-4" />
+                        <span>Adicionar</span>
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-4 items-center text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-400">Prazo:</span>
+                        <input
+                          type="date"
+                          value={newTaskDate}
+                          onChange={e => setNewTaskDate(e.target.value)}
+                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-850 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-400">Prioridade:</span>
+                        <select
+                          value={newTaskPriority}
+                          onChange={e => setNewTaskPriority(e.target.value as 'baixa' | 'media' | 'alta')}
+                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-850 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                        >
+                          <option value="baixa">🟢 Baixa</option>
+                          <option value="media">🟡 Média</option>
+                          <option value="alta">🔴 Alta</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

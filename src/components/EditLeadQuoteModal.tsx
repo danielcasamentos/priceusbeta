@@ -38,12 +38,27 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>(
     savedOrcamentoDetalhe.selectedProdutos || {}
   );
+  const [activeDiscounts, setActiveDiscounts] = useState<Record<string, boolean>>({});
   const initialForma =
     (savedOrcamentoDetalhe as any).selectedFormaPagamento ||
     savedOrcamentoDetalhe.forma_pagamento_id ||
     savedOrcamentoDetalhe.paymentMethod?.id ||
     '';
   const [selectedForma, setSelectedForma] = useState<string>(initialForma);
+
+  // ── Upsell ──────────────────────────────────────────────────────────────
+  const [upsellItems, setUpsellItems] = useState<any[]>(
+    (savedOrcamentoDetalhe as any).upsell_produtos || []
+  );
+  const upsellSubtotal = upsellItems.reduce((acc, p) => {
+    const baseVal = parseFloat(p.valor || 0);
+    const desc = p.desconto_percentual || 0;
+    return acc + baseVal * (1 - desc / 100) * (p.quantidade || 1);
+  }, 0);
+
+  const handleRemoveUpsellItem = (produtoId: string) => {
+    setUpsellItems(prev => prev.filter(p => p.id !== produtoId));
+  };
 
   // ── Recalculado em realtime ──────────────────────────────────────────────
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown>(
@@ -88,7 +103,22 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         .select('*')
         .eq('template_id', lead.template_id)
         .order('ordem', { ascending: true });
-      if (prodData) setAllProducts(prodData);
+      
+      if (prodData) {
+        setAllProducts(prodData);
+        
+        // Initialize activeDiscounts based on savedOrcamentoDetalhe.produtos or default to true if template discount > 0
+        const initialDiscounts: Record<string, boolean> = {};
+        prodData.forEach((p) => {
+          const savedProd = savedOrcamentoDetalhe?.produtos?.find((sp: any) => sp.id === p.id);
+          if (savedProd && typeof savedProd.desconto_ativo !== 'undefined') {
+            initialDiscounts[p.id] = savedProd.desconto_ativo;
+          } else {
+            initialDiscounts[p.id] = (p.desconto_percentual ?? 0) > 0;
+          }
+        });
+        setActiveDiscounts(initialDiscounts);
+      }
 
       const { data: formataData } = await supabase
         .from('formas_pagamento')
@@ -113,7 +143,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
   useEffect(() => {
     if (allProducts.length > 0) recalculateValues();
-  }, [selectedProducts, selectedForma, allProducts, formasPagamento]);
+  }, [selectedProducts, selectedForma, allProducts, formasPagamento, activeDiscounts]);
 
   const recalculateValues = () => {
     const ob = savedOrcamentoDetalhe.priceBreakdown || {
@@ -132,7 +162,12 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
     const newSubtotal = allProducts.reduce((total, p) => {
       const qty = selectedProducts[p.id] || 0;
-      return total + p.valor * qty;
+      const discountActive = activeDiscounts[p.id];
+      const discountPercent = p.desconto_percentual ?? 0;
+      const effectivePrice = (discountActive && discountPercent > 0)
+        ? p.valor * (1 - discountPercent / 100)
+        : p.valor;
+      return total + effectivePrice * qty;
     }, 0);
 
     const newAjusteSazonal = newSubtotal * seasonalRatio;
@@ -192,10 +227,17 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
           ...priceBreakdown,
           total: efectiveTotal, // garante que o override é persistido
         },
-        produtos: allProducts,
+        produtos: allProducts.map((p) => ({
+          ...p,
+          desconto_percentual: p.desconto_percentual ?? 0,
+          desconto_ativo: !!activeDiscounts[p.id],
+        })),
         paymentMethod: formasPagamento.find((f) => f.id === selectedForma),
         customFieldsData: customFieldsData,
-      };
+        upsell_produtos: upsellItems,
+        valor_base: efectiveTotal - upsellSubtotal,
+        valor_upsell: upsellSubtotal,
+      } as any;
 
       const updatedLeadData: Partial<Lead> = {
         nome_cliente: nomeCliente || null,
@@ -425,25 +467,66 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                         }`}
                       >
                         <div className="flex-1 pr-4">
-                          <label className="flex items-start gap-3 cursor-pointer">
+                          <div className="flex items-start gap-3">
                             <input
                               type="checkbox"
+                              id={`checkbox-prod-${p.id}`}
                               checked={isSelected}
                               onChange={(e) =>
                                 handleToggleProduct(p.id, e.target.checked ? 1 : 0)
                               }
                               className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                             />
-                            <div>
-                              <p className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                            <div className="flex-1">
+                              <label htmlFor={`checkbox-prod-${p.id}`} className={`font-medium cursor-pointer ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
                                 {p.nome}
-                              </p>
-                              <p className="text-sm text-gray-500">{formatCurrency(p.valor)}</p>
+                              </label>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {isSelected && p.desconto_percentual && p.desconto_percentual > 0 && activeDiscounts[p.id] ? (
+                                  <>
+                                    <span className="text-sm text-gray-400 line-through">
+                                      {formatCurrency(p.valor)}
+                                    </span>
+                                    <span className="text-sm font-bold text-green-600">
+                                      {formatCurrency(p.valor * (1 - p.desconto_percentual / 100))}
+                                    </span>
+                                    <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                                      -{p.desconto_percentual}%
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-sm text-gray-500">{formatCurrency(p.valor)}</span>
+                                )}
+                              </div>
+
+                              {/* Discount toggle checkbox */}
+                              {isSelected && p.desconto_percentual && p.desconto_percentual > 0 && (
+                                <div className="mt-2 flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-md p-1.5 w-fit">
+                                  <input
+                                    type="checkbox"
+                                    id={`discount-toggle-${p.id}`}
+                                    checked={activeDiscounts[p.id] || false}
+                                    onChange={(e) => {
+                                      setActiveDiscounts((prev) => ({
+                                        ...prev,
+                                        [p.id]: e.target.checked,
+                                      }));
+                                    }}
+                                    className="w-3.5 h-3.5 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
+                                  />
+                                  <label
+                                    htmlFor={`discount-toggle-${p.id}`}
+                                    className="text-xs text-gray-600 cursor-pointer select-none font-medium"
+                                  >
+                                    Aplicar desconto do template (-{p.desconto_percentual}%)
+                                  </label>
+                                </div>
+                              )}
                             </div>
-                          </label>
+                          </div>
                         </div>
 
-                        {p.permite_multiplos && isSelected && (
+                        {p.permite_multiplas_unidades && isSelected && (
                           <div className="flex items-center bg-white border border-blue-200 rounded-lg overflow-hidden shrink-0">
                             <button
                               onClick={() => handleToggleProduct(p.id, Math.max(1, qty - 1))}
@@ -485,6 +568,58 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* ── Seção Upsell ── */}
+              {upsellItems.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <h4 className="font-semibold text-amber-900 text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span>🎁</span> Adicionais Contratados (Upsell)
+                  </h4>
+                  <div className="space-y-2">
+                    {upsellItems.map((p) => {
+                      const baseVal = parseFloat(p.valor || 0);
+                      const desc = p.desconto_percentual || 0;
+                      const precoFinal = baseVal * (1 - desc / 100);
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between p-3 rounded-lg bg-white border border-amber-100"
+                        >
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-amber-900">{p.nome}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {desc > 0 && (
+                                <span className="text-xs text-gray-400 line-through">
+                                  {formatCurrency(baseVal)}
+                                </span>
+                              )}
+                              <span className="text-sm font-bold text-amber-700">
+                                {formatCurrency(precoFinal)}
+                                {desc > 0 && (
+                                  <span className="text-xs ml-1 text-green-600 font-normal">(-{desc}%)</span>
+                                )}
+                              </span>
+                              {p.quantidade > 1 && (
+                                <span className="text-xs text-gray-500">x {p.quantidade}</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveUpsellItem(p.id)}
+                            className="ml-3 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remover adicional"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-amber-700 mt-3 font-medium">
+                    Subtotal dos adicionais: {formatCurrency(upsellSubtotal)}
+                  </p>
                 </div>
               )}
             </div>
@@ -538,6 +673,12 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                   )}
 
                   <div className="border-t pt-3 mt-4">
+                    {upsellSubtotal > 0 && (
+                      <div className="flex justify-between text-amber-600 mb-2 text-sm font-medium">
+                        <span>🎁 Adicionais</span>
+                        <span>+{formatCurrency(upsellSubtotal)}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-gray-900 text-base">Total Final</span>
                       {manualTotalOverride !== null && (

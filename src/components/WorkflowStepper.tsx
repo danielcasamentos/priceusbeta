@@ -2,6 +2,41 @@ import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 /** Gera UUID v4 usando a API nativa do browser — sem dependência externa */
 const uuidv4 = () => crypto.randomUUID();
+
+/** Converte string amigável (ex: "1:30" ou "90m" ou "1.5") em minutos */
+export function parseDurationString(str: string): number | null {
+  if (!str) return null;
+  str = str.toLowerCase().trim();
+  if (str.includes(':')) {
+    const [h, m] = str.split(':').map(Number);
+    if (!isNaN(h) && !isNaN(m)) return h * 60 + m;
+  }
+  if (str.includes('h')) {
+    const match = str.match(/(\d+(?:\.\d+)?)\s*h/);
+    if (match) return Math.round(parseFloat(match[1]) * 60);
+  }
+  if (str.includes('m')) {
+    const match = str.match(/(\d+)\s*m/);
+    if (match) return parseInt(match[1], 10);
+  }
+  const val = parseFloat(str);
+  if (!isNaN(val)) {
+    if (val < 24) return Math.round(val * 60); // menos que 24: assume horas
+    return Math.round(val); // >= 24: assume minutos
+  }
+  return null;
+}
+
+/** Formata minutos para string legível (ex: 90 -> "1h 30m") */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || minutes <= 0) return '';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
 import {
   Plus, Trash2, Save, ChevronDown, ChevronUp,
   Pause, Check, FolderOpen, X, Loader2
@@ -9,6 +44,8 @@ import {
 import { WorkflowStep, WorkflowTemplate, WorkflowTemplateStep, SlaResult } from '../types/workflow';
 import { useWorkflowSla, calcularSlaEtapa } from '../hooks/useWorkflowSla';
 import { supabase } from '../lib/supabase';
+import { syncWorkflowToCalendar } from '../services/availabilityService';
+import { suggestWorkflowTasksFromProducts } from '../lib/nicheParser';
 
 // ==========================================================
 // PriceUs — WorkflowStepper
@@ -22,6 +59,7 @@ interface WorkflowStepperProps {
   initialWorkflow: WorkflowStep[];
   onWorkflowChange: (workflow: WorkflowStep[]) => void;
   onAllCompleted: () => void; // Callback quando todas as etapas forem concluídas
+  leadProdutos?: any[];
 }
 
 // ── Inline Editable Field ────────────────────────────────
@@ -125,6 +163,9 @@ function SaveTemplateModal({
       const etapas: WorkflowTemplateStep[] = workflow.map(s => ({
         label: s.label,
         description: s.description,
+        duracao_minutos: s.duracao_minutos || null,
+        horario_inicio: s.horario_inicio || null,
+        ambiente: s.ambiente || null,
       }));
       await supabase.from('workflow_templates').insert({ user_id: userId, nome: nome.trim(), etapas });
       onSaved();
@@ -222,7 +263,7 @@ function ManageTemplatesModal({
   };
 
   const handleAddStep = () => {
-    setEditEtapas([...editEtapas, { label: 'Nova etapa', description: '' }]);
+    setEditEtapas([...editEtapas, { label: 'Nova etapa', description: '', duracao_minutos: null, horario_inicio: null, ambiente: 'externo' }]);
   };
 
   const handleRemoveStep = (index: number) => {
@@ -241,7 +282,7 @@ function ManageTemplatesModal({
     setEditEtapas(newEtapas);
   };
 
-  const handleStepChange = (index: number, field: 'label' | 'description', val: string) => {
+  const handleStepChange = (index: number, field: keyof WorkflowTemplateStep, val: any) => {
     const newEtapas = [...editEtapas];
     newEtapas[index] = {
       ...newEtapas[index],
@@ -469,30 +510,71 @@ function ManageTemplatesModal({
                             </div>
 
                             {/* Inputs */}
-                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
-                              <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                  Nome da Etapa
-                                </span>
-                                <input
-                                  type="text"
-                                  value={step.label}
-                                  onChange={(e) => handleStepChange(idx, 'label', e.target.value)}
-                                  placeholder="Ex: Reunião de Alinhamento"
-                                  className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
-                                />
+                            <div className="flex-1 flex flex-col gap-3 min-w-0">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    Nome da Etapa
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={step.label}
+                                    onChange={(e) => handleStepChange(idx, 'label', e.target.value)}
+                                    placeholder="Ex: Reunião de Alinhamento"
+                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    Descrição
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={step.description}
+                                    onChange={(e) => handleStepChange(idx, 'description', e.target.value)}
+                                    placeholder="Ex: Explicar prazos e entregar briefing"
+                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                  Descrição
-                                </span>
-                                <input
-                                  type="text"
-                                  value={step.description}
-                                  onChange={(e) => handleStepChange(idx, 'description', e.target.value)}
-                                  placeholder="Ex: Explicar prazos e entregar briefing"
-                                  className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
-                                />
+
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    Horário de Início
+                                  </span>
+                                  <input
+                                    type="time"
+                                    value={step.horario_inicio || ''}
+                                    onChange={(e) => handleStepChange(idx, 'horario_inicio', e.target.value || null)}
+                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    Duração
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={step.duracao_minutos ? formatDuration(step.duracao_minutos) : ''}
+                                    onChange={(e) => handleStepChange(idx, 'duracao_minutos', parseDurationString(e.target.value))}
+                                    placeholder="Ex: 1:30 ou 90m"
+                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    Ambiente
+                                  </span>
+                                  <select
+                                    value={step.ambiente || 'externo'}
+                                    onChange={(e) => handleStepChange(idx, 'ambiente', e.target.value)}
+                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                                  >
+                                    <option value="externo">🎥 Externo (Agenda)</option>
+                                    <option value="interno">🏢 Interno (Estúdio)</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
 
@@ -587,6 +669,7 @@ export function WorkflowStepper({
   initialWorkflow,
   onWorkflowChange,
   onAllCompleted,
+  leadProdutos = [],
 }: WorkflowStepperProps) {
   const [workflow, setWorkflow] = useState<WorkflowStep[]>(initialWorkflow);
   const [expanded, setExpanded] = useState(false);
@@ -652,6 +735,7 @@ export function WorkflowStepper({
     try {
       await supabase.from('leads').update({ workflow: updated }).eq('id', leadId);
       onWorkflowChange(updated);
+      await syncWorkflowToCalendar(userId, leadId, leadName, updated);
     } catch (err) {
       console.error('Erro ao salvar workflow:', err);
     } finally {
@@ -678,8 +762,46 @@ export function WorkflowStepper({
       description: '',
       deadline: '',
       status: 'pendente',
+      duracao_minutos: null,
+      horario_inicio: null,
+      ambiente: 'externo',
     };
     updateWorkflow([...workflow, newStep]);
+  };
+
+  // Iniciar workflow sugerido a partir dos produtos
+  const handleIniciarWorkflow = async () => {
+    setExpanded(true);
+    let defaultSteps: WorkflowStep[] = [];
+    if (leadProdutos && leadProdutos.length > 0) {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('nicho')
+          .eq('id', userId)
+          .maybeSingle();
+        const niche = data?.nicho || 'fotografia';
+        defaultSteps = suggestWorkflowTasksFromProducts(leadProdutos, niche);
+      } catch (e) {
+        console.warn('Erro ao obter nicho, usando padrão fotografia:', e);
+        defaultSteps = suggestWorkflowTasksFromProducts(leadProdutos, 'fotografia');
+      }
+    }
+
+    if (defaultSteps.length === 0) {
+      defaultSteps = [{
+        id: uuidv4(),
+        label: 'Nova etapa',
+        description: '',
+        deadline: '',
+        status: 'pendente',
+        duracao_minutos: null,
+        horario_inicio: null,
+        ambiente: 'externo',
+      }];
+    }
+
+    updateWorkflow(defaultSteps);
   };
 
   // Remover etapa
@@ -717,6 +839,9 @@ export function WorkflowStepper({
       description: e.description,
       deadline: '',
       status: 'pendente',
+      duracao_minutos: e.duracao_minutos || null,
+      horario_inicio: e.horario_inicio || null,
+      ambiente: e.ambiente || 'externo',
     }));
 
     if (workflow.length > 0) {
@@ -751,7 +876,7 @@ export function WorkflowStepper({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setExpanded(true); addStep(); }}
+            onClick={handleIniciarWorkflow}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
@@ -889,16 +1014,54 @@ export function WorkflowStepper({
                     />
                   </div>
 
-                  {/* Deadline */}
-                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                    <span className="text-xs text-gray-400 dark:text-gray-500">📅</span>
-                    <InlineEdit
-                      value={step.deadline}
-                      onSave={(val) => updateStep(step.id, { deadline: val })}
-                      type="date"
-                      className="text-xs text-gray-600 dark:text-gray-400"
-                      placeholder="Definir prazo"
-                    />
+                  {/* Informações de Agendamento/Prazo */}
+                  <div className="flex items-center gap-x-4 gap-y-1.5 mt-1.5 flex-wrap text-xs">
+                    {/* Deadline */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400 dark:text-gray-500">📅</span>
+                      <InlineEdit
+                        value={step.deadline}
+                        onSave={(val) => updateStep(step.id, { deadline: val })}
+                        type="date"
+                        className="text-gray-600 dark:text-gray-400"
+                        placeholder="Prazo"
+                      />
+                    </div>
+
+                    {/* Horário de Início */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400 dark:text-gray-500">🕒</span>
+                      <input
+                        type="time"
+                        value={step.horario_inicio || ''}
+                        onChange={(e) => updateStep(step.id, { horario_inicio: e.target.value || null })}
+                        className="bg-transparent border-none p-0 text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/20 rounded max-w-[70px]"
+                      />
+                    </div>
+
+                    {/* Duração */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400 dark:text-gray-500">⏱️</span>
+                      <input
+                        type="text"
+                        value={step.duracao_minutos ? formatDuration(step.duracao_minutos) : ''}
+                        onChange={(e) => updateStep(step.id, { duracao_minutos: parseDurationString(e.target.value) })}
+                        placeholder="Duração (ex: 2h)"
+                        className="bg-transparent border-none p-0 text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/20 rounded max-w-[85px] placeholder-gray-400 dark:placeholder-gray-600"
+                      />
+                    </div>
+
+                    {/* Ambiente */}
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={step.ambiente || 'externo'}
+                        onChange={(e) => updateStep(step.id, { ambiente: e.target.value as 'interno' | 'externo' })}
+                        className="bg-transparent border-none p-0 text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/20 rounded cursor-pointer font-medium"
+                      >
+                        <option value="externo">🎥 Externo</option>
+                        <option value="interno">🏢 Interno</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 

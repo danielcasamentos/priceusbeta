@@ -71,6 +71,16 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
   const [isManualValueOverride, setIsManualValueOverride] = useState(false);
 
+  // Upsell
+  const [upsellProducts, setUpsellProducts] = useState<Product[]>([]);
+  const [selectedUpsellProducts, setSelectedUpsellProducts] = useState<Record<string, boolean>>({});
+  const [hasUpsell, setHasUpsell] = useState(false);
+  const upsellSubtotal = upsellProducts.reduce((acc, p) => {
+    if (!selectedUpsellProducts[p.id]) return acc;
+    const desc = (p as any).desconto_percentual || 0;
+    return acc + p.valor * (1 - desc / 100);
+  }, 0);
+
   // Carrega templates ao abrir
   useEffect(() => {
     async function loadTemplates() {
@@ -128,6 +138,9 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     let isMounted = true;
     async function loadTemplateProducts() {
       setLoadingProducts(true);
+      setUpsellProducts([]);
+      setSelectedUpsellProducts({});
+      setHasUpsell(false);
       try {
         const { data, error: prodErr } = await supabase
           .from('produtos')
@@ -157,6 +170,26 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
           
           if (!isManualValueOverride) {
             setValor((totalSum * 100).toString());
+          }
+        }
+
+        // Verificar se o template tem upsell configurado
+        const { data: templateData } = await supabase
+          .from('templates')
+          .select('upsell_ativo, upsell_template_id, upsell_produtos_ids')
+          .eq('id', templateId)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (templateData?.upsell_ativo && templateData.upsell_template_id && templateData.upsell_produtos_ids?.length > 0) {
+          setHasUpsell(true);
+          const { data: upsellData } = await supabase
+            .from('produtos')
+            .select('*')
+            .in('id', templateData.upsell_produtos_ids);
+          if (isMounted && upsellData) {
+            setUpsellProducts(upsellData as Product[]);
           }
         }
       } catch (err) {
@@ -281,7 +314,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
         tipo_evento: tipoEvento.trim() || null,
         data_evento: dataEvento || null,
         cidade_evento: cidade.trim() || null,
-        valor_total: valorNumerico || subtotal || 0,
+        valor_total: (valorNumerico || subtotal || 0) + upsellSubtotal,
         status,
         origem: origem || 'manual',
         orcamento_detalhe: {
@@ -293,6 +326,18 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
           priceBreakdown,
           customFields: [],
           customFieldsData: {},
+          upsell_produtos: upsellProducts
+            .filter(p => selectedUpsellProducts[p.id])
+            .map(p => ({
+              id: p.id,
+              nome: p.nome,
+              valor: p.valor,
+              desconto_percentual: (p as any).desconto_percentual || 0,
+              imagem_url: (p as any).imagem_url || '',
+              quantidade: 1,
+            })),
+          valor_base: valorNumerico || subtotal || 0,
+          valor_upsell: upsellSubtotal,
         },
       };
 
@@ -523,7 +568,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                               </div>
                             </label>
 
-                            {p.permite_multiplos && isSelected && (
+                            {p.permite_multiplas_unidades && isSelected && (
                               <div className="flex items-center gap-1 bg-white dark:bg-[#07101f] border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden shrink-0">
                                 <button
                                   type="button"
@@ -548,6 +593,62 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                         );
                       })}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Seção de Upsell */}
+              {hasUpsell && upsellProducts.length > 0 && (
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                  <label className="block text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
+                    🎁 Adicionais Opcionais (Upsell)
+                  </label>
+                  <div className="space-y-2">
+                    {upsellProducts.map((p) => {
+                      const desc = (p as any).desconto_percentual || 0;
+                      const precoFinal = p.valor * (1 - desc / 100);
+                      const isSelected = !!selectedUpsellProducts[p.id];
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center justify-between p-2 rounded-lg border text-sm transition-colors ${
+                            isSelected
+                              ? 'bg-amber-100/50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800/50'
+                              : 'bg-white border-gray-100 dark:bg-transparent dark:border-[rgba(255,255,255,0.04)]'
+                          }`}
+                        >
+                          <label className="flex items-center gap-2 cursor-pointer flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => setSelectedUpsellProducts(prev => ({...prev, [p.id]: e.target.checked}))}
+                              className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                            />
+                            <div>
+                              <span className="font-medium text-gray-700 dark:text-gray-300">{p.nome}</span>
+                              <div className="flex items-center gap-1.5 text-xs">
+                                {desc > 0 && (
+                                  <span className="text-gray-400 line-through">
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor)}
+                                  </span>
+                                )}
+                                <span className="text-amber-700 font-semibold">
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(precoFinal)}
+                                </span>
+                                {desc > 0 && (
+                                  <span className="text-green-600 bg-green-50 px-1 py-0.5 rounded font-medium">-{desc}%</span>
+                                )}
+                              </div>
+                            </div>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {upsellSubtotal > 0 && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold mt-2">
+                      Adicionais selecionados: +{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(upsellSubtotal)}
+                    </p>
                   )}
                 </div>
               )}

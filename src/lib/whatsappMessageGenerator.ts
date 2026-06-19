@@ -17,6 +17,8 @@ export interface Product {
   valor: number;
   permite_multiplos?: boolean;
   permite_multiplas_unidades?: boolean;
+  desconto_percentual?: number;
+  desconto_ativo?: boolean;
 }
 
 export interface PaymentMethod {
@@ -58,6 +60,8 @@ export interface PriceBreakdown {
   descontoCupom: number;
   acrescimoFormaPagamento: number;
   total: number;
+  valorBase?: number;
+  valorUpsell?: number;
 }
 
 export interface WhatsAppMessageOptions {
@@ -74,6 +78,9 @@ export interface WhatsAppMessageOptions {
   products: Product[];
   selectedProducts: Record<string, number>; // { productId: quantity }
 
+  // Adicionais de upsell
+  upsellProducts?: Product[];
+
   // Forma de pagamento
   paymentMethod?: PaymentMethod;
   lastInstallmentDate?: string; // YYYY-MM-DD
@@ -87,6 +94,7 @@ export interface WhatsAppMessageOptions {
 
   // Campos sazonais e geográficos (aparecem automaticamente se sistemas ativos)
   eventDate?: string; // YYYY-MM-DD
+  eventTime?: string; // HH:MM
   eventCity?: string;
   availabilityStatus?: 'disponivel' | 'ocupada' | 'parcial' | 'bloqueada' | 'inativa';
 
@@ -131,12 +139,31 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
   console.log('DEBUG_WA: Initial message (after template/default):', message);
 
   // 2. PREPARAR LISTA DE PRODUTOS
-  const productsText = buildProductsList(
+  let productsText = buildProductsList(
     products,
     selectedProducts,
     template.ocultar_valores_intermediarios || false
   );
   console.log('DEBUG_WA: Generated productsText:', productsText);
+
+  // 2b. PREPARAR LISTA DE UPSELLS
+  let upsellText = '';
+  if (options.upsellProducts && options.upsellProducts.length > 0) {
+    upsellText = options.upsellProducts
+      .map((p) => {
+        const valFinal = p.valor * (1 - (p.desconto_percentual ?? 0) / 100);
+        if (template.ocultar_valores_intermediarios) {
+          return `• 🎁 ${p.nome}`;
+        }
+        return `• 🎁 ${p.nome} - ${formatCurrency(valFinal)}`;
+      })
+      .join('\n');
+  }
+
+  // Se houver upsellText, e o template não contiver a tag {{UPSELL_LIST}}, anexar ao productsText
+  if (upsellText && !template.texto_whatsapp?.includes('{{UPSELL_LIST}}')) {
+    productsText += (productsText ? '\n' : '') + upsellText;
+  }
 
   // 3. CALCULAR DETALHES DE PAGAMENTO
   const { entradaText, parcelasText } = calculatePaymentDetails(
@@ -182,8 +209,11 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
 
     // Produtos e valores
     '{{SERVICES_LIST}}': productsText,
+    '{{UPSELL_LIST}}': upsellText,
     '{{SUBTOTAL_VALUE}}': formatCurrency(priceBreakdown.subtotal),
     '{{TOTAL_VALUE}}': formatCurrency(priceBreakdown.total),
+    '{{BASE_TOTAL_VALUE}}': formatCurrency(priceBreakdown.valorBase ?? priceBreakdown.total),
+    '{{UPSELL_TOTAL_VALUE}}': formatCurrency(priceBreakdown.valorUpsell ?? 0),
 
     // Forma de pagamento
     '{{PAYMENT_METHOD}}': paymentMethod?.nome || '',
@@ -219,6 +249,7 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
 
     // 🔥 DADOS SAZONAIS E GEOGRÁFICOS (aparecem automaticamente)
     '{{EVENT_DATE}}': eventDateFormatted,
+    '{{EVENT_TIME}}': options.eventTime || '',
     '{{EVENT_CITY}}': eventCity || '',
   };
 
@@ -239,6 +270,21 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
   }
   console.log('DEBUG_WA: Message after productsText append logic:', message);
 
+  // 🔥 NOVO: Se UPSELL_LIST não foi incluída e há adicionais, anexar
+  if (upsellText && !message.includes(upsellText) && !message.includes('ADICIONAIS ESPECIAIS')) {
+    message += `\n\n🎁 *ADICIONAIS ESPECIAIS:*\n${upsellText}`;
+  }
+
+  // 🔥 Resumo Financeiro detalhado se houver upsell e não houver um resumo no template
+  if (upsellText && priceBreakdown.valorUpsell && priceBreakdown.valorUpsell > 0) {
+    if (!message.includes('Pacote Base:') && !message.includes('Total Geral:')) {
+      message += `\n\n💵 *Resumo Financeiro:*`;
+      message += `\n• Pacote Base: ${formatCurrency(priceBreakdown.valorBase ?? (priceBreakdown.total - priceBreakdown.valorUpsell))}`;
+      message += `\n• Opcionais (Upsell): ${formatCurrency(priceBreakdown.valorUpsell)}`;
+      message += `\n• *Total Geral:* ${formatCurrency(priceBreakdown.total)}`;
+    }
+  }
+
   // 9. 🔥 ADICIONAR CAMPOS PERSONALIZADOS SE EXISTIREM
   const customFieldsSection = buildCustomFieldsSection(options.customFields, options.customFieldsData);
   if (customFieldsSection) {
@@ -251,6 +297,7 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     eventDate: eventDateFormatted,
     eventCity,
     priceBreakdown,
+    eventTime: options.eventTime,
   });
   if (additionalDataSection) {
     message += `\n\n${additionalDataSection}`;
@@ -330,8 +377,8 @@ function buildCustomFieldsSection(
 ): string {
   // Filtrar apenas campos que têm valor
   const fieldsWithData = customFields
-    .filter((field) => customFieldsData[field.id]?.trim()) // Corrigido: customFieldsData estava sem uso
-    .map((field) => { // Corrigido: parâmetro 'index' não era necessário
+    .filter((field) => customFieldsData[field.id]?.trim())
+    .map((field) => {
       const value = customFieldsData[field.id];
       // Adicionar numeração automática (campoInserido01, campoInserido02...)
       return `📌 ${field.label}: ${value}`;
@@ -350,8 +397,9 @@ function buildAdditionalDataSection(options: {
   eventDate: string;
   eventCity?: string;
   priceBreakdown: PriceBreakdown;
+  eventTime?: string;
 }): string {
-  const { template, eventDate, eventCity, priceBreakdown } = options;
+  const { template, eventDate, eventCity, priceBreakdown, eventTime } = options;
   const sections: string[] = [];
 
   // 🔥 RESPEITAR configuração de ocultar valores intermediários
@@ -359,7 +407,11 @@ function buildAdditionalDataSection(options: {
 
   // Se sistema sazonal ativo e tem data, adicionar
   if (template.sistema_sazonal_ativo && eventDate) {
-    sections.push(`📅 *Data:* ${eventDate}`);
+    let dateLine = `📅 *Data:* ${eventDate}`;
+    if (eventTime) {
+      dateLine += ` às ${eventTime}`;
+    }
+    sections.push(dateLine);
 
     // 🔥 Só mostrar ajuste sazonal se valores NÃO estiverem ocultos
     if (!ocultarValores && priceBreakdown.ajusteSazonal !== 0) {

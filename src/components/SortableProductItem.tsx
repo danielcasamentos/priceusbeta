@@ -15,6 +15,7 @@ interface Product {
   mostrar_imagem: boolean;
   imagens?: string[];
   carrossel_automatico?: boolean;
+  duracao_minutos?: number | null;
 }
 
 interface SortableProductItemProps {

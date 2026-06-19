@@ -13,6 +13,7 @@ import { MobileDatePicker } from '../components/MobileDatePicker';
 import { AvailabilityIndicator } from '../components/AvailabilityIndicator';
 import { generateWhatsAppMessage, generateWaLinkToPhotographer } from '../lib/whatsappMessageGenerator';
 import { getTema, TemaType } from '../lib/themes'; // Remove unused theme helpers
+import { getThemeInlineStyles } from '../lib/themeStyles';
 import { PublicReviews } from '../components/PublicReviews';
 import { RatePhotographerButton } from '../components/RatePhotographerButton';
 import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
@@ -22,6 +23,9 @@ import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
 import { QuotePromocional } from '../components/quote-themes/QuotePromocional';
 import { QuoteOferta } from '../components/quote-themes/QuoteOferta';
 import { QuotePdfElegante } from '../components/quote-themes/QuotePdfElegante';
+import { QuotePdfElegante2 } from '../components/quote-themes/QuotePdfElegante2';
+import { QuoteNatal } from '../components/quote-themes/QuoteNatal';
+import { QuoteRevellon } from '../components/quote-themes/QuoteRevellon';
 
 interface Produto {
   id: string;
@@ -38,6 +42,7 @@ interface Produto {
   permite_multiplas_unidades?: boolean;
   /** 0–100. Desconto aplicado ao valor unitário */
   desconto_percentual?: number;
+  duracao_minutos?: number | null;
 }
 
 interface FormaPagamento {
@@ -88,6 +93,17 @@ export function QuotePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
+  // Black Friday countdown timer state
+  const [blackFridayTime, setBlackFridayTime] = useState(10800); // 3 horas em segundos
+  useEffect(() => {
+    if (template?.tema === 'black-friday') {
+      const interval = setInterval(() => {
+        setBlackFridayTime((prev) => (prev > 0 ? prev - 1 : 10800));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [template?.tema]);
+
   // 🎨 Sistema de Temas
   const tema = getTema((template?.tema as TemaType) || 'moderno');
 
@@ -110,13 +126,7 @@ export function QuotePage() {
   const [camposExtrasData, setCamposExtrasData] = useState<Record<string, string>>({});
   const [selectedFormaPagamento, setSelectedFormaPagamento] = useState<string>('');
 
-  // Auto-selecionar a forma de pagamento padrão (is_default) ou a primeira disponível
-  useEffect(() => {
-    if (formasPagamento.length > 0 && !selectedFormaPagamento) {
-      const formaDefault = formasPagamento.find((f) => f.is_default);
-      setSelectedFormaPagamento(formaDefault?.id ?? formasPagamento[0].id);
-    }
-  }, [formasPagamento, selectedFormaPagamento]);
+  // Não auto-selecionamos a forma de pagamento por padrão para permitir que o cliente escolha ativamente.
 
   // Cupom de desconto
   const [cupomCodigo, setCupomCodigo] = useState<string>('');
@@ -154,6 +164,7 @@ export function QuotePage() {
 
   // 📅 Sistema de Verificação de Disponibilidade
   const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
+  const [horarioSelecionado, setHorarioSelecionado] = useState<string>('');
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [agendaConfig, setAgendaConfig] = useState<any>(null);
   const [_feriadosNacionais, _setFeriadosNacionais] = useState<string[]>([]); // Estado para feriados da API
@@ -165,6 +176,77 @@ export function QuotePage() {
   const totalSectionRef = useRef<HTMLDivElement>(null);
   const firstProductRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null); // Mantido caso seja usado em outro lugar
+
+  // 🎁 Upselling
+  const [upsellProdutos, setUpsellProdutos] = useState<Produto[]>([]);
+  const [selectedUpsellIds, setSelectedUpsellIds] = useState<Set<string>>(new Set());
+  const upsellScrollRef = useRef<HTMLDivElement>(null);
+  const [upsellCanScrollRight, setUpsellCanScrollRight] = useState(false);
+
+  const normalizeText = (text: string) => {
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  };
+
+  const getSignificantWords = (text: string) => {
+    const stopWords = new Set(['de', 'do', 'da', 'o', 'a', 'e', 'com', 'para', 'em', 'um', 'uma', 'os', 'as', 'dos', 'das']);
+    const normalized = normalizeText(text);
+    return normalized
+      .split(/\s+/)
+      .map(w => w.replace(/[^a-z0-9]/g, ''))
+      .filter(w => w.length > 2 && !stopWords.has(w));
+  };
+
+  const filteredUpsellProdutos = useMemo(() => {
+    const cartTextNormalized = normalizeText(
+      produtos
+        .filter(p => selectedProdutos[p.id] > 0)
+        .map(p => `${p.nome} ${p.descricao || ''}`)
+        .join(' ')
+    );
+
+    return upsellProdutos.filter(produto => {
+      const upsellSignificantWords = getSignificantWords(produto.nome);
+      const isDuplicate = upsellSignificantWords.some(word => cartTextNormalized.includes(word));
+      return !isDuplicate;
+    });
+  }, [upsellProdutos, produtos, selectedProdutos]);
+
+  const handleToggleUpsell = (id: string) => {
+    setSelectedUpsellIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const upsellSubtotal = filteredUpsellProdutos
+    .filter(p => selectedUpsellIds.has(p.id))
+    .reduce((acc, p) => {
+      const d = p.desconto_percentual ?? 0;
+      return acc + p.valor * (1 - d / 100);
+    }, 0);
+
+  // Detectar se o carrossel pode rolar para a direita
+  const checkUpsellScroll = () => {
+    const el = upsellScrollRef.current;
+    if (!el) return;
+    setUpsellCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    checkUpsellScroll();
+    const el = upsellScrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', checkUpsellScroll, { passive: true });
+    window.addEventListener('resize', checkUpsellScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', checkUpsellScroll);
+      window.removeEventListener('resize', checkUpsellScroll);
+    };
+  }, [filteredUpsellProdutos]);
 
   // � Hook de validação de campos obrigatórios
   const fieldsValidation = useRequiredFieldsValidation({
@@ -273,36 +355,24 @@ export function QuotePage() {
     loadEditLeadData();
   }, [template, loading, cidades, estados]);
 
+
+
+  // ⏱️ Cálculo de Duração Total dos Produtos Selecionados
+  const activeDuration = (() => {
+    const totalDuration = Object.entries(selectedProdutos).reduce((acc, [produtoId, quantity]) => {
+      if (quantity <= 0) return acc;
+      const prod = produtos.find(p => p.id === produtoId);
+      if (prod && prod.duracao_minutos) {
+        return acc + (prod.duracao_minutos * quantity);
+      }
+      return acc;
+    }, 0);
+    return totalDuration > 0 ? totalDuration : 60;
+  })();
+
   useEffect(() => {
-    if (template && produtos.length > 0) {
-      updateLead({
-        templateId: template.id,
-        userId: template.user_id,
-        formData: {
-          ...formData,
-          ...camposExtrasData,
-          data_evento: dataEvento || null,
-          cidade_evento: cidadeSelecionada || null,
-          tipo_evento: template.nome_template || null,
-        },
-        orcamentoDetalhe: {
-          // ANTES: Apenas IDs eram salvos, o que quebrava a geração da mensagem.
-          // AGORA: Salvamos os objetos completos para reconstrução posterior.
-          selectedProdutos,
-          selectedFormaPagamento,
-          produtos: produtos,
-          paymentMethod: formasPagamentoProcessadas.find(f => f.id === selectedFormaPagamento),
-          formasPagamento: formasPagamentoProcessadas,
-          priceBreakdown: getPriceBreakdown(),
-          // Campos necessários para o LeadsManager reconstruir a mensagem
-          sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
-          sistema_geografico_ativo: template?.sistema_geografico_ativo,
-          ocultar_valores_intermediarios: template?.ocultar_valores_intermediarios,
-        },
-        valorTotal: calculateTotal(),
-      });
-    }
-  }, [formData, selectedProdutos, selectedFormaPagamento, camposExtrasData, dataEvento, cidadeSelecionada]);
+    setHorarioSelecionado('');
+  }, [dataEvento]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -311,6 +381,7 @@ export function QuotePage() {
       console.log('[QuotePage] 🔄 Iniciando verificação de disponibilidade', {
         dataEvento,
         userId: template.user_id,
+        duration: activeDuration,
         timestamp: new Date().toISOString(),
       });
 
@@ -336,13 +407,14 @@ export function QuotePage() {
       setDisponibilidade(null);
       setCheckingAvailability(true);
 
-      checkAvailability(template.user_id, dataEvento)
+      checkAvailability(template.user_id, dataEvento, activeDuration)
         .then((result) => {
           if (!isCancelled) {
             console.log('[QuotePage] ✅ Disponibilidade recebida', {
               dataEvento,
               status: result.status,
               disponivel: result.disponivel,
+              slotsCount: result.slots?.length || 0,
             });
             setDisponibilidade(result);
           }
@@ -365,7 +437,7 @@ export function QuotePage() {
     return () => {
       isCancelled = true;
     };
-  }, [dataEvento, template?.user_id, template?.dias_semana_bloqueados]);
+  }, [dataEvento, template?.user_id, template?.dias_semana_bloqueados, activeDuration]);
 
   useEffect(() => {
     if (formData.nome_cliente) analytics?.trackFieldFilled('nome_cliente', true);
@@ -453,6 +525,180 @@ export function QuotePage() {
   // Chave para salvar/carregar o orçamento do localStorage
   const storageKey = useMemo(() => (template ? `priceus-quote-${template.id}` : null), [template]);
 
+  const customFont = template?.fonte_personalizada || 'Inter';
+  const customFontFamily = `'${customFont}', sans-serif`;
+
+  const inlineStyles = useMemo(() => {
+    const baseThemeName = template?.tema_personalizado?.tema_base || template?.tema || 'moderno';
+    const baseStyles = getThemeInlineStyles(baseThemeName);
+    
+    if (template?.tema_personalizado) {
+      const customCores = template.tema_personalizado.cores || {};
+      const overrides: any = {};
+      
+      if (customCores.bgPrincipal) {
+        overrides.pageWrapper = {
+          ...baseStyles.pageWrapper,
+          background: customCores.bgPrincipal,
+          backgroundImage: 'none'
+        };
+      }
+      if (customCores.bgCard) {
+        overrides.profileCard = { ...baseStyles.profileCard, background: customCores.bgCard };
+        overrides.quoteCard = { ...baseStyles.quoteCard, background: customCores.bgCard };
+        overrides.productCard = { ...baseStyles.productCard, background: customCores.bgCard };
+      }
+      if (customCores.primaria) {
+        overrides.submitButton = {
+          ...baseStyles.submitButton,
+          background: customCores.primaria,
+          backgroundImage: 'none'
+        };
+        overrides.avatarBorder = {
+          ...baseStyles.avatarBorder,
+          borderColor: customCores.primaria
+        };
+      }
+      if (customCores.textoPrincipal) {
+        overrides.heading1 = { ...baseStyles.heading1, color: customCores.textoPrincipal };
+        overrides.heading2 = { ...baseStyles.heading2, color: customCores.textoPrincipal };
+        overrides.textColor = customCores.textoPrincipal;
+      }
+      if (customCores.textoSecundario) {
+        overrides.textColorSecondary = customCores.textoSecundario;
+        overrides.label = { ...baseStyles.label, color: customCores.textoSecundario };
+      }
+      if (customCores.borda) {
+        overrides.profileCard = { ...overrides.profileCard, ...baseStyles.profileCard, borderColor: customCores.borda };
+        overrides.quoteCard = { ...overrides.quoteCard, ...baseStyles.quoteCard, borderColor: customCores.borda };
+        overrides.productCard = { ...overrides.productCard, ...baseStyles.productCard, borderColor: customCores.borda };
+      }
+      
+      return {
+        ...baseStyles,
+        ...overrides,
+        accentColor: customCores.primaria || baseStyles.accentColor,
+      };
+    }
+    
+    return baseStyles;
+  }, [template, template?.tema_personalizado]);
+
+  const wrapWithFonts = (children: React.ReactNode) => {
+    let customStyleBlock = '';
+    if (template?.tema_personalizado) {
+      const customCores = template.tema_personalizado.cores || {};
+      customStyleBlock = `
+        ${customCores.bgPrincipal ? `
+          .quote-page-root,
+          .quote-page-root .min-h-screen,
+          .quote-page-root .promo-root,
+          .quote-page-root .oferta-root,
+          .quote-page-root .nt-root,
+          .quote-page-root .rv-root {
+            background: ${customCores.bgPrincipal} !important;
+            background-image: none !important;
+          }
+        ` : ''}
+        ${customCores.bgCard ? `
+          .quote-page-root .promo-card,
+          .quote-page-root .oferta-card,
+          .quote-page-root .nt-card,
+          .quote-page-root .rv-card,
+          .quote-page-root .pdf-prod-card,
+          .quote-page-root [className*="bgCard"],
+          .quote-page-root [class*="bgCard"],
+          .quote-page-root div[style*="background"] {
+            background-color: ${customCores.bgCard} !important;
+            background-image: none !important;
+          }
+        ` : ''}
+        ${customCores.primaria ? `
+          .quote-page-root button[type="submit"],
+          .quote-page-root .promo-shimmer-btn,
+          .quote-page-root .oferta-submit-btn,
+          .quote-page-root button[data-fixed-button],
+          .quote-page-root .submit-button,
+          .quote-page-root button:not([type="button"]) {
+            background: ${customCores.primaria} !important;
+            background-image: none !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px ${customCores.primaria}40 !important;
+          }
+          .quote-page-root .avatar-border,
+          .quote-page-root [class*="avatar"] {
+            border-color: ${customCores.primaria} !important;
+          }
+        ` : ''}
+        ${customCores.textoPrincipal ? `
+          .quote-page-root h1,
+          .quote-page-root h2,
+          .quote-page-root h3,
+          .quote-page-root h4,
+          .quote-page-root h5,
+          .quote-page-root h6,
+          .quote-page-root strong,
+          .quote-page-root .text-gray-900,
+          .quote-page-root .text-slate-900,
+          .quote-page-root .text-neutral-900 {
+            color: ${customCores.textoPrincipal} !important;
+          }
+        ` : ''}
+        ${customCores.textoSecundario ? `
+          .quote-page-root p,
+          .quote-page-root span,
+          .quote-page-root label,
+          .quote-page-root .text-gray-500,
+          .quote-page-root .text-gray-600,
+          .quote-page-root .text-slate-600,
+          .quote-page-root .text-neutral-500 {
+            color: ${customCores.textoSecundario} !important;
+          }
+        ` : ''}
+        ${customCores.borda ? `
+          .quote-page-root .border,
+          .quote-page-root [class*="border-"],
+          .quote-page-root hr,
+          .quote-page-root div[style*="border"] {
+            border-color: ${customCores.borda} !important;
+          }
+        ` : ''}
+      `;
+    }
+
+    return (
+      <div className="quote-page-root" style={{ fontFamily: customFontFamily, minHeight: '100vh' }}>
+        {/* Preload custom font */}
+        <link
+          rel="stylesheet"
+          href={`https://fonts.googleapis.com/css2?family=${encodeURIComponent(customFont)}:wght@300;400;500;600;700;800;900&display=swap`}
+        />
+        <style>{`
+          .quote-page-root,
+          .quote-page-root * {
+            font-family: '${customFont}', sans-serif !important;
+          }
+          /* Preserve icons */
+          .quote-page-root [class*="lucide"],
+          .quote-page-root svg,
+          .quote-page-root svg *,
+          .quote-page-root [class*="lucide"] * {
+            font-family: inherit !important;
+          }
+          /* Preserve monospace for code/countdown/etc */
+          .quote-page-root .font-mono,
+          .quote-page-root .font-mono *,
+          .quote-page-root [style*="monospace"],
+          .quote-page-root [style*="monospace"] * {
+            font-family: monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+          }
+          ${customStyleBlock}
+        `}</style>
+        {children}
+      </div>
+    );
+  };
+
   // Efeito para SALVAR o estado do orçamento no localStorage sempre que algo mudar
   useEffect(() => {
     // Não salva se não tiver a chave (template não carregado) ou se estiver carregando dados
@@ -460,6 +706,7 @@ export function QuotePage() {
 
     const quoteStateToSave = {
       selectedProdutos,
+      selectedUpsellIds: Array.from(selectedUpsellIds),
       formData,
       camposExtrasData,
       selectedFormaPagamento,
@@ -479,7 +726,7 @@ export function QuotePage() {
     } catch (error) {
       console.error('Falha ao salvar orçamento no localStorage:', error);
     }
-  }, [storageKey, loading, selectedProdutos, formData, camposExtrasData, selectedFormaPagamento, dataEvento, cidadeSelecionada, selectedEstado, selectedPais, cupomCodigo, cupomAtivo, cupomDesconto, cupomMensagem]);
+  }, [storageKey, loading, selectedProdutos, selectedUpsellIds, formData, camposExtrasData, selectedFormaPagamento, dataEvento, cidadeSelecionada, selectedEstado, selectedPais, cupomCodigo, cupomAtivo, cupomDesconto, cupomMensagem]);
 
 
   // Efeito para exibir alerta ao tentar fechar a aba com orçamento em andamento
@@ -570,7 +817,7 @@ export function QuotePage() {
         console.log('[QuotePage] 📋 Loading by UUID:', templateUuid);
         const { data, error } = await supabase
           .from('templates')
-          .select('*')
+          .select('*, tema_personalizado:temas_personalizados(*)')
           .eq('uuid', templateUuid)
           .maybeSingle();
 
@@ -601,7 +848,7 @@ export function QuotePage() {
 
         const { data, error: templateError } = await supabase
           .from('templates')
-          .select('*')
+          .select('*, tema_personalizado:temas_personalizados(*)')
           .eq('user_id', profileData.id)
           .eq('slug_template', slugTemplate)
           .maybeSingle();
@@ -691,6 +938,33 @@ export function QuotePage() {
       setCamposExtras(camposData || []);
       setRetryCount(0);
 
+      // 🎁 Carregar produtos de upsell se configurado
+      if (
+        templateData.upsell_ativo &&
+        templateData.upsell_template_id &&
+        Array.isArray(templateData.upsell_produtos_ids) &&
+        templateData.upsell_produtos_ids.length > 0
+      ) {
+        try {
+          const { data: upsellData } = await supabase
+            .from('produtos')
+            .select('*')
+            .in('id', templateData.upsell_produtos_ids)
+            .order('ordem');
+
+          // Deduplicação: remover produtos cujo nome já está no template principal
+          const mainNames = (produtosData || []).map((p: any) =>
+            p.nome.toLowerCase().trim()
+          );
+          const filtered = (upsellData || []).filter(
+            (p: any) => !mainNames.includes(p.nome.toLowerCase().trim())
+          );
+          setUpsellProdutos(filtered);
+        } catch (e) {
+          console.warn('[QuotePage] ⚠️ Erro ao carregar produtos upsell:', e);
+        }
+      }
+
       // Carregar configuração da agenda para verificação de disponibilidade
       const config = await getOrCreateAgendaConfig(templateData.user_id);
       setAgendaConfig(config);
@@ -720,13 +994,44 @@ export function QuotePage() {
         setDatasBloqueadas(bloqueadasData || []);
       }
 
-      const initialSelected: Record<string, number> = {};
-      produtosData?.forEach((produto) => {
-        if (produto.obrigatorio) {
-          initialSelected[produto.id] = 1;
+      let loadedFromStorage = false;
+      if (storageKey) {
+        try {
+          const savedQuote = localStorage.getItem(storageKey);
+          if (savedQuote) {
+            console.log('✅ [QuotePage] Orçamento encontrado no localStorage. Carregando...');
+            const parsedState = JSON.parse(savedQuote);
+
+            // Restaura o estado do componente com os dados salvos
+            setSelectedProdutos(parsedState.selectedProdutos || {});
+            setSelectedUpsellIds(new Set(parsedState.selectedUpsellIds || []));
+            setFormData(parsedState.formData || { nome_cliente: '', email_cliente: '', telefone_cliente: '' });
+            setCamposExtrasData(parsedState.camposExtrasData || {});
+            setSelectedFormaPagamento(parsedState.selectedFormaPagamento || '');
+            setDataEvento(parsedState.dataEvento || '');
+            setSelectedPais(parsedState.selectedPais || '');
+            setSelectedEstado(parsedState.selectedEstado || '');
+            setCidadeSelecionada(parsedState.cidadeSelecionada || '');
+            setCupomCodigo(parsedState.cupomCodigo || '');
+            setCupomAtivo(parsedState.cupomAtivo || false);
+            setCupomDesconto(parsedState.cupomDesconto || 0);
+            setCupomMensagem(parsedState.cupomMensagem || '');
+            loadedFromStorage = true;
+          }
+        } catch (e) {
+          console.error('Falha ao carregar orçamento do localStorage:', e);
         }
-      });
-      setSelectedProdutos(initialSelected);
+      }
+
+      if (!loadedFromStorage) {
+        const initialSelected: Record<string, number> = {};
+        produtosData?.forEach((produto) => {
+          if (produto.obrigatorio) {
+            initialSelected[produto.id] = 1;
+          }
+        });
+        setSelectedProdutos(initialSelected);
+      }
     } catch (error: any) {
       // Lógica para carregar o orçamento salvo do localStorage
       if (storageKey) {
@@ -738,6 +1043,7 @@ export function QuotePage() {
 
             // Restaura o estado do componente com os dados salvos
             setSelectedProdutos(parsedState.selectedProdutos || {});
+            setSelectedUpsellIds(new Set(parsedState.selectedUpsellIds || []));
             setFormData(parsedState.formData || { nome_cliente: '', email_cliente: '', telefone_cliente: '' });
             setCamposExtrasData(parsedState.camposExtrasData || {});
             setSelectedFormaPagamento(parsedState.selectedFormaPagamento || '');
@@ -792,12 +1098,20 @@ export function QuotePage() {
    * Calcula subtotal dos produtos selecionados (sem ajustes)
    */
   const calculateSubtotal = () => {
-    return produtos.reduce((total, produto) => {
+    const subtotalProdutos = produtos.reduce((total, produto) => {
       const qty = selectedProdutos[produto.id] || 0;
       const desconto = produto.desconto_percentual ?? 0;
       const valorComDesconto = produto.valor * (1 - desconto / 100);
       return total + valorComDesconto * qty;
     }, 0);
+    // Adicionar produtos de upsell selecionados
+    const subtotalUpsell = filteredUpsellProdutos
+      .filter(p => selectedUpsellIds.has(p.id))
+      .reduce((acc, p) => {
+        const d = p.desconto_percentual ?? 0;
+        return acc + p.valor * (1 - d / 100);
+      }, 0);
+    return subtotalProdutos + subtotalUpsell;
   };
 
   /**
@@ -907,6 +1221,10 @@ export function QuotePage() {
     const totalAntesCupom = totalAntesFormaPagamento + acrescimoFormaPagamento;
     const descontoCupom = cupomAtivo && cupomDesconto > 0 ? (totalAntesCupom * cupomDesconto) / 100 : 0;
 
+    const total = calculateTotal();
+    const valorUpsell = upsellSubtotal;
+    const valorBase = total - valorUpsell;
+
     return {
       subtotal,
       ajusteSazonal,
@@ -917,7 +1235,9 @@ export function QuotePage() {
       taxaDeslocamento: geoAdjustment.taxa,
       acrescimoFormaPagamento,
       descontoCupom,
-      total: calculateTotal(),
+      total,
+      valorBase,
+      valorUpsell,
     };
   };
 
@@ -952,6 +1272,37 @@ export function QuotePage() {
     ...forma,
     max_parcelas: getDynamicMaxParcelas(forma),
   }));
+
+  useEffect(() => {
+    if (template && produtos.length > 0) {
+      updateLead({
+        templateId: template.id,
+        userId: template.user_id,
+        formData: {
+          ...formData,
+          ...camposExtrasData,
+          data_evento: dataEvento || null,
+          cidade_evento: cidadeSelecionada || null,
+          tipo_evento: template.nome_template || null,
+        },
+        orcamentoDetalhe: {
+          // ANTES: Apenas IDs eram salvos, o que quebrava a geração da mensagem.
+          // AGORA: Salvamos os objetos completos para reconstrução posterior.
+          selectedProdutos,
+          selectedFormaPagamento,
+          produtos: produtos,
+          paymentMethod: formasPagamentoProcessadas.find(f => f.id === selectedFormaPagamento),
+          formasPagamento: formasPagamentoProcessadas,
+          priceBreakdown: getPriceBreakdown(),
+          // Campos necessários para o LeadsManager reconstruir a mensagem
+          sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
+          sistema_geografico_ativo: template?.sistema_geografico_ativo,
+          ocultar_valores_intermediarios: template?.ocultar_valores_intermediarios,
+        },
+        valorTotal: calculateTotal(),
+      });
+    }
+  }, [template, produtos, selectedProdutos, selectedFormaPagamento, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas]);
 
 
 
@@ -1104,6 +1455,9 @@ export function QuotePage() {
       products: produtos,
       selectedProducts: selectedProdutos,
 
+      // Adicionais de upsell
+      upsellProducts: filteredUpsellProdutos.filter(p => selectedUpsellIds.has(p.id)),
+
       // Forma de pagamento
       paymentMethod: formaPagamento ? {
         ...formaPagamento,
@@ -1126,6 +1480,7 @@ export function QuotePage() {
 
       // 🔥 Dados sazonais e geográficos (automáticos)
       eventDate: dataEvento,
+      eventTime: horarioSelecionado || undefined,
       eventCity: cidadeNome,
 
       // 🔥 Campos personalizados (automáticos)
@@ -1246,7 +1601,7 @@ export function QuotePage() {
                   console.log('[QuotePage] 🔄 Atualizando disponibilidade manualmente');
                   setDisponibilidade(null);
                   setCheckingAvailability(true);
-                  checkAvailability(template.user_id, dataEvento)
+                  checkAvailability(template.user_id, dataEvento, activeDuration)
                     .then(setDisponibilidade)
                     .finally(() => setCheckingAvailability(false));
                 }
@@ -1263,6 +1618,46 @@ export function QuotePage() {
               photographerName={profile?.nome_completo || profile?.nome_empresa}
               showRefreshButton={true}
             />
+
+            {/* Grid de Horários / Slots */}
+            {disponibilidade?.modo_agendamento === 'hora' && disponibilidade.slots && disponibilidade.slots.length > 0 && (
+              <div className="mt-4 border-t pt-4 border-gray-100/10">
+                <label className={`block text-sm font-semibold ${tema.cores.textoPrincipal} mb-2`}>
+                  🕒 Horários Disponíveis ({activeDuration} min)
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {disponibilidade.slots.map((slot) => {
+                    const isSelected = horarioSelecionado === slot.horario;
+                    const isAvailable = slot.disponivel;
+                    
+                    return (
+                      <button
+                        key={slot.horario}
+                        type="button"
+                        disabled={!isAvailable}
+                        onClick={() => setHorarioSelecionado(slot.horario)}
+                        className={`
+                          py-2 px-1 text-center rounded-lg border font-medium text-xs sm:text-sm transition-all duration-200
+                          ${!isAvailable
+                            ? 'bg-red-500/5 border-red-500/10 text-gray-400 cursor-not-allowed opacity-40'
+                            : isSelected
+                              ? `${tema.cores.textoDestaque.replace('text-', 'border-')} ${tema.cores.secundaria || 'bg-amber-500 text-white'} ring-2 ring-amber-500/20`
+                              : `${tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} hover:border-amber-500/50 hover:bg-amber-500/5`
+                          }
+                        `}
+                      >
+                        {slot.horario}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!horarioSelecionado && (
+                  <p className="text-xs text-red-500 mt-2 font-medium">
+                    * Por favor, escolha um horário acima para o seu trabalho.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1396,12 +1791,22 @@ export function QuotePage() {
       // Validação de forma de pagamento: só bloqueia se o fotógrafo ativou a opção no template
       if (formasPagamento.length > 0 && template?.forma_pagamento_obrigatoria && !selectedFormaPagamento) {
         alert('⚠️ Por favor, selecione uma forma de pagamento antes de enviar o orçamento.');
+        const paymentSection = document.querySelector('[data-pagamento-section]');
+        if (paymentSection) {
+          paymentSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         setIsSubmitting(false);
         setHasSubmitted(false);
         return;
       }
-
-
+      // Validação de horário de agendamento se estiver em modo horário
+      const isHoraAgendamento = disponibilidade?.modo_agendamento === 'hora';
+      if (isHoraAgendamento && !horarioSelecionado) {
+        alert('⚠️ Por favor, selecione um horário para o seu agendamento antes de prosseguir.');
+        setIsSubmitting(false);
+        setHasSubmitted(false);
+        return;
+      }
       analytics?.trackStage('tentativa_envio');
 
       // 1. AÇÃO IMEDIATA: PREPARAR DADOS E EXIBIR O MODAL
@@ -1420,7 +1825,9 @@ export function QuotePage() {
       const summaryEventData = {
         tipo: templateRef.current?.nome_template || '',
         data: dataEvento
-          ? `${parseLocalYMD(dataEvento).toLocaleDateString('pt-BR')} [${
+          ? `${parseLocalYMD(dataEvento).toLocaleDateString('pt-BR')}${
+              horarioSelecionado ? ` às ${horarioSelecionado}` : ''
+            } [${
               disponibilidade?.status === 'disponivel'
                 ? 'Data Livre'
                 : 'Verificar Disponibilidade'
@@ -1434,14 +1841,24 @@ export function QuotePage() {
 
       const summaryQuoteData = {
         total: calculateTotal(),
-        items: produtos
-          .filter((p) => selectedProdutos[p.id] > 0)
-          .map((p) => ({
-            name: p.nome,
-            quantity: selectedProdutos[p.id],
-            price: p.valor,
-            permite_multiplas_unidades: p.permite_multiplas_unidades,
-          })),
+        items: [
+          ...produtos
+            .filter((p) => selectedProdutos[p.id] > 0)
+            .map((p) => ({
+              name: p.nome,
+              quantity: selectedProdutos[p.id],
+              price: p.valor * (1 - (p.desconto_percentual ?? 0) / 100),
+              permite_multiplas_unidades: p.permite_multiplas_unidades,
+            })),
+          ...filteredUpsellProdutos
+            .filter((p) => selectedUpsellIds.has(p.id))
+            .map((p) => ({
+              name: `🎁 ${p.nome} (Adicional)`,
+              quantity: 1,
+              price: p.valor * (1 - (p.desconto_percentual ?? 0) / 100),
+              permite_multiplas_unidades: false,
+            }))
+        ],
         paymentMethod:
           formasPagamento.find((f) => f.id === selectedFormaPagamento)?.nome ||
           'Não selecionada',
@@ -1471,13 +1888,24 @@ export function QuotePage() {
           const payload = {
             templateId: templateRef.current.id,
             userId: templateRef.current.user_id,
-            formData: { ...formData, ...camposExtrasData, data_evento: dataEvento || null, cidade_evento: cidadeSelecionada || null, tipo_evento: templateRef.current.nome_template || null },
+            formData: { 
+              ...formData, 
+              ...camposExtrasData, 
+              data_evento: dataEvento || null, 
+              cidade_evento: cidadeSelecionada || null, 
+              tipo_evento: templateRef.current.nome_template || null,
+              horario_inicio: horarioSelecionado || null,
+              duracao_minutos: activeDuration || null,
+            },
             orcamentoDetalhe: {
               // O objeto 'selectedProdutos' é convertido para um array, que é o que a Edge Function espera.
               produtos: Object.entries(selectedProdutos).map(([produto_id, quantidade]) => ({
                 produto_id,
                 quantidade: Number(quantidade),
               })),
+              upsell_produtos: filteredUpsellProdutos
+                .filter(p => selectedUpsellIds.has(p.id))
+                .map(p => ({ produto_id: p.id, nome: p.nome, valor: p.valor, desconto_percentual: p.desconto_percentual ?? 0 })),
               forma_pagamento_id: selectedFormaPagamento || null,
               priceBreakdown: getPriceBreakdown(),
             },
@@ -1680,6 +2108,183 @@ export function QuotePage() {
     );
   }
 
+  // ── Função de seção de upsell (carrossel) ─────────────────────────────
+  const renderUpsellSection = () => {
+    if (!template?.upsell_ativo || filteredUpsellProdutos.length === 0 || !selectedFormaPagamento) return null;
+
+    const titulo = template?.upsell_titulo || '🎁 Aproveite e adicione ao seu pacote';
+    const subtitulo = template?.upsell_subtitulo || 'Itens especiais com condições exclusivas para você';
+
+    return (
+      <div
+        style={{
+          marginTop: 32,
+          paddingTop: 24,
+          borderTop: '1px solid rgba(0,0,0,0.08)',
+        }}
+      >
+        {/* Cabeçalho */}
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, color: tema.cores.textoPrincipal?.includes('white') || tema.cores.textoPrincipal?.includes('gray-100') ? '#fff' : '#111827', margin: 0, marginBottom: 4 }}>
+            {titulo}
+          </h3>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>{subtitulo}</p>
+        </div>
+
+        {/* Carrossel */}
+        <div style={{ position: 'relative' }}>
+          <div
+            ref={upsellScrollRef}
+            onScroll={checkUpsellScroll}
+            style={{
+              display: 'flex',
+              gap: 12,
+              overflowX: 'auto',
+              scrollBehavior: 'smooth',
+              paddingBottom: 8,
+              scrollbarWidth: 'none',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            {filteredUpsellProdutos.map((produto) => {
+              const selecionado = selectedUpsellIds.has(produto.id);
+              const desconto = produto.desconto_percentual ?? 0;
+              const valorFinal = produto.valor * (1 - desconto / 100);
+              const imgUrl = produto.imagem_url || (produto.imagens?.[0]);
+
+              return (
+                <div
+                  key={produto.id}
+                  onClick={() => handleToggleUpsell(produto.id)}
+                  style={{
+                    flex: '0 0 200px',
+                    minWidth: 200,
+                    maxWidth: 200,
+                    border: selecionado ? '2px solid #2563eb' : '1.5px solid #e5e7eb',
+                    borderRadius: 14,
+                    background: selecionado ? '#eff6ff' : '#fff',
+                    cursor: 'pointer',
+                    overflow: 'hidden',
+                    boxShadow: selecionado ? '0 4px 16px rgba(37,99,235,0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    userSelect: 'none',
+                  }}
+                  role="checkbox"
+                  aria-checked={selecionado}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') handleToggleUpsell(produto.id); }}
+                >
+                  {/* Badge selecionado */}
+                  {selecionado && (
+                    <div style={{
+                      position: 'absolute', top: 8, right: 8, zIndex: 2,
+                      background: '#2563eb', color: '#fff', borderRadius: '50%',
+                      width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 700, boxShadow: '0 2px 6px rgba(37,99,235,0.4)',
+                    }}>✓</div>
+                  )}
+
+                  {/* Badge de desconto */}
+                  {desconto > 0 && (
+                    <div style={{
+                      position: 'absolute', top: 8, left: 8, zIndex: 2,
+                      background: '#dc2626', color: '#fff', borderRadius: 6,
+                      padding: '2px 7px', fontSize: 11, fontWeight: 700,
+                    }}>-{desconto}%</div>
+                  )}
+
+                  {/* Imagem */}
+                  {imgUrl ? (
+                    <div style={{ height: 110, overflow: 'hidden', background: '#f3f4f6' }}>
+                      <img
+                        src={imgUrl}
+                        alt={produto.nome}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ height: 70, background: 'linear-gradient(135deg,#dbeafe,#ede9fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
+                      🎁
+                    </div>
+                  )}
+
+                  {/* Conteúdo */}
+                  <div style={{ padding: '10px 12px 12px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 4, lineHeight: 1.3 }}>
+                      {produto.nome}
+                    </div>
+                    {produto.resumo && (
+                      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8, lineHeight: 1.4,
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {produto.resumo}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: selecionado ? '#2563eb' : '#059669' }}>
+                        {formatCurrency(valorFinal)}
+                      </span>
+                      {desconto > 0 && (
+                        <span style={{ fontSize: 11, color: '#9ca3af', textDecoration: 'line-through' }}>
+                          {formatCurrency(produto.valor)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Indicador de scroll à direita */}
+          {upsellCanScrollRight && (
+            <div
+              style={{
+                position: 'absolute', right: 0, top: 0, bottom: 8,
+                width: 56,
+                background: 'linear-gradient(to left, rgba(255,255,255,0.95) 40%, transparent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                paddingRight: 8,
+                pointerEvents: 'none',
+              }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: '#fff', border: '1.5px solid #e5e7eb',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, color: '#374151',
+              }}>›</div>
+            </div>
+          )}
+        </div>
+
+        {/* Resumo do upsell selecionado */}
+        {selectedUpsellIds.size > 0 && (
+          <div style={{
+            marginTop: 12,
+            padding: '10px 14px',
+            background: '#eff6ff',
+            borderRadius: 10,
+            border: '1px solid #bfdbfe',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}>
+            <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 600 }}>
+              🎁 {selectedUpsellIds.size} adicional{selectedUpsellIds.size > 1 ? 'is' : ''} selecionado{selectedUpsellIds.size > 1 ? 's' : ''}
+            </span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#1d4ed8' }}>
+              +{formatCurrency(upsellSubtotal)}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ── Dark Studio: componente premium dedicado ──────────────────────────
   if (template?.tema === 'promocional' && !loading && template && profile) {
     const commonProps = {
@@ -1704,10 +2309,11 @@ export function QuotePage() {
       firstProductRef,
       totalSectionRef,
       breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
     };
-    return (
+    return wrapWithFonts(
       <>
-        <CookieBanner />
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
         <QuotePromocional {...commonProps} />
         {template?.exibir_painel_flutuante !== false && (
           <FloatingTotalPanel
@@ -1750,10 +2356,11 @@ export function QuotePage() {
       firstProductRef,
       totalSectionRef,
       breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
     };
-    return (
+    return wrapWithFonts(
       <>
-        <CookieBanner />
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
         <QuoteOferta {...commonProps} />
         {template?.exibir_painel_flutuante !== false && (
           <FloatingTotalPanel
@@ -1795,10 +2402,11 @@ export function QuotePage() {
       firstProductRef,
       totalSectionRef,
       breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
     };
-    return (
+    return wrapWithFonts(
       <>
-        <CookieBanner />
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
         <QuotePdfElegante {...commonProps} />
         {template?.exibir_painel_flutuante !== false && (
           <FloatingTotalPanel
@@ -1810,6 +2418,52 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="pdf-elegante"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
+        {renderSummaryModal()}
+      </>
+    );
+  }
+  if (template?.tema === 'pdf-elegante-2' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      fieldErrors,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+      formasPagamento: formasPagamentoProcessadas,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
+    };
+    return wrapWithFonts(
+      <>
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
+        <QuotePdfElegante2 {...commonProps} />
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="pdf-elegante-2"
             breakdown={getPriceBreakdown()}
           />
         )}
@@ -1842,10 +2496,11 @@ export function QuotePage() {
       firstProductRef,
       totalSectionRef,
       breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
     };
-    return (
+    return wrapWithFonts(
       <>
-        <CookieBanner />
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
         <QuoteDarkStudio {...commonProps} />
         {/* FloatingTotalPanel com as mesmas regras de todos os outros temas */}
         {template?.exibir_painel_flutuante !== false && (
@@ -1944,26 +2599,522 @@ export function QuotePage() {
     );
   }
 
+  if (template?.tema === 'natal' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      fieldErrors,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+      formasPagamento: formasPagamentoProcessadas,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
+    };
+    return wrapWithFonts(
+      <>
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
+        <QuoteNatal {...commonProps} />
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="natal"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
+        {renderSummaryModal()}
+      </>
+    );
+  }
 
-  return (
+  if (template?.tema === 'revellon' && !loading && template && profile) {
+    const commonProps = {
+      template,
+      profile,
+      produtos,
+      selectedProdutos,
+      formData,
+      calculateTotal,
+      handleProdutoQuantityChange,
+      handleSubmit,
+      setFormData,
+      fieldsValidation,
+      fieldErrors,
+      camposExtras,
+      camposExtrasData,
+      setCamposExtrasData,
+      renderLocationDateFields,
+      formasPagamento: formasPagamentoProcessadas,
+      selectedFormaPagamento,
+      setSelectedFormaPagamento,
+      firstProductRef,
+      totalSectionRef,
+      breakdown: getPriceBreakdown(),
+      upsellSection: renderUpsellSection(),
+    };
+    return wrapWithFonts(
+      <>
+        <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
+        <QuoteRevellon {...commonProps} />
+        {template?.exibir_painel_flutuante !== false && (
+          <FloatingTotalPanel
+            calculateTotal={calculateTotal}
+            selectedProdutos={selectedProdutos}
+            produtos={produtos}
+            tema={tema}
+            ocultarValoresIntermediarios={template?.ocultar_valores_intermediarios || false}
+            firstProductRef={firstProductRef}
+            totalSectionRef={totalSectionRef}
+            temaNome="revellon"
+            breakdown={getPriceBreakdown()}
+          />
+        )}
+        {renderSummaryModal()}
+      </>
+    );
+  }
+
+
+  const renderThemeOverlay = () => {
+    const temaNome = template?.tema;
+    if (!temaNome) return null;
+
+    // 1. Neve para Inverno/Natal
+    if (temaNome === 'oferta-inverno' || temaNome === 'natal') {
+      const snowflakes = ['❄️', '❅', '❆', '✧'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 25 }).map((_, i) => {
+            const size = Math.random() * 12 + 8;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 8 + 5;
+            const delay = Math.random() * 6;
+            const flake = snowflakes[i % snowflakes.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  top: '-20px',
+                  fontSize: `${size}px`,
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  animation: `snowFall ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {flake}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 2. Confete para Carnaval
+    if (temaNome === 'carnaval') {
+      const colors = ['#f43f5e', '#3b82f6', '#eab308', '#22c55e', '#a855f7', '#ec4899'];
+      const shapes = ['🎉', '✨', '🎈', '•', '▫️'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 30 }).map((_, i) => {
+            const size = Math.random() * 14 + 10;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 6 + 4;
+            const delay = Math.random() * 5;
+            const shape = shapes[i % shapes.length];
+            const color = colors[i % colors.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  top: '-20px',
+                  fontSize: `${size}px`,
+                  color: shape === '•' || shape === '▫️' ? color : undefined,
+                  animation: `snowFall ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {shape}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 3. Corações para Dia dos Namorados / Valentine's Day
+    if (temaNome === 'dia-dos-namorados' || temaNome === 'valentines-day') {
+      const hearts = ['❤️', '💖', '💕', '💘', '🌸'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 15 }).map((_, i) => {
+            const size = Math.random() * 16 + 12;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 9 + 6;
+            const delay = Math.random() * 8;
+            const heart = hearts[i % hearts.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  bottom: '-20px',
+                  fontSize: `${size}px`,
+                  animation: `driftUp ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {heart}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 4. Flores/Pétalas para Mês da Mulher / Dia das Mães / Oferta Primavera
+    if (temaNome === 'mes-da-mulher' || temaNome === 'dia-das-maes' || temaNome === 'oferta-primavera') {
+      const petals = ['🌸', '🌺', '🌹', '🌷', '🍃'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 15 }).map((_, i) => {
+            const size = Math.random() * 14 + 10;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 8 + 6;
+            const delay = Math.random() * 6;
+            const petal = petals[i % petals.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  top: '-20px',
+                  fontSize: `${size}px`,
+                  animation: `snowFall ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {petal}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 5. Morcegos e Fantasmas para Halloween
+    if (temaNome === 'halloween') {
+      const spooky = ['🦇', '👻', '🎃', '🕷️'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 20 }).map((_, i) => {
+            const size = Math.random() * 20 + 16;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 10 + 7;
+            const delay = Math.random() * 8;
+            const item = spooky[i % spooky.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  bottom: '-30px',
+                  fontSize: `${size}px`,
+                  animation: `driftUp ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {item}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 6. Brasas e Fagulhas para São João
+    if (temaNome === 'sao-joao') {
+      const fireParticles = ['🔥', '✨', '🔥', '✦', '✧'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 25 }).map((_, i) => {
+            const size = Math.random() * 10 + 6;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 5 + 4;
+            const delay = Math.random() * 5;
+            const spark = fireParticles[i % fireParticles.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  bottom: '-10px',
+                  fontSize: `${size}px`,
+                  color: spark === '✨' || spark === '✦' || spark === '✧' ? '#f59e0b' : undefined,
+                  animation: `driftUp ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {spark}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 7. Bolhas Champagne para Réveillon / Ano Novo / Dia do Cliente
+    if (temaNome === 'revellon' || temaNome === 'ano-novo' || temaNome === 'dia-do-cliente') {
+      const items = temaNome === 'dia-do-cliente' ? ['👑', '✨', '⭐', '💎'] : ['🥂', '✨', '🍾', '🫧'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 20 }).map((_, i) => {
+            const size = Math.random() * 14 + 10;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 8 + 5;
+            const delay = Math.random() * 7;
+            const val = items[i % items.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  bottom: '-20px',
+                  fontSize: `${size}px`,
+                  animation: `driftUp ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {val}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 8. Sol e Emojis de Verão/Férias
+    if (temaNome === 'ferias' || temaNome === 'oferta-verao') {
+      const summer = ['☀️', '🌴', '🕶️', '🌊', '🍹'];
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ height: '100%', minHeight: '100vh', width: '100%' }}>
+          {Array.from({ length: 12 }).map((_, i) => {
+            const size = Math.random() * 18 + 12;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 11 + 8;
+            const delay = Math.random() * 9;
+            const item = summer[i % summer.length];
+            return (
+              <span
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${left}%`,
+                  bottom: '-30px',
+                  fontSize: `${size}px`,
+                  animation: `driftUp ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {item}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  return wrapWithFonts(
     <>
-      <CookieBanner />
-      <div className={`min-h-screen ${tema.cores.bgPrincipal} py-4 sm:py-8 px-4`}>
-        <div className="max-w-4xl mx-auto pb-6">
+      <CookieBanner accentColor={inlineStyles.accentColor} backgroundColor={inlineStyles.quoteCard?.background || inlineStyles.pageWrapper?.background} textColor={inlineStyles.textColor} />
+      {/* Preload custom font */}
+      <link
+        rel="stylesheet"
+        href={`https://fonts.googleapis.com/css2?family=${encodeURIComponent(customFont)}:wght@400;500;600;700;800;900&display=swap`}
+      />
+      
+      <style>{`
+        @keyframes driftUp {
+          0% { transform: translateY(100vh) translateX(0) scale(0.8); opacity: 0; }
+          10% { opacity: 0.8; }
+          90% { opacity: 0.8; }
+          100% { transform: translateY(-10vh) translateX(20px) scale(1.2); opacity: 0; }
+        }
+        @keyframes snowFall {
+          0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+        @keyframes pulseBorderNeon {
+          0%, 100% { box-shadow: 0 0 8px rgba(234,179,8,0.4), inset 0 0 4px rgba(234,179,8,0.2); border-color: #eab308; }
+          50% { box-shadow: 0 0 20px rgba(234,179,8,0.8), inset 0 0 10px rgba(234,179,8,0.4); border-color: #fef08a; }
+        }
+        @keyframes bf-marquee-anim {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-100%, 0, 0); }
+        }
+        @keyframes sway {
+          0%, 100% { transform: rotate(-5deg); }
+          50% { transform: rotate(5deg); }
+        }
+        .bf-marquee {
+          white-space: nowrap;
+          overflow: hidden;
+          background: #eab308;
+          color: #000;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          padding: 6px 0;
+          font-size: 11px;
+          border-bottom: 2px solid #000;
+        }
+        .bf-marquee-inner {
+          display: inline-block;
+          padding-left: 100%;
+          animation: bf-marquee-anim 20s linear infinite;
+        }
+        .saojoao-bandeirinhas {
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+          padding: 0 8px;
+          margin-top: -12px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          pointer-events: none;
+        }
+        .bandeirinha {
+          width: 14px;
+          height: 20px;
+          background-color: #ef4444;
+          clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 50% 70%, 0% 100%);
+          animation: sway 2s ease-in-out infinite alternate;
+        }
+        .bandeirinha:nth-child(2n) { background-color: #3b82f6; animation-delay: 0.3s; }
+        .bandeirinha:nth-child(3n) { background-color: #eab308; animation-delay: 0.6s; }
+        .bandeirinha:nth-child(4n) { background-color: #22c55e; animation-delay: 0.9s; }
+        .bandeirinha:nth-child(5n) { background-color: #ec4899; animation-delay: 1.2s; }
+      `}</style>
+
+      <div className={`min-h-screen ${tema.cores.bgPrincipal} py-4 sm:py-8 px-4 relative overflow-hidden`} style={{ ...inlineStyles.pageWrapper, fontFamily: customFontFamily }}>
+        {renderThemeOverlay()}
+        <div className="max-w-4xl mx-auto pb-6 relative z-10">
+        
+        {/* Letreiro Black Friday */}
+        {template?.tema === 'black-friday' && (
+          <div className="bf-marquee mb-4 rounded-lg overflow-hidden border border-zinc-800">
+            <div className="bf-marquee-inner">
+              🏷️ BLACK FRIDAY PRICEUS • OFERTA DE IMPACTO MÁXIMO • BLACK FRIDAY PRICEUS • OFERTA DE IMPACTO MÁXIMO • BLACK FRIDAY PRICEUS • OFERTA DE IMPACTO MÁXIMO
+            </div>
+          </div>
+        )}
+
+        {/* Temporizador Black Friday */}
+        {template?.tema === 'black-friday' && (
+          <div style={{
+            background: 'linear-gradient(90deg, #ca8a04, #eab308, #ca8a04)',
+            color: '#000',
+            padding: '10px 24px',
+            textAlign: 'center',
+            fontSize: '13px',
+            fontWeight: 900,
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            boxShadow: '0 4px 15px rgba(234,179,8,0.35)',
+            borderRadius: '12px',
+            marginBottom: '20px',
+            flexWrap: 'wrap',
+          }}>
+            <span>⚡ OFERTA EXCLUSIVA BLACK FRIDAY — EXPIRA EM:</span>
+            <span style={{
+              background: '#000',
+              color: '#eab308',
+              padding: '4px 12px',
+              borderRadius: '6px',
+              fontFamily: 'monospace',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              border: '1px solid #eab308'
+            }}>
+              {Math.floor(blackFridayTime / 3600).toString().padStart(2, '0')}:
+              {Math.floor((blackFridayTime % 3600) / 60).toString().padStart(2, '0')}:
+              {(blackFridayTime % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+        )}
+
+        {inlineStyles.topBanner && inlineStyles.topBannerText && (
+          <div style={inlineStyles.topBanner}>
+            {inlineStyles.themeEmoji && <span className="mr-2">{inlineStyles.themeEmoji}</span>}
+            {inlineStyles.topBannerText}
+          </div>
+        )}
+        
+        {/* Bandeirinhas São João */}
+        {template?.tema === 'sao-joao' && (
+          <div className="saojoao-bandeirinhas">
+            {Array.from({ length: 24 }).map((_, idx) => (
+              <div key={idx} className="bandeirinha" />
+            ))}
+          </div>
+        )}
         {profile && (
-          <div className={`${tema.cores.bgCard} ${tema.estilos.borderRadius} ${tema.estilos.shadow} p-5 sm:p-6 mb-6 text-center border ${tema.cores.borda}`}>
+          <div className={`${tema.cores.bgCard} ${tema.estilos.borderRadius} ${tema.estilos.shadow} p-5 sm:p-6 mb-6 text-center border ${tema.cores.borda}`} style={inlineStyles.profileCard}>
             {profile.profile_image_url && (
               <img
                 src={profile.profile_image_url}
                 alt={profile.nome_profissional}
                 className={`w-32 h-32 sm:w-36 sm:h-36 rounded-full mx-auto mb-4 object-cover border-4 ${tema.cores.textoDestaque.replace('text-', 'border-')}`}
+                style={inlineStyles.avatarBorder}
               />
             )}
-            <h1 className={`text-2xl sm:text-3xl ${tema.estilos.fontHeading} ${tema.cores.textoPrincipal} mb-2 leading-tight`}>
+            <h1 className={`text-2xl sm:text-3xl ${tema.estilos.fontHeading} ${tema.cores.textoPrincipal} mb-2 leading-tight`} style={inlineStyles.heading1}>
               {profile.nome_profissional || 'Fotógrafo Profissional'}
             </h1>
             {profile.tipo_fotografia && (
-              <p className="text-gray-600 mb-2 text-sm sm:text-base">{profile.tipo_fotografia}</p>
+              <p className="text-gray-600 mb-2 text-sm sm:text-base" style={{ color: inlineStyles.textColorSecondary }}>{profile.tipo_fotografia}</p>
             )}
             {profile.apresentacao && (
               <p className="text-gray-700 mt-3 mb-4 text-sm sm:text-base leading-relaxed px-2">{profile.apresentacao}</p>
@@ -2024,15 +3175,15 @@ export function QuotePage() {
           </div>
         )}
 
-        <div className={`${tema.cores.bgCard} ${tema.estilos.borderRadius} ${tema.estilos.shadow} p-4 sm:p-6 mb-6 border ${tema.cores.borda}`}>
-          <h2 className={`text-xl sm:text-2xl ${tema.estilos.fontHeading} ${tema.cores.textoPrincipal} mb-4 leading-tight`}>
+        <div className={`${tema.cores.bgCard} ${tema.estilos.borderRadius} ${tema.estilos.shadow} p-4 sm:p-6 mb-6 border ${tema.cores.borda}`} style={inlineStyles.quoteCard}>
+          <h2 className={`text-xl sm:text-2xl ${tema.estilos.fontHeading} ${tema.cores.textoPrincipal} mb-4 leading-tight`} style={inlineStyles.heading2}>
             {template.titulo_template || template.nome_template}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="nome-cliente" className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`}>
+                <label htmlFor="nome-cliente" className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`} style={inlineStyles.label}>
                   Nome Completo *
                 </label>
                 <input
@@ -2044,13 +3195,14 @@ export function QuotePage() {
                     setFormData({ ...formData, nome_cliente: e.target.value })
                   }
                   className={`w-full px-4 py-3 text-base border ${tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  style={inlineStyles.input}
                   required
                   aria-required="true"
                 />
               </div>
 
               <div>
-                <label htmlFor="email-cliente" className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`}>
+                <label htmlFor="email-cliente" className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`} style={inlineStyles.label}>
                   E-mail *
                 </label>
                 <input
@@ -2067,6 +3219,7 @@ export function QuotePage() {
                     setFieldErrors(prev => ({ ...prev, email: validateEmail(e.target.value) }));
                   }}
                   className={`w-full px-4 py-3 text-base border ${fieldErrors.email ? 'border-red-500 ring-1 ring-red-400' : tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  style={{ ...inlineStyles.input, ...(fieldErrors.email ? { borderColor: '#ef4444', borderWidth: '1.5px' } : {}) }}
                   placeholder="seu@email.com"
                   required
                   aria-required="true"
@@ -2080,7 +3233,7 @@ export function QuotePage() {
               </div>
 
               <div>
-                <label htmlFor="telefone-cliente" className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`}>
+                <label htmlFor="telefone-cliente" className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`} style={inlineStyles.label}>
                   Telefone/WhatsApp *
                 </label>
                 <input
@@ -2097,6 +3250,7 @@ export function QuotePage() {
                     setFieldErrors(prev => ({ ...prev, telefone: validatePhone(e.target.value) }));
                   }}
                   className={`w-full px-4 py-3 text-base border ${fieldErrors.telefone ? 'border-red-500 ring-1 ring-red-400' : tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                  style={{ ...inlineStyles.input, ...(fieldErrors.telefone ? { borderColor: '#ef4444', borderWidth: '1.5px' } : {}) }}
                   placeholder="(11) 98765-4321"
                   required
                   aria-required="true"
@@ -2113,7 +3267,7 @@ export function QuotePage() {
             {/* Campos de Localização e Data para Preços Dinâmicos */}
             {((template?.sistema_sazonal_ativo && temporadas.length > 0) || (template?.sistema_geografico_ativo && paises.length > 0) || (agendaConfig?.agenda_ativa && !template?.ignorar_agenda_global)) && (
               <div className="border-t pt-6 mt-6">
-                <h3 className={`text-lg font-semibold ${tema.cores.textoPrincipal} mb-4`}>
+                <h3 className={`text-lg font-semibold ${tema.cores.textoPrincipal} mb-4`} style={{ ...inlineStyles.heading2, fontSize: '1.25rem', borderBottom: 'none', paddingBottom: 0 }}>
                   📍 Localização e Data
                 </h3>
 
@@ -2123,7 +3277,7 @@ export function QuotePage() {
 
             {camposExtras.map((campo) => (
               <div key={campo.id}>
-                <label className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`}>
+                <label className={`block text-sm font-medium ${tema.cores.textoSecundario} mb-2`} style={inlineStyles.label}>
                   {campo.label} {campo.obrigatorio && '*'}
                 </label>
                 {campo.tipo === 'textarea' ? (
@@ -2135,6 +3289,7 @@ export function QuotePage() {
                     placeholder={campo.placeholder}
                     required={campo.obrigatorio}
                     className={`w-full px-4 py-3 text-base border ${tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                    style={inlineStyles.input}
                     rows={4}
                   />
                 ) : (
@@ -2147,13 +3302,19 @@ export function QuotePage() {
                     placeholder={campo.placeholder}
                     required={campo.obrigatorio}
                     className={`w-full px-4 py-3 text-base border ${tema.cores.borda} ${tema.cores.bgCard} ${tema.cores.textoPrincipal} rounded-lg focus:ring-2 focus:ring-opacity-50 touch-manipulation`}
+                    style={inlineStyles.input}
                   />
                 )}
               </div>
             ))}
 
-            <div className="border-t pt-6" data-produtos-section>
-              <div className="flex justify-between items-center mb-4"><h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} flex items-center gap-2`}><ShoppingCart className="w-6 h-6" />Selecione os Serviços</h3><button
+            <div className="border-t pt-6" data-produtos-section style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} flex items-center gap-2`} style={{ ...inlineStyles.heading2, fontSize: '1.25rem', borderBottom: 'none', paddingBottom: 0 }}>
+                  <ShoppingCart className="w-6 h-6" style={{ color: inlineStyles.accentColor }} />
+                  Selecione os Serviços
+                </h3>
+                <button
                   type="button"
                   onClick={handleResetQuote}
                   className="text-sm text-red-600 hover:text-red-800 font-medium flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors"
@@ -2189,46 +3350,172 @@ export function QuotePage() {
                 }
                 ref={produtosSectionRef} // 🔥 CORREÇÃO: A ref foi movida para este contêiner
               >
-                {produtos.map((produto, index) => (
-                  <div
-                    key={produto.id}
-                    ref={index === 0 ? firstProductRef : null}
-                    className={`border ${tema.estilos.borderRadius} p-4 sm:p-5 transition-all ${tema.estilos.shadow} ${
-                      selectedProdutos[produto.id]
-                        ? `${tema.cores.textoDestaque.replace('text-', 'border-')} ${tema.cores.secundaria}`
-                        : `${tema.cores.borda} ${tema.cores.bgHover}`
-                    }`}
-                  > 
-                    {/* Layout dinâmico: 'linha' (sm:flex-row) ou 'quadro' (flex-col) para desktop */}
-                    <div className={`flex flex-col gap-4 ${
-                      template?.layout_produtos_desktop === 'quadro'
-                        ? 'sm:items-center' // Layout Quadro: mantém flex-col e centraliza
-                        : 'sm:flex-row sm:items-start' // Layout Linha: muda para flex-row
-                    }`}>
-                      {produto.mostrar_imagem && produto.imagem_url && (
-                        (() => {
-                          const sizeClasses = {
-                            pequeno: 'w-32 h-32 sm:w-48 sm:h-48',
-                            medio: 'w-48 h-48 sm:w-80 sm:h-80',
-                            grande: 'w-full h-auto sm:w-96 sm:h-96',
-                          };
-                           const imageSize = template?.tamanho_imagem_grid || 'medio';
-                           const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
-                           return (
-                             <div className="mx-auto sm:mx-0">
-                               <ImageWithFallback
-                                 src={produto.imagem_url}
-                                 alt={produto.nome}
-                                 className={`object-cover rounded-lg ${finalClass}`}
-                                 fallbackClassName={`rounded-lg ${finalClass}`}
-                                 retries={2}
-                               />
-                             </div>
-                           );
-                        })()
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h4 className={`font-semibold text-base sm:text-lg ${tema.cores.textoPrincipal} flex flex-wrap items-center gap-2`}>
+                {produtos.map((produto, index) => {
+                  const isHighlighted = produto.destacar_produto;
+                  let highlightStyles = {};
+                  if (isHighlighted) {
+                    const tName = template?.tema;
+                    if (tName === 'halloween') {
+                      highlightStyles = {
+                        border: '2px solid #ea580c',
+                        boxShadow: '0 0 25px rgba(234, 88, 12, 0.4)',
+                        background: 'rgba(234, 88, 12, 0.12)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    } else if (tName === 'black-friday') {
+                      highlightStyles = {
+                        border: '2px solid #eab308',
+                        boxShadow: '0 0 20px #eab308, inset 0 0 10px rgba(234,179,8,0.2)',
+                        background: 'rgba(254, 240, 138, 0.04)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                        animation: 'pulseBorderNeon 2s infinite',
+                      };
+                    } else if (tName === 'sao-joao') {
+                      highlightStyles = {
+                        border: '2px solid #ea580c',
+                        boxShadow: '0 0 20px rgba(234, 88, 12, 0.35)',
+                        background: 'rgba(251, 146, 60, 0.08)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    } else if (tName === 'natal') {
+                      highlightStyles = {
+                        border: '2px solid #dc2626',
+                        boxShadow: '0 0 20px rgba(220, 38, 38, 0.35)',
+                        background: 'rgba(220, 38, 38, 0.06)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    } else if (tName === 'revellon' || tName === 'ano-novo') {
+                      highlightStyles = {
+                        border: '2px solid #d4a853',
+                        boxShadow: '0 0 20px rgba(212, 168, 83, 0.35)',
+                        background: 'rgba(212, 168, 83, 0.08)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    } else if (tName === 'dia-do-cliente') {
+                      highlightStyles = {
+                        border: '2.5px double #d4a853',
+                        boxShadow: '0 0 25px rgba(212, 168, 83, 0.4)',
+                        background: 'rgba(212, 168, 83, 0.07)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    } else if (tName === 'dia-dos-pais') {
+                      highlightStyles = {
+                        border: '2px solid #38bdf8',
+                        boxShadow: '0 0 15px rgba(56, 189, 248, 0.25)',
+                        background: 'rgba(56, 189, 248, 0.05)',
+                        transform: 'scale(1.01)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    } else {
+                      highlightStyles = {
+                        border: '2px solid #f59e0b',
+                        boxShadow: '0 8px 25px rgba(245,158,11,0.25)',
+                        background: 'rgba(245, 158, 11, 0.04)',
+                        transform: 'scale(1.02)',
+                        position: 'relative',
+                        zIndex: 2,
+                      };
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={produto.id}
+                      ref={index === 0 ? firstProductRef : null}
+                      className={`border ${tema.estilos.borderRadius} p-4 sm:p-5 transition-all ${tema.estilos.shadow} ${
+                        selectedProdutos[produto.id]
+                          ? `${tema.cores.textoDestaque.replace('text-', 'border-')} ${tema.cores.secundaria}`
+                          : `${tema.cores.borda} ${tema.cores.bgHover}`
+                      }`}
+                      style={{
+                        ...inlineStyles.productCard,
+                        ...(selectedProdutos[produto.id]
+                          ? {
+                              borderColor: inlineStyles.accentColor,
+                              boxShadow: `0 0 0 2px ${inlineStyles.accentColor}1a, ${inlineStyles.productCard.boxShadow || ''}`,
+                            }
+                          : {}),
+                        ...highlightStyles,
+                      }}
+                    > 
+                      {/* Layout dinâmico: 'linha' (sm:flex-row) ou 'quadro' (flex-col) para desktop */}
+                      <div className={`flex flex-col gap-4 ${
+                        template?.layout_produtos_desktop === 'quadro'
+                          ? 'sm:items-center' // Layout Quadro: mantém flex-col e centraliza
+                          : 'sm:flex-row sm:items-start' // Layout Linha: muda para flex-row
+                      }`}>
+                        {produto.mostrar_imagem && produto.imagem_url && (
+                          (() => {
+                            const sizeClasses = {
+                              pequeno: 'w-32 h-32 sm:w-48 sm:h-48',
+                              medio: 'w-48 h-48 sm:w-80 sm:h-80',
+                              grande: 'w-full h-auto sm:w-96 sm:h-96',
+                            };
+                             const imageSize = template?.tamanho_imagem_grid || 'medio';
+                             const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
+                             return (
+                               <div className="mx-auto sm:mx-0">
+                                 <ImageWithFallback
+                                   src={produto.imagem_url}
+                                   alt={produto.nome}
+                                   className={`object-cover rounded-lg ${finalClass}`}
+                                   fallbackClassName={`rounded-lg ${finalClass}`}
+                                   retries={2}
+                                 />
+                               </div>
+                             );
+                          })()
+                        )}
+                        <div className="flex-1 min-w-0">
+                          {/* Highlight badge */}
+                          {produto.destacar_produto && produto.destaque_texto && (
+                            <div className="mb-2">
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background:
+                                  template?.tema === 'halloween'
+                                    ? 'linear-gradient(135deg, #a855f7, #ea580c)'
+                                    : template?.tema === 'black-friday'
+                                    ? 'linear-gradient(135deg, #ca8a04, #ca8a04)'
+                                    : template?.tema === 'sao-joao'
+                                    ? 'linear-gradient(135deg, #ea580c, #ef4444)'
+                                    : template?.tema === 'natal'
+                                    ? 'linear-gradient(135deg, #dc2626, #16a34a)'
+                                    : template?.tema === 'dia-dos-pais'
+                                    ? 'linear-gradient(135deg, #0284c7, #0369a1)'
+                                    : template?.tema === 'dia-do-cliente'
+                                    ? 'linear-gradient(135deg, #d4a853, #1e1b4b)'
+                                    : 'linear-gradient(135deg,#f59e0b,#ef4444)',
+                                borderRadius: 999,
+                                padding: '2px 10px',
+                                fontSize: 10,
+                                fontWeight: 900,
+                                color: template?.tema === 'black-friday' ? '#000' : '#fff',
+                                letterSpacing: '0.5px',
+                                textTransform: 'uppercase',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                              }}>
+                                {template?.tema === 'halloween' ? '🎃' : template?.tema === 'black-friday' ? '🏷️' : template?.tema === 'sao-joao' ? '🔥' : template?.tema === 'natal' ? '🎁' : template?.tema === 'dia-do-cliente' ? '👑' : template?.tema === 'dia-dos-pais' ? '👔' : '⭐'}{' '}
+                                {produto.destaque_texto}
+                              </span>
+                            </div>
+                          )}
+                        <h4 className={`font-semibold text-base sm:text-lg ${tema.cores.textoPrincipal} flex flex-wrap items-center gap-2`} style={{ color: inlineStyles.textColor }}>
                           {produto.nome}
                           {produto.obrigatorio && (
                             <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full whitespace-nowrap">
@@ -2237,7 +3524,7 @@ export function QuotePage() {
                           )}
                         </h4>
                         {produto.resumo && (
-                          <p className={`text-sm ${tema.cores.textoSecundario} mt-2 leading-relaxed`}>{produto.resumo}</p>
+                          <p className={`text-sm ${tema.cores.textoSecundario} mt-2 leading-relaxed`} style={{ color: inlineStyles.textColorSecondary }}>{produto.resumo}</p>
                         )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
@@ -2245,7 +3532,7 @@ export function QuotePage() {
                           return (
                             <div className="mt-3 flex items-center gap-2 flex-wrap">
                               {desconto > 0 && (
-                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${inlineStyles.accentColor}15`, color: inlineStyles.accentColor }}>
                                   🏷️ {desconto}% OFF
                                 </span>
                               )}
@@ -2253,7 +3540,7 @@ export function QuotePage() {
                                 {desconto > 0 && (
                                   <span className="text-sm text-gray-400 line-through">{formatCurrency(produto.valor)}</span>
                                 )}
-                                <span className="text-lg sm:text-xl font-bold text-blue-600">{formatCurrency(valorFinal)}</span>
+                                <span className="text-lg sm:text-xl font-bold text-blue-600" style={inlineStyles.priceBadge}>{formatCurrency(valorFinal)}</span>
                               </div>
                               {desconto > 0 && (
                                 <span className="text-xs text-green-600">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
@@ -2266,7 +3553,7 @@ export function QuotePage() {
 
                     {/* Controle: toggle simples ou +/- quantidade */}
                     {(produto.permite_multiplas_unidades ?? true) ? (
-                      <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-200" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
                       <button
                         type="button"
                         onClick={() =>
@@ -2277,11 +3564,15 @@ export function QuotePage() {
                         }
                         disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
                         className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold transition-colors"
+                        style={{
+                          background: `${inlineStyles.textColorSecondary}15`,
+                          color: inlineStyles.textColor,
+                        }}
                         aria-label="Diminuir quantidade"
                       >
                         -
                       </button>
-                      <span className={`min-w-[60px] text-center font-bold text-xl ${tema.cores.textoPrincipal}`}>
+                      <span className={`min-w-[60px] text-center font-bold text-xl ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>
                         {selectedProdutos[produto.id] || 0}
                       </span>
                       <button
@@ -2298,6 +3589,10 @@ export function QuotePage() {
                         }}
                         disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
                         className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold transition-colors"
+                        style={{
+                          background: inlineStyles.accentColor,
+                          color: '#fff',
+                        }}
                         title={!produto.obrigatorio && !fieldsValidation.canAddProducts ? 'Preencha os campos obrigatórios primeiro' : ''}
                         aria-label="Aumentar quantidade"
                       >
@@ -2306,9 +3601,9 @@ export function QuotePage() {
                     </div>
                     ) : (
                       // Modo toggle — selecionar/desselecionar (qty sempre 0 ou 1)
-                      <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="mt-4 pt-4 border-t border-gray-200" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
                         {produto.obrigatorio ? (
-                          <div className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold">
+                          <div className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold" style={{ background: `${inlineStyles.accentColor}15`, color: inlineStyles.accentColor }}>
                             <Check className="w-4 h-4" /> Incluído
                           </div>
                         ) : (
@@ -2329,6 +3624,11 @@ export function QuotePage() {
                                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
+                            style={
+                              selectedProdutos[produto.id]
+                                ? { background: inlineStyles.accentColor, color: '#fff' }
+                                : { background: `${inlineStyles.textColorSecondary}15`, color: inlineStyles.textColor }
+                            }
                           >
                             {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
                           </button>
@@ -2336,15 +3636,41 @@ export function QuotePage() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
             </div>
 
             {formasPagamentoProcessadas.length > 0 && (
-              <div className="border-t pt-6" data-pagamento-section>
-                <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} mb-4`}>
-                  Forma de Pagamento
+              <div className="border-t pt-6" data-pagamento-section style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
+                <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2`} style={{ ...inlineStyles.heading2, fontSize: '1.25rem', borderBottom: 'none', paddingBottom: 0 }}>
+                  <span>Forma de Pagamento</span>
+                  {!selectedFormaPagamento && (
+                    <span className="text-xs px-3 py-1 bg-amber-50 text-amber-800 font-medium rounded-full animate-pulse border border-amber-200">
+                      {template?.forma_pagamento_obrigatoria ? '⚠️ Escolha obrigatória para enviar' : 'ℹ️ Por favor, selecione uma opção'}
+                    </span>
+                  )}
                 </h3>
+
+                {!selectedFormaPagamento && (
+                  <div className={`mb-4 p-4 rounded-xl text-sm flex items-start gap-2.5 transition-all ${
+                    template?.forma_pagamento_obrigatoria 
+                      ? 'bg-red-50 text-red-800 border border-red-200' 
+                      : 'bg-amber-50 text-amber-800 border border-amber-200'
+                  }`}>
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-semibold mb-0.5">
+                        {template?.forma_pagamento_obrigatoria ? 'Escolha Obrigatória' : 'Escolha uma Forma de Pagamento'}
+                      </strong>
+                      <span className="opacity-90">
+                        {template?.forma_pagamento_obrigatoria 
+                          ? 'Selecione uma das opções abaixo para liberar o envio do orçamento via WhatsApp.' 
+                          : 'Selecione uma das opções abaixo para prosseguir com o orçamento.'}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   {formasPagamentoProcessadas.map((forma) => (
@@ -2355,6 +3681,18 @@ export function QuotePage() {
                           ? 'border-blue-600 bg-blue-50'
                           : 'border-gray-200 hover:border-gray-300 active:border-gray-400'
                       }`}
+                      style={{
+                        ...inlineStyles.productCard,
+                        ...(selectedFormaPagamento === forma.id
+                          ? {
+                              borderColor: inlineStyles.accentColor,
+                              background: `${inlineStyles.accentColor}08`,
+                              boxShadow: `0 0 0 2px ${inlineStyles.accentColor}1a`,
+                            }
+                          : {
+                              borderColor: `${inlineStyles.textColorSecondary}30`,
+                            }),
+                      }}
                     >
                       <input
                         type="radio"
@@ -2363,10 +3701,11 @@ export function QuotePage() {
                         checked={selectedFormaPagamento === forma.id}
                         onChange={(e) => setSelectedFormaPagamento(e.target.value)}
                         className="w-5 h-5 mt-0.5 text-blue-600 flex-shrink-0"
+                        style={{ accentColor: inlineStyles.accentColor }}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className={`font-semibold text-base ${tema.cores.textoPrincipal} mb-1`}>{forma.nome}</div>
-                        <div className={`text-sm ${tema.cores.textoSecundario} leading-relaxed`}>
+                        <div className={`font-semibold text-base ${tema.cores.textoPrincipal} mb-1`} style={{ color: inlineStyles.textColor }}>{forma.nome}</div>
+                        <div className={`text-sm ${tema.cores.textoSecundario} leading-relaxed`} style={{ color: inlineStyles.textColorSecondary }}>
                           <div>
                             {forma.entrada_tipo === 'percentual'
                               ? `Entrada de ${forma.entrada_valor}%`
@@ -2379,7 +3718,7 @@ export function QuotePage() {
                             );
                           })()}
                           {forma.acrescimo > 0 && (
-                            <div className="text-orange-600 mt-0.5">(+{forma.acrescimo}% acréscimo)</div>
+                            <div className="text-orange-600 mt-0.5" style={{ color: '#ea580c' }}>(+{forma.acrescimo}% acréscimo)</div>
                           )}
                         </div>
                       </div>
@@ -2400,29 +3739,29 @@ export function QuotePage() {
                   const valorParcela = maxParcelasCalculado > 0 ? saldoRestante / maxParcelasCalculado : 0;
 
                   return (
-                    <div className="mt-4 bg-blue-50 rounded-lg p-4 sm:p-5 space-y-3">
-                      <h4 className={`font-semibold text-base ${tema.cores.textoPrincipal}`}>💳 Detalhes do Parcelamento</h4>
+                    <div className="mt-4 bg-blue-50 rounded-lg p-4 sm:p-5 space-y-3" style={inlineStyles.totalSection}>
+                      <h4 className={`font-semibold text-base ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>💳 Detalhes do Parcelamento</h4>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div className="bg-white rounded-lg p-3">
-                          <div className={`${tema.cores.textoSecundario} text-xs mb-1`}>Entrada:</div>
-                          <div className="font-bold text-blue-600 text-lg">
+                        <div className="bg-white rounded-lg p-3" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)' }}>
+                          <div className={`${tema.cores.textoSecundario} text-xs mb-1`} style={{ color: inlineStyles.textColorSecondary }}>Entrada:</div>
+                          <div className="font-bold text-blue-600 text-lg" style={{ color: inlineStyles.accentColor }}>
                             {formatCurrency(valorEntrada)}
                           </div>
                           {formaPagamento.entrada_tipo === 'percentual' && (
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500 mt-1" style={{ color: inlineStyles.textColorSecondary }}>
                               ({formaPagamento.entrada_valor}% do total)
                             </div>
                           )}
                         </div>
 
                         {maxParcelasCalculado > 0 && saldoRestante > 0.01 && (
-                          <div className="bg-white rounded-lg p-3">
-                            <div className={`${tema.cores.textoSecundario} text-xs mb-1`}>Parcelas:</div>
-                            <div className="font-bold text-blue-600 text-lg">
+                          <div className="bg-white rounded-lg p-3" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)' }}>
+                            <div className={`${tema.cores.textoSecundario} text-xs mb-1`} style={{ color: inlineStyles.textColorSecondary }}>Parcelas:</div>
+                            <div className="font-bold text-blue-600 text-lg" style={{ color: inlineStyles.accentColor }}>
                               {maxParcelasCalculado}x de {formatCurrency(valorParcela)}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500 mt-1" style={{ color: inlineStyles.textColorSecondary }}>
                               Saldo restante
                             </div>
                           </div>
@@ -2430,12 +3769,12 @@ export function QuotePage() {
                       </div>
 
                       {formaPagamento.acrescimo !== 0 && (
-                        <div className="bg-white rounded-lg p-3 text-sm">
+                        <div className="bg-white rounded-lg p-3 text-sm" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)' }}>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-600">
+                            <span className="text-gray-600" style={{ color: inlineStyles.textColorSecondary }}>
                               {formaPagamento.acrescimo > 0 ? 'Acréscimo' : 'Desconto'} aplicado:
                             </span>
-                            <span className={`font-bold ${formaPagamento.acrescimo > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                            <span className={`font-bold ${formaPagamento.acrescimo > 0 ? 'text-orange-600' : 'text-green-600'}`} style={{ color: formaPagamento.acrescimo > 0 ? '#ea580c' : '#16a34a' }}>
                               {formaPagamento.acrescimo > 0 ? '+' : ''}{formaPagamento.acrescimo}%
                             </span>
                           </div>
@@ -2447,10 +3786,13 @@ export function QuotePage() {
               </div>
             )}
 
+            {/* 🎁 Upselling – abaixo das formas de pagamento */}
+            {renderUpsellSection()}
+
             {/* Cupom de Desconto */}
             {fieldsValidation.canUseCoupons && (
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              <div className="border-t pt-6" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4" style={{ ...inlineStyles.heading2, fontSize: '1.25rem', borderBottom: 'none', paddingBottom: 0 }}>
                   🎟️ Cupom de Desconto
                 </h3>
 
@@ -2468,6 +3810,7 @@ export function QuotePage() {
                     placeholder="Digite o código do cupom"
                     disabled={cupomAtivo}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed uppercase"
+                    style={inlineStyles.input}
                     aria-describedby="cupom-mensagem"
                   />
                 </div>
@@ -2488,6 +3831,10 @@ export function QuotePage() {
                       ? 'bg-red-600 hover:bg-red-700 text-white'
                       : 'bg-blue-600 hover:bg-blue-700 text-white'
                   }`}
+                  style={{
+                    background: cupomAtivo ? '#dc2626' : inlineStyles.accentColor,
+                    color: '#fff',
+                  }}
                 >
                   {cupomAtivo ? 'Remover' : 'Aplicar'}
                 </button>
@@ -2509,8 +3856,8 @@ export function QuotePage() {
             )}
 
             {fieldsValidation.canSeeTotals && (
-              <div className="border-t pt-6">
-              <div className="bg-gray-50 rounded-lg p-4 sm:p-6 space-y-3">
+              <div className="border-t pt-6" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
+              <div className="bg-gray-50 rounded-lg p-4 sm:p-6 space-y-3" style={inlineStyles.totalSection}>
                 {(() => {
                   const breakdown = getPriceBreakdown();
                   const ocultarIntermediarios = template?.ocultar_valores_intermediarios;
@@ -2520,15 +3867,15 @@ export function QuotePage() {
                       {!ocultarIntermediarios && (
                         <>
                           <div className="flex items-start justify-between text-sm gap-2">
-                            <span className={`${tema.cores.textoSecundario} flex-1`}>Subtotal (Produtos):</span>
-                            <span className={`${tema.cores.textoPrincipal} font-semibold text-right`}>
+                            <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>Subtotal (Produtos):</span>
+                            <span className={`${tema.cores.textoPrincipal} font-semibold text-right`} style={{ color: inlineStyles.textColor }}>
                               {formatCurrency(breakdown.subtotal)}
                             </span>
                           </div>
 
                           {breakdown.ajusteSazonal !== 0 && (
                             <div className="flex items-start justify-between text-sm gap-2">
-                              <span className={`${tema.cores.textoSecundario} flex-1`}>
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>
                                 Ajuste Sazonal ({breakdown.ajusteSazonal > 0 ? '+' : ''}
                                 {((breakdown.ajusteSazonal / breakdown.subtotal) * 100).toFixed(1)}%):
                               </span>
@@ -2536,6 +3883,7 @@ export function QuotePage() {
                                 className={`font-semibold text-right ${
                                   breakdown.ajusteSazonal > 0 ? 'text-red-600' : 'text-green-600'
                                 }`}
+                                style={{ color: breakdown.ajusteSazonal > 0 ? '#dc2626' : '#16a34a' }}
                               >
                                 {breakdown.ajusteSazonal > 0 ? '+' : ''}
                                 {formatCurrency(breakdown.ajusteSazonal)}
@@ -2545,11 +3893,12 @@ export function QuotePage() {
 
                           {breakdown.ajusteGeografico.percentual !== 0 && (
                             <div className="flex items-start justify-between text-sm gap-2">
-                              <span className={`${tema.cores.textoSecundario} flex-1`}>Ajuste Geográfico:</span>
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>Ajuste Geográfico:</span>
                               <span
                                 className={`font-semibold text-right ${
                                   breakdown.ajusteGeografico.percentual > 0 ? 'text-red-600' : 'text-green-600'
                                 }`}
+                                style={{ color: breakdown.ajusteGeografico.percentual > 0 ? '#dc2626' : '#16a34a' }}
                               >
                                 {breakdown.ajusteGeografico.percentual > 0 ? '+' : ''}
                                 {formatCurrency(breakdown.ajusteGeografico.percentual)}
@@ -2559,8 +3908,8 @@ export function QuotePage() {
 
                           {breakdown.taxaDeslocamento > 0 && (
                             <div className="flex items-start justify-between text-sm gap-2">
-                              <span className={`${tema.cores.textoSecundario} flex-1`}>Taxa de Deslocamento:</span>
-                              <span className="text-red-600 font-semibold text-right">
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>Taxa de Deslocamento:</span>
+                              <span className="text-red-600 font-semibold text-right" style={{ color: '#dc2626' }}>
                                 +{formatCurrency(breakdown.taxaDeslocamento)}
                               </span>
                             </div>
@@ -2568,13 +3917,14 @@ export function QuotePage() {
 
                           {breakdown.acrescimoFormaPagamento !== 0 && (
                             <div className="flex items-start justify-between text-sm gap-2">
-                              <span className={`${tema.cores.textoSecundario} flex-1`}>
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>
                                 {breakdown.acrescimoFormaPagamento > 0 ? 'Acréscimo' : 'Desconto'} Forma de Pagamento:
                               </span>
                               <span
                                 className={`font-semibold text-right ${
                                   breakdown.acrescimoFormaPagamento > 0 ? 'text-red-600' : 'text-green-600'
                                 }`}
+                                style={{ color: breakdown.acrescimoFormaPagamento > 0 ? '#dc2626' : '#16a34a' }}
                               >
                                 {breakdown.acrescimoFormaPagamento > 0 ? '+' : ''}
                                 {formatCurrency(breakdown.acrescimoFormaPagamento)}
@@ -2584,8 +3934,8 @@ export function QuotePage() {
 
                           {breakdown.descontoCupom > 0 && (
                             <div className="flex items-start justify-between text-sm gap-2">
-                              <span className={`${tema.cores.textoSecundario} flex-1`}>Desconto Cupom ({cupomDesconto}%):</span>
-                              <span className="text-green-600 font-semibold text-right">
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>Desconto Cupom ({cupomDesconto}%):</span>
+                              <span className="text-green-600 font-semibold text-right" style={{ color: '#16a34a' }}>
                                 -{formatCurrency(breakdown.descontoCupom)}
                               </span>
                             </div>
@@ -2593,13 +3943,13 @@ export function QuotePage() {
                         </>
                       )}
 
-                      <div className="border-t pt-3 mt-3" ref={totalSectionRef} data-total-section>
+                      <div className="border-t pt-3 mt-3" ref={totalSectionRef} data-total-section style={{ borderTopColor: `${inlineStyles.textColorSecondary}30` }}>
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`${tema.cores.textoPrincipal} text-lg sm:text-xl md:text-2xl font-bold flex-1`}>Valor Total:</span>
-                          <span className="text-blue-600 text-xl sm:text-2xl md:text-3xl font-bold text-right">{formatCurrency(calculateTotal())}</span>
+                          <span className={`${tema.cores.textoPrincipal} text-lg sm:text-xl md:text-2xl font-bold flex-1`} style={{ color: inlineStyles.textColor }}>Valor Total:</span>
+                          <span className="text-blue-600 text-xl sm:text-2xl md:text-3xl font-bold text-right" style={{ color: inlineStyles.accentColor }}>{formatCurrency(calculateTotal())}</span>
                         </div>
                         {ocultarIntermediarios && (
-                          <p className="text-xs text-gray-500 mt-2 text-center leading-relaxed">
+                          <p className="text-xs text-gray-500 mt-2 text-center leading-relaxed" style={{ color: inlineStyles.textColorSecondary }}>
                             Valor final já inclui todos os ajustes aplicáveis
                           </p>
                         )}
@@ -2616,11 +3966,11 @@ export function QuotePage() {
                           const valorParcela = maxParcelasCalculado > 0 ? saldoRestante / maxParcelasCalculado : 0;
 
                           return (
-                            <div className="mt-3 pt-3 border-t border-gray-300">
-                              <div className="text-sm text-gray-700 space-y-1"> 
+                            <div className="mt-3 pt-3 border-t border-gray-300" style={{ borderTopColor: `${inlineStyles.textColorSecondary}30` }}>
+                              <div className="text-sm text-gray-700 space-y-1" style={{ color: inlineStyles.textColor }}> 
                                 <div className="flex justify-between items-center">
                                   <span className="font-medium">Forma de Pagamento:</span>
-                                  <span className="font-semibold text-blue-600">{formaPagamento.nome}</span>
+                                  <span className="font-semibold text-blue-600" style={{ color: inlineStyles.accentColor }}>{formaPagamento.nome}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span>Entrada:</span>
@@ -2647,6 +3997,16 @@ export function QuotePage() {
             <button
               type="submit"
               className={`w-full flex items-center justify-center gap-2 sm:gap-3 bg-green-600 hover:bg-green-700 active:opacity-90 text-white px-6 py-4 sm:py-5 ${tema.estilos.borderRadius} font-semibold text-base sm:text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${tema.estilos.shadow} ${tema.estilos.shadowHover} min-h-[56px] touch-manipulation`}
+              style={{
+                ...inlineStyles.submitButton,
+                ...((isSubmitting ||
+                  !profile?.whatsapp_principal ||
+                  !fieldsValidation.canUseWhatsApp ||
+                  (disponibilidade?.modo_aviso === 'restritivo' &&
+                   (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada')))
+                  ? { opacity: 0.5, cursor: 'not-allowed', background: '#9ca3af', border: 'none', boxShadow: 'none' }
+                  : {})
+              }}
               disabled={
                 isSubmitting ||
                 !profile?.whatsapp_principal ||
@@ -2727,7 +4087,11 @@ export function QuotePage() {
       {renderSummaryModal()}
 
       {/* Rodapé */}
-      <footer ref={footerRef} className="bg-gray-100 py-8 text-center text-sm text-gray-500"></footer>
+      {!(profile?.status_assinatura === 'active') && (
+        <footer ref={footerRef} className="py-8 text-center text-sm text-gray-500 border-t border-gray-200 mt-8">
+          Powered by <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-600 font-bold">PriceUs</a>
+        </footer>
+      )}
     </div>
     </>
   );

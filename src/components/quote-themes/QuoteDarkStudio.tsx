@@ -4,6 +4,7 @@ import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
+import { PortfolioSection } from '../PortfolioSection';
 
 interface QuoteDarkStudioProps {
   template: any;
@@ -29,6 +30,7 @@ interface QuoteDarkStudioProps {
   totalSectionRef?: React.RefObject<HTMLDivElement>;
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
+  upsellSection?: React.ReactNode;
 }
 
 export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
@@ -44,17 +46,20 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
   } = props;
 
 
+  const customFont = template?.fonte_personalizada || 'Inter';
+  const fontFamily = `'${customFont}', sans-serif`;
+
   return (
     <div
       style={{
-        fontFamily: "'Inter', sans-serif",
+        fontFamily,
         background: '#07101f',
         color: '#fff',
         minHeight: '100vh',
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(customFont)}:wght@400;500;600;700;800;900&display=swap');
         @keyframes dsIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
         @keyframes dsGlow { 0%,100% { box-shadow:0 0 20px rgba(34,197,94,.15); } 50% { box-shadow:0 0 40px rgba(34,197,94,.35); } }
         .ds-in { animation: dsIn .55s ease both; }
@@ -186,6 +191,11 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                 </a>
               )}
             </div>
+            <PortfolioSection
+              portfolioLink={profile.portfolio_link}
+              portfolioFotos={profile.portfolio_fotos}
+              isDark={true}
+            />
           </div>
         </section>
       )}
@@ -356,6 +366,26 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                       )}
                       {/* Info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* Highlight badge */}
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            background: 'linear-gradient(135deg,#f59e0b,#ef4444)',
+                            borderRadius: 999,
+                            padding: '2px 10px',
+                            marginBottom: 6,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            color: '#fff',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            boxShadow: '0 2px 10px rgba(245,158,11,.4)',
+                          }}>
+                            ⭐ {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
                         {produto.resumo && (
                           <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>
@@ -415,6 +445,8 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
 
           </div>
 
+          {props.upsellSection}
+
           {/* Formas de Pagamento */}
           {formasPagamento.length > 0 && (
             <div
@@ -424,6 +456,20 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
               <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 16 }}>
                 💳 Forma de Pagamento
               </h3>
+              {!selectedFormaPagamento && (
+                <div style={{
+                  marginBottom: 16, padding: '12px 16px', borderRadius: 10,
+                  fontSize: 13, background: template?.forma_pagamento_obrigatoria ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.06)',
+                  color: template?.forma_pagamento_obrigatoria ? '#fca5a5' : '#fde047',
+                  border: `1.5px solid ${template?.forma_pagamento_obrigatoria ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.2)'}`,
+                  display: 'flex', alignItems: 'center', gap: 8
+                }}>
+                  <span>⚠️</span>
+                  <span>
+                    <strong>{template?.forma_pagamento_obrigatoria ? 'Escolha Obrigatória:' : 'Atenção:'}</strong> Selecione uma das opções abaixo para prosseguir.
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {formasPagamento.map((forma) => {
                   const total = calculateTotal();
@@ -616,6 +662,10 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
             profileName={profile.nome_profissional}
             aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
             aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
+            theme={{
+              primaryColor: 'green',
+              buttonColor: 'bg-green-500 hover:bg-green-600 text-black'
+            }}
           />
         </div>
       )}

@@ -29,21 +29,7 @@ const leadPayloadSchemaFinal = z.object({
   templateId: z.string().uuid(),
   userId: z.string().uuid(),
   formData: z.record(z.any()),
-  orcamentoDetalhe: z.object({
-    produtos: z
-      .array(
-        z.object({
-          produto_id: z.string().uuid(),
-          quantidade: z.number().int().min(1),
-        })
-      )
-      .min(1, { message: 'Pelo menos um produto deve ser selecionado' }),
-    forma_pagamento_id: z.preprocess(
-      (val) => (val === '' ? null : val),
-      z.string().uuid().optional().nullable()
-    ),
-    priceBreakdown: z.record(z.any()).optional(),
-  }),
+  orcamentoDetalhe: z.record(z.any()).optional().default({}),
   valorTotal: z.number(),
   status: z.string().optional(),
   sessionId: z.string().optional(),

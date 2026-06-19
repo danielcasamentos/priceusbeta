@@ -213,7 +213,8 @@ export function LeadsManager({ userId }: { userId: string }) {
       ...savedOrcamentoDetalhe,
       produtos: produtosCompletos,
       selectedProdutos: selectedProdutosDict,
-      paymentMethod: formaPagamentoCompleta
+      paymentMethod: formaPagamentoCompleta,
+      upsell_produtos: savedOrcamentoDetalhe.upsell_produtos || []
     };
 
     if (updateState) {
@@ -315,6 +316,7 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       customFields: savedOrcamentoDetalhe.customFields || [],
       customFieldsData: savedOrcamentoDetalhe.customFieldsData || {},
+      upsellProducts: savedOrcamentoDetalhe.upsell_produtos || [],
       context: 'photographer-to-client',
     });
 
@@ -1057,12 +1059,12 @@ export function LeadsManager({ userId }: { userId: string }) {
                     />
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Cliente</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Contato</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Orçamento</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Evento</th>
+                  <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Contato</th>
+                  <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Orçamento</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Evento</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Valor</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Data</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Data</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
@@ -1085,16 +1087,16 @@ export function LeadsManager({ userId }: { userId: string }) {
                         <span title="Contrato gerado para este lead"><CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400 ml-2" /></span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="hidden sm:table-cell px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">{lead.telefone_cliente || '—'}</div>
                       <div className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{lead.email_cliente || '—'}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="hidden sm:table-cell px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {templates[lead.template_id]?.nome_template || 'Template não encontrado'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap"> {/* Corrigido: Removido o duplicado de data e cidade */}
+                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap"> {/* Corrigido: Removido o duplicado de data e cidade */}
                       <div className="text-sm text-gray-900 dark:text-white">{lead.tipo_evento || '—'}</div>
                       <div className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
                         {lead.data_evento ? formatDate(lead.data_evento) : '—'}
@@ -1107,7 +1109,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(lead.status)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
+                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-[rgba(255,255,255,0.5)]">
                       <div className="font-medium text-gray-900 dark:text-white">{formatDate(lead.data_orcamento)}</div>
                       <div className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)]">{new Date(lead.data_orcamento).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}</div>
                     </td>
@@ -1860,6 +1862,7 @@ function ProducaoCard({
           initialWorkflow={workflow}
           onWorkflowChange={(updated) => onWorkflowChange(lead.id, updated)}
           onAllCompleted={() => onLeadFinalizado(lead)}
+          leadProdutos={lead.orcamento_detalhe?.produtos || []}
         />
       </div>
     </div>

@@ -50,7 +50,7 @@ max_client_conn = 100
 
 [db.migrations]
 # If disabled, migrations will be skipped during a db push or reset.
-enabled = true
+enabled = false
 # Specifies an ordered list of schema files that describe your database.
 # Supports glob patterns relative to supabase directory: "./schemas/*.sql"
 schema_paths = []
@@ -391,3 +391,39 @@ entrypoint = "./functions/sync-calendar/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/sync-calendar/*.html" ]
+
+[functions.create-lead]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-lead/index.ts"
+
+[functions.create-analytics-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-analytics-session/index.ts"
+
+[functions.create-portal-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-portal-session/index.ts"
+
+[functions.fetch-calendar]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-calendar/index.ts"
+
+[functions.send-email-notification]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-email-notification/index.ts"
+
+[functions.stripe-checkout]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-checkout/index.ts"
+
+[functions.stripe-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-webhook/index.ts"
+

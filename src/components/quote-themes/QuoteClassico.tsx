@@ -118,8 +118,12 @@ export function QuoteClassico(props: QuoteClassicoProps) {
                 {produtos.map((produto) => (
                   <div
                     key={produto.id}
-                    className={`border-2 rounded-xl p-4 transition-all ${
-                      selectedProdutos[produto.id] ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    className={`border-2 rounded-xl p-4 transition-all relative ${
+                      produto.destacar_produto
+                        ? 'border-amber-400 bg-amber-50/20 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.15)] ring-2 ring-amber-400/20 scale-[1.01]'
+                        : selectedProdutos[produto.id]
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
                     <div className="flex items-center gap-4">
@@ -142,6 +146,11 @@ export function QuoteClassico(props: QuoteClassicoProps) {
                         </div>
                       )}
                       <div className="flex-1">
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-red-500 text-white rounded-full px-2.5 py-0.5 text-[10px] font-black tracking-wider uppercase mb-1 shadow-sm">
+                            ⭐ {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 className="font-bold text-lg">{produto.nome}</h4>
                         {produto.resumo && <p className="text-sm text-gray-600 mt-1">{produto.resumo}</p>}
                         {!template.ocultar_valores_intermediarios && (

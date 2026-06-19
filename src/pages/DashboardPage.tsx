@@ -31,6 +31,7 @@ import { BottomNavigation } from '../components/BottomNavigation';
 import { useDeviceType } from '../hooks/useDeviceType';
 import { MeuDia } from '../components/MeuDia';
 import { useMeuDiaNotification } from '../hooks/useMeuDiaNotification';
+import { ChangelogModal } from '../components/ChangelogModal';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -148,6 +149,7 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#07101f] transition-colors duration-300">
+      <ChangelogModal />
       {
         !planLimits.isPrivileged && trialStatus.status === 'trial' && trialStatus.daysRemaining !== null && !trialStatus.isExpired && (
           <TrialBanner daysRemaining={trialStatus.daysRemaining} isExpired={trialStatus.isExpired} />

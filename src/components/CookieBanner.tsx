@@ -14,7 +14,13 @@ import { X, Cookie } from 'lucide-react';
 const COOKIE_CONSENT_KEY = 'priceus_cookie_consent';
 const CONSENT_VERSION = '2.0'; // Atualizada com nova política
 
-export function CookieBanner() {
+export interface CookieBannerProps {
+  accentColor?: string;
+  backgroundColor?: string;
+  textColor?: string;
+}
+
+export function CookieBanner({ accentColor = '#2563eb', backgroundColor, textColor }: CookieBannerProps) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -250,39 +256,75 @@ Ao continuar navegando e preenchendo este formulário, você declara estar cient
     document.body.appendChild(modal);
   };
 
+  // Inteligência de cores para o banner
+  const isLightTheme = textColor && (
+    textColor.toLowerCase() === '#111827' ||
+    textColor.toLowerCase() === '#1a1a1a' ||
+    textColor.toLowerCase() === '#1e293b' ||
+    textColor.toLowerCase() === '#0f172a' ||
+    textColor.toLowerCase() === '#000000' ||
+    textColor.toLowerCase() === '#374151'
+  );
+
+  const defaultBg = isLightTheme ? 'rgba(255, 255, 255, 0.92)' : 'rgba(15, 23, 42, 0.92)';
+  const defaultText = isLightTheme ? '#1e293b' : '#f8fafc';
+
+  const bgStyle = backgroundColor 
+    ? (backgroundColor.startsWith('#') ? `${backgroundColor}e6` : backgroundColor)
+    : defaultBg;
+
+  const textStyle = textColor || defaultText;
+  const borderStyle = isLightTheme ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.1)';
+
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 animate-slide-down">
-      <div className="bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-lg border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-2.5">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Cookie className="w-4 h-4 flex-shrink-0 text-gray-300" />
-              <p className="text-xs leading-relaxed text-gray-200">
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 animate-slide-up">
+      <div 
+        style={{
+          background: bgStyle,
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          color: textStyle,
+          border: borderStyle,
+          boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.3)',
+          borderRadius: '12px',
+          padding: '16px',
+        }}
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <Cookie className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />
+            <div className="flex-1">
+              <p className="text-xs leading-relaxed opacity-90" style={{ fontFamily: 'sans-serif' }}>
                 Este site usa cookies essenciais. Os dados preenchidos são de responsabilidade exclusiva do profissional.
                 <button
                   onClick={handleShowPolicy}
-                  className="underline hover:text-white font-medium ml-1 transition-colors"
+                  className="underline ml-1 font-medium hover:opacity-100 transition-opacity"
+                  style={{ color: accentColor, opacity: 0.8 }}
                 >
                   Ler política completa
                 </button>
               </p>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                onClick={handleAccept}
-                className="px-3 py-1.5 text-xs font-medium bg-white text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                Aceitar
-              </button>
-              <button
-                onClick={handleDismiss}
-                className="p-1.5 hover:bg-gray-700 rounded-md transition-colors"
-                title="Fechar"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
+          <div className="flex items-center justify-end gap-2 border-t pt-2.5" style={{ borderColor: isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)' }}>
+            <button
+              onClick={handleAccept}
+              className="px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all active:scale-95"
+              style={{
+                background: accentColor,
+                color: isLightTheme && accentColor === '#fff' ? '#000' : '#fff',
+              }}
+            >
+              Aceitar
+            </button>
+            <button
+              onClick={handleDismiss}
+              className="px-3 py-1.5 text-xs font-medium rounded-md hover:bg-white/10 transition-colors"
+              style={{ color: textStyle, opacity: 0.7 }}
+            >
+              Recusar
+            </button>
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
 import { StarRating } from './StarRating';
+import { getThemeInlineStyles } from '../lib/themeStyles';
 
 interface Profile {
   id: string;
@@ -199,8 +200,12 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 24 }}>
               {templates.map((template, i) => {
-                const isPromo = template.tema === 'promocional' || template.tema === 'oferta';
+                const CLASSIC_THEMES = ['moderno', 'classico', 'romantico', 'vibrante', 'natural', 'minimalista', 'darkstudio', 'pretoebranco', 'escuro', 'studio', 'pdf-elegante', 'pdf-elegante-2'];
+                const isPromo = !!template.tema && !CLASSIC_THEMES.includes(template.tema);
                 const isOferta = template.tema === 'oferta';
+                const temaStyles = getThemeInlineStyles(template.tema || 'moderno');
+                const themeEmoji = temaStyles.themeEmoji || '✨';
+                const themeName = template.tema ? template.tema.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Especial';
                 return (
                   <Link
                     key={template.id}
@@ -243,8 +248,8 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
                         </div>
                       )}
                       {isPromo && !isOferta && (
-                        <div style={{ position: 'absolute', top: 12, right: 12, background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 999, letterSpacing: '1px' }}>
-                          🔥 OFERTA
+                        <div style={{ position: 'absolute', top: 12, right: 12, color: '#fff', fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 999, letterSpacing: '1px', background: `linear-gradient(135deg, ${temaStyles.accentColor || '#dc2626'}, ${temaStyles.accentColor || '#f97316'})` }}>
+                          {themeEmoji} {themeName}
                         </div>
                       )}
                       <div style={{ flex: 1, padding: '24px 24px 20px' }}>
@@ -268,12 +273,12 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
                             {new Date(template.created_at).toLocaleDateString('pt-BR')}
                           </span>
                         )}
-                        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: isPromo ? '#ef4444' : '#22c55e' }}>
-                          {isPromo ? 'Ver Oferta' : 'Ver Orçamento'} <ExternalLink size={14} />
+                        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: isPromo ? (temaStyles.accentColor || '#ef4444') : '#22c55e' }}>
+                          {isPromo ? `Ver ${themeName}` : 'Ver Orçamento'} <ExternalLink size={14} />
                         </span>
                       </div>
                       {/* bottom accent */}
-                      <div style={{ height: 3, background: isPromo ? 'linear-gradient(90deg, #dc2626, #f97316)' : 'linear-gradient(90deg, #16a34a, #22c55e)' }} />
+                      <div style={{ height: 3, background: isPromo ? `linear-gradient(90deg, ${temaStyles.accentColor || '#dc2626'}, ${temaStyles.accentColor || '#f97316'})` : 'linear-gradient(90deg, #16a34a, #22c55e)' }} />
                     </div>
                   </Link>
                 );

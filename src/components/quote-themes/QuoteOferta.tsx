@@ -4,6 +4,7 @@ import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
+import { PortfolioSection } from '../PortfolioSection';
 
 interface QuoteOfertaProps {
   template: any;
@@ -27,6 +28,7 @@ interface QuoteOfertaProps {
   totalSectionRef?: React.RefObject<HTMLDivElement>;
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
+  upsellSection?: React.ReactNode;
 }
 
 export function QuoteOferta(props: QuoteOfertaProps) {
@@ -285,6 +287,11 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                 </a>
               )}
             </div>
+            <PortfolioSection
+              portfolioLink={profile.portfolio_link}
+              portfolioFotos={profile.portfolio_fotos}
+              isDark={false}
+            />
           </div>
         </section>
       )}
@@ -426,13 +433,20 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                     key={produto.id}
                     className={`oferta-prod${isSelected ? ' selected' : ''}`}
                     style={{
-                      border: '2px solid #ffedd5',
+                      border: produto.destacar_produto ? '3px solid #ea580c' : '2px solid #ffedd5',
                       borderRadius: 14,
                       padding: '18px',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 14,
                       background: '#fff',
+                      ...(produto.destacar_produto
+                        ? {
+                            boxShadow: '0 8px 30px rgba(234,88,12,0.18)',
+                            transform: 'scale(1.01)',
+                            position: 'relative' as const,
+                          }
+                        : {}),
                     }}
                   >
                     <div ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
@@ -455,6 +469,25 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                         </div>
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            background: 'linear-gradient(135deg,#ea580c,#ef4444)',
+                            borderRadius: 999,
+                            padding: '2px 10px',
+                            marginBottom: 6,
+                            fontSize: 10,
+                            fontWeight: 900,
+                            color: '#fff',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            boxShadow: '0 2px 10px rgba(234,88,12,.3)',
+                          }}>
+                            ⚡ {produto.destaque_texto}
+                          </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
                           <h4 style={{ fontSize: 16, fontWeight: 800, color: '#1a1a1a', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
                           {isSelected && (
@@ -520,6 +553,8 @@ export function QuoteOferta(props: QuoteOfertaProps) {
             </div>
           </div>
 
+          {props.upsellSection}
+
           {/* Formas de Pagamento */}
           {formasPagamento.length > 0 && (
             <div
@@ -529,6 +564,20 @@ export function QuoteOferta(props: QuoteOfertaProps) {
               <h3 style={{ fontSize: 12, fontWeight: 900, color: '#ea580c', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 18 }}>
                 💳 Condições Especiais de Pagamento
               </h3>
+              {!selectedFormaPagamento && (
+                <div style={{
+                  marginBottom: 16, padding: '12px 16px', borderRadius: 10,
+                  fontSize: 13, background: template?.forma_pagamento_obrigatoria ? '#fef2f2' : '#fffbeb',
+                  color: template?.forma_pagamento_obrigatoria ? '#991b1b' : '#92400e',
+                  border: `1.5px solid ${template?.forma_pagamento_obrigatoria ? '#fee2e2' : '#fef3c7'}`,
+                  display: 'flex', alignItems: 'center', gap: 8
+                }}>
+                  <span>⚠️</span>
+                  <span>
+                    <strong>{template?.forma_pagamento_obrigatoria ? 'Escolha Obrigatória:' : 'Atenção:'}</strong> Selecione uma das opções abaixo para prosseguir.
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {formasPagamento.map((forma) => {
                   const total = calculateTotal();
@@ -660,6 +709,10 @@ export function QuoteOferta(props: QuoteOfertaProps) {
             profileName={profile.nome_profissional}
             aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
             aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
+            theme={{
+              primaryColor: 'orange',
+              buttonColor: 'bg-orange-500 hover:bg-orange-600 text-white'
+            }}
           />
         </div>
       )}

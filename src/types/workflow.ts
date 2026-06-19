@@ -36,6 +36,12 @@ export interface WorkflowStep {
   status: WorkflowStepStatus;
   /** Timestamp ISO registrado quando a etapa foi concluída, usado para estatísticas de produtividade */
   completedAt?: string;
+  /** Duração em minutos da tarefa */
+  duracao_minutos?: number | null;
+  /** Horário de início em formato HH:MM */
+  horario_inicio?: string | null;
+  /** Local do trabalho: interno (escritório/estúdio) ou externo (evento/sessão) */
+  ambiente?: 'interno' | 'externo' | null;
 }
 
 /**
@@ -57,6 +63,9 @@ export interface SlaResult {
 export interface WorkflowTemplateStep {
   label: string;
   description: string;
+  duracao_minutos?: number | null;
+  horario_inicio?: string | null;
+  ambiente?: 'interno' | 'externo' | null;
 }
 
 export interface WorkflowTemplate {

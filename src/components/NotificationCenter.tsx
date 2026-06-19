@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Check, Loader2, AlertCircle, MessageSquare, FileSignature, Calendar, DollarSign, TrendingUp, Users, Star } from 'lucide-react';
+import { Bell, Check, Loader2, AlertCircle, MessageSquare, FileSignature, Calendar, DollarSign, TrendingUp, Users, Star, Sun } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNotifications } from '../hooks/useNotifications';
@@ -40,12 +40,27 @@ const getNotificationIcon = (type: string) => {
     case 'plan_limit_reached':
     case 'plan_limit_approaching':
       return <AlertCircle className="w-4 h-4 text-red-600" />;
-    case 'trial': // Corrigido para 'trial' conforme o CHECK da tabela
+    case 'trial':
       return <AlertCircle className="w-4 h-4 text-red-600" />;
+    case 'meu_dia_resumo':
+      return <Sun className="w-4 h-4 text-amber-500" />;
+    // Legacy types from old multi-notification hook — handled by filter below
+    case 'meu_dia_tarefa_atrasada':
+    case 'meu_dia_tarefa_hoje':
+    case 'meu_dia_tarefa_amanha':
+      return <Bell className="w-4 h-4 text-orange-500" />;
     default:
       return <Bell className="w-4 h-4 text-gray-600" />;
   }
 };
+
+// Tipos de notificação legados que foram substituídos pela notificação de resumo única.
+// São filtrados da lista para evitar poluição visual de quem usou a versão anterior.
+const LEGACY_HIDDEN_TYPES = new Set([
+  'meu_dia_tarefa_atrasada',
+  'meu_dia_tarefa_hoje',
+  'meu_dia_tarefa_amanha',
+]);
 
 export default function NotificationCenter({ userId, onNavigate }: NotificationCenterProps) {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -53,7 +68,10 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
   const bellRef = useRef<HTMLButtonElement>(null);
   const { user } = useAuth();
 
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications(user);
+  const { notifications: rawNotifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications(user);
+
+  // Filtra notificações legadas da lista de exibição (sem afetar contagem no banco)
+  const notifications = rawNotifications.filter(n => !LEGACY_HIDDEN_TYPES.has(n.type));
 
   const handleNotificationClick = (notification: Notification) => {
     // Trial notifications → redirect direto

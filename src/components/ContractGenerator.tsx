@@ -47,7 +47,22 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
   const [copied, setCopied] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [generatedLeadData, setGeneratedLeadData] = useState<any>(null); // New state to store lead data
+  const [shareMode, setShareMode] = useState<'completo' | 'simplificado' | 'so-link'>('completo');
+  const [showSafariFallback, setShowSafariFallback] = useState(false);
+  const [fallbackUrl, setFallbackUrl] = useState('');
   const planLimits = usePlanLimits();
+
+  const orcamentoDetalhe = lead.orcamento_detalhe || {};
+  const upsellProdutos = orcamentoDetalhe.upsell_produtos || [];
+  const valorUpsell = typeof orcamentoDetalhe.valor_upsell === 'number'
+    ? orcamentoDetalhe.valor_upsell
+    : (typeof orcamentoDetalhe.valor_upsell === 'string' ? parseFloat(orcamentoDetalhe.valor_upsell) : 0);
+  const totalVal = typeof lead.valor_total === 'number'
+    ? lead.valor_total
+    : (typeof lead.valor_total === 'string' ? parseFloat(lead.valor_total) : (orcamentoDetalhe.priceBreakdown?.total || lead.orcamento_total || 0));
+  const valorBase = typeof orcamentoDetalhe.valor_base === 'number'
+    ? orcamentoDetalhe.valor_base
+    : (typeof orcamentoDetalhe.valor_base === 'string' ? parseFloat(orcamentoDetalhe.valor_base) : (totalVal - valorUpsell));
 
   useEffect(() => {
     loadTemplates();
@@ -271,6 +286,9 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         ocultar_valores_intermediarios: ocultarValoresIntermediarios,
         // Plano de pagamento final definido pelo usuário no ConvertLeadModal (se já existir)
         plano_pagamento: orcamentoDetalhe.plano_pagamento || null,
+        upsell_produtos: upsellProdutos,
+        valor_base: valorBase,
+        valor_upsell: valorUpsell,
       };
 
       console.log('=== CONTRACT GENERATOR - LEAD DATA SALVO ===');
@@ -373,40 +391,70 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
   const sendViaWhatsApp = () => {
     if (!generatedLink) return;
 
-    const message = `Olá ${generatedLeadData.nome_cliente}! 📄
+    let message = '';
+    const clientName = generatedLeadData?.nome_cliente || lead.nome_cliente || 'Cliente';
+    const totalVal = typeof generatedLeadData?.valor_total === 'number'
+      ? generatedLeadData.valor_total
+      : (typeof lead.valor_total === 'number' ? lead.valor_total : parseFloat(lead.valor_total || '0'));
 
-Seu orçamento detalhado e contrato digital estão prontos para assinatura.
-
-*Detalhes do Orçamento:*
-${generatedLeadData.produtos && generatedLeadData.produtos.length > 0 ?
-      generatedLeadData.produtos.map((p: any) => `- ${p.nome}: R$ ${p.preco.toFixed(2)}${p.permite_multiplas_unidades !== false ? ` x ${p.quantidade}` : ''}`).join('\n') :
-      'Nenhum produto selecionado.'
+    if (shareMode === 'completo') {
+      message = `Olá ${clientName}! 📄\n\n`;
+      message += `Seu orçamento detalhado e contrato digital estão prontos para assinatura.\n\n`;
+      message += `*Detalhes do Orçamento:*\n`;
+      if (generatedLeadData?.produtos && generatedLeadData.produtos.length > 0) {
+        message += generatedLeadData.produtos.map((p: any) => `- ${p.nome}: R$ ${p.preco.toFixed(2)}${p.permite_multiplas_unidades !== false ? ` x ${p.quantidade}` : ''}`).join('\n') + '\n';
+      } else {
+        message += 'Nenhum produto selecionado.\n';
+      }
+      if (generatedLeadData?.servicos && generatedLeadData.servicos.length > 0) {
+        message += generatedLeadData.servicos.map((s: any) => `- ${s.nome}: R$ ${s.preco.toFixed(2)}`).join('\n') + '\n';
+      }
+      if (generatedLeadData?.desconto_cupom > 0) {
+        message += `Desconto: R$ ${generatedLeadData.desconto_cupom.toFixed(2)}\n`;
+      }
+      if (generatedLeadData?.acrescimo_pagamento > 0) {
+        message += `Acréscimo: R$ ${generatedLeadData.acrescimo_pagamento.toFixed(2)}\n`;
+      }
+      if (generatedLeadData?.upsell_produtos && generatedLeadData.upsell_produtos.length > 0) {
+        message += `\n*Adicionais Contratados (Upsell):*\n`;
+        message += generatedLeadData.upsell_produtos.map((p: any) => {
+          const val = parseFloat(p.valor || p.preco || 0);
+          const desc = p.desconto_percentual ? (1 - p.desconto_percentual / 100) : 1;
+          const finalVal = val * desc;
+          return `- ${p.nome || p.nome_produto}: R$ ${finalVal.toFixed(2)}${p.quantidade > 1 ? ` x ${p.quantidade}` : ''}`;
+        }).join('\n') + '\n';
+      }
+      message += `*Valor Total: R$ ${totalVal.toFixed(2)}*\n\n`;
+      message += `Acesse o link abaixo para revisar e assinar:\n${generatedLink}\n\n`;
+      message += `Este link expira em ${expirationDays} dias.\n\n`;
+      message += `Qualquer dúvida, estou à disposição!`;
+    } else if (shareMode === 'simplificado') {
+      message = `Olá ${clientName}! 📄\n\n`;
+      message += `Seu contrato digital e proposta estão prontos.\n\n`;
+      message += `*Valor Total: R$ ${totalVal.toFixed(2)}*\n\n`;
+      message += `Acesse o link abaixo para revisar os detalhes e assinar:\n${generatedLink}\n\n`;
+      message += `Este link expira em ${expirationDays} dias.`;
+    } else {
+      // so-link
+      message = `Olá ${clientName}! Segue o link para assinatura do seu contrato:\n${generatedLink}`;
     }
-${generatedLeadData.servicos && generatedLeadData.servicos.length > 0 ?
-      generatedLeadData.servicos.map((s: any) => `- ${s.nome}: R$ ${s.preco.toFixed(2)}`).join('\n') :
-      ''
-    }
-${generatedLeadData.desconto_cupom > 0 ? `Desconto: R$ ${generatedLeadData.desconto_cupom.toFixed(2)}\n` : ''}
-${generatedLeadData.acrescimo_pagamento > 0 ? `Acréscimo (${generatedLeadData.acrescimo_pagamento}%): R$ ${(generatedLeadData.valor_total - (generatedLeadData.valor_total / (1 + generatedLeadData.acrescimo_pagamento / 100))).toFixed(2)}\n` : ''}
-*Valor Total: R$ ${generatedLeadData.valor_total.toFixed(2)}*
-
-Acesse o link abaixo para revisar e assinar:
-${generatedLink}
-
-Este link expira em ${expirationDays} dias.
-
-Qualquer dúvida, estou à disposição!`;
 
     const phone = (lead.telefone_cliente || lead.telefone || '').replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+    
+    const newWindow = window.open(whatsappUrl, '_blank');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      setFallbackUrl(whatsappUrl);
+      setShowSafariFallback(true);
+    }
   };
 
   const sendViaEmail = async () => {
     if (!generatedLink) return;
 
     const subject = 'Seu Contrato Digital Está Pronto';
-    const body = `Olá ${lead.nome_cliente},
+    const clientName = generatedLeadData?.nome_cliente || lead.nome_cliente || 'Cliente';
+    const body = `Olá ${clientName},
 
 Seu contrato digital está pronto para assinatura.
 
@@ -417,13 +465,18 @@ Este link expira em ${expirationDays} dias.
 
 Atenciosamente`;
 
-    window.open(`mailto:${lead.email_cliente || lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    const mailtoUrl = `mailto:${lead.email_cliente || lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const newWindow = window.open(mailtoUrl);
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      setFallbackUrl(mailtoUrl);
+      setShowSafariFallback(true);
+    }
   };
 
   if (generatedLink) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 relative">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -461,6 +514,34 @@ Atenciosamente`;
               </div>
             </div>
 
+            {/* Sharing Mode Selector */}
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-medium text-gray-700">Escolha o formato da mensagem:</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'completo', label: 'Completo', desc: 'Produtos, valores e link' },
+                  { id: 'simplificado', label: 'Simplificado', desc: 'Apenas total e link' },
+                  { id: 'so-link', label: 'Só o Link', desc: 'Apenas a URL do contrato' }
+                ].map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setShareMode(mode.id as any)}
+                    className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-all ${
+                      shareMode === mode.id
+                        ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <span className={`text-xs font-bold ${shareMode === mode.id ? 'text-blue-700' : 'text-gray-700'}`}>
+                      {mode.label}
+                    </span>
+                    <span className="text-[10px] text-gray-500 mt-1 leading-tight">{mode.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="border-t pt-4">
               <p className="text-sm font-medium text-gray-700 mb-3">Enviar para o cliente:</p>
               <div className="flex gap-3">
@@ -488,6 +569,49 @@ Atenciosamente`;
             </div>
           </div>
         </div>
+
+        {/* Safari / Mobile popup blocker fallback modal */}
+        {showSafariFallback && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+              <div className="flex items-center gap-3 text-yellow-600">
+                <AlertCircle className="w-6 h-6 shrink-0" />
+                <h3 className="font-bold text-lg text-gray-900">Bloqueador de Popups Ativo</h3>
+              </div>
+              <p className="text-sm text-gray-600">
+                Seu navegador (comum no Safari do iPhone) bloqueou a abertura automática do aplicativo. 
+                Por favor, clique no botão abaixo para abrir diretamente.
+              </p>
+              <div className="flex flex-col gap-2">
+                <a
+                  href={fallbackUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setShowSafariFallback(false)}
+                  className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-center flex items-center justify-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Abrir WhatsApp / Email
+                </a>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(fallbackUrl.includes('wa.me') ? generatedLink || '' : fallbackUrl);
+                    alert('Link copiado!');
+                  }}
+                  className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-center"
+                >
+                  Copiar Link
+                </button>
+                <button
+                  onClick={() => setShowSafariFallback(false)}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium text-center"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -609,7 +733,15 @@ Atenciosamente`;
                 <li>• Telefone: {lead.telefone_cliente || lead.telefone}</li>
                 {lead.data_evento && <li>• Data do Evento: {lead.data_evento}</li>}
                 {lead.cidade && <li>• Cidade: {lead.cidade}</li>}
-                {lead.orcamento_total && <li>• Valor: R$ {lead.orcamento_total.toFixed(2)}</li>}
+                {lead.orcamento_total && (
+                  <li>
+                    • Valor: R$ {lead.orcamento_total.toFixed(2)}
+                    {valorUpsell > 0 && ` (Base: R$ ${valorBase.toFixed(2)} + Adicionais: R$ ${valorUpsell.toFixed(2)})`}
+                  </li>
+                )}
+                {upsellProdutos.length > 0 && (
+                  <li>• Adicionais (Upsell): {upsellProdutos.map((p: any) => p.nome).join(', ')}</li>
+                )}
               </ul>
             </div>
 

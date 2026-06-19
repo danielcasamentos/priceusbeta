@@ -1,4 +1,11 @@
 import { supabase } from '../lib/supabase';
+import { WorkflowStep } from '../types/workflow';
+
+export interface SlotDisponibilidade {
+  horario: string;
+  disponivel: boolean;
+  motivo: string | null;
+}
 
 export interface AvailabilityResult {
   disponivel: boolean;
@@ -9,6 +16,8 @@ export interface AvailabilityResult {
   bloqueada: boolean;
   mensagem: string;
   cor_status: string;
+  modo_agendamento?: 'dia' | 'hora';
+  slots?: SlotDisponibilidade[];
 }
 
 export interface ConfiguracaoAgenda {
@@ -27,6 +36,11 @@ export interface ConfiguracaoAgenda {
   regra_par_impar?: 'nenhum' | 'pares' | 'impares';
   regra_semanal?: 'nenhum' | 'trabalha_pares' | 'trabalha_impares';
   regra_semanal_inicio?: string | null;
+  modo_agendamento?: 'dia' | 'hora';
+  politica_bloqueio?: 'dia_inteiro' | 'por_horario';
+  config_horarios_trabalho?: Record<string, string[]> | null;
+  bloquear_agenda_workflow?: boolean;
+  permitir_conflito_interno?: boolean;
 }
 
 export interface EventoAgenda {
@@ -41,6 +55,9 @@ export interface EventoAgenda {
   observacoes: string;
   importacao_id?: string | null;
   uid_externo?: string;
+  horario_inicio?: string | null;
+  duracao_minutos?: number | null;
+  horario_fim?: string | null;
 }
 
 export interface HistoricoImportacao {
@@ -72,6 +89,7 @@ export interface ImportResult {
 export async function checkAvailability(
   userId: string,
   dataEvento: string,
+  duracaoMinutos?: number,
   retryCount: number = 0
 ): Promise<AvailabilityResult> {
   const maxRetries = 2;
@@ -80,6 +98,7 @@ export async function checkAvailability(
     const { data, error } = await supabase.rpc('check_date_availability', {
       p_user_id: userId,
       p_data_evento: dataEvento,
+      p_duracao_minutos: duracaoMinutos || 60,
     });
 
     if (error) {
@@ -107,6 +126,8 @@ export async function checkAvailability(
       bloqueada: data.bloqueada,
       mensagem: data.mensagem,
       cor_status: statusColorMap[data.status as keyof typeof statusColorMap] || 'gray',
+      modo_agendamento: data.modo_agendamento,
+      slots: data.slots,
     };
   } catch (error) {
     console.error('[AGENDA] Erro ao verificar disponibilidade:', error);
@@ -114,7 +135,7 @@ export async function checkAvailability(
     if (retryCount < maxRetries) {
       const delay = 500 * (retryCount + 1);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return checkAvailability(userId, dataEvento, retryCount + 1);
+      return checkAvailability(userId, dataEvento, duracaoMinutos, retryCount + 1);
     }
 
     return {
@@ -363,7 +384,15 @@ export async function rollbackImportacao(userId: string, importacaoId: string): 
 export async function importarEventosInteligente(
   userId: string,
   nomeArquivo: string,
-  eventos: Array<{ data: string; nome: string; tipo?: string; cidade?: string; uid_externo?: string }>,
+  eventos: Array<{ 
+    data: string; 
+    nome: string; 
+    tipo?: string; 
+    cidade?: string; 
+    uid_externo?: string;
+    horario_inicio?: string | null;
+    duracao_minutos?: number | null;
+  }>,
   estrategia: 'substituir_tudo' | 'adicionar_novos' | 'mesclar_atualizar'
 ): Promise<ImportResult> {
   const result: ImportResult = {
@@ -512,6 +541,8 @@ export async function importarEventosInteligente(
             origem: nomeArquivo === 'google-calendar-sync' ? 'ics_sync' : 'csv_import',
             observacoes: `Importado de ${nomeArquivo}`,
             importacao_id: historicoId,
+            horario_inicio: evento.horario_inicio || null,
+            duracao_minutos: evento.duracao_minutos || null,
           };
           if (evento.uid_externo) {
             (novoPayload as any).uid_externo = evento.uid_externo;
@@ -663,52 +694,138 @@ export async function getPeriodosBloqueados(userId: string) {
   }
 }
 
-const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> => {
-  const parseICalDate = (dateStr: string): string | null => {
-    if (!dateStr || dateStr.length < 8) return null;
-    if (dateStr.endsWith('Z') && dateStr.includes('T')) {
-      try {
-        const year = parseInt(dateStr.substring(0, 4), 10);
-        const month = parseInt(dateStr.substring(4, 6), 10) - 1;
-        const day = parseInt(dateStr.substring(6, 8), 10);
-        const hour = parseInt(dateStr.substring(9, 11), 10);
-        const minute = parseInt(dateStr.substring(11, 13), 10);
-        const second = parseInt(dateStr.substring(13, 15), 10);
-        
-        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute) && !isNaN(second)) {
-          const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+interface ParsedDateTime {
+  date: string;
+  time: string | null;
+  rawDate: Date | null;
+}
+
+const parseICalDateTime = (dateStr: string): ParsedDateTime | null => {
+  if (!dateStr || dateStr.length < 8) return null;
+  const isDateTime = dateStr.includes('T');
+  try {
+    const year = parseInt(dateStr.substring(0, 4), 10);
+    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+    const day = parseInt(dateStr.substring(6, 8), 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+
+    if (isDateTime) {
+      const tIndex = dateStr.indexOf('T');
+      const timePart = dateStr.substring(tIndex + 1);
+      const hour = parseInt(timePart.substring(0, 2), 10);
+      const minute = parseInt(timePart.substring(2, 4), 10);
+      const second = parseInt(timePart.substring(4, 6), 10) || 0;
+
+      if (!isNaN(hour) && !isNaN(minute)) {
+        let dateObj: Date;
+        if (dateStr.endsWith('Z')) {
+          dateObj = new Date(Date.UTC(year, month, day, hour, minute, second));
+        } else {
+          dateObj = new Date(year, month, day, hour, minute, second);
+        }
+
+        try {
           const formatter = new Intl.DateTimeFormat('en-US', {
             timeZone: 'America/Sao_Paulo',
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
           });
-          const parts = formatter.formatToParts(date);
+
+          const parts = formatter.formatToParts(dateObj);
           const y = parts.find(p => p.type === 'year')?.value;
           const m = parts.find(p => p.type === 'month')?.value;
           const d = parts.find(p => p.type === 'day')?.value;
-          if (y && m && d) {
-            return `${y}-${m}-${d}`;
+          const hr = parts.find(p => p.type === 'hour')?.value;
+          const min = parts.find(p => p.type === 'minute')?.value;
+          const sec = parts.find(p => p.type === 'second')?.value;
+
+          if (y && m && d && hr && min) {
+            const normalizedHour = hr === '24' ? '00' : hr;
+            return {
+              date: `${y}-${m}-${d}`,
+              time: `${normalizedHour}:${min}:${sec || '00'}`,
+              rawDate: dateObj,
+            };
           }
+        } catch (_) {
+          const utcMs = Date.UTC(year, month, day, hour, minute, second);
+          const localMs = utcMs - 3 * 60 * 60 * 1000;
+          const localDate = new Date(localMs);
+          const y = localDate.getUTCFullYear();
+          const m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(localDate.getUTCDate()).padStart(2, '0');
+          const hr = String(localDate.getUTCHours()).padStart(2, '0');
+          const min = String(localDate.getUTCMinutes()).padStart(2, '0');
+          const sec = String(localDate.getUTCSeconds()).padStart(2, '0');
+          return {
+            date: `${y}-${m}-${d}`,
+            time: `${hr}:${min}:${sec}`,
+            rawDate: new Date(localMs),
+          };
         }
-      } catch (e) {
-        console.warn('Falha ao formatar data com fuso de Sao Paulo, usando fallback:', e);
       }
     }
-    
+
+    const rawDate = new Date(year, month, day);
+    const mStr = String(month + 1).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    return {
+      date: `${year}-${mStr}-${dStr}`,
+      time: null,
+      rawDate,
+    };
+  } catch (_) {
     const dateMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})/);
     if (dateMatch) {
-      return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+      return {
+        date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
+        time: null,
+        rawDate: null,
+      };
     }
-    return null;
-  };
+  }
+  return null;
+};
 
-  const eventos: Array<{ data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string }> = [];
+const parseICalDuration = (durationStr: string): number | null => {
+  try {
+    const regex = /PT?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+    const match = durationStr.match(regex);
+    if (match) {
+      const hours = parseInt(match[1] || '0', 10);
+      const minutes = parseInt(match[2] || '0', 10);
+      const seconds = parseInt(match[3] || '0', 10);
+      return hours * 60 + minutes + Math.round(seconds / 60);
+    }
+  } catch (_) {}
+  return null;
+};
+
+export interface EventoImportado {
+  data_evento: string;
+  cliente_nome: string;
+  tipo_evento?: string;
+  uid_externo?: string;
+  horario_inicio?: string | null;
+  duracao_minutos?: number | null;
+  horario_fim?: string | null;
+}
+
+const parseICS = (text: string): Array<EventoImportado> => {
+  const eventos: Array<EventoImportado> = [];
   const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
   const lines = unfoldedText.split(/\r?\n/);
 
-  let currentEvent: { data_evento?: string; cliente_nome?: string; tipo_evento?: string; uid_externo?: string } = {};
+  let currentEvent: EventoImportado = { data_evento: '', cliente_nome: '' };
   let inEvent = false;
+  let dtstartVal = '';
+  let dtendVal = '';
+  let durationVal = '';
 
   for (const line of lines) {
     const trimmedLine = line.trim();
@@ -719,24 +836,53 @@ const parseICS = (text: string): Array<{ data_evento: string; cliente_nome: stri
 
     const keyWithParams = trimmedLine.substring(0, colonIndex);
     const value = trimmedLine.substring(colonIndex + 1).trim();
-    const keyParts = keyWithParams.split(';');
-    const key = keyParts[0].trim().toUpperCase();
+    const key = keyWithParams.split(';')[0].trim().toUpperCase();
 
     if (key === 'BEGIN' && value === 'VEVENT') {
       inEvent = true;
-      currentEvent = { tipo_evento: 'evento' };
+      currentEvent = { data_evento: '', cliente_nome: '', tipo_evento: 'evento' };
+      dtstartVal = '';
+      dtendVal = '';
+      durationVal = '';
     } else if (key === 'END' && value === 'VEVENT') {
+      if (dtstartVal) {
+        const startParsed = parseICalDateTime(dtstartVal);
+        if (startParsed) {
+          currentEvent.data_evento = startParsed.date;
+          currentEvent.horario_inicio = startParsed.time;
+
+          let calculatedDuration: number | null = null;
+          if (dtendVal) {
+            const endParsed = parseICalDateTime(dtendVal);
+            if (endParsed && startParsed.rawDate && endParsed.rawDate && startParsed.time && endParsed.time) {
+              const diffMs = endParsed.rawDate.getTime() - startParsed.rawDate.getTime();
+              const diffMin = Math.round(diffMs / (1000 * 60));
+              if (diffMin > 0) {
+                calculatedDuration = diffMin;
+              }
+            }
+          } else if (durationVal) {
+            calculatedDuration = parseICalDuration(durationVal);
+          }
+
+          if (calculatedDuration !== null) {
+            currentEvent.duracao_minutos = calculatedDuration;
+          }
+        }
+      }
+
       if (currentEvent.data_evento && currentEvent.cliente_nome) {
-        eventos.push(currentEvent as { data_evento: string; cliente_nome: string; tipo_evento?: string; uid_externo?: string });
+        eventos.push(currentEvent);
       }
       inEvent = false;
-      currentEvent = {};
+      currentEvent = { data_evento: '', cliente_nome: '' };
     } else if (inEvent) {
       if (key === 'DTSTART') {
-        const parsedDate = parseICalDate(value);
-        if (parsedDate) {
-          currentEvent.data_evento = parsedDate;
-        }
+        dtstartVal = value;
+      } else if (key === 'DTEND') {
+        dtendVal = value;
+      } else if (key === 'DURATION') {
+        durationVal = value;
       } else if (key === 'SUMMARY') {
         currentEvent.cliente_nome = value || 'Evento de Calendário';
       } else if (key === 'UID') {
@@ -786,7 +932,9 @@ export async function uploadICSFile(icsText: string, userId: string): Promise<{s
              status: 'confirmado',
              origem: 'ics_sync',
              observacoes: 'Importado manualmente do calendário externo',
-             created_at: dataHoraAtual
+             created_at: dataHoraAtual,
+             horario_inicio: (evento as any).horario_inicio || null,
+             duracao_minutos: (evento as any).duracao_minutos || null,
           };
           if (evento.uid_externo) {
              novoEventoPayload.uid_externo = evento.uid_externo;
@@ -820,5 +968,88 @@ export async function uploadICSFile(icsText: string, userId: string): Promise<{s
   } catch (error: any) {
     console.error('Erro na sincronização importada:', error);
     return { success: false, message: error.message || 'Erro desconhecido ao importar arquivo ICS.' };
+  }
+}
+
+/**
+ * Sincroniza tarefas de workflow de um lead específico com a tabela eventos_agenda.
+ */
+export async function syncWorkflowToCalendar(
+  userId: string,
+  leadId: string,
+  leadName: string,
+  workflow: WorkflowStep[]
+): Promise<void> {
+  try {
+    // 1. Obter configuração da agenda do profissional
+    const config = await getOrCreateAgendaConfig(userId);
+    const active = config?.bloquear_agenda_workflow ?? false;
+
+    // 2. Buscar eventos sincronizados desse workflow do banco
+    const { data: existingEvents } = await supabase
+      .from('eventos_agenda')
+      .select('id, uid_externo')
+      .eq('lead_id', leadId)
+      .eq('origem', 'workflow');
+
+    const existingEventsMap = new Map(
+      (existingEvents || []).map((e: any) => [e.uid_externo, e.id])
+    );
+
+    // 3. Processar cada etapa do workflow
+    for (const step of workflow) {
+      const uid = `workflow_${step.id}`;
+      const hasDateTime = step.deadline && step.horario_inicio && step.duracao_minutos;
+      const shouldSync = active && hasDateTime && step.status !== 'concluido';
+
+      if (shouldSync) {
+        const eventPayload = {
+          user_id: userId,
+          lead_id: leadId,
+          data_evento: step.deadline,
+          tipo_evento: step.label,
+          cliente_nome: leadName,
+          observacoes: step.description || 'Tarefa de Workflow',
+          horario_inicio: step.horario_inicio,
+          duracao_minutos: step.duracao_minutos,
+          ambiente: step.ambiente || 'externo',
+          origem: 'workflow',
+          status: 'confirmado',
+          uid_externo: uid
+        };
+
+        if (existingEventsMap.has(uid)) {
+          const eventId = existingEventsMap.get(uid);
+          await supabase
+            .from('eventos_agenda')
+            .update(eventPayload)
+            .eq('id', eventId);
+          existingEventsMap.delete(uid);
+        } else {
+          await supabase
+            .from('eventos_agenda')
+            .insert([eventPayload]);
+        }
+      } else {
+        if (existingEventsMap.has(uid)) {
+          const eventId = existingEventsMap.get(uid);
+          await supabase
+            .from('eventos_agenda')
+            .delete()
+            .eq('id', eventId);
+          existingEventsMap.delete(uid);
+        }
+      }
+    }
+
+    // 4. Limpar eventos órfãos de etapas deletadas
+    for (const eventId of existingEventsMap.values()) {
+      await supabase
+        .from('eventos_agenda')
+        .delete()
+        .eq('id', eventId);
+    }
+  } catch (err) {
+    console.error('Erro ao sincronizar workflow com calendário:', err);
   }
 }

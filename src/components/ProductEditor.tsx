@@ -21,6 +21,11 @@ interface Product {
   permite_multiplas_unidades?: boolean;
   /** Desconto percentual (0–100). Zero = sem desconto */
   desconto_percentual?: number;
+  /** Destacar este produto com um badge especial no orçamento */
+  destacar_produto?: boolean;
+  /** Texto exibido no badge de destaque (ex: Mais Vendido) */
+  destaque_texto?: string;
+  duracao_minutos?: number | null;
 }
 
 interface ProductEditorProps {
@@ -54,6 +59,10 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [imageKey, setImageKey] = useState(Date.now());
+  const [unitType, setUnitType] = useState<'hours' | 'minutes'>(() => {
+    if (!product.duracao_minutos) return 'hours';
+    return product.duracao_minutos % 60 === 0 ? 'hours' : 'minutes';
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +104,9 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         carrossel_automatico: product.carrossel_automatico || false,
         permite_multiplas_unidades: product.permite_multiplas_unidades ?? true,
         desconto_percentual: product.desconto_percentual ?? 0,
+        destacar_produto: product.destacar_produto ?? false,
+        destaque_texto: product.destaque_texto ?? null,
+        duracao_minutos: product.duracao_minutos ?? null,
       };
 
       const { data, error: insertError } = await supabase
@@ -473,6 +485,69 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         </div>
       </div>
 
+      {/* Duração do Serviço */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Duração do Serviço / Evento
+        </label>
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            value={(() => {
+              if (product.duracao_minutos === null || product.duracao_minutos === undefined) return '';
+              return unitType === 'hours'
+                ? Math.round((product.duracao_minutos / 60) * 100) / 100
+                : product.duracao_minutos;
+            })()}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '') {
+                onChange('duracao_minutos', null);
+              } else {
+                const parsedVal = parseFloat(val);
+                if (!isNaN(parsedVal) && parsedVal >= 0) {
+                  const minutes = unitType === 'hours'
+                    ? Math.round(parsedVal * 60)
+                    : Math.round(parsedVal);
+                  onChange('duracao_minutos', minutes);
+                }
+              }
+            }}
+            placeholder={unitType === 'hours' ? 'Ex: 1.5' : 'Ex: 90'}
+            min={0}
+            step={unitType === 'hours' ? 0.25 : 5}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <div className="flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
+            <button
+              type="button"
+              onClick={() => setUnitType('hours')}
+              className={`px-3 py-2 text-sm font-semibold transition-colors ${
+                unitType === 'hours'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Horas
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnitType('minutes')}
+              className={`px-3 py-2 text-sm font-semibold border-l border-gray-300 transition-colors ${
+                unitType === 'minutes'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Minutos
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Informe o tempo estimado para este serviço. Usado para calcular slots livres na agenda.
+        </p>
+      </div>
+
       {/* Upload de Imagem */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -739,6 +814,67 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
             </span>
           )}
         </div>
+      </div>
+
+      {/* Destaque do Produto */}
+      <div className="border border-amber-200 rounded-xl p-4 bg-amber-50 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⭐</span>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Destaque este produto</p>
+              <p className="text-xs text-gray-500">Exibe um badge especial neste pacote no orçamento</p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              id={`highlight-${product.ordem}`}
+              checked={product.destacar_produto ?? false}
+              onChange={(e) => onChange('destacar_produto', e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+
+        {product.destacar_produto && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-700">Texto do badge:</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {['Mais Vendido', 'Mais Popular', 'Melhor Opção', 'Recomendado', 'Exclusivo', 'Super Oferta'].map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => onChange('destaque_texto', label)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                    product.destaque_texto === label
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-amber-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={product.destaque_texto ?? ''}
+              onChange={(e) => onChange('destaque_texto', e.target.value)}
+              placeholder="Ou escreva um texto personalizado..."
+              maxLength={30}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent text-sm"
+            />
+            {product.destaque_texto && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-gray-500">Preview:</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold shadow">
+                  ⭐ {product.destaque_texto}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Botões de Ação */}

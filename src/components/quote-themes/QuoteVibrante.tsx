@@ -125,8 +125,10 @@ export function QuoteVibrante(props: QuoteVibranteProps) {
                 {produtos.map((produto: any) => (
                   <div
                     key={produto.id}
-                    className={`border-2 rounded-xl p-4 transition-all ${
-                      selectedProdutos[produto.id]
+                    className={`border-2 rounded-xl p-4 transition-all relative ${
+                      produto.destacar_produto
+                        ? 'border-pink-500 bg-gradient-to-r from-pink-50/50 to-purple-50/50 shadow-[0_8px_30px_rgba(236,72,153,0.22)] ring-2 ring-pink-500/30 scale-[1.01]'
+                        : selectedProdutos[produto.id]
                         ? 'border-pink-500 bg-gradient-to-r from-pink-50 to-purple-50 shadow-lg'
                         : 'border-pink-200 hover:border-pink-300'
                     }`}
@@ -151,6 +153,11 @@ export function QuoteVibrante(props: QuoteVibranteProps) {
                         </div>
                       )}
                       <div className="flex-1">
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white rounded-full px-2.5 py-0.5 text-[10px] font-black tracking-wider uppercase mb-1 shadow-sm">
+                            💖 {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 className="font-bold text-lg text-gray-900">{produto.nome}</h4>
                         {produto.resumo && <p className="text-sm text-gray-600 mt-1">{produto.resumo}</p>}
                         {!template.ocultar_valores_intermediarios && (

@@ -116,9 +116,85 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
   const [horasSemana, setHorasSemana] = useState<number>(40);
   const [diasSemana, setDiasSemana]   = useState<number>(5);
   const [lucroDesejado, setLucroDesejado] = useState<number>(3000);
+  const [modoCalculo, setModoCalculo] = useState<'manual' | 'dinamico'>('manual');
+
+  const [dynamicHorasWorkflow, setDynamicHorasWorkflow] = useState<number>(0);
+  const [dynamicHorasTasks, setDynamicHorasTasks] = useState<number>(0);
+  const [dynamicHorasContracts, setDynamicHorasContracts] = useState<number>(0);
 
   const isFirstLoad = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load dynamic hours from different sources ─────────────────────────
+  const loadDynamicHours = async () => {
+    if (!userId) return;
+    try {
+      // 1. Pending/active workflows (leads with status = 'convertido')
+      const { data: leadsWorkflow } = await supabase
+        .from('leads')
+        .select('workflow')
+        .eq('user_id', userId)
+        .eq('status', 'convertido');
+
+      let workflowMinutes = 0;
+      if (leadsWorkflow) {
+        leadsWorkflow.forEach(lead => {
+          const steps = Array.isArray(lead.workflow) ? lead.workflow : [];
+          steps.forEach((step: any) => {
+            if (step.status !== 'concluido' && step.duracao_minutos) {
+              workflowMinutes += Number(step.duracao_minutos);
+            }
+          });
+        });
+      }
+      setDynamicHorasWorkflow(workflowMinutes / 60);
+
+      // 2. Incomplete company tasks
+      const { data: tasks } = await supabase
+        .from('company_tasks')
+        .select('duracao_minutos')
+        .eq('user_id', userId)
+        .eq('concluida', false);
+
+      let tasksMinutes = 0;
+      if (tasks) {
+        tasks.forEach(t => {
+          if (t.duracao_minutos) {
+            tasksMinutes += Number(t.duracao_minutos);
+          }
+        });
+      }
+      setDynamicHorasTasks(tasksMinutes / 60);
+
+      // 3. Closed leads in the current month (status = 'finalizado', updated_at in current month)
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: leadsClosed } = await supabase
+        .from('leads')
+        .select('orcamento_detalhe')
+        .eq('user_id', userId)
+        .eq('status', 'finalizado')
+        .gte('updated_at', startOfMonth.toISOString());
+
+      let closedMinutes = 0;
+      if (leadsClosed) {
+        leadsClosed.forEach(lead => {
+          const detail = lead.orcamento_detalhe || {};
+          const produtos = Array.isArray(detail.produtos) ? detail.produtos : [];
+          produtos.forEach((p: any) => {
+            const qty = Number(p.quantidade || p.qty || 1);
+            const duration = Number(p.duracao_minutos || p.duracao || 0);
+            closedMinutes += duration * qty;
+          });
+        });
+      }
+      setDynamicHorasContracts(closedMinutes / 60);
+    } catch (err) {
+      console.error('Erro ao calcular horas dinâmicas:', err);
+    }
+  };
 
   // ── Load from Supabase on mount ─────────────────────────
   useEffect(() => {
@@ -126,7 +202,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
     setLoadingConfig(true);
     supabase
       .from('profiles')
-      .select('horas_semana, dias_semana, lucro_desejado')
+      .select('horas_semana, dias_semana, lucro_desejado, modo_calculo_hora')
       .eq('id', userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -134,6 +210,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
           setHorasSemana(data.horas_semana    ?? 40);
           setDiasSemana(data.dias_semana      ?? 5);
           setLucroDesejado(data.lucro_desejado ?? 3000);
+          setModoCalculo((data.modo_calculo_hora as 'manual' | 'dinamico') ?? 'manual');
         }
       })
       .then(() => {
@@ -145,6 +222,13 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
       });
   }, [userId]);
 
+  // Load dynamic hours when in dynamic mode
+  useEffect(() => {
+    if (userId && modoCalculo === 'dinamico') {
+      loadDynamicHours();
+    }
+  }, [userId, modoCalculo]);
+
   // ── Debounced save (800ms) ──────────────────────────────
   useEffect(() => {
     if (isFirstLoad.current || loadingConfig) return;
@@ -152,7 +236,12 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
     debounceRef.current = setTimeout(async () => {
       const { error } = await supabase
         .from('profiles')
-        .update({ horas_semana: horasSemana, dias_semana: diasSemana, lucro_desejado: lucroDesejado })
+        .update({ 
+          horas_semana: horasSemana, 
+          dias_semana: diasSemana, 
+          lucro_desejado: lucroDesejado,
+          modo_calculo_hora: modoCalculo
+        })
         .eq('id', userId);
       if (!error) {
         setSavedIndicator(true);
@@ -160,18 +249,22 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
       }
     }, 800);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [horasSemana, diasSemana, lucroDesejado, userId, loadingConfig]);
+  }, [horasSemana, diasSemana, lucroDesejado, modoCalculo, userId, loadingConfig]);
 
   // ── Cálculos ──────────────────────────────────────────
   const SEMANAS_MES = 4.33;
 
   const custosFixosMensal = Math.max(0, mediaDespesasMensal);
   const metaReceita       = custosFixosMensal + lucroDesejado;
-  const horasMensal       = horasSemana * SEMANAS_MES;
-  const horasDia          = diasSemana > 0 ? horasSemana / diasSemana : 0;
+
+  const totalDynamicHours = dynamicHorasWorkflow + dynamicHorasTasks + dynamicHorasContracts;
+  const horasMensal       = modoCalculo === 'dinamico' ? totalDynamicHours : (horasSemana * SEMANAS_MES);
+  const horasSemanaCalculada = modoCalculo === 'dinamico' ? (horasMensal / SEMANAS_MES) : horasSemana;
+  const horasDia          = diasSemana > 0 ? horasSemanaCalculada / diasSemana : 0;
+
   const valorHora         = horasMensal > 0 ? metaReceita / horasMensal : 0;
   const valorDia          = valorHora * horasDia;
-  const valorSemana       = valorHora * horasSemana;
+  const valorSemana       = valorHora * horasSemanaCalculada;
   const valorMes          = metaReceita;
   const lucroAtual        = mediaReceitasMensal - mediaDespesasMensal;
   const coberturaPercent  = metaReceita > 0 ? (mediaReceitasMensal / metaReceita) * 100 : 0;
@@ -221,12 +314,12 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
     list.push({
       icon: Lightbulb,
       title: 'Precificação saudável',
-      desc: `Com ${horasSemana}h/semana, seu valor mínimo por hora é ${formatCurrency(valorHora)} para cobrir custos e atingir ${formatCurrency(lucroDesejado)}/mês de lucro.`,
+      desc: `Com ${horasSemanaCalculada.toFixed(1)}h/semana, seu valor mínimo por hora é ${formatCurrency(valorHora)} para cobrir custos e atingir ${formatCurrency(lucroDesejado)}/mês de lucro.`,
       accent: 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300',
     });
 
     return list;
-  }, [jaUltrapassou, faltaParaMeta, coberturaPercent, valorHora, lucroAtual, investMensal, patrimonioAnual, horasSemana, lucroDesejado, metaReceita, mediaReceitasMensal]);
+  }, [jaUltrapassou, faltaParaMeta, coberturaPercent, valorHora, lucroAtual, investMensal, patrimonioAnual, horasSemanaCalculada, lucroDesejado, metaReceita, mediaReceitasMensal]);
 
   return (
     <div className="bg-white dark:bg-[#0a1628] rounded-2xl border border-gray-200 dark:border-white/10 shadow-lg overflow-hidden">
@@ -267,6 +360,80 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
         <div className="px-6 pb-6 space-y-6">
           <div className="h-px bg-gray-100 dark:bg-white/10" />
 
+          {/* ── Modo de Cálculo ── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50 dark:bg-white/5 rounded-xl p-4 border border-gray-100 dark:border-white/10">
+            <div>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Modo de Cálculo das Horas</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Escolha se quer definir suas horas manualmente ou calculá-las dinamicamente a partir dos workflows, tarefas administrativas e leads fechados.
+              </p>
+            </div>
+            <div className="flex bg-gray-100 dark:bg-white/10 p-1 rounded-xl w-fit self-start sm:self-center">
+              <button
+                onClick={() => setModoCalculo('manual')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  modoCalculo === 'manual'
+                    ? 'bg-emerald-500 text-white shadow-md'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                Manual
+              </button>
+              <button
+                onClick={() => setModoCalculo('dinamico')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  modoCalculo === 'dinamico'
+                    ? 'bg-emerald-500 text-white shadow-md'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                Dinâmico
+              </button>
+            </div>
+          </div>
+
+          {/* ── Detalhamento Dinâmico ── */}
+          {modoCalculo === 'dinamico' && (
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <BarChart2 className="w-4 h-4" />
+                <span className="text-sm font-bold">Detalhamento das Horas Dinâmicas</span>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                As suas horas mensais foram calculadas dinamicamente com base nas suas atividades atuais e projetos concluídos no mês corrente:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div className="bg-white dark:bg-[#0c1e35] p-3 rounded-lg border border-gray-100 dark:border-white/5 space-y-1">
+                  <span className="text-gray-400 dark:text-gray-500">Workflows Ativos</span>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">
+                    {dynamicHorasWorkflow.toFixed(1)} <span className="text-xs font-medium">horas</span>
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Etapas pendentes</p>
+                </div>
+                <div className="bg-white dark:bg-[#0c1e35] p-3 rounded-lg border border-gray-100 dark:border-white/5 space-y-1">
+                  <span className="text-gray-400 dark:text-gray-500">Tarefas Administrativas</span>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">
+                    {dynamicHorasTasks.toFixed(1)} <span className="text-xs font-medium">horas</span>
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Meu Dia (incompletas)</p>
+                </div>
+                <div className="bg-white dark:bg-[#0c1e35] p-3 rounded-lg border border-gray-100 dark:border-white/5 space-y-1">
+                  <span className="text-gray-400 dark:text-gray-500">Projetos Fechados (Mês)</span>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">
+                    {dynamicHorasContracts.toFixed(1)} <span className="text-xs font-medium">horas</span>
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Duração dos produtos</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-emerald-500/10">
+                <span className="font-semibold text-gray-700 dark:text-gray-300">Total de Horas Dinâmicas no Mês</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                  {totalDynamicHours.toFixed(1)}h / mês (~{(totalDynamicHours / SEMANAS_MES).toFixed(1)}h/sem)
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* ── Inputs ── */}
           <div>
             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">
@@ -274,9 +441,37 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
               <span className="ml-2 normal-case font-normal text-gray-300 dark:text-gray-600">• salvo automaticamente no seu perfil</span>
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <InputRow label="Horas por semana" hint="Quanto você trabalha" value={horasSemana} onChange={setHorasSemana} min={1} max={80} step={1} suffix="h" />
-              <InputRow label="Dias úteis por semana" hint="Dias que você trabalha" value={diasSemana} onChange={setDiasSemana} min={1} max={7} step={1} suffix="dias" />
-              <InputRow label="Lucro desejado" hint="Meta de lucro mensal" value={lucroDesejado} onChange={setLucroDesejado} min={0} max={100000} step={100} prefix="R$" />
+              <InputRow 
+                label="Horas por semana" 
+                hint="Quanto você trabalha" 
+                value={Math.round(horasSemanaCalculada)} 
+                onChange={setHorasSemana} 
+                min={1} 
+                max={80} 
+                step={1} 
+                suffix="h" 
+                disabled={modoCalculo === 'dinamico'}
+              />
+              <InputRow 
+                label="Dias úteis por semana" 
+                hint="Dias que você trabalha" 
+                value={diasSemana} 
+                onChange={setDiasSemana} 
+                min={1} 
+                max={7} 
+                step={1} 
+                suffix="dias" 
+              />
+              <InputRow 
+                label="Lucro desejado" 
+                hint="Meta de lucro mensal" 
+                value={lucroDesejado} 
+                onChange={setLucroDesejado} 
+                min={0} 
+                max={100000} 
+                step={100} 
+                prefix="R$" 
+              />
             </div>
           </div>
 
@@ -332,7 +527,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
                 color="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" />
               <MetricCard label="Por dia" value={formatCurrency(valorDia)} sub={`${horasDia.toFixed(1)}h de trabalho`} icon={Calendar}
                 color="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300" />
-              <MetricCard label="Por semana" value={formatCurrency(valorSemana)} sub={`${horasSemana}h trabalhadas`} icon={BarChart2}
+              <MetricCard label="Por semana" value={formatCurrency(valorSemana)} sub={`${horasSemanaCalculada.toFixed(1)}h trabalhadas`} icon={BarChart2}
                 color="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300" />
               <MetricCard label="Por mês" value={formatCurrency(valorMes)} sub="Meta + custos" icon={DollarSign}
                 color="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300" />

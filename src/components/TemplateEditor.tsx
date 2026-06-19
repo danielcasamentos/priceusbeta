@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, BarChart3, Image, Send, Loader2, Calendar } from 'lucide-react';
+import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, BarChart3, Image, Send, Loader2, Calendar, TrendingUp } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkTemplateSlugAvailability } from '../lib/slugUtils';
 import { ProductList } from './ProductList';
 import { PaymentMethodEditor } from './PaymentMethodEditor';
@@ -27,6 +27,9 @@ interface Produto {
   carrossel_automatico?: boolean;
   permite_multiplas_unidades?: boolean;
   desconto_percentual?: number;
+  destacar_produto?: boolean;
+  destaque_texto?: string;
+  duracao_minutos?: number | null;
 }
 
 interface FormaPagamento {
@@ -69,6 +72,13 @@ interface Template {
   ocultar_data_criacao?: boolean;
   dias_semana_bloqueados?: number[];
   limitar_parcelas_pelo_evento?: boolean;
+  // Upsell
+  upsell_ativo?: boolean;
+  upsell_template_id?: string | null;
+  upsell_produtos_ids?: string[];
+  upsell_titulo?: string;
+  upsell_subtitulo?: string;
+  upsell_layout?: 'grid' | 'carousel' | 'list';
 }
 
 interface TemplateEditorProps {
@@ -87,7 +97,7 @@ const DIAS_SEMANA = [
 ];
 
 export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
-  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'analytics' | 'config'>('produtos');
+  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'analytics' | 'upsell' | 'config'>('produtos');
   const [template, setTemplate] = useState<Template | null>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
@@ -106,6 +116,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     type: 'success' | 'error' | 'info' | null;
   }>({ saving: false, message: null, type: null });
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // ── Upsell states ──────────────────────────────────────────────────────────
+  const [allUserTemplates, setAllUserTemplates] = useState<{ id: string; nome_template: string }[]>([]);
+  const [upsellSourceProducts, setUpsellSourceProducts] = useState<Produto[]>([]);
+  const [loadingUpsellProducts, setLoadingUpsellProducts] = useState(false);
+  const [upsellSaveStatus, setUpsellSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // ── Estados locais para campos de texto livre (sem salvar a cada tecla) ──
   const [localTextoBtn, setLocalTextoBtn] = useState('');
@@ -172,6 +188,22 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       if (profileData?.slug_usuario) {
         setUserSlug(profileData.slug_usuario);
       }
+
+      // Carregar todos os templates do usuário para seleção de fonte de upsell
+      if (templateData?.user_id) {
+        const { data: templatesData } = await supabase
+          .from('templates')
+          .select('id, nome_template')
+          .eq('user_id', templateData.user_id)
+          .neq('id', templateId)
+          .order('nome_template');
+        setAllUserTemplates(templatesData || []);
+      }
+
+      // Se já há um template de upsell configurado, carregar seus produtos
+      if (templateData?.upsell_template_id) {
+        loadUpsellSourceProducts(templateData.upsell_template_id);
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -201,6 +233,53 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     }
   };
 
+  // ── Upsell helpers ────────────────────────────────────────────────────────
+  const loadUpsellSourceProducts = async (sourceTemplateId: string) => {
+    setLoadingUpsellProducts(true);
+    try {
+      const { data } = await supabase
+        .from('produtos')
+        .select('id, nome, resumo, valor, imagem_url, desconto_percentual')
+        .eq('template_id', sourceTemplateId)
+        .order('ordem');
+      setUpsellSourceProducts((data || []) as Produto[]);
+    } catch (err) {
+      console.error('Erro ao carregar produtos do template upsell:', err);
+    } finally {
+      setLoadingUpsellProducts(false);
+    }
+  };
+
+  const handleUpsellTemplateChange = async (newTemplateId: string) => {
+    const value = newTemplateId || null;
+    await handleUpdateTemplateConfig('upsell_template_id', value);
+    await handleUpdateTemplateConfig('upsell_produtos_ids', []);
+    setUpsellSourceProducts([]);
+    if (value) loadUpsellSourceProducts(value);
+  };
+
+  const handleToggleUpsellProduct = async (produtoId: string) => {
+    const current = template?.upsell_produtos_ids || [];
+    const updated = current.includes(produtoId)
+      ? current.filter(id => id !== produtoId)
+      : [...current, produtoId];
+    await handleUpdateTemplateConfig('upsell_produtos_ids', updated);
+  };
+
+  const handleSaveUpsellTexts = async () => {
+    setUpsellSaveStatus('saving');
+    try {
+      await supabase.from('templates').update({
+        upsell_titulo: template?.upsell_titulo,
+        upsell_subtitulo: template?.upsell_subtitulo,
+      }).eq('id', templateId);
+      setUpsellSaveStatus('saved');
+    } catch {
+      setUpsellSaveStatus('error');
+    }
+    setTimeout(() => setUpsellSaveStatus('idle'), 2500);
+  };
+
   const calculateTotalValue = () => {
     return produtos.reduce((sum, p) => sum + p.valor, 0);
   };
@@ -221,6 +300,9 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         carrossel_automatico: false,
         permite_multiplas_unidades: true,
         desconto_percentual: 0,
+        destacar_produto: false,
+        destaque_texto: undefined,
+        duracao_minutos: null,
       },
     ]);
   };
@@ -260,6 +342,9 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       carrossel_automatico: produtoOriginal.carrossel_automatico || false,
       permite_multiplas_unidades: produtoOriginal.permite_multiplas_unidades ?? true,
       desconto_percentual: produtoOriginal.desconto_percentual ?? 0,
+      destacar_produto: false, // duplicates start without highlight
+      destaque_texto: undefined,
+      duracao_minutos: produtoOriginal.duracao_minutos ?? null,
     };
 
     const novosProdutos = [...produtos];
@@ -290,6 +375,9 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           carrossel_automatico: produto.carrossel_automatico || false,
           permite_multiplas_unidades: produto.permite_multiplas_unidades ?? true,
           desconto_percentual: produto.desconto_percentual ?? 0,
+          destacar_produto: produto.destacar_produto ?? false,
+          destaque_texto: produto.destaque_texto ?? null,
+          duracao_minutos: produto.duracao_minutos ?? null,
         };
 
         if (produto.id) {
@@ -575,6 +663,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     { id: 'precos', label: 'Preços', icon: MapPin },
     { id: 'aparencia', label: 'Aparência', icon: Palette },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'upsell', label: 'Upsell', icon: TrendingUp },
     { id: 'config', label: 'Configurações', icon: null },
   ];
 
@@ -827,6 +916,203 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
 
           {activeTab === 'analytics' && (
             <QuoteAnalytics templateId={templateId} />
+          )}
+
+          {activeTab === 'upsell' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold dark:text-white flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-emerald-600" />
+                    Sistema de Upselling
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Ofereça produtos extras ao cliente após ele visualizar o orçamento principal.
+                  </p>
+                </div>
+                {/* Toggle ativar upsell */}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={template?.upsell_ativo || false}
+                    onChange={(e) => handleUpdateTemplateConfig('upsell_ativo', e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {template?.upsell_ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </label>
+              </div>
+
+              {!template?.upsell_ativo && (
+                <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-lg p-4 text-sm text-amber-700 dark:text-amber-400">
+                  ⚡ Ative o Upsell acima para configurar e exibir ofertas extras no orçamento do cliente.
+                </div>
+              )}
+
+              {template?.upsell_ativo && (
+                <>
+                  {/* Template fonte */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                      1. Template fonte dos produtos de Upsell
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Escolha um template secundário (ex: &ldquo;Ensaio&rdquo;, &ldquo;Promoções&rdquo;) cujos produtos serão oferecidos como extras.
+                    </p>
+                    {allUserTemplates.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">
+                        Você não tem outros templates. Crie um template separado para seus produtos de upsell.
+                      </p>
+                    ) : (
+                      <select
+                        value={template?.upsell_template_id || ''}
+                        onChange={(e) => handleUpsellTemplateChange(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="">— Selecione um template —</option>
+                        {allUserTemplates.map(t => (
+                          <option key={t.id} value={t.id}>{t.nome_template}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Layout do Upsell */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+                      2. Layout do Carrossel / Exibição de Ofertas
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Escolha como as ofertas adicionais serão exibidas para o seu cliente final no orçamento.
+                    </p>
+                    <select
+                      value={template?.upsell_layout || 'grid'}
+                      onChange={(e) => handleUpdateTemplateConfig('upsell_layout', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="grid">Grid de 2 colunas (Compacto, sem fotos grandes)</option>
+                      <option value="carousel">Carrossel horizontal (Deslizável, com miniaturas e indicação de mais itens à direita)</option>
+                      <option value="list">Lista minimalista (Checkbox e preço - Super limpo)</option>
+                    </select>
+                  </div>
+
+                  {/* Seleção de produtos */}
+                  {template?.upsell_template_id && (
+                    <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                        3. Produtos a oferecer
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        Marque quais produtos deste template serão exibidos como oferta extra. O sistema filtra automaticamente itens que o cliente já tem no pacote.
+                      </p>
+                      {loadingUpsellProducts ? (
+                        <div className="flex items-center gap-2 text-gray-500 py-4">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Carregando produtos...
+                        </div>
+                      ) : upsellSourceProducts.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">
+                          Nenhum produto encontrado neste template.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {upsellSourceProducts.map(p => {
+                            const isSelected = (template?.upsell_produtos_ids || []).includes(p.id || '');
+                            return (
+                              <label
+                                key={p.id}
+                                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10'
+                                    : 'border-gray-200 dark:border-[rgba(255,255,255,.08)] hover:border-gray-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleUpsellProduct(p.id || '')}
+                                  className="w-4 h-4 text-emerald-600 rounded"
+                                />
+                                {p.imagem_url && (
+                                  <img src={p.imagem_url} alt={p.nome} className="w-10 h-10 object-cover rounded flex-shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900 dark:text-white text-sm">{p.nome}</div>
+                                  {p.resumo && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.resumo}</div>}
+                                </div>
+                                <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 flex-shrink-0">
+                                  {p.desconto_percentual && p.desconto_percentual > 0
+                                    ? `R$ ${(p.valor * (1 - p.desconto_percentual / 100)).toFixed(2).replace('.', ',')}`
+                                    : `R$ ${p.valor.toFixed(2).replace('.', ',')}`
+                                  }
+                                  {p.desconto_percentual && p.desconto_percentual > 0 && (
+                                    <span className="ml-1 text-xs line-through text-gray-400">
+                                      R$ {p.valor.toFixed(2).replace('.', ',')}
+                                    </span>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Textos da seção */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
+                      4. Textos da seção de Upsell
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título</label>
+                        <input
+                          type="text"
+                          value={template?.upsell_titulo || ''}
+                          onChange={(e) => setTemplate(prev => prev ? { ...prev, upsell_titulo: e.target.value } : null)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Aproveite estas ofertas especiais! 🎁"
+                          maxLength={80}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subtítulo</label>
+                        <input
+                          type="text"
+                          value={template?.upsell_subtitulo || ''}
+                          onChange={(e) => setTemplate(prev => prev ? { ...prev, upsell_subtitulo: e.target.value } : null)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Itens exclusivos para complementar seu pacote"
+                          maxLength={120}
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveUpsellTexts}
+                        disabled={upsellSaveStatus === 'saving'}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60 text-sm font-medium"
+                      >
+                        {upsellSaveStatus === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        {upsellSaveStatus === 'saving' ? 'Salvando...' : upsellSaveStatus === 'saved' ? '✓ Salvo!' : 'Salvar Textos'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preview */}
+                  {(template?.upsell_produtos_ids || []).length > 0 && (
+                    <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 rounded-lg p-4">
+                      <p className="text-sm font-medium text-emerald-800 dark:text-emerald-400">
+                        ✅ {(template?.upsell_produtos_ids || []).length} produto(s) de upsell configurado(s).
+                        Eles aparecerão automaticamente no orçamento do cliente após os produtos principais.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           {activeTab === 'config' && (

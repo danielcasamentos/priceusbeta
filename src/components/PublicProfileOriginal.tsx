@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink } from 'lucide-react';
 import { StarRating } from './StarRating';
+import { getThemeInlineStyles } from '../lib/themeStyles';
 
 interface Profile {
   id: string;
@@ -166,8 +167,12 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               {templates.map((template) => {
-                const isPromo = template.tema === 'promocional' || template.tema === 'oferta';
+                const CLASSIC_THEMES = ['moderno', 'classico', 'romantico', 'vibrante', 'natural', 'minimalista', 'darkstudio', 'pretoebranco', 'escuro', 'studio', 'pdf-elegante', 'pdf-elegante-2'];
+                const isPromo = !!template.tema && !CLASSIC_THEMES.includes(template.tema);
                 const isOferta = template.tema === 'oferta';
+                const temaStyles = getThemeInlineStyles(template.tema || 'moderno');
+                const themeEmoji = temaStyles.themeEmoji || '✨';
+                const themeName = template.tema ? template.tema.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Especial';
                 return (
                   <Link
                     key={template.id}
@@ -203,8 +208,9 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
                       </div>
                     )}
                     {isPromo && !isOferta && (
-                      <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full animate-pulse shadow-md tracking-wider flex items-center gap-1 z-10">
-                        🔥 OFERTA
+                      <div className="absolute top-3 right-3 text-white text-[10px] font-black px-2.5 py-1 rounded-full animate-pulse shadow-md tracking-wider flex items-center gap-1 z-10"
+                        style={{ background: `linear-gradient(135deg, ${temaStyles.accentColor || '#dc2626'}, ${temaStyles.accentColor || '#ea580c'})` }}>
+                        {themeEmoji} {themeName}
                       </div>
                     )}
                     <div className="p-6 sm:p-8">

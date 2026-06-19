@@ -15,7 +15,7 @@ import { useReviewRequest } from '../../hooks/useReviewRequest';
 
 
 // New interface to match what's saved in lead.orcamento_detalhe by QuotePage
-interface LeadOrcamentoDetalhe {
+export interface LeadOrcamentoDetalhe {
   selectedProdutos: Record<string, number>; // { productId: quantity }
   selectedFormaPagamento?: string; // ID da forma de pagamento
   produtos: Product[]; // Full list of products from the template
@@ -26,6 +26,9 @@ interface LeadOrcamentoDetalhe {
   sistema_geografico_ativo?: boolean;
   ocultar_valores_intermediarios?: boolean;
   priceBreakdown: PriceBreakdown;
+  upsell_produtos?: any[];
+  valor_base?: number;
+  valor_upsell?: number;
 }
 
 interface City {
@@ -203,6 +206,7 @@ export function LeadsManager({ userId }: { userId: string }) {
 
       customFields: savedOrcamentoDetalhe.customFields || [],
       customFieldsData: savedOrcamentoDetalhe.customFieldsData || {},
+      upsellProducts: savedOrcamentoDetalhe.upsell_produtos || [],
       context: 'photographer-to-client',
     });
 
@@ -875,8 +879,13 @@ export function LeadsManager({ userId }: { userId: string }) {
 
                 <div>
                   <h3 className="font-semibold text-gray-700">Orçamento</h3>
-                  <div className="mt-2">
+                  <div className="mt-2 space-y-1">
                     <p><strong>Valor Total:</strong> {formatCurrency(selectedLead.valor_total)}</p>
+                    {detalhesOrcamento && detalhesOrcamento.valor_upsell !== undefined && detalhesOrcamento.valor_upsell > 0 && (
+                      <p className="text-sm text-gray-500">
+                        (Valor Base: {formatCurrency(detalhesOrcamento.valor_base || 0)} + Adicionais: {formatCurrency(detalhesOrcamento.valor_upsell || 0)})
+                      </p>
+                    )}
                   </div>
                   {loadingDetalhes ? (
                     <div className="text-center py-4">
@@ -898,6 +907,26 @@ export function LeadsManager({ userId }: { userId: string }) {
                                   detalhesOrcamento.selectedProdutos[p.id]
                                 }x ${p.nome} (${formatCurrency(p.valor)})`}</li>
                               ))}
+                          </ul>
+                        </div>
+                      )}
+                      {detalhesOrcamento.upsell_produtos && detalhesOrcamento.upsell_produtos.length > 0 && (
+                        <div className="mt-4 bg-amber-50 border border-amber-100 rounded-lg p-3">
+                          <h4 className="font-semibold text-amber-900 flex items-center gap-1.5 text-sm">
+                            <span>🎁 Adicionais Contratados (Upsell):</span>
+                          </h4>
+                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-amber-900">
+                            {detalhesOrcamento.upsell_produtos.map((p: any) => {
+                              const baseVal = parseFloat(p.valor || 0);
+                              const desc = p.desconto_percentual || 0;
+                              const precoFinal = baseVal * (1 - desc / 100);
+                              return (
+                                <li key={p.id}>
+                                  {p.quantidade || 1}x {p.nome} ({formatCurrency(precoFinal)} 
+                                  {desc > 0 && <span className="text-xs text-green-600 ml-1">-{desc}%</span>})
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}

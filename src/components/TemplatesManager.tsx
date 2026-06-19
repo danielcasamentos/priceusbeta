@@ -372,6 +372,13 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
           obrigatorio: produto.obrigatorio,
           ordem: produto.ordem,
           mostrar_imagem: produto.mostrar_imagem,
+          imagens: produto.imagens || [],
+          carrossel_automatico: produto.carrossel_automatico || false,
+          permite_multiplas_unidades: produto.permite_multiplas_unidades ?? true,
+          desconto_percentual: produto.desconto_percentual ?? 0,
+          destacar_produto: produto.destacar_produto ?? false,
+          destaque_texto: produto.destaque_texto ?? null,
+          duracao_minutos: produto.duracao_minutos ?? null,
         }));
 
         const { error: insertProdutosError } = await supabase

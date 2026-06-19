@@ -216,7 +216,7 @@ export function QuoteDocumento(props: any) {
               </div>
               <div className="space-y-4">
                 {produtos.map((produto: any) => (
-                  <div key={produto.id} className={`border p-4 sm:p-5 transition-all ${selectedProdutos[produto.id] ? 'border-black bg-gray-50' : tema.cores.borda}`}>
+                  <div key={produto.id} className={`border p-4 sm:p-5 transition-all relative ${produto.destacar_produto ? 'border-black border-[3px] bg-gray-50/50 shadow-md scale-[1.01]' : selectedProdutos[produto.id] ? 'border-black bg-gray-50' : tema.cores.borda}`}>
                     <div className="flex flex-col sm:flex-row gap-4">
                       {produto.mostrar_imagem && (produto.imagem_url || (produto.imagens?.length > 0)) && (
                         <div className="w-full sm:w-48 h-48 flex-shrink-0">
@@ -232,6 +232,11 @@ export function QuoteDocumento(props: any) {
                         </div>
                       )}
                       <div className="flex-1">
+                        {produto.destacar_produto && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-black text-white rounded px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase mb-1 shadow-sm font-serif">
+                            ★ {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 className={`font-semibold text-lg ${tema.cores.textoPrincipal}`}>{produto.nome}</h4>
                         {produto.resumo && <p className={`text-sm ${tema.cores.textoSecundario} mt-2`}>{produto.resumo}</p>}
                         {!template.ocultar_valores_intermediarios && (

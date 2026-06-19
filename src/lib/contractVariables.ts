@@ -52,6 +52,9 @@ export interface LeadData {
   subtotal?: number;
   ocultar_valores_intermediarios?: boolean;
   plano_pagamento?: any;
+  upsell_produtos?: any[];
+  valor_base?: number;
+  valor_upsell?: number;
 }
 
 /**
@@ -96,6 +99,8 @@ export function replaceContractVariables(
     '{{CONTA_USUARIO}}': businessSettings.bank_account || '',
 
     '{{NOME_CLIENTE}}': leadData.nome_cliente || '',
+    '{{VALOR_BASE}}': leadData.valor_base !== undefined ? `R$ ${Number(leadData.valor_base).toFixed(2).replace('.', ',')}` : '',
+    '{{VALOR_UPSELL}}': leadData.valor_upsell !== undefined ? `R$ ${Number(leadData.valor_upsell).toFixed(2).replace('.', ',')}` : '',
     '{{EMAIL_CLIENTE}}': leadData.email || clientData.email || '',
     '{{TELEFONE_CLIENTE}}': leadData.telefone || clientData.telefone || '',
 
@@ -210,6 +215,27 @@ export function replaceContractVariables(
     variables['{{PRODUTOS_LISTA}}'] = '';
   }
 
+  if (leadData.upsell_produtos && leadData.upsell_produtos.length > 0) {
+    const upsellLista = leadData.upsell_produtos
+      .map((p: any) => {
+        const cleanNome = removeEmojis(p.nome || p.nome_produto);
+        const qtyText = p.quantidade > 1 ? `${p.quantidade}x ` : '';
+        const precoVal = parseFloat(p.valor || p.preco || 0);
+        const desc = p.desconto_percentual || 0;
+        const precoFinal = precoVal * (1 - desc / 100);
+        
+        if (ocultarValores) {
+          return `• ${qtyText}${cleanNome}`;
+        } else {
+          return `• ${qtyText}${cleanNome} - R$ ${precoFinal.toFixed(2).replace('.', ',')}`;
+        }
+      })
+      .join('\n');
+    variables['{{UPSELL_LISTA}}'] = upsellLista;
+  } else {
+    variables['{{UPSELL_LISTA}}'] = '';
+  }
+
   if (leadData.servicos && leadData.servicos.length > 0) {
     const servicosLista = leadData.servicos
       .map((s: any) => {
@@ -286,5 +312,8 @@ export function getAvailableVariables(): { key: string; description: string; cat
     { key: '{{FORMA_PAGAMENTO}}', description: 'Forma de pagamento', category: 'Financeiro' },
     { key: '{{PRODUTOS_LISTA}}', description: 'Lista de produtos contratados', category: 'Financeiro' },
     { key: '{{SERVICOS_LISTA}}', description: 'Lista de serviços contratados', category: 'Financeiro' },
+    { key: '{{UPSELL_LISTA}}', description: 'Lista de adicionais (upsell) contratados', category: 'Financeiro' },
+    { key: '{{VALOR_BASE}}', description: 'Valor base (sem adicionais)', category: 'Financeiro' },
+    { key: '{{VALOR_UPSELL}}', description: 'Valor total dos adicionais (upsell)', category: 'Financeiro' },
   ];
 }
