@@ -17,7 +17,7 @@ interface Template {
   ocultar_data_criacao?: boolean;
   created_at: string;
 }
-import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { TemplateAnalyticsSummary } from './TemplateAnalyticsSummary';

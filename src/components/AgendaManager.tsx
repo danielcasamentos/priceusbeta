@@ -1227,46 +1227,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
             </div>
           )}
 
-          {activeTab === 'feriados' && (
-            <div className="space-y-6 max-w-2xl mx-auto">
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Feriados Personalizados</h3>
-                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-1">Adicione feriados estaduais, municipais ou pontos facultativos.</p>
-              </div>
 
-              <form onSubmit={handleAddFeriado} className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.05)] border dark:border-[rgba(255,255,255,0.1)] rounded-lg">
-                <div className="sm:col-span-2">
-                  <label className="text-sm font-medium dark:text-[rgba(255,255,255,0.8)]">Nome do Feriado</label>
-                  <input name="nome" type="text" required className="w-full mt-1 p-2 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-md" placeholder="Ex: Aniversário da Cidade" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium dark:text-[rgba(255,255,255,0.8)]">Data</label>
-                  <input name="data" type="date" required className="w-full mt-1 p-2 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.1)] text-gray-900 dark:text-white rounded-md" />
-                </div>
-                <div className="sm:col-span-3">
-                  <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Adicionar Feriado</button>
-                </div>
-              </form>
-
-              <div className="space-y-3">
-                {feriadosPersonalizados.length > 0 ? feriadosPersonalizados.map(feriado => (
-                  <div key={feriado.id} className="flex justify-between items-center p-3 bg-white dark:bg-transparent border dark:border-[rgba(255,255,255,0.05)] rounded-lg">
-                    <div>
-                      <p className="font-medium dark:text-white">{feriado.nome}</p>
-                      <p className="text-sm text-gray-500 dark:text-[rgba(255,255,255,0.6)]">{new Date(feriado.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
-                    </div>
-                    <button onClick={() => handleDeleteFeriado(feriado.id)} className="text-red-500 hover:text-red-700 p-1">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                )) : (
-                  <div className="text-center text-gray-500 dark:text-[rgba(255,255,255,0.4)] py-8">
-                    <p>Nenhum feriado personalizado adicionado.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {activeTab === 'feriados' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -2,7 +2,7 @@
 // PriceUs — Niche and Keyword Parser for Workflows
 // ==========================================================
 
-import { WorkflowStep, WorkflowTemplateStep } from '../types/workflow';
+import { WorkflowStep } from '../types/workflow';
 
 /**
  * Normaliza textos removendo acentos, cedilhas, maiúsculas e espaços excedentes.

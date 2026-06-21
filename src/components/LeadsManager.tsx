@@ -30,6 +30,7 @@ export interface LeadOrcamentoDetalhe {
   sistema_geografico_ativo?: boolean;
   ocultar_valores_intermediarios?: boolean;
   priceBreakdown: PriceBreakdown;
+  upsell_produtos?: any[];
 }
 
 interface City {
@@ -44,6 +45,7 @@ interface TemplateFromDB {
   sistema_sazonal_ativo: boolean;
   sistema_geografico_ativo: boolean;
   ocultar_valores_intermediarios: boolean;
+  ocultar_taxa_deslocamento?: boolean;
   limitar_parcelas_pelo_evento?: boolean;
 }
 

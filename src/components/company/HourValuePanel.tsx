@@ -50,7 +50,7 @@ function InsightCard({ icon: Icon, title, desc, accent }: {
 }
 
 // ── Input Row ─────────────────────────────────────────────
-function InputRow({ label, hint, value, onChange, min, max, step, prefix, suffix }: {
+function InputRow({ label, hint, value, onChange, min, max, step, prefix, suffix, disabled }: {
   label: string;
   hint: string;
   value: number;
@@ -60,6 +60,7 @@ function InputRow({ label, hint, value, onChange, min, max, step, prefix, suffix
   step: number;
   prefix?: string;
   suffix?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -76,7 +77,8 @@ function InputRow({ label, hint, value, onChange, min, max, step, prefix, suffix
           step={step}
           value={value}
           onChange={(e) => onChange(Math.max(min, Math.min(max, Number(e.target.value))))}
-          className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+          disabled={disabled}
+          className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
         />
         {suffix && <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{suffix}</span>}
       </div>
@@ -87,7 +89,8 @@ function InputRow({ label, hint, value, onChange, min, max, step, prefix, suffix
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-emerald-500 cursor-pointer"
+        disabled={disabled}
+        className="w-full h-1.5 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-emerald-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
   );

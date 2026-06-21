@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, BarChart3, Image, Send, Loader2, Calendar, TrendingUp } from 'lucide-react';
+import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkTemplateSlugAvailability } from '../lib/slugUtils';
 import { ProductList } from './ProductList';
 import { PaymentMethodEditor } from './PaymentMethodEditor';
@@ -11,7 +11,7 @@ import { TutorialGuide } from './TutorialGuide';
 import { getVideoByTab } from '../config/videoTutorials';
 import { YouTubeEmbed } from './YouTubeEmbed';
 import { TemplateEditorWithThemeSelector } from './TemplateEditorWithThemeSelector';
-import { QuoteAnalytics } from './QuoteAnalytics';
+
 
 interface Produto {
   id?: string;
@@ -214,27 +214,6 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     }
   };
 
-  const reloadProducts = async () => {
-    try {
-      const scrollPosition = window.scrollY;
-
-      const { data: produtosData } = await supabase
-        .from('produtos')
-        .select('*')
-        .eq('template_id', templateId)
-        .order('ordem');
-
-      if (produtosData) {
-        setProdutos(produtosData);
-
-        setTimeout(() => {
-          window.scrollTo({ top: scrollPosition, behavior: 'auto' });
-        }, 50);
-      }
-    } catch (error) {
-      console.error('❌ Erro ao recarregar produtos:', error);
-    }
-  };
 
   // ── Upsell helpers ────────────────────────────────────────────────────────
   const loadUpsellSourceProducts = async (sourceTemplateId: string) => {
@@ -738,7 +717,6 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
               onSave={handleSaveProdutos}
               userId={userId}
               templateId={templateId}
-              onReloadProducts={reloadProducts}
               onProductSaved={handleProductSaved}
             />
           )}

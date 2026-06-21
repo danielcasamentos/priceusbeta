@@ -80,7 +80,7 @@ export function ProfileEditorWithThemeSelector({ userId }: ProfileEditorWithThem
   const loadCurrentTheme = async () => {
     try {
       console.log('🔍 [ThemeSelector] Carregando tema para userId:', userId);
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('tema_perfil, slug_usuario, fonte_personalizada, tema_personalizado_id')
         .eq('id', userId)

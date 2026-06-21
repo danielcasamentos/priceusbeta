@@ -16,7 +16,6 @@ import { generateWhatsAppMessage, generateWaLinkToPhotographer } from '../lib/wh
 import { getTema, TemaType } from '../lib/themes'; // Remove unused theme helpers
 import { getThemeInlineStyles } from '../lib/themeStyles';
 import { PublicReviews } from '../components/PublicReviews';
-import { RatePhotographerButton } from '../components/RatePhotographerButton';
 import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
 import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
 import { detectBrowser, getReferrer, logBrowserInfo } from '../lib/browserDetection';
@@ -32,6 +31,7 @@ interface Produto {
   id: string;
   nome: string;
   resumo: string;
+  descricao?: string;
   valor: number;
   unidade: string;
   obrigatorio: boolean;
@@ -44,6 +44,8 @@ interface Produto {
   /** 0–100. Desconto aplicado ao valor unitário */
   desconto_percentual?: number;
   duracao_minutos?: number | null;
+  destacar_produto?: boolean;
+  destaque_texto?: string | null;
 }
 
 interface FormaPagamento {
@@ -3462,7 +3464,7 @@ export function QuotePage() {
                           ? 'sm:items-center' // Layout Quadro: mantém flex-col e centraliza
                           : 'sm:flex-row sm:items-start' // Layout Linha: muda para flex-row
                       }`}>
-                        {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
+                        {produto.mostrar_imagem && (produto.imagem_url || (produto.imagens && produto.imagens.length > 0)) && (
                           (() => {
                             const sizeClasses = {
                               pequeno: 'w-32 h-32 sm:w-48 sm:h-48',
@@ -3473,15 +3475,15 @@ export function QuotePage() {
                              const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
                              return (
                                <div className={`mx-auto sm:mx-0 rounded-lg overflow-hidden ${finalClass}`}>
-                                 {produto.imagens?.length > 0 ? (
+                                 {produto.imagens && produto.imagens.length > 0 ? (
                                    <ProductGalleryCarousel
-                                     images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                     images={[produto.imagem_url, ...(produto.imagens || [])].filter(Boolean) as string[]}
                                      autoPlay={produto.carrossel_automatico}
                                      productName={produto.nome}
                                    />
                                  ) : (
                                    <ImageWithFallback
-                                     src={produto.imagem_url}
+                                     src={produto.imagem_url || ''}
                                      alt={produto.nome}
                                      className="w-full h-full object-cover"
                                      fallbackClassName="w-full h-full"

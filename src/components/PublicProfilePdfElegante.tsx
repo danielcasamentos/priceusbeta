@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Instagram, Mail, MessageCircle, ExternalLink, Award } from 'lucide-react';
+import { Instagram, Mail, MessageCircle, ExternalLink } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { getThemeInlineStyles } from '../lib/themeStyles';
 import { PortfolioSection } from './PortfolioSection';
@@ -296,7 +296,7 @@ export function PublicProfilePdfElegante({ profile, templates, reviews, averageR
                     <div>
                       <h4 className="text-sm font-semibold text-neutral-950">{review.cliente_nome}</h4>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <StarRating rating={review.rating} size="xs" />
+                        <StarRating rating={review.rating} size="sm" />
                         <span className="text-[10px] text-neutral-400 font-medium">
                           {new Date(review.created_at).toLocaleDateString('pt-BR')}
                         </span>

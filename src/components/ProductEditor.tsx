@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy } from 'lucide-react';
-import { ImageUploadService, UploadProgress, formatFileSize } from '../services/imageUploadService';
+import { ImageUploadService } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
 

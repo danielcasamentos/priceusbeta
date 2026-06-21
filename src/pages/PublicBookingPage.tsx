@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, Camera, MapPin, Star } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, Camera, Star } from 'lucide-react';
 
 interface BookingConfig {
   modo: 'avulso' | 'dinamico';

@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Cookie } from 'lucide-react';
+import { Cookie } from 'lucide-react';
 
 const COOKIE_CONSENT_KEY = 'priceus_cookie_consent';
 const CONSENT_VERSION = '2.0'; // Atualizada com nova política

@@ -31,9 +31,7 @@ export function useMeuDiaNotification(userId: string) {
       const saudacao =
         hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
 
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const makeDate = (d: Date) =>
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 
       // ── Buscar dados do perfil (nome do usuário) ──────────────────────────────
       const profileRes = await supabase

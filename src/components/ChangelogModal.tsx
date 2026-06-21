@@ -5,7 +5,6 @@ import {
   Bell,
   Zap,
   Star,
-  Type,
   X,
   ArrowRight,
   CheckCircle2,
