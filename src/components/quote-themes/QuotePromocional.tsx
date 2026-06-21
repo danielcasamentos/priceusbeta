@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Send, Lock, Tag, Flame, MessageCircle, Instagram, Mail, Star, Clock, Zap } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
-import { PortfolioSection } from '../PortfolioSection';
 
 interface QuotePromocionalProps {
   template: any;
@@ -296,11 +295,6 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                 </a>
               )}
             </div>
-            <PortfolioSection
-              portfolioLink={profile.portfolio_link}
-              portfolioFotos={profile.portfolio_fotos}
-              isDark={false}
-            />
           </div>
         </section>
       )}
@@ -458,24 +452,52 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                         : {}),
                     }}
                   >
-                    <div ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    <div 
+                      ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} 
+                      style={{ 
+                        display: 'flex', 
+                        flexDirection: template?.layout_produtos_desktop === 'quadro' ? 'column' : 'row', 
+                        alignItems: template?.layout_produtos_desktop === 'quadro' ? 'center' : 'flex-start', 
+                        gap: 14 
+                      }}
+                    >
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                        <div style={{ width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0, border: '2px solid #fecaca' }}>
-                          {produto.imagens?.length > 0 ? (
-                            <ProductGalleryCarousel
-                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                              autoPlay={produto.carrossel_automatico}
-                              productName={produto.nome}
-                            />
-                          ) : (
-                            <ImageWithFallback
-                              src={produto.imagem_url}
-                              alt={produto.nome}
-                              className="w-full h-full object-cover"
-                              fallbackClassName="w-full h-full"
-                            />
-                          )}
-                        </div>
+                        (() => {
+                          const isQuadro = template?.layout_produtos_desktop === 'quadro';
+                          const size = template?.tamanho_imagem_grid || 'medio';
+                          const sizes = {
+                            pequeno: { w: isQuadro ? 96 : 56, h: isQuadro ? 96 : 56 },
+                            medio: { w: isQuadro ? 144 : 80, h: isQuadro ? 144 : 80 },
+                            grande: { w: isQuadro ? '100%' : 120, h: isQuadro ? 180 : 120 }
+                          };
+                          const currentSize = sizes[size as keyof typeof sizes] || sizes.medio;
+                          return (
+                            <div style={{ 
+                              width: currentSize.w, 
+                              height: currentSize.h, 
+                              borderRadius: 10, 
+                              overflow: 'hidden', 
+                              flexShrink: 0, 
+                              border: '2px solid #fecaca',
+                              maxWidth: size === 'grande' && isQuadro ? '100%' : undefined
+                            }}>
+                              {produto.imagens?.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback
+                                  src={produto.imagem_url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover"
+                                  fallbackClassName="w-full h-full"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {produto.destacar_produto && produto.destaque_texto && (
@@ -498,7 +520,14 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                           </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                          <h4 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
+                          <h4 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', marginBottom: 2, wordBreak: 'break-word', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span>{produto.nome}</span>
+                            {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.05)', color: '#4b5563', fontSize: 10, fontWeight: 400, padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(0,0,0,0.1)' }}>
+                                ⏱️ {formatDuration(produto.duracao_minutos)}
+                              </span>
+                            )}
+                          </h4>
                           {isSelected && (
                             <span style={{
                               background: 'linear-gradient(135deg,#dc2626,#ea580c)',
@@ -511,49 +540,106 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                         {produto.resumo && (
                           <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{produto.resumo}</p>
                         )}
-                        {!template?.ocultar_valores_intermediarios && (
-                          <p style={{ fontSize: 18, fontWeight: 900, color: '#dc2626', marginTop: 4 }}>
-                            {formatCurrency(produto.valor)}
-                          </p>
-                        )}
+                        {!template?.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div style={{ marginTop: 6 }}>
+                              {desconto > 0 && (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#dc2626,#ea580c)', borderRadius: 999, padding: '2px 10px', marginBottom: 4, fontSize: 11, fontWeight: 900, color: '#fff', letterSpacing: '0.5px' }}>
+                                  🏷️ {desconto}% OFF
+                                </div>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {desconto > 0 && (
+                                  <span style={{ fontSize: 13, color: '#9ca3af', textDecoration: 'line-through', fontWeight: 500 }}>{formatCurrency(produto.valor)}</span>
+                                )}
+                                <p style={{ fontSize: 18, fontWeight: 900, color: '#dc2626' }}>
+                                  {formatCurrency(valorFinal)}
+                                </p>
+                              </div>
+                              {desconto > 0 && (
+                                <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700 }}>Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: '#fff7f0', borderRadius: 10, padding: '10px 14px',
-                    }}>
-                      <span style={{ fontSize: 13, color: '#9ca3af', fontWeight: 500 }}>
-                        {isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <button
-                          type="button"
-                          className="promo-qty-btn"
-                          onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
-                          disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                        >
-                          −
-                        </button>
-                        <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17, color: '#1a1a1a' }}>
-                          {selectedProdutos[produto.id] || 0}
+                    {/* Controle: toggle simples ou +/- quantidade */}
+                    {(produto.permite_multiplas_unidades ?? true) ? (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: '#fff7f0', borderRadius: 10, padding: '10px 14px',
+                      }}>
+                        <span style={{ fontSize: 13, color: '#9ca3af', fontWeight: 500 }}>
+                          {isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}
                         </span>
-                        <button
-                          type="button"
-                          className="promo-qty-btn"
-                          onClick={() => {
-                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                              alert(fieldsValidation.validationMessage);
-                              return;
-                            }
-                            props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
-                          }}
-                          disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                        >
-                          +
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <button
+                            type="button"
+                            className="promo-qty-btn"
+                            onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
+                            disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                          >
+                            −
+                          </button>
+                          <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17, color: '#1a1a1a' }}>
+                            {selectedProdutos[produto.id] || 0}
+                          </span>
+                          <button
+                            type="button"
+                            className="promo-qty-btn"
+                            onClick={() => {
+                              if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
+                            }}
+                            disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', background: '#fff7f0', borderRadius: 10, padding: '10px 14px' }}>
+                        {produto.obrigatorio ? (
+                          <div style={{ padding: '6px 16px', background: 'linear-gradient(135deg,#dc2626,#ea580c)', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 800 }}>
+                            ✔ Incluído
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              props.handleProdutoQuantityChange(
+                                produto.id,
+                                selectedProdutos[produto.id] ? 0 : 1
+                              );
+                            }}
+                            style={{
+                              padding: '8px 20px',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 800,
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all .15s',
+                              background: isSelected ? 'linear-gradient(135deg,#dc2626,#ea580c)' : '#f3f4f6',
+                              color: isSelected ? '#fff' : '#374151',
+                            }}
+                          >
+                            {isSelected ? '✔ Selecionado' : 'Selecionar'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

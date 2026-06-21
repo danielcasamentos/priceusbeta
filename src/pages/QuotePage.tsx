@@ -4,10 +4,11 @@ import { supabase } from '../lib/supabase';
 import { useLeadCapture } from '../hooks/useLeadCapture';
 import { useRequiredFieldsValidation } from '../hooks/useRequiredFieldsValidation';
 import { useQuoteAnalytics } from '../hooks/useQuoteAnalytics';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatDuration } from '../lib/utils';
 import { ShoppingCart, Send, Lock, User, AlertCircle, Check, X, Trash2 } from 'lucide-react';
 import { checkAvailability, getOrCreateAgendaConfig, type AvailabilityResult } from '../services/availabilityService';
 import { ImageWithFallback } from '../components/ImageWithFallback';
+import { ProductGalleryCarousel } from '../components/ui/ProductGalleryCarousel';
 import { CookieBanner } from '../components/CookieBanner';
 import { MobileDatePicker } from '../components/MobileDatePicker';
 import { AvailabilityIndicator } from '../components/AvailabilityIndicator';
@@ -1225,14 +1226,15 @@ export function QuotePage() {
     const valorUpsell = upsellSubtotal;
     const valorBase = total - valorUpsell;
 
+    const ocultarDeslocamento = template?.ocultar_taxa_deslocamento || false;
     return {
       subtotal,
       ajusteSazonal,
       ajusteGeografico: {
         percentual: geoAdjustment.percentual,
-        taxa: geoAdjustment.taxa,
+        taxa: ocultarDeslocamento ? 0 : geoAdjustment.taxa,
       },
-      taxaDeslocamento: geoAdjustment.taxa,
+      taxaDeslocamento: ocultarDeslocamento ? 0 : geoAdjustment.taxa,
       acrescimoFormaPagamento,
       descontoCupom,
       total,
@@ -1449,6 +1451,7 @@ export function QuotePage() {
         sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
         sistema_geografico_ativo: template?.sistema_geografico_ativo,
         ocultar_valores_intermediarios: template?.ocultar_valores_intermediarios,
+        ocultar_taxa_deslocamento: template?.ocultar_taxa_deslocamento,
       },
 
       // Produtos
@@ -1735,7 +1738,7 @@ export function QuotePage() {
                           <>
                             {cidade.ajuste_percentual !== 0 &&
                               ` (${cidade.ajuste_percentual > 0 ? '+' : ''}${cidade.ajuste_percentual}%)`}
-                            {cidade.taxa_deslocamento > 0 &&
+                            {cidade.taxa_deslocamento > 0 && !template?.ocultar_taxa_deslocamento &&
                               ` + R$ ${cidade.taxa_deslocamento.toFixed(2)}`}
                           </>
                         )}
@@ -1743,7 +1746,9 @@ export function QuotePage() {
                     ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-2">
-                  Valores podem incluir ajuste de preço e taxa de deslocamento
+                  {template?.ocultar_taxa_deslocamento
+                    ? 'Valores podem incluir ajuste de preço'
+                    : 'Valores podem incluir ajuste de preço e taxa de deslocamento'}
                 </p>
               </div>
             )}
@@ -3457,7 +3462,7 @@ export function QuotePage() {
                           ? 'sm:items-center' // Layout Quadro: mantém flex-col e centraliza
                           : 'sm:flex-row sm:items-start' // Layout Linha: muda para flex-row
                       }`}>
-                        {produto.mostrar_imagem && produto.imagem_url && (
+                        {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
                           (() => {
                             const sizeClasses = {
                               pequeno: 'w-32 h-32 sm:w-48 sm:h-48',
@@ -3467,14 +3472,22 @@ export function QuotePage() {
                              const imageSize = template?.tamanho_imagem_grid || 'medio';
                              const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
                              return (
-                               <div className="mx-auto sm:mx-0">
-                                 <ImageWithFallback
-                                   src={produto.imagem_url}
-                                   alt={produto.nome}
-                                   className={`object-cover rounded-lg ${finalClass}`}
-                                   fallbackClassName={`rounded-lg ${finalClass}`}
-                                   retries={2}
-                                 />
+                               <div className={`mx-auto sm:mx-0 rounded-lg overflow-hidden ${finalClass}`}>
+                                 {produto.imagens?.length > 0 ? (
+                                   <ProductGalleryCarousel
+                                     images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                     autoPlay={produto.carrossel_automatico}
+                                     productName={produto.nome}
+                                   />
+                                 ) : (
+                                   <ImageWithFallback
+                                     src={produto.imagem_url}
+                                     alt={produto.nome}
+                                     className="w-full h-full object-cover"
+                                     fallbackClassName="w-full h-full"
+                                     retries={2}
+                                   />
+                                 )}
                                </div>
                              );
                           })()
@@ -3516,10 +3529,15 @@ export function QuotePage() {
                             </div>
                           )}
                         <h4 className={`font-semibold text-base sm:text-lg ${tema.cores.textoPrincipal} flex flex-wrap items-center gap-2`} style={{ color: inlineStyles.textColor }}>
-                          {produto.nome}
+                          <span>{produto.nome}</span>
                           {produto.obrigatorio && (
                             <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full whitespace-nowrap">
                               Obrigatório
+                            </span>
+                          )}
+                          {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1">
+                              ⏱️ {formatDuration(produto.duracao_minutos)}
                             </span>
                           )}
                         </h4>
@@ -3679,6 +3697,8 @@ export function QuotePage() {
                       className={`flex items-start gap-3 p-4 sm:p-5 border rounded-lg cursor-pointer transition-all touch-manipulation ${
                         selectedFormaPagamento === forma.id
                           ? 'border-blue-600 bg-blue-50'
+                          : forma.is_default
+                          ? 'border-amber-400 bg-amber-50/10 shadow-[0_4px_12px_rgba(245,158,11,0.06)]'
                           : 'border-gray-200 hover:border-gray-300 active:border-gray-400'
                       }`}
                       style={{
@@ -3688,6 +3708,10 @@ export function QuotePage() {
                               borderColor: inlineStyles.accentColor,
                               background: `${inlineStyles.accentColor}08`,
                               boxShadow: `0 0 0 2px ${inlineStyles.accentColor}1a`,
+                            }
+                          : forma.is_default
+                          ? {
+                              borderColor: '#fbbf24',
                             }
                           : {
                               borderColor: `${inlineStyles.textColorSecondary}30`,
@@ -3704,7 +3728,14 @@ export function QuotePage() {
                         style={{ accentColor: inlineStyles.accentColor }}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className={`font-semibold text-base ${tema.cores.textoPrincipal} mb-1`} style={{ color: inlineStyles.textColor }}>{forma.nome}</div>
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <div className={`font-semibold text-base ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>{forma.nome}</div>
+                          {forma.is_default && (
+                            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider whitespace-nowrap">
+                              ⭐ Recomendado
+                            </span>
+                          )}
+                        </div>
                         <div className={`text-sm ${tema.cores.textoSecundario} leading-relaxed`} style={{ color: inlineStyles.textColorSecondary }}>
                           <div>
                             {forma.entrada_tipo === 'percentual'
@@ -4040,22 +4071,7 @@ export function QuotePage() {
             </button>
           </form>
 
-          {/* Rate Photographer Button */}
-          {profile && (
-            <div className="mt-4">
-              <RatePhotographerButton
-                userId={template.user_id}
-                templateId={template.id}
-                profileName={profile.nome_profissional || 'Fotógrafo'}
-                aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
-                aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
-                theme={{
-                  primaryColor: 'yellow',
-                  buttonColor: `${tema.cores.secundaria || 'bg-yellow-500'} hover:bg-yellow-600`
-                }}
-              />
-            </div>
-          )}
+          {/* Rate Photographer Button removido de propostas públicas */}
         </div>
 
         {template && profile && (

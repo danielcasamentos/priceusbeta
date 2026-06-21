@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { X, Plus, Trash2, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, Loader2, Edit2, Check } from 'lucide-react';
 import type { CompanyCategory } from '../../hooks/useCompanyTransactions';
 
 interface CategoryManagerModalProps {
@@ -14,6 +14,40 @@ export function CategoryManagerModal({ userId, categories, onClose, onCategories
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryType, setNewCategoryType] = useState<'receita' | 'despesa'>('receita');
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  const startEdit = (id: string, currentNome: string) => {
+    setEditingId(id);
+    setEditingName(currentNome);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingName('');
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editingName.trim()) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('company_categories')
+        .update({ nome: editingName.trim() })
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      setEditingId(null);
+      setEditingName('');
+      onCategoriesChange();
+    } catch (err) {
+      console.error('Erro ao editar categoria:', err);
+      alert('Erro ao editar categoria.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,8 +133,31 @@ export function CategoryManagerModal({ userId, categories, onClose, onCategories
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {categories.filter(c => c.tipo === 'receita').map(c => (
                   <div key={c.id} className="flex justify-between items-center p-3 bg-white dark:bg-[#07101f] border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.1)] transition-colors">
-                    <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] truncate pr-2">{c.nome}</span>
-                    <button onClick={() => handleDelete(c.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                    {editingId === c.id ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
+                          className="flex-1 px-2 py-1 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm dark:bg-[#0a1628] dark:text-white"
+                          autoFocus
+                        />
+                        <button onClick={() => handleSaveEdit(c.id)} className="text-green-500 hover:text-green-600 transition-colors p-1" disabled={loading}>
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-500 transition-colors p-1" disabled={loading}>
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] truncate pr-2">{c.nome}</span>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEdit(c.id, c.nome)} className="text-gray-400 hover:text-blue-500 transition-colors p-1"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleDelete(c.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -113,8 +170,31 @@ export function CategoryManagerModal({ userId, categories, onClose, onCategories
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {categories.filter(c => c.tipo === 'despesa').map(c => (
                   <div key={c.id} className="flex justify-between items-center p-3 bg-white dark:bg-[#07101f] border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.1)] transition-colors">
-                    <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] truncate pr-2">{c.nome}</span>
-                    <button onClick={() => handleDelete(c.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                    {editingId === c.id ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
+                          className="flex-1 px-2 py-1 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm dark:bg-[#0a1628] dark:text-white"
+                          autoFocus
+                        />
+                        <button onClick={() => handleSaveEdit(c.id)} className="text-green-500 hover:text-green-600 transition-colors p-1" disabled={loading}>
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-500 transition-colors p-1" disabled={loading}>
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] truncate pr-2">{c.nome}</span>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEdit(c.id, c.nome)} className="text-gray-400 hover:text-blue-500 transition-colors p-1"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleDelete(c.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

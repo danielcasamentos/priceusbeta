@@ -1,10 +1,8 @@
 import { Send, Lock, MapPin, Sparkles, MessageCircle, Instagram, Mail } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
-import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
-import { PortfolioSection } from '../PortfolioSection';
 
 interface QuoteDarkStudioProps {
   template: any;
@@ -191,11 +189,6 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                 </a>
               )}
             </div>
-            <PortfolioSection
-              portfolioLink={profile.portfolio_link}
-              portfolioFotos={profile.portfolio_fotos}
-              isDark={true}
-            />
           </div>
         </section>
       )}
@@ -344,25 +337,52 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                     }}
                   >
                     {/* Linha superior: imagem + info — ref no primeiro para FloatingTotalPanel */}
-                    <div ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    <div 
+                      ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} 
+                      style={{ 
+                        display: 'flex', 
+                        flexDirection: template?.layout_produtos_desktop === 'quadro' ? 'column' : 'row', 
+                        alignItems: template?.layout_produtos_desktop === 'quadro' ? 'center' : 'flex-start', 
+                        gap: 14 
+                      }}
+                    >
                       {/* Image */}
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                        <div style={{ width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
-                          {produto.imagens?.length > 0 ? (
-                            <ProductGalleryCarousel
-                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                              autoPlay={produto.carrossel_automatico}
-                              productName={produto.nome}
-                            />
-                          ) : (
-                            <ImageWithFallback
-                              src={produto.imagem_url}
-                              alt={produto.nome}
-                              className="w-full h-full object-cover"
-                              fallbackClassName="w-full h-full"
-                            />
-                          )}
-                        </div>
+                        (() => {
+                          const isQuadro = template?.layout_produtos_desktop === 'quadro';
+                          const size = template?.tamanho_imagem_grid || 'medio';
+                          const sizes = {
+                            pequeno: { w: isQuadro ? 96 : 56, h: isQuadro ? 96 : 56 },
+                            medio: { w: isQuadro ? 144 : 80, h: isQuadro ? 144 : 80 },
+                            grande: { w: isQuadro ? '100%' : 120, h: isQuadro ? 180 : 120 }
+                          };
+                          const currentSize = sizes[size as keyof typeof sizes] || sizes.medio;
+                          return (
+                            <div style={{ 
+                              width: currentSize.w, 
+                              height: currentSize.h, 
+                              borderRadius: 10, 
+                              overflow: 'hidden', 
+                              flexShrink: 0,
+                              maxWidth: size === 'grande' && isQuadro ? '100%' : undefined
+                            }}>
+                              {produto.imagens?.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback
+                                  src={produto.imagem_url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover"
+                                  fallbackClassName="w-full h-full"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
                       {/* Info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -386,58 +406,127 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                             ⭐ {produto.destaque_texto}
                           </div>
                         )}
-                        <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
+                        <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2, wordBreak: 'break-word', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span>{produto.nome}</span>
+                          {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: 400, padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)' }}>
+                              ⏱️ {formatDuration(produto.duracao_minutos)}
+                            </span>
+                          )}
+                        </h4>
                         {produto.resumo && (
                           <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>
                         )}
-                        {!template?.ocultar_valores_intermediarios && (
-                          <p style={{ fontSize: 17, fontWeight: 800, color: '#22c55e', marginTop: 4 }}>
-                            {formatCurrency(produto.valor)}
-                          </p>
-                        )}
+                        {!template?.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              {desconto > 0 && (
+                                <span style={{ background: 'rgba(34,197,94,.15)', color: '#22c55e', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {desconto > 0 && (
+                                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,.3)', textDecoration: 'line-through' }}>{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span style={{ fontSize: 17, fontWeight: 800, color: '#22c55e' }}>{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
-                    {/* Linha inferior: controle de quantidade — sempre largura total no mobile */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      background: 'rgba(255,255,255,.04)',
-                      borderRadius: 10,
-                      padding: '10px 14px',
-                    }}>
-                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>
-                        {isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <button
-                          type="button"
-                          className="ds-qty-btn"
-                          onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
-                          disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                        >
-                          −
-                        </button>
-                        <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>
-                          {selectedProdutos[produto.id] || 0}
+                    {/* Linha inferior: controle de quantidade ou toggle */}
+                    {(produto.permite_multiplas_unidades ?? true) ? (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'rgba(255,255,255,.04)',
+                        borderRadius: 10,
+                        padding: '10px 14px',
+                      }}>
+                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>
+                          {isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}
                         </span>
-                        <button
-                          type="button"
-                          className="ds-qty-btn"
-                          onClick={() => {
-                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                              alert(fieldsValidation.validationMessage);
-                              return;
-                            }
-                            props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
-                          }}
-                          disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                        >
-                          +
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <button
+                            type="button"
+                            className="ds-qty-btn"
+                            onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
+                            disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                          >
+                            −
+                          </button>
+                          <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>
+                            {selectedProdutos[produto.id] || 0}
+                          </span>
+                          <button
+                            type="button"
+                            className="ds-qty-btn"
+                            onClick={() => {
+                              if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
+                            }}
+                            disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(255,255,255,.04)',
+                        borderRadius: 10,
+                        padding: '10px 14px',
+                      }}>
+                        {produto.obrigatorio ? (
+                          <div style={{ padding: '6px 16px', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.2)', color: '#22c55e', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+                            Incluído
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              props.handleProdutoQuantityChange(
+                                produto.id,
+                                selectedProdutos[produto.id] ? 0 : 1
+                              );
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '10px 16px',
+                              background: selectedProdutos[produto.id] ? 'linear-gradient(135deg, #22c55e, #15803d)' : 'rgba(255,255,255,.05)',
+                              border: selectedProdutos[produto.id] ? 'none' : '1px solid rgba(255,255,255,.1)',
+                              color: selectedProdutos[produto.id] ? '#fff' : 'rgba(255,255,255,.8)',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              transition: 'all .2s'
+                            }}
+                          >
+                            {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -653,22 +742,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
         </form>
       </section>
 
-      {/* Rate Photographer Button — mesmo padrão dos outros temas */}
-      {profile && (
-        <div style={{ padding: '0 24px 32px', maxWidth: 760, margin: '0 auto' }}>
-          <RatePhotographerButton
-            userId={template.user_id}
-            templateId={template.id}
-            profileName={profile.nome_profissional}
-            aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
-            aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
-            theme={{
-              primaryColor: 'green',
-              buttonColor: 'bg-green-500 hover:bg-green-600 text-black'
-            }}
-          />
-        </div>
-      )}
+      {/* Rate Photographer Button removido */}
 
       {/* ── FOOTER ── */}
       {!(profile?.status_assinatura === 'active') && (

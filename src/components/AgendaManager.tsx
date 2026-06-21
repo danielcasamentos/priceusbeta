@@ -88,8 +88,10 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
   const planLimits = usePlanLimits();
 
+  const holidaysCache = useRef<Record<number, any[]>>({});
+
   useEffect(() => {
-    loadData();
+    loadData(!loading);
   }, [userId, currentMonth]);
 
   const loadData = async (silent: boolean = false) => {
@@ -136,13 +138,18 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       const { data: feriadosData } = await supabase.from('feriados').select('*').eq('user_id', userId);
       setFeriadosPersonalizados(feriadosData || []);
 
-      // Carregar feriados nacionais da API
+      // Carregar feriados nacionais da API com cache
       try {
         const year = currentMonth.getFullYear();
-        const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${year}`);
-        if (!response.ok) throw new Error('Falha na resposta da API de feriados');
-        const holidays = await response.json();
-        setFeriadosNacionais(holidays || []);
+        if (holidaysCache.current[year]) {
+          setFeriadosNacionais(holidaysCache.current[year]);
+        } else {
+          const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${year}`);
+          if (!response.ok) throw new Error('Falha na resposta da API de feriados');
+          const holidays = await response.json();
+          holidaysCache.current[year] = holidays || [];
+          setFeriadosNacionais(holidays || []);
+        }
       } catch (apiError) {
         console.error("Erro ao buscar feriados da BrasilAPI:", apiError);
         // Não quebra a aplicação, apenas não mostra os feriados nacionais

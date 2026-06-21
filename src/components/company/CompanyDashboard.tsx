@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { DollarSign, TrendingUp, Clock, PiggyBank, Plus, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, PiggyBank, Plus, Calendar, MessageCircle } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { useCompanyTransactions } from '../../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
 import { HourValuePanel } from './HourValuePanel';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { CobrancaModal } from './CobrancaModal';
 
 interface CompanyDashboardProps {
   userId: string;
@@ -12,23 +13,38 @@ interface CompanyDashboardProps {
 }
 
 const PendingTransactionsPanel = ({ transactions }: { transactions: any[] }) => {
+  const [activeTx, setActiveTx] = useState<any | null>(null);
   const now = new Date();
   const startOfToday = new Date(now.setHours(0, 0, 0, 0));
   const next7Days = new Date(new Date().setDate(startOfToday.getDate() + 7));
   const next30Days = new Date(new Date().setDate(startOfToday.getDate() + 30));
 
   const pending = transactions.filter(t => t.status === 'pendente');
-  const overdue = pending.filter(t => new Date(t.data) < startOfToday);
-  const dueIn7Days = pending.filter(t => new Date(t.data) >= startOfToday && new Date(t.data) <= next7Days);
-  const dueIn30Days = pending.filter(t => new Date(t.data) > next7Days && new Date(t.data) <= next30Days);
+  const overdue = pending.filter(t => new Date(t.data + 'T12:00:00') < startOfToday);
+  const dueIn7Days = pending.filter(t => new Date(t.data + 'T12:00:00') >= startOfToday && new Date(t.data + 'T12:00:00') <= next7Days);
+  const dueIn30Days = pending.filter(t => new Date(t.data + 'T12:00:00') > next7Days && new Date(t.data + 'T12:00:00') <= next30Days);
 
   const renderTransactionList = (txs: any[], title: string) => (
     <div>
       <h4 className="text-sm font-semibold text-gray-600 mb-2">{title}</h4>
       {txs.length > 0 ? txs.map(t => (
-        <div key={t.id} className={`flex justify-between items-center text-sm p-2 rounded ${t.tipo === 'receita' ? 'bg-green-50' : 'bg-red-50'}`}>
-          <span className="text-gray-800">{t.descricao}</span>
-          <span className={`font-bold ${t.tipo === 'receita' ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(t.valor)}</span>
+        <div key={t.id} className={`flex justify-between items-center text-sm p-2 rounded mb-1.5 ${t.tipo === 'receita' ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}>
+          <div className="flex-1 min-w-0">
+            <span className="text-gray-800 dark:text-gray-200 font-medium truncate block">{t.descricao}</span>
+            {t.cliente_nome && <span className="text-[10px] text-gray-500 block">👤 {t.cliente_nome}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`font-bold ${t.tipo === 'receita' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{formatCurrency(t.valor)}</span>
+            {t.tipo === 'receita' && (
+              <button
+                onClick={() => setActiveTx(t)}
+                title="Cobrar via WhatsApp"
+                className="p-1 text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-900/30 rounded transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       )) : <p className="text-xs text-gray-500 italic">Nenhuma transação.</p>}
     </div>
@@ -50,6 +66,18 @@ const PendingTransactionsPanel = ({ transactions }: { transactions: any[] }) => 
         {renderTransactionList(dueIn7Days, 'Vencendo nos próximos 7 dias')}
         {renderTransactionList(dueIn30Days, 'Vencendo nos próximos 30 dias')}
       </div>
+
+      {activeTx && (
+        <CobrancaModal
+          isOpen={!!activeTx}
+          onClose={() => setActiveTx(null)}
+          clienteNome={activeTx.cliente_nome || ''}
+          clienteTelefone={activeTx.cliente_telefone || ''}
+          valor={activeTx.valor}
+          dataVencimento={activeTx.data}
+          descricao={activeTx.descricao}
+        />
+      )}
     </div>
   );
 };

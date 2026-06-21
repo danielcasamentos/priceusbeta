@@ -1,10 +1,8 @@
 import { Lock, MessageCircle, Instagram, Mail, Award } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
-import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
-import { PortfolioSection } from '../PortfolioSection';
 
 interface QuotePdfEleganteProps {
   template: any;
@@ -220,11 +218,6 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                 </a>
               )}
             </div>
-            <PortfolioSection
-              portfolioLink={profile.portfolio_link}
-              portfolioFotos={profile.portfolio_fotos}
-              isDark={false}
-            />
           </div>
         )}
 
@@ -348,72 +341,136 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                     key={produto.id}
                     className={`pdf-prod-card p-4 ${isSelected ? 'selected' : ''}`}
                   >
-                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    <div className={`flex flex-col gap-4 ${template?.layout_produtos_desktop === 'quadro' ? 'sm:items-center' : 'sm:flex-row sm:items-start'}`}>
                       {/* Product image */}
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                        <div className="w-20 h-20 rounded-none border border-neutral-100 overflow-hidden flex-shrink-0 mx-auto sm:mx-0">
-                          {produto.imagens?.length > 0 ? (
-                            <ProductGalleryCarousel
-                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                              autoPlay={produto.carrossel_automatico}
-                              productName={produto.nome}
-                            />
-                          ) : (
-                            <ImageWithFallback
-                              src={produto.imagem_url}
-                              alt={produto.nome}
-                              className="w-full h-full object-cover rounded-none"
-                              fallbackClassName="w-full h-full rounded-none"
-                            />
-                          )}
-                        </div>
+                        (() => {
+                          const sizeClasses = {
+                            pequeno: 'w-24 h-24 sm:w-32 sm:h-32',
+                            medio: 'w-32 h-32 sm:w-48 sm:h-48',
+                            grande: 'w-full h-48 sm:w-72 sm:h-72',
+                          };
+                          const imageSize = template?.tamanho_imagem_grid || 'medio';
+                          const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
+                          return (
+                            <div className={`rounded-none border border-neutral-100 overflow-hidden flex-shrink-0 mx-auto sm:mx-0 ${finalClass}`}>
+                              {produto.imagens?.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback
+                                  src={produto.imagem_url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover rounded-none"
+                                  fallbackClassName="w-full h-full rounded-none"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
 
                       {/* Service info */}
                       <div className="flex-1 min-w-0" ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined}>
-                        <h4 className="text-base font-semibold text-neutral-900 tracking-tight leading-snug">
-                          {produto.nome}
+                        <h4 className="text-base font-semibold text-neutral-900 tracking-tight leading-snug flex items-center flex-wrap gap-2">
+                          <span>{produto.nome}</span>
+                          {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                            <span className="inline-flex items-center gap-1 bg-neutral-100 text-neutral-600 text-[10px] font-normal px-2 py-0.5 rounded border border-neutral-200">
+                              ⏱️ {formatDuration(produto.duracao_minutos)}
+                            </span>
+                          )}
                         </h4>
                         {produto.resumo && (
                           <p className="pdf-sans text-xs text-neutral-500 mt-1 leading-relaxed">
                             {produto.resumo}
                           </p>
                         )}
-                        {!template?.ocultar_valores_intermediarios && (
-                          <p className="text-sm font-semibold text-neutral-800 mt-1.5">
-                            {formatCurrency(produto.valor)}
-                          </p>
-                        )}
+                        {!template?.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                              {desconto > 0 && (
+                                <span className="bg-green-50 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-green-200 pdf-sans">
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {desconto > 0 && (
+                                  <span className="text-xs text-neutral-400 line-through">{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span className="text-sm font-semibold text-neutral-800">{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span className="text-[10px] text-green-600 font-semibold pdf-sans">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Quantity */}
-                      <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded px-2 py-1 self-stretch sm:self-auto justify-between sm:justify-start">
-                        <button
-                          type="button"
-                          className="pdf-btn-qty"
-                          onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
-                          disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                        >
-                          −
-                        </button>
-                        <span className="pdf-sans font-semibold text-neutral-800 text-sm min-w-6 text-center">
-                          {selectedProdutos[produto.id] || 0}
-                        </span>
-                        <button
-                          type="button"
-                          className="pdf-btn-qty"
-                          onClick={() => {
-                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                              alert(fieldsValidation.validationMessage);
-                              return;
-                            }
-                            props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
-                          }}
-                          disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                        >
-                          +
-                        </button>
-                      </div>
+                      {(produto.permite_multiplas_unidades ?? true) ? (
+                        <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded px-2 py-1 self-stretch sm:self-auto justify-between sm:justify-start">
+                          <button
+                            type="button"
+                            className="pdf-btn-qty"
+                            onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
+                            disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                          >
+                            −
+                          </button>
+                          <span className="pdf-sans font-semibold text-neutral-800 text-sm min-w-6 text-center">
+                            {selectedProdutos[produto.id] || 0}
+                          </span>
+                          <button
+                            type="button"
+                            className="pdf-btn-qty"
+                            onClick={() => {
+                              if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                              props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
+                            }}
+                            disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          {produto.obrigatorio ? (
+                            <div className="py-1 px-3 bg-neutral-100 text-neutral-500 rounded border border-neutral-200 text-xs font-semibold pdf-sans">
+                              Incluído
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                                props.handleProdutoQuantityChange(
+                                  produto.id,
+                                  selectedProdutos[produto.id] ? 0 : 1
+                                );
+                              }}
+                              className={`py-1.5 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all pdf-sans ${
+                                selectedProdutos[produto.id]
+                                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
+                                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-300'
+                              }`}
+                            >
+                              {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -567,22 +624,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
             </button>
           </div>
 
-          {/* 6. Review Button */}
-          {profile && (
-            <div className="pt-2">
-              <RatePhotographerButton
-                userId={template.user_id}
-                templateId={template.id}
-                profileName={profile.nome_profissional}
-                aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
-                aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
-                theme={{
-                  primaryColor: 'zinc',
-                  buttonColor: 'bg-neutral-900 hover:bg-neutral-800 text-white font-medium tracking-widest text-xs uppercase py-4 rounded-md'
-                }}
-              />
-            </div>
-          )}
+          {/* 6. Review Button removido */}
         </form>
 
         {/* 7. Large Footer Photo (borderless, vertical aspect ratio, at the bottom) */}

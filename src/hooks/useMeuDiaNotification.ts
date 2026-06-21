@@ -60,9 +60,9 @@ export function useMeuDiaNotification(userId: string) {
           .neq('status', 'cancelado'),
         supabase
           .from('company_transactions')
-          .select('id, valor, status')
+          .select('id, valor, status, data')
           .eq('user_id', userId)
-          .eq('data', today)
+          .lte('data', today)
           .eq('tipo', 'receita'),
         supabase
           .from('leads')
@@ -94,9 +94,11 @@ export function useMeuDiaNotification(userId: string) {
 
       const totalTarefas = tarefasHoje + tarefasAtrasadas;
 
-      // ── Contar pagamentos do dia ──────────────────────────────────────────────
+      // ── Contar pagamentos do dia e vencidos ───────────────────────────────────
       const pagamentosHoje =
-        trRes.data?.filter((t) => t.status === 'pendente').length || 0;
+        trRes.data?.filter((t) => t.status === 'pendente' && t.data === today).length || 0;
+      const pagamentosVencidos =
+        trRes.data?.filter((t) => t.status === 'pendente' && t.data < today).length || 0;
 
       // ── Contar follow-ups ─────────────────────────────────────────────────────
       const followupsHoje = followupRes.data?.length || 0;
@@ -106,7 +108,7 @@ export function useMeuDiaNotification(userId: string) {
 
       // ── Se não há nada relevante, não enviar notificação ──────────────────────
       const temAlgo =
-        totalTarefas > 0 || pagamentosHoje > 0 || followupsHoje > 0 || eventosHoje > 0;
+        totalTarefas > 0 || pagamentosHoje > 0 || pagamentosVencidos > 0 || followupsHoje > 0 || eventosHoje > 0;
 
       if (!temAlgo) {
         // Marca como disparado mesmo assim para não tentar novamente hoje
@@ -127,9 +129,15 @@ export function useMeuDiaNotification(userId: string) {
         );
       }
 
+      if (pagamentosVencidos > 0) {
+        partes.push(
+          `${pagamentosVencidos} pagamento${pagamentosVencidos > 1 ? 's' : ''} vencido${pagamentosVencidos > 1 ? 's' : ''}`
+        );
+      }
+
       if (pagamentosHoje > 0) {
         partes.push(
-          `${pagamentosHoje} pagamento${pagamentosHoje > 1 ? 's' : ''} para receber`
+          `${pagamentosHoje} pagamento${pagamentosHoje > 1 ? 's' : ''} para receber hoje`
         );
       }
 

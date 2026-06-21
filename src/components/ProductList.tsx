@@ -42,7 +42,6 @@ interface ProductListProps {
   onSave: () => void;
   userId: string;
   templateId?: string;
-  onReloadProducts?: () => void;
   onProductSaved?: (index: number, productId: string) => void;
 }
 
@@ -57,7 +56,6 @@ export function ProductList({
   onSave,
   userId,
   templateId,
-  onReloadProducts,
   onProductSaved,
 }: ProductListProps) {
   const [localProducts, setLocalProducts] = useState<Product[]>(products);
@@ -211,7 +209,6 @@ export function ProductList({
                 onDuplicate={() => onDuplicate(index)}
                 userId={userId}
                 templateId={templateId}
-                onImageUploadSuccess={onReloadProducts}
                 onProductSaved={(productId) => onProductSaved?.(index, productId)}
               />
             ))}

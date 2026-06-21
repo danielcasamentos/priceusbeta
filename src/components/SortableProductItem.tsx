@@ -26,7 +26,6 @@ interface SortableProductItemProps {
   onDuplicate?: () => void;
   userId: string;
   templateId?: string;
-  onImageUploadSuccess?: () => void;
   onProductSaved?: (productId: string) => void;
 }
 
@@ -38,7 +37,6 @@ export function SortableProductItem({
   onDuplicate,
   userId,
   templateId,
-  onImageUploadSuccess,
   onProductSaved,
 }: SortableProductItemProps) {
   const {
@@ -83,7 +81,6 @@ export function SortableProductItem({
               onDuplicate={onDuplicate}
               userId={userId}
               templateId={templateId}
-              onImageUploadSuccess={onImageUploadSuccess}
               onProductSaved={onProductSaved}
             />
           </div>

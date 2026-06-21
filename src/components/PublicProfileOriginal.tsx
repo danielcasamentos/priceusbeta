@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { MapPin, Instagram, Mail, MessageCircle, ExternalLink } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { getThemeInlineStyles } from '../lib/themeStyles';
+import { PortfolioSection } from './PortfolioSection';
 
 interface Profile {
   id: string;
@@ -15,6 +16,8 @@ interface Profile {
   email_recebimento: string;
   slug_usuario: string;
   status_assinatura?: string | null;
+  portfolio_link?: string | null;
+  portfolio_fotos?: string[] | null;
 }
 
 interface Template {
@@ -144,7 +147,6 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
                       Instagram
                     </a>
                   )}
-
                   {profile.email_recebimento && (
                     <a
                       href={`mailto:${profile.email_recebimento}`}
@@ -155,6 +157,11 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
                     </a>
                   )}
                 </div>
+
+                <PortfolioSection
+                  portfolioLink={profile.portfolio_link || null}
+                  portfolioFotos={profile.portfolio_fotos || null}
+                />
               </div>
             </div>
           </div>

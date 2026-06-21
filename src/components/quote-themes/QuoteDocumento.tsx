@@ -1,9 +1,8 @@
 import { ShoppingCart, Trash2 } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 
-import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
 export function QuoteDocumento(props: any) {
@@ -217,19 +216,31 @@ export function QuoteDocumento(props: any) {
               <div className="space-y-4">
                 {produtos.map((produto: any) => (
                   <div key={produto.id} className={`border p-4 sm:p-5 transition-all relative ${produto.destacar_produto ? 'border-black border-[3px] bg-gray-50/50 shadow-md scale-[1.01]' : selectedProdutos[produto.id] ? 'border-black bg-gray-50' : tema.cores.borda}`}>
-                    <div className="flex flex-col sm:flex-row gap-4">
+                    <div className={`flex flex-col gap-4 ${template?.layout_produtos_desktop === 'quadro' ? 'sm:items-center' : 'sm:flex-row sm:items-start'}`}>
+                      {/* Product image */}
                       {produto.mostrar_imagem && (produto.imagem_url || (produto.imagens?.length > 0)) && (
-                        <div className="w-full sm:w-48 h-48 flex-shrink-0">
-                          {produto.imagens && produto.imagens.length > 0 ? (
-                            <ProductGalleryCarousel
-                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                              autoPlay={produto.carrossel_automatico}
-                              productName={produto.nome}
-                            />
-                          ) : (
-                            <ImageWithFallback src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" />
-                          )}
-                        </div>
+                        (() => {
+                          const sizeClasses = {
+                            pequeno: 'w-32 h-32 sm:w-48 sm:h-48',
+                            medio: 'w-48 h-48 sm:w-64 sm:h-64',
+                            grande: 'w-full h-48 sm:w-80 sm:h-80',
+                          };
+                          const imageSize = template?.tamanho_imagem_grid || 'medio';
+                          const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
+                          return (
+                            <div className={`flex-shrink-0 mx-auto sm:mx-0 overflow-hidden ${finalClass}`}>
+                              {produto.imagens && produto.imagens.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
                       <div className="flex-1">
                         {produto.destacar_produto && produto.destaque_texto && (
@@ -237,21 +248,78 @@ export function QuoteDocumento(props: any) {
                             ★ {produto.destaque_texto}
                           </div>
                         )}
-                        <h4 className={`font-semibold text-lg ${tema.cores.textoPrincipal}`}>{produto.nome}</h4>
+                        <h4 className={`font-semibold text-lg ${tema.cores.textoPrincipal} flex items-center flex-wrap gap-2`}>
+                          <span>{produto.nome}</span>
+                          {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 font-normal">
+                              ⏱️ {formatDuration(produto.duracao_minutos)}
+                            </span>
+                          )}
+                        </h4>
                         {produto.resumo && <p className={`text-sm ${tema.cores.textoSecundario} mt-2`}>{produto.resumo}</p>}
-                        {!template.ocultar_valores_intermediarios && (
-                          <p className="text-lg font-bold text-black mt-3">{formatCurrency(produto.valor)}</p>
-                        )}
+                        {!template.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div className="mt-3 flex items-center gap-2 flex-wrap">
+                              {desconto > 0 && (
+                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded">
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {desconto > 0 && (
+                                  <span className="text-sm text-gray-400 line-through">{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span className="text-lg font-bold text-black">{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span className="text-xs text-green-600 font-semibold">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
-                      <div className="flex items-center justify-center gap-3 mt-4 sm:mt-0">
-                        <button type="button" onClick={() => handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)} disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1} className="w-10 h-10 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-lg font-bold">
-                          -
-                        </button>
-                        <span className={`text-xl font-bold ${tema.cores.textoPrincipal}`}>{selectedProdutos[produto.id] || 0}</span>
-                        <button type="button" onClick={() => handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1)} className="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-gray-900 text-white text-lg font-bold">
-                          +
-                        </button>
-                      </div>
+                      {(produto.permite_multiplas_unidades ?? true) ? (
+                        <div className="flex items-center justify-center gap-3 mt-4 sm:mt-0">
+                          <button type="button" onClick={() => handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)} disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1} className="w-10 h-10 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-lg font-bold">
+                            -
+                          </button>
+                          <span className={`text-xl font-bold ${tema.cores.textoPrincipal}`}>{selectedProdutos[produto.id] || 0}</span>
+                          <button type="button" onClick={() => handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1)} className="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-gray-900 text-white text-lg font-bold">
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center mt-4 sm:mt-0">
+                          {produto.obrigatorio ? (
+                            <div className="py-2 px-4 bg-gray-100 text-gray-500 rounded text-sm font-semibold">
+                              Incluído
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                                handleProdutoQuantityChange(
+                                  produto.id,
+                                  selectedProdutos[produto.id] ? 0 : 1
+                                );
+                              }}
+                              className={`py-2.5 px-4 rounded text-sm font-semibold transition-all ${
+                                selectedProdutos[produto.id]
+                                  ? 'bg-black text-white hover:bg-gray-900'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -383,12 +451,7 @@ export function QuoteDocumento(props: any) {
         />
       )}
 
-      {/* Rate Photographer Button */}
-      {profile && (
-        <div className="mt-8">
-          <RatePhotographerButton userId={template.user_id} templateId={template.id} profileName={profile.nome_profissional} />
-        </div>
-      )}
+      {/* Rate Photographer Button removido */}
     </div>
   );
 }

@@ -1,10 +1,8 @@
 import { Send, Lock, MapPin, Sparkles, MessageCircle, Instagram, Mail, Star } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
-import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
-import { PortfolioSection } from '../PortfolioSection';
 
 interface QuoteRevellonProps {
   template: any; profile: any; produtos: any[]; selectedProdutos: Record<string, number>; formData: any;
@@ -86,11 +84,6 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
               {profile.instagram && <a href={`https://instagram.com/${profile.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#e1306c,#f77737)', color: '#fff', padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}><Instagram size={14} /> Instagram</a>}
               {profile.email_recebimento && <a href={`mailto:${profile.email_recebimento}`} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.12)', color: '#fff', padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}><Mail size={14} /> E-mail</a>}
             </div>
-            <PortfolioSection
-              portfolioLink={profile.portfolio_link}
-              portfolioFotos={profile.portfolio_fotos}
-              isDark={true}
-            />
           </div>
         </section>
       )}
@@ -168,11 +161,51 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                         : {}),
                     }}
                   >
-                    <div ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    <div 
+                      ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined} 
+                      style={{ 
+                        display: 'flex', 
+                        flexDirection: template?.layout_produtos_desktop === 'quadro' ? 'column' : 'row', 
+                        alignItems: template?.layout_produtos_desktop === 'quadro' ? 'center' : 'flex-start', 
+                        gap: 14 
+                      }}
+                    >
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                        <div style={{ width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
-                          {produto.imagens?.length > 0 ? <ProductGalleryCarousel images={[produto.imagem_url, ...produto.imagens].filter(Boolean)} autoPlay={produto.carrossel_automatico} productName={produto.nome} /> : <ImageWithFallback src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" fallbackClassName="w-full h-full" />}
-                        </div>
+                        (() => {
+                          const isQuadro = template?.layout_produtos_desktop === 'quadro';
+                          const size = template?.tamanho_imagem_grid || 'medio';
+                          const sizes = {
+                            pequeno: { w: isQuadro ? 96 : 56, h: isQuadro ? 96 : 56 },
+                            medio: { w: isQuadro ? 144 : 80, h: isQuadro ? 144 : 80 },
+                            grande: { w: isQuadro ? '100%' : 120, h: isQuadro ? 180 : 120 }
+                          };
+                          const currentSize = sizes[size as keyof typeof sizes] || sizes.medio;
+                          return (
+                            <div style={{ 
+                              width: currentSize.w, 
+                              height: currentSize.h, 
+                              borderRadius: 10, 
+                              overflow: 'hidden', 
+                              flexShrink: 0,
+                              maxWidth: size === 'grande' && isQuadro ? '100%' : undefined
+                            }}>
+                              {produto.imagens?.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback
+                                  src={produto.imagem_url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover"
+                                  fallbackClassName="w-full h-full"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {produto.destacar_produto && produto.destaque_texto && (
@@ -194,19 +227,86 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                             ✨ {produto.destaque_texto}
                           </div>
                         )}
-                        <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2, wordBreak: 'break-word' }}>{produto.nome}</h4>
+                        <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 2, wordBreak: 'break-word', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span>{produto.nome}</span>
+                          {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: 400, padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)' }}>
+                              ⏱️ {formatDuration(produto.duracao_minutos)}
+                            </span>
+                          )}
+                        </h4>
                         {produto.resumo && <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>}
-                        {!template?.ocultar_valores_intermediarios && <p style={{ fontSize: 17, fontWeight: 800, color: '#fbbf24', marginTop: 4 }}>{formatCurrency(produto.valor)}</p>}
+                        {!template?.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              {desconto > 0 && (
+                                <span style={{ background: 'rgba(245,158,11,.15)', color: '#fbbf24', fontSize: 10, fontWeight: 950, padding: '2px 6px', borderRadius: 4 }}>
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {desconto > 0 && (
+                                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,.3)', textDecoration: 'line-through' }}>{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span style={{ fontSize: 17, fontWeight: 800, color: '#fbbf24' }}>{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '10px 14px' }}>
-                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>{isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <button type="button" className="rv-qty-btn" onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)} disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}>−</button>
-                        <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>{selectedProdutos[produto.id] || 0}</span>
-                        <button type="button" className="rv-qty-btn" onClick={() => { if (!produto.obrigatorio && !fieldsValidation.canAddProducts) { alert(fieldsValidation.validationMessage); return; } props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1); }} disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}>+</button>
+                    {/* Linha inferior: controle de quantidade ou toggle */}
+                    {(produto.permite_multiplas_unidades ?? true) ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '10px 14px' }}>
+                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>{isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <button type="button" className="rv-qty-btn" onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)} disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}>−</button>
+                          <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>{selectedProdutos[produto.id] || 0}</span>
+                          <button type="button" className="rv-qty-btn" onClick={() => { if (!produto.obrigatorio && !fieldsValidation.canAddProducts) { alert(fieldsValidation.validationMessage); return; } props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1); }} disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}>+</button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '10px 14px' }}>
+                        {produto.obrigatorio ? (
+                          <div style={{ padding: '6px 16px', background: 'rgba(245,158,11,.15)', border: '1px solid rgba(245,158,11,.3)', color: '#fbbf24', borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
+                            Incluído
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              props.handleProdutoQuantityChange(
+                                produto.id,
+                                selectedProdutos[produto.id] ? 0 : 1
+                              );
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '10px 16px',
+                              background: selectedProdutos[produto.id] ? 'linear-gradient(135deg,#b45309,#f59e0b)' : 'rgba(255,255,255,.05)',
+                              border: selectedProdutos[produto.id] ? 'none' : '1px solid rgba(255,255,255,.1)',
+                              color: selectedProdutos[produto.id] ? '#03030f' : 'rgba(255,255,255,.8)',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              transition: 'all .2s'
+                            }}
+                          >
+                            {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -268,21 +368,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
         </form>
       </section>
 
-      {profile && (
-        <div style={{ padding: '0 24px 32px', maxWidth: 760, margin: '0 auto' }}>
-          <RatePhotographerButton
-            userId={template.user_id}
-            templateId={template.id}
-            profileName={profile.nome_profissional}
-            aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
-            aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
-            theme={{
-              primaryColor: 'amber',
-              buttonColor: 'bg-amber-600 hover:bg-amber-700 text-white'
-            }}
-          />
-        </div>
-      )}
+      {/* Rate Photographer Button removido */}
       {!(profile?.status_assinatura === 'active') && (
         <footer style={{ background: '#010108', padding: '28px 24px', borderTop: '1px solid rgba(245,158,11,.08)', textAlign: 'center' }}>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,.25)' }}>Powered by <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a></p>

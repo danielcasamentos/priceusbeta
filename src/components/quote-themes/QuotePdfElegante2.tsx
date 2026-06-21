@@ -1,10 +1,8 @@
 import { Lock, MessageCircle, Instagram, Mail, Award } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
-import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
-import { PortfolioSection } from '../PortfolioSection';
 
 interface QuotePdfElegante2Props {
   template: any;
@@ -287,11 +285,6 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
                 </a>
               )}
             </div>
-            <PortfolioSection
-              portfolioLink={profile.portfolio_link}
-              portfolioFotos={profile.portfolio_fotos}
-              isDark={false}
-            />
           </div>
         )}
 
@@ -410,77 +403,153 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
             <div className="flex flex-col gap-3">
               {produtos.map((produto) => {
                 const isSelected = !!selectedProdutos[produto.id];
+                const isHighlighted = produto.destacar_produto === true;
                 return (
                   <div
                     key={produto.id}
-                    className={`pdf2-prod-card p-4 ${isSelected ? 'selected' : ''}`}
+                    className={`pdf2-prod-card p-4 transition-all relative ${
+                      isHighlighted
+                        ? 'border-amber-400 bg-amber-50/10 shadow-[0_8px_20px_rgba(245,158,11,0.08)] ring-1 ring-amber-400/20'
+                        : isSelected
+                        ? 'selected'
+                        : ''
+                    }`}
                   >
-                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    <div className={`flex flex-col gap-4 ${template?.layout_produtos_desktop === 'quadro' ? 'sm:items-center' : 'sm:flex-row sm:items-start'}`}>
                       {/* Product image */}
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
-                        <div className="w-20 h-20 rounded-none border border-neutral-100 overflow-hidden flex-shrink-0 mx-auto sm:mx-0">
-                          {produto.imagens?.length > 0 ? (
-                            <ProductGalleryCarousel
-                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                              autoPlay={produto.carrossel_automatico}
-                              productName={produto.nome}
-                            />
-                          ) : (
-                            <ImageWithFallback
-                              src={produto.imagem_url}
-                              alt={produto.nome}
-                              className="w-full h-full object-cover rounded-none"
-                              fallbackClassName="w-full h-full rounded-none"
-                            />
-                          )}
-                        </div>
+                        (() => {
+                          const sizeClasses = {
+                            pequeno: 'w-24 h-24 sm:w-32 sm:h-32',
+                            medio: 'w-32 h-32 sm:w-48 sm:h-48',
+                            grande: 'w-full h-48 sm:w-72 sm:h-72',
+                          };
+                          const imageSize = template?.tamanho_imagem_grid || 'medio';
+                          const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
+                          return (
+                            <div className={`rounded-none border border-neutral-100 overflow-hidden flex-shrink-0 mx-auto sm:mx-0 ${finalClass}`}>
+                              {produto.imagens?.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback
+                                  src={produto.imagem_url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover rounded-none"
+                                  fallbackClassName="w-full h-full rounded-none"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
 
                       {/* Service info */}
                       <div className="flex-1 min-w-0" ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined}>
-                        <h4 className="text-base font-semibold text-neutral-900 tracking-tight leading-snug">
-                          {produto.nome}
+                        {isHighlighted && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-red-500 text-white rounded px-2 py-0.5 text-[9px] font-black tracking-wider uppercase mb-1.5 shadow-sm pdf2-sans">
+                            ⭐ {produto.destaque_texto}
+                          </div>
+                        )}
+                        <h4 className="text-base font-semibold text-neutral-900 tracking-tight leading-snug flex items-center flex-wrap gap-2">
+                          <span>{produto.nome}</span>
+                          {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (
+                            <span className="inline-flex items-center gap-1 bg-neutral-100 text-neutral-600 text-[10px] font-normal px-2 py-0.5 rounded border border-neutral-200">
+                              ⏱️ {formatDuration(produto.duracao_minutos)}
+                            </span>
+                          )}
                         </h4>
                         {produto.resumo && (
                           <p className="pdf2-sans text-xs text-neutral-500 mt-1 leading-relaxed">
                             {produto.resumo}
                           </p>
                         )}
-                        {!template?.ocultar_valores_intermediarios && (
-                          <p className="text-sm font-semibold text-neutral-800 mt-1.5">
-                            {formatCurrency(produto.valor)}
-                          </p>
-                        )}
+                        {!template?.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                              {desconto > 0 && (
+                                <span className="bg-green-50 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-green-200 pdf2-sans">
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {desconto > 0 && (
+                                  <span className="text-xs text-neutral-400 line-through">{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span className="text-sm font-semibold text-neutral-800">{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span className="text-[10px] text-green-600 font-semibold pdf2-sans">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Quantity */}
-                      <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded px-2 py-1 self-stretch sm:self-auto justify-between sm:justify-start">
-                        <button
-                          type="button"
-                          className="pdf2-btn-qty"
-                          onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
-                          disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                        >
-                          −
-                        </button>
-                        <span className="pdf2-sans font-semibold text-neutral-800 text-sm min-w-6 text-center">
-                          {selectedProdutos[produto.id] || 0}
-                        </span>
-                        <button
-                          type="button"
-                          className="pdf2-btn-qty"
-                          onClick={() => {
-                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                              alert(fieldsValidation.validationMessage);
-                              return;
-                            }
-                            props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
-                          }}
-                          disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                        >
-                          +
-                        </button>
-                      </div>
+                      {(produto.permite_multiplas_unidades ?? true) ? (
+                        <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded px-2 py-1 self-stretch sm:self-auto justify-between sm:justify-start">
+                          <button
+                            type="button"
+                            className="pdf2-btn-qty"
+                            onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
+                            disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                          >
+                            −
+                          </button>
+                          <span className="pdf2-sans font-semibold text-neutral-800 text-sm min-w-6 text-center">
+                            {selectedProdutos[produto.id] || 0}
+                          </span>
+                          <button
+                            type="button"
+                            className="pdf2-btn-qty"
+                            onClick={() => {
+                              if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                              props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
+                            }}
+                            disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          {produto.obrigatorio ? (
+                            <div className="py-1 px-3 bg-neutral-100 text-neutral-500 rounded border border-neutral-200 text-xs font-semibold pdf2-sans">
+                              Incluído
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                                props.handleProdutoQuantityChange(
+                                  produto.id,
+                                  selectedProdutos[produto.id] ? 0 : 1
+                                );
+                              }}
+                              className={`py-1.5 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all pdf2-sans ${
+                                selectedProdutos[produto.id]
+                                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
+                                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-300'
+                              }`}
+                            >
+                              {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -518,12 +587,16 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
                     ? (total * forma.entrada_valor) / 100
                     : forma.entrada_valor;
 
+                  const isDefault = forma.is_default === true;
+
                   return (
                     <label
                       key={forma.id}
                       className={`flex gap-3 items-start p-3 border rounded cursor-pointer transition-all ${
                         selectedFormaPagamento === forma.id
                           ? 'border-neutral-800 bg-neutral-50'
+                          : isDefault
+                          ? 'border-amber-400 bg-amber-50/15 shadow-[0_4px_12px_rgba(245,158,11,0.06)]'
                           : 'border-neutral-200 bg-neutral-50/40 hover:bg-neutral-50'
                       }`}
                     >
@@ -537,7 +610,14 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
                         style={{ accentColor: '#1a1a1a' }}
                       />
                       <div className="flex-1">
-                        <p className="font-semibold text-neutral-800 text-xs">{forma.nome}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-neutral-800 text-xs">{forma.nome}</p>
+                          {isDefault && (
+                            <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider pdf2-sans">
+                              ⭐ Recomendado
+                            </span>
+                          )}
+                        </div>
                         <p className="pdf2-sans text-[11px] text-neutral-500 mt-0.5 leading-normal">
                           <span>
                             {forma.entrada_tipo === 'percentual'
@@ -634,22 +714,7 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
             </button>
           </div>
 
-          {/* Review Button */}
-          {profile && (
-            <div className="pt-2">
-              <RatePhotographerButton
-                userId={template.user_id}
-                templateId={template.id}
-                profileName={profile.nome_profissional}
-                aceitaAvaliacoes={profile.aceita_avaliacoes ?? true}
-                aprovacaoAutomatica={profile.aprovacao_automatica_avaliacoes ?? false}
-                theme={{
-                  primaryColor: 'zinc',
-                  buttonColor: 'bg-neutral-900 hover:bg-neutral-800 text-white font-medium tracking-widest text-xs uppercase py-4 rounded-md'
-                }}
-              />
-            </div>
-          )}
+          {/* Review Button removido */}
         </form>
 
         {/* Footer Photo */}

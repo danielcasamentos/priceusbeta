@@ -110,8 +110,8 @@ export function SeasonalPricingManager({
     setNotification({ message, type });
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // Carregar países
       const { data: paisesData } = await supabase
@@ -148,7 +148,7 @@ export function SeasonalPricingManager({
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -263,12 +263,14 @@ export function SeasonalPricingManager({
   };
 
   const handleUpdateCidade = async (id: string, field: string, value: number) => {
+    setCidades(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
     try {
-      await supabase.from('cidades_ajuste').update({ [field]: value }).eq('id', id);
-      await loadData();
+      const { error } = await supabase.from('cidades_ajuste').update({ [field]: value }).eq('id', id);
+      if (error) throw error;
     } catch (error) {
       console.error('Erro:', error);
       showNotification('❌ Erro ao atualizar cidade', 'error');
+      loadData(true);
     }
   };
 
@@ -316,29 +318,23 @@ export function SeasonalPricingManager({
   };
 
   const handleUpdateTemporada = async (id: string, field: string, value: any) => {
+    let updateData: any = {};
+    if (field === 'ajuste_percentual') {
+      const multiplicador = 1 + (parseFloat(value) / 100);
+      updateData = { multiplicador };
+      setTemporadas(prev => prev.map(t => t.id === id ? { ...t, multiplicador } : t));
+    } else {
+      updateData = { [field]: value };
+      setTemporadas(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+    }
+
     try {
-      let updateData: any = {};
-
-      // Se estiver atualizando ajuste percentual, converter para multiplicador
-      if (field === 'ajuste_percentual') {
-        const multiplicador = 1 + (parseFloat(value) / 100);
-        updateData = { multiplicador };
-      } else {
-        updateData = { [field]: value };
-      }
-
       const { error } = await supabase.from('temporadas').update(updateData).eq('id', id);
-
-      if (error) {
-        console.error('Erro ao atualizar temporada:', error);
-        showNotification(`❌ Erro: ${error.message}`, 'error');
-        return;
-      }
-
-      await loadData();
+      if (error) throw error;
     } catch (error) {
       console.error('Erro:', error);
       showNotification('❌ Erro ao atualizar temporada', 'error');
+      loadData(true);
     }
   };
 

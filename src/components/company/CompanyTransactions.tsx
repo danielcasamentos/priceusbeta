@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download, Copy, LayoutGrid, List, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Filter, DollarSign, TrendingDown, TrendingUp, ChevronDown, Loader2, Download, Copy, LayoutGrid, List, Search, MessageCircle } from 'lucide-react';
 import { ExportModal } from '../ExportModal';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { useCompanyTransactions, CompanyTransaction, CompanyCategory } from '../../hooks/useCompanyTransactions';
 import { useCompanyMetrics } from '../../hooks/useCompanyMetrics';
 import { TransactionFormModal } from '../TransactionFormModal';
+import { CobrancaModal } from './CobrancaModal';
 
 interface CompanyTransactionsProps {
   userId: string;
@@ -46,6 +47,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<CompanyTransaction | null>(null);
   const [isDeletingTx, setIsDeletingTx] = useState(false);
+  const [cobrancaTransaction, setCobrancaTransaction] = useState<CompanyTransaction | null>(null);
 
   const filteredTransactions = transactions.filter((t: CompanyTransaction) => {
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
@@ -725,6 +727,11 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
+                        {transaction.tipo === 'receita' && transaction.status === 'pendente' && (
+                          <button onClick={() => setCobrancaTransaction(transaction)} className="p-1.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-[rgba(34,197,94,0.2)] rounded transition-colors" title="Cobrar via WhatsApp">
+                            <MessageCircle className="w-4 h-4" />
+                          </button>
+                        )}
                         <button onClick={() => handleEdit(transaction)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-[rgba(59,130,246,0.2)] rounded transition-colors" title="Editar">
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -782,6 +789,9 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                       {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
                     </span>
                     <div className="flex gap-1">
+                      {transaction.tipo === 'receita' && transaction.status === 'pendente' && (
+                        <button onClick={(e) => { e.stopPropagation(); setCobrancaTransaction(transaction); }} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Cobrar via WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
+                      )}
                       <button onClick={(e) => { e.stopPropagation(); handleEdit(transaction); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil className="w-3.5 h-3.5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); handleDuplicate(transaction); }} className="p-1 text-indigo-600 hover:bg-indigo-50 rounded"><Copy className="w-3.5 h-3.5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); setTransactionToDelete(transaction); }} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -839,6 +849,9 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
                   : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.1)] text-gray-600 dark:text-[rgba(255,255,255,0.6)]'
                 }`}>{t.status}</span>
                 <div className="flex gap-1">
+                  {t.tipo === 'receita' && t.status === 'pendente' && (
+                    <button onClick={() => setCobrancaTransaction(t)} className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-[rgba(34,197,94,0.15)] rounded" title="Cobrar via WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
+                  )}
                   <button onClick={() => handleEdit(t)} className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.15)] rounded" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
                   <button onClick={() => handleDuplicate(t)} className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-[rgba(99,102,241,0.15)] rounded" title="Duplicar"><Copy className="w-3.5 h-3.5" /></button>
                   <button onClick={() => setTransactionToDelete(t)} className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-[rgba(239,68,68,0.15)] rounded" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -892,6 +905,18 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {cobrancaTransaction && (
+        <CobrancaModal
+          isOpen={!!cobrancaTransaction}
+          onClose={() => setCobrancaTransaction(null)}
+          clienteNome={cobrancaTransaction.cliente_nome || ''}
+          clienteTelefone={cobrancaTransaction.cliente_telefone || ''}
+          valor={cobrancaTransaction.valor}
+          dataVencimento={cobrancaTransaction.data}
+          descricao={cobrancaTransaction.descricao}
+        />
       )}
     </div>
   );

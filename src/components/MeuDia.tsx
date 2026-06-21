@@ -6,6 +6,7 @@ import {
   Zap, ChevronRight, Plus, ArrowRight, Trash2, MessageCircle, Users,
   AlertCircle, Star, Sliders,
 } from 'lucide-react';
+import { CobrancaModal } from './company/CobrancaModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -56,8 +57,15 @@ interface ClientRecommendation {
 }
 
 interface Transacao {
-  id: string; descricao: string; valor: number; data: string;
-  status: string; tipo: string; forma_pagamento?: string;
+  id: string;
+  descricao: string;
+  valor: number;
+  data: string;
+  status: string;
+  tipo: string;
+  forma_pagamento?: string;
+  cliente_nome?: string;
+  cliente_telefone?: string;
 }
 interface TarefaWorkflow {
   leadId: string; leadNome: string; stepId: string; stepNome: string;
@@ -316,7 +324,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
 
   // ── CRM data ───────────────────────────────────────────────────────────────
   const [abaAgenda, setAbaAgenda] = useState<'hoje' | 'amanha' | 'semana'>('hoje');
-  const [abaTarefaPeriodo, setAbaTarefaPeriodo] = useState<'hoje' | 'amanha' | 'proximos3' | 'semana' | 'mes' | 'ano' | 'periodo'>('hoje');
+  const [abaTarefaPeriodo, setAbaTarefaPeriodo] = useState<'atrasadas' | 'hoje' | 'amanha' | 'proximos3' | 'semana' | 'mes' | 'ano' | 'periodo'>('hoje');
   
   const [todasTarefas, setTodasTarefas] = useState<TarefaWorkflow[]>([]);
   const [tarefasConcluidas, setTarefasConcluidas] = useState<TarefaWorkflow[]>([]);
@@ -337,6 +345,9 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [cashflowTr, setCashflowTr] = useState<Transacao[]>([]);
   const [lucroDesejado, setLucroDesejado] = useState(3000);
 
+  // ── Cobrança Modal (new) ──────────────────────────────────────────────────
+  const [cobrancaTransaction, setCobrancaTransaction] = useState<Transacao | null>(null);
+
   // ── Growth Hub (new) ──────────────────────────────────────────────────────
   const [growthTab, setGrowthTab] = useState<GrowthTab>('sazonal');
 
@@ -344,6 +355,8 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [roiInvestimento, setRoiInvestimento] = useState(1000);
   const [roiTicket, setRoiTicket] = useState(5000);
   const [roiConversao, setRoiConversao] = useState(8);
+  const [ticketMedioReal, setTicketMedioReal] = useState<number | null>(null);
+  const [conversaoReal, setConversaoReal] = useState<number | null>(null);
 
   const range = getRangeForPeriodo(periodo, customStart, customEnd);
 
@@ -460,16 +473,21 @@ export function MeuDia({ userId }: MeuDiaProps) {
     try {
       const [leadsRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes, avaliacoesPendentesRes] =
         await Promise.all([
-          supabase.from('leads').select('id, nome_cliente, workflow').eq('user_id', userId).eq('status', 'convertido'),
+          supabase.from('leads').select('id, nome_cliente, workflow, valor_total, status').eq('user_id', userId),
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioMes).lte('data', hoje),
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioAno).lte('data', hoje),
-          supabase.from('company_transactions').select('id, descricao, valor, data, status, tipo').eq('user_id', userId).gte('data', inicioMes).lte('data', fim3Meses).order('data'),
+          supabase.from('company_transactions').select('id, descricao, valor, data, status, tipo, leads:lead_id(nome_cliente, telefone_cliente)').eq('user_id', userId).gte('data', dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() - 5, 1))).lte('data', fim3Meses).order('data'),
           supabase.from('profiles').select('lucro_desejado').eq('id', userId).maybeSingle(),
           supabase.from('eventos_agenda').select('id, data_evento, tipo_evento, cliente_nome, status, lead_id, leads(telefone_cliente)').eq('user_id', userId).order('data_evento', { ascending: false }),
           supabase.from('avaliacoes').select('id, rating, comentario, nome_cliente, created_at, tipo_evento').eq('profile_id', userId).eq('visivel', false).order('created_at', { ascending: false }).limit(10),
         ]);
 
-      setCashflowTr((cashflowRes.data as Transacao[]) || []);
+      const mappedCashflow = ((cashflowRes.data || []) as any[]).map((t: any) => ({
+        ...t,
+        cliente_nome: t.leads?.nome_cliente || '',
+        cliente_telefone: t.leads?.telefone_cliente || ''
+      }));
+      setCashflowTr(mappedCashflow);
       setAllEventos((allEvRes.data as any[]) || []);
       setAvaliacoesPendentes((avaliacoesPendentesRes.data as ReviewPendente[]) || []);
 
@@ -481,10 +499,23 @@ export function MeuDia({ userId }: MeuDiaProps) {
       setReceitaMes(calcReceita((trMesRes.data as { tipo: string; status: string; valor: number }[]) || []));
       setReceitaAno(calcReceita((trAnoRes.data as { tipo: string; status: string; valor: number }[]) || []));
 
+      const allLeads = (leadsRes.data || []) as any[];
+      const convertedLeads = allLeads.filter(l => l.status === 'convertido');
+      const totalTicket = convertedLeads.reduce((sum, lead) => sum + (lead.valor_total || 0), 0);
+      const avgTicket = convertedLeads.length > 0 ? Math.round(totalTicket / convertedLeads.length) : 5000;
+      setTicketMedioReal(convertedLeads.length > 0 ? avgTicket : null);
+      setRoiTicket(prev => prev === 5000 ? avgTicket : prev);
+
+      const totalLeadsCount = allLeads.length;
+      const convertedCount = convertedLeads.length;
+      const convRate = totalLeadsCount > 0 ? Math.round((convertedCount / totalLeadsCount) * 100) : 8;
+      setConversaoReal(totalLeadsCount > 0 ? convRate : null);
+      setRoiConversao(prev => prev === 8 ? convRate : prev);
+
       const todasTarefasRaw: TarefaWorkflow[] = [];
       const concluidasRaw: TarefaWorkflow[] = [];
 
-      for (const lead of (leadsRes.data || [])) {
+      for (const lead of convertedLeads) {
         const wf = Array.isArray(lead.workflow) ? lead.workflow : [];
         for (const step of wf) {
           const prazo = step.prazo || step.deadline || null;
@@ -594,6 +625,14 @@ export function MeuDia({ userId }: MeuDiaProps) {
     return Math.min(150, Math.max(0, (cashflow.mes.lucro / lucroDesejado) * 100));
   }, [cashflow.mes.lucro, lucroDesejado]);
 
+  // Pagamentos vencidos: receitas pendentes com data < hoje
+  const pagamentosVencidos = useMemo(() => {
+    const hoje = getToday();
+    return cashflowTr.filter(t => t.tipo === 'receita' && t.status === 'pendente' && t.data < hoje);
+  }, [cashflowTr]);
+
+  const totalVencido = pagamentosVencidos.reduce((s, t) => s + t.valor, 0);
+
   // ── Computed: ROI ──────────────────────────────────────────────────────────
   const roiCalc = useMemo(() => {
     const cpl = Math.max(20, roiTicket * 0.008);
@@ -659,6 +698,10 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const inicioAno = `${todayObj.getFullYear()}-01-01`;
     const fimAno = `${todayObj.getFullYear()}-12-31`;
 
+    // Atrasadas: prazo ANTES de hoje
+    const atrasadasCRM = todasTarefas.filter(t => t.prazo && t.prazo < hoje);
+    const atrasadasCompany = companyTasks.filter(t => !t.concluida && t.data_limite && t.data_limite < hoje);
+
     const hojeCRM = todasTarefas.filter(t => t.prazo === hoje);
     const hojeCompany = companyTasks.filter(t => !t.concluida && t.data_limite === hoje);
 
@@ -684,6 +727,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const concluidaCRMCount = tarefasConcluidas.length;
     const executadasTotais = concluidaCompanyCount + concluidaCRMCount;
 
+    const atrasadasCount = atrasadasCRM.length + atrasadasCompany.length;
     const hojeCount = hojeCRM.length + hojeCompany.length;
     const amanhaCount = amanhaCRM.length + amanhaCompany.length;
     const semanaCount = semanaCRM.length + semanaCompany.length;
@@ -691,6 +735,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const totaisGeral = todasTarefas.length + companyTasks.filter(t => !t.concluida).length;
 
     return {
+      atrasadas: { crm: atrasadasCRM, company: atrasadasCompany, count: atrasadasCount },
       hoje: { crm: hojeCRM, company: hojeCompany, count: hojeCount },
       amanha: { crm: amanhaCRM, company: amanhaCompany, count: amanhaCount },
       proximos3: { crm: proximo3CRM, company: proximo3Company, count: proximo3CRM.length + proximo3Company.length },
@@ -700,6 +745,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       periodo: { crm: periodoCRM, company: periodoCompany, count: periodoCRM.length + periodoCompany.length },
       stats: {
         executadasTotais,
+        atrasadasCount,
         hojeCount,
         amanhaCount,
         semanaCount,
@@ -710,7 +756,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
   }, [todasTarefas, companyTasks, tarefasConcluidas, range.start, range.end]);
 
   const tarefasCombinadas = useMemo(() => {
-    const currentPeriod = tarefasPorPeriodo[abaTarefaPeriodo];
+    const currentPeriod = tarefasPorPeriodo[abaTarefaPeriodo] || tarefasPorPeriodo.hoje;
     const list: {
       tipo: 'crm' | 'company';
       id: string;
@@ -905,20 +951,24 @@ export function MeuDia({ userId }: MeuDiaProps) {
                 <div>
                   <div className="flex gap-1.5 overflow-x-auto pb-2">
                     {[
-                      { id: 'hoje', label: 'Hoje', count: tarefasPorPeriodo.hoje.count },
-                      { id: 'amanha', label: 'Amanhã', count: tarefasPorPeriodo.amanha.count },
-                      { id: 'proximos3', label: '3 dias', count: tarefasPorPeriodo.proximos3.count },
-                      { id: 'semana', label: 'Semana', count: tarefasPorPeriodo.semana.count },
-                      { id: 'mes', label: 'Mês', count: tarefasPorPeriodo.mes.count },
-                      { id: 'ano', label: 'Ano', count: tarefasPorPeriodo.ano.count },
+                      { id: 'atrasadas', label: '⚠️ Atrasadas', count: tarefasPorPeriodo.atrasadas.count, isOverdue: true },
+                      { id: 'hoje', label: 'Hoje', count: tarefasPorPeriodo.hoje.count, isOverdue: false },
+                      { id: 'amanha', label: 'Amanhã', count: tarefasPorPeriodo.amanha.count, isOverdue: false },
+                      { id: 'proximos3', label: '3 dias', count: tarefasPorPeriodo.proximos3.count, isOverdue: false },
+                      { id: 'semana', label: 'Semana', count: tarefasPorPeriodo.semana.count, isOverdue: false },
+                      { id: 'mes', label: 'Mês', count: tarefasPorPeriodo.mes.count, isOverdue: false },
+                      { id: 'ano', label: 'Ano', count: tarefasPorPeriodo.ano.count, isOverdue: false },
                     ].map(tab => (
                       <button key={tab.id}
                         onClick={() => setAbaTarefaPeriodo(tab.id as any)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${abaTarefaPeriodo === tab.id
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
-                          : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
+                          abaTarefaPeriodo === tab.id
+                            ? tab.isOverdue ? 'bg-red-600 text-white shadow-md shadow-red-500/20' : 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                            : tab.isOverdue && tab.count > 0
+                              ? 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 animate-pulse'
+                              : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
                         {tab.label}
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${abaTarefaPeriodo === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400'}`}>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${abaTarefaPeriodo === tab.id ? 'bg-white/20 text-white' : tab.isOverdue && tab.count > 0 ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400'}`}>
                           {tab.count}
                         </span>
                       </button>
@@ -934,11 +984,25 @@ export function MeuDia({ userId }: MeuDiaProps) {
                     ) : tarefasCombinadas.map(t => {
                       const pi = prazoInfo(t.prazo);
                       return (
-                        <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all group ${t.concluida ? 'opacity-50 bg-gray-50 dark:bg-white/2 border-gray-100 dark:border-white/3' : 'bg-white dark:bg-white/3 border-gray-100 dark:border-white/5 hover:border-indigo-200 dark:hover:border-indigo-500/30'}`}>
+                        <div
+                          key={t.id}
+                          onClick={() => {
+                            if (t.tipo === 'crm' && t.taskObject?.leadId) {
+                              navigate(`/dashboard/leads?id=${t.taskObject.leadId}`);
+                            }
+                          }}
+                          className={`flex items-center gap-3 p-3 rounded-xl border transition-all group ${
+                            t.tipo === 'crm' ? 'cursor-pointer hover:bg-indigo-50/20 dark:hover:bg-white/5' : ''
+                          } ${t.concluida ? 'opacity-50 bg-gray-50 dark:bg-white/2 border-gray-100 dark:border-white/3' : 'bg-white dark:bg-white/3 border-gray-100 dark:border-white/5 hover:border-indigo-200 dark:hover:border-indigo-500/30'}`}
+                        >
                           {t.tipo === 'company' ? (
-                            <input type="checkbox" checked={t.concluida}
+                            <input
+                              type="checkbox"
+                              checked={t.concluida}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={() => toggleTask(t.id, t.concluida)}
-                              className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0" />
+                              className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                            />
                           ) : (
                             <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${pi.dotColor}`} />
                           )}
@@ -958,14 +1022,24 @@ export function MeuDia({ userId }: MeuDiaProps) {
                             )}
                             <span className={`text-[10px] font-bold ${pi.colorClass}`}>{pi.texto}</span>
                             {t.tipo === 'crm' && (
-                              <button onClick={() => navigate(`/dashboard/leads?id=${t.taskObject?.leadId}`)}
-                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-all">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/dashboard/leads?id=${t.taskObject?.leadId}`);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-all"
+                              >
                                 <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
                               </button>
                             )}
                             {t.tipo === 'company' && (
-                              <button onClick={() => deleteTask(t.id)}
-                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteTask(t.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                              >
                                 <Trash2 className="w-3.5 h-3.5 text-red-400" />
                               </button>
                             )}
@@ -1193,6 +1267,45 @@ export function MeuDia({ userId }: MeuDiaProps) {
                 </div>
               </div>
 
+              {/* Pagamentos Vencidos */}
+              {pagamentosVencidos.length > 0 && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-red-200/60 dark:border-red-900/30 shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 bg-red-50 dark:bg-red-950/20 border-b border-red-100 dark:border-red-900/30">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      <h3 className="font-bold text-red-800 dark:text-red-300 text-sm">⚠️ Pagamentos Vencidos</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-red-600 dark:text-red-400">{fmtCurrency(totalVencido)}</span>
+                      <span className="text-[10px] bg-red-600 text-white font-black px-2 py-0.5 rounded-full">{pagamentosVencidos.length}</span>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
+                    {pagamentosVencidos.map((tr) => {
+                      const diasVencido = Math.round((new Date().setHours(0,0,0,0) - new Date(tr.data + 'T00:00:00').getTime()) / 86400000);
+                      return (
+                        <div key={tr.id} className="px-6 py-3.5 hover:bg-red-50/30 dark:hover:bg-red-900/10 transition-all">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">{tr.descricao || 'Pagamento pendente'}</p>
+                              <p className="text-[11px] text-red-500 font-semibold mt-0.5">Venceu há {diasVencido} dia{diasVencido > 1 ? 's' : ''} • {fmtCurrency(tr.valor)}</p>
+                            </div>
+                            <button
+                              onClick={() => setCobrancaTransaction(tr)}
+                              title="Cobrar via WhatsApp"
+                              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold rounded-xl transition-all active:scale-95"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              Cobrar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Follow-ups Sugeridos */}
               {clientRecommendations.length > 0 && (
                 <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
@@ -1404,11 +1517,18 @@ export function MeuDia({ userId }: MeuDiaProps) {
                       <label className="text-sm font-bold text-gray-700 dark:text-gray-200">🎯 Ticket médio dos seus serviços</label>
                       <span className="text-lg font-black text-blue-500">{fmtCurrency(roiTicket)}</span>
                     </div>
-                    <input type="range" min={800} max={25000} step={200} value={roiTicket}
+                    <input type="range" min={800} max={Math.max(25000, ticketMedioReal || 25000)} step={200} value={roiTicket}
                       onChange={e => setRoiTicket(Number(e.target.value))}
                       className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-blue-500 cursor-pointer" />
                     <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                      <span>R$ 800</span><span>R$ 25.000</span>
+                      <span>R$ 800</span>
+                      {ticketMedioReal !== null && (
+                        <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded text-[9px] text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
+                          <span>Média real: <strong>{fmtCurrency(ticketMedioReal)}</strong></span>
+                          <button type="button" onClick={() => setRoiTicket(ticketMedioReal)} className="font-bold underline ml-1 hover:text-blue-800 dark:hover:text-blue-200">Aplicar</button>
+                        </div>
+                      )}
+                      <span>{fmtCurrency(Math.max(25000, ticketMedioReal || 25000))}</span>
                     </div>
                   </div>
                   <div>
@@ -1416,11 +1536,18 @@ export function MeuDia({ userId }: MeuDiaProps) {
                       <label className="text-sm font-bold text-gray-700 dark:text-gray-200">📈 Taxa de conversão de leads</label>
                       <span className="text-lg font-black text-emerald-500">{roiConversao}%</span>
                     </div>
-                    <input type="range" min={2} max={20} step={1} value={roiConversao}
+                    <input type="range" min={2} max={Math.max(20, conversaoReal || 20)} step={1} value={roiConversao}
                       onChange={e => setRoiConversao(Number(e.target.value))}
                       className="w-full h-2 rounded-full appearance-none bg-gray-200 dark:bg-white/10 accent-emerald-500 cursor-pointer" />
                     <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                      <span>2% (conservador)</span><span>20% (agressivo)</span>
+                      <span>2% (conservador)</span>
+                      {conversaoReal !== null && (
+                        <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded text-[9px] text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800">
+                          <span>Conversão real: <strong>{conversaoReal}%</strong></span>
+                          <button type="button" onClick={() => setRoiConversao(conversaoReal)} className="font-bold underline ml-1 hover:text-emerald-800 dark:hover:text-emerald-200">Aplicar</button>
+                        </div>
+                      )}
+                      <span>{Math.max(20, conversaoReal || 20)}% (agressivo)</span>
                     </div>
                   </div>
                 </div>
@@ -1463,6 +1590,18 @@ export function MeuDia({ userId }: MeuDiaProps) {
           </div>
 
         </div>
+      )}
+
+      {cobrancaTransaction && (
+        <CobrancaModal
+          isOpen={!!cobrancaTransaction}
+          onClose={() => setCobrancaTransaction(null)}
+          clienteNome={cobrancaTransaction.cliente_nome || ''}
+          clienteTelefone={cobrancaTransaction.cliente_telefone || ''}
+          valor={cobrancaTransaction.valor}
+          dataVencimento={cobrancaTransaction.data}
+          descricao={cobrancaTransaction.descricao}
+        />
       )}
 
     </div>

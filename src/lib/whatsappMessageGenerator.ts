@@ -19,6 +19,7 @@ export interface Product {
   permite_multiplas_unidades?: boolean;
   desconto_percentual?: number;
   desconto_ativo?: boolean;
+  resumo?: string;
 }
 
 export interface PaymentMethod {
@@ -48,6 +49,7 @@ export interface Template {
   sistema_sazonal_ativo?: boolean;
   sistema_geografico_ativo?: boolean;
   ocultar_valores_intermediarios?: boolean;
+  ocultar_taxa_deslocamento?: boolean;
 }
 
 export interface PriceBreakdown {
@@ -232,7 +234,7 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
         ? formatCurrency(Math.abs(priceBreakdown.ajusteGeografico.percentual))
         : '',
     '{{TRAVEL_FEE}}':
-      priceBreakdown.ajusteGeografico.taxa !== 0
+      priceBreakdown.ajusteGeografico.taxa !== 0 && !template.ocultar_taxa_deslocamento
         ? formatCurrency(priceBreakdown.ajusteGeografico.taxa)
         : '',
     '{{PAYMENT_ADJUSTMENT}}':
@@ -324,10 +326,13 @@ function buildProductsList(
       const quantity = selectedProducts[p.id];
       const showQty = p.permite_multiplas_unidades !== false;
       const qtyText = showQty ? `${quantity}x ` : "";
-      if (hideValues) {
-        return `• ${qtyText}${p.nome}`;
+      let productLine = hideValues
+        ? `• ${qtyText}${p.nome}`
+        : `• ${qtyText}${p.nome} - ${formatCurrency(p.valor)}`;
+      if (p.resumo) {
+        productLine += `\n   ${p.resumo.trim()}`;
       }
-      return `• ${qtyText}${p.nome} - ${formatCurrency(p.valor)}`;
+      return productLine;
     })
     .join('\n');
 }
@@ -438,7 +443,7 @@ function buildAdditionalDataSection(options: {
             `   └─ Ajuste Regional: ${signal}${formatCurrency(Math.abs(priceBreakdown.ajusteGeografico.percentual))}`
           );
         }
-        if (priceBreakdown.ajusteGeografico.taxa !== 0) {
+        if (priceBreakdown.ajusteGeografico.taxa !== 0 && !template.ocultar_taxa_deslocamento) {
           sections.push(
             `   └─ Taxa de Deslocamento: ${formatCurrency(priceBreakdown.ajusteGeografico.taxa)}`
           );

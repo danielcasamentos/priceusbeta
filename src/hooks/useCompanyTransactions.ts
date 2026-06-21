@@ -36,6 +36,7 @@ export interface CompanyTransaction {
   created_at: string;
   updated_at: string;
   cliente_nome?: string;
+  cliente_telefone?: string;
   documento_fiscal?: string;
 }
 
@@ -101,7 +102,7 @@ export function useCompanyTransactions(userId: string) {
       const { data, error } = await applyFilters(
         supabase
           .from('company_transactions')
-          .select('*, leads:lead_id(nome_cliente, dados_formulario)')
+          .select('*, leads:lead_id(nome_cliente, dados_formulario, telefone_cliente)')
           .eq('user_id', userId)
       );
 
@@ -154,6 +155,7 @@ export function useCompanyTransactions(userId: string) {
           return {
             ...t,
             cliente_nome: t.leads?.nome_cliente || '',
+            cliente_telefone: t.leads?.telefone_cliente || '',
             documento_fiscal: t.documento_fiscal || contractCpf || leadCpf || '',
           };
         });

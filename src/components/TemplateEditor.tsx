@@ -79,6 +79,9 @@ interface Template {
   upsell_titulo?: string;
   upsell_subtitulo?: string;
   upsell_layout?: 'grid' | 'carousel' | 'list';
+  // Deslocamento
+  ocultar_taxa_deslocamento?: boolean;
+  exibir_duracao_produto?: boolean;
 }
 
 interface TemplateEditorProps {
@@ -97,7 +100,7 @@ const DIAS_SEMANA = [
 ];
 
 export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
-  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'analytics' | 'upsell' | 'config'>('produtos');
+  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'upsell' | 'config'>('produtos');
   const [template, setTemplate] = useState<Template | null>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
@@ -662,7 +665,6 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
     { id: 'precos', label: 'Preços', icon: MapPin },
     { id: 'aparencia', label: 'Aparência', icon: Palette },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'upsell', label: 'Upsell', icon: TrendingUp },
     { id: 'config', label: 'Configurações', icon: null },
   ];
@@ -836,6 +838,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                         <option value="email">E-mail</option>
                         <option value="tel">Telefone</option>
                         <option value="date">Data</option>
+                        <option value="time">Hora</option>
                         <option value="number">Número</option>
                         <option value="textarea">Texto Longo</option>
                       </select>
@@ -912,10 +915,6 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
 
           {activeTab === 'aparencia' && (
             <TemplateEditorWithThemeSelector templateId={templateId} />
-          )}
-
-          {activeTab === 'analytics' && (
-            <QuoteAnalytics templateId={templateId} />
           )}
 
           {activeTab === 'upsell' && (
@@ -1202,6 +1201,27 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
+                      checked={template?.exibir_duracao_produto || false}
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('exibir_duracao_produto', e.target.checked)
+                      }
+                      className="w-5 h-5 text-blue-600 rounded mt-1"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        ⏱️ Exibir Duração do Produto / Serviço
+                      </div>
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                        Quando ativado, exibe a duração em horas/minutos configurada nos produtos e serviços diretamente no orçamento enviado ao cliente (ex: ⏱️ 2h, ⏱️ 1h30min).
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
                       checked={template?.bloquear_campos_obrigatorios || false}
                       onChange={(e) =>
                         handleUpdateTemplateConfig('bloquear_campos_obrigatorios', e.target.checked)
@@ -1271,6 +1291,27 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </div>
                       <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                         Mostra um botão flutuante com o totalizador na tela, acompanhando o cliente. O painel agora aparecerá inteligentemente apenas após o primeiro produto ser exibido e seu formato seguirá automaticamente o design do tema escolhido.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="border border-orange-200 dark:border-orange-900/30 bg-orange-50 dark:bg-orange-900/10 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={template?.ocultar_taxa_deslocamento || false}
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('ocultar_taxa_deslocamento', e.target.checked)
+                      }
+                      className="w-5 h-5 text-orange-600 rounded mt-1"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        🚗 Ocultar Taxa de Deslocamento
+                      </div>
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                        Ative para esconder o detalhamento da taxa de deslocamento de cidade nos itens do orçamento e nas mensagens de WhatsApp. O valor total continuará sendo calculado corretamente — apenas o item separado de deslocamento ficará oculto para o cliente.
                       </div>
                     </div>
                   </label>

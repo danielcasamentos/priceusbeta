@@ -35,7 +35,6 @@ interface ProductEditorProps {
   onDuplicate?: () => void;
   userId: string;
   templateId?: string;
-  onImageUploadSuccess?: () => void;
   onProductSaved?: (productId: string) => void;
 }
 
@@ -51,9 +50,8 @@ interface ProductEditorProps {
  * - Feedback visual detalhado
  * - Auto-save no banco de dados
  */
-export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId, templateId, onImageUploadSuccess, onProductSaved }: ProductEditorProps) {
+export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId, templateId, onProductSaved }: ProductEditorProps) {
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [saving, setSaving] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +61,9 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
     if (!product.duracao_minutos) return 'hours';
     return product.duracao_minutos % 60 === 0 ? 'hours' : 'minutes';
   });
+
+  const [uploadingSlots, setUploadingSlots] = useState<number[]>([]);
+  const [slotProgress, setSlotProgress] = useState<Record<number, number>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,129 +135,135 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
   };
 
   /**
-   * Processa upload de imagem com o novo serviço
+   * Processa upload de multiplas imagens com o novo serviço
    */
-  const handleImageUpload = async (file: File) => {
+  const handleMultipleImagesUpload = async (files: File[]) => {
     setError(null);
     setSuccess(null);
 
-    try {
-      // PASSO 1: Validar campos obrigatórios
-      const validation = validateProductForAutoSave();
-      if (!validation.valid) {
-        setError(validation.message || 'Dados inválidos');
+    // PASSO 1: Validar campos obrigatórios
+    const validation = validateProductForAutoSave();
+    if (!validation.valid) {
+      setError(validation.message || 'Dados inválidos');
+      return;
+    }
+
+    // PASSO 2: Auto-save do produto se não tiver ID
+    let productId = product.id;
+
+    if (!productId) {
+      setSaving(true);
+      setUploading(true);
+      setUploadingSlots([0]);
+      setSlotProgress({ 0: 5 });
+
+      try {
+        const savedId = await autoSaveProduct();
+        if (!savedId) {
+          throw new Error('Falha ao obter ID do produto');
+        }
+        productId = savedId;
+
+        // Atualizar estado local com o novo ID
+        onChange('id', productId);
+
+        // Notificar componente pai sobre o novo ID
+        if (onProductSaved) {
+          onProductSaved(productId);
+        }
+
+        console.log('✅ Produto salvo, prosseguindo com upload de imagem');
+      } catch (error) {
+        setError('Erro ao salvar produto. Tente novamente.');
+        console.error('Erro no auto-save:', error);
+        setUploading(false);
+        setSaving(false);
+        setUploadingSlots([]);
+        setSlotProgress({});
         return;
+      } finally {
+        setSaving(false);
+        setUploadingSlots([]);
+        setSlotProgress({});
       }
+    }
 
-      // PASSO 2: Auto-save do produto se não tiver ID
-      let productId = product.id;
+    // PASSO 3: Upload das imagens progressivo, slot-by-slot
+    setUploading(true);
 
-      if (!productId) {
-        setSaving(true);
-        setProgress({
-          phase: 'validating',
-          percent: 5,
-          message: 'Salvando produto automaticamente...'
+    let successCount = 0;
+    try {
+      let currentUrls = [
+        product.imagem_url,
+        ...(product.imagens || [])
+      ].filter(Boolean) as string[];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const targetIndex = currentUrls.length;
+
+        if (targetIndex >= 5) {
+          setError('Limite máximo de 5 imagens atingido');
+          break;
+        }
+
+        // Marcar o slot como em upload
+        setUploadingSlots(prev => [...prev, targetIndex]);
+        setSlotProgress(prev => ({ ...prev, [targetIndex]: 0 }));
+
+        const uploadService = new ImageUploadService((progressData) => {
+          setSlotProgress(prev => ({ ...prev, [targetIndex]: progressData.percent }));
         });
 
-        try {
-          const savedId = await autoSaveProduct();
-          if (!savedId) {
-            throw new Error('Falha ao obter ID do produto');
-          }
-          productId = savedId;
+        const result = await uploadService.uploadImage(file, userId, {
+          maxSizeMB: 1,
+          maxWidthPx: 1280,
+          maxHeightPx: 1280,
+          quality: 0.80,
+          allowedFormats: ['image/jpeg', 'image/png', 'image/webp'],
+          folder: 'produtos',
+        });
 
-          // Atualizar estado local com o novo ID
-          onChange('id', productId);
+        // Limpar estado de progresso desse slot
+        setUploadingSlots(prev => prev.filter(idx => idx !== targetIndex));
+        setSlotProgress(prev => {
+          const next = { ...prev };
+          delete next[targetIndex];
+          return next;
+        });
 
-          // Notificar componente pai sobre o novo ID
-          if (onProductSaved) {
-            onProductSaved(productId);
-          }
+        if (result.success && result.url) {
+          currentUrls.push(result.url);
+          successCount++;
 
-          console.log('✅ Produto salvo, prosseguindo com upload de imagem');
-        } catch (error) {
-          setError('Erro ao salvar produto. Tente novamente.');
-          console.error('Erro no auto-save:', error);
-          return;
-        } finally {
-          setSaving(false);
+          const finalImagemUrl = currentUrls[0] || '';
+          const finalImagensArray = currentUrls.slice(1);
+
+          onChange('imagem_url', finalImagemUrl);
+          onChange('imagens', finalImagensArray);
+          onChange('mostrar_imagem', true);
+
+          // Salvar URLs das imagens no banco
+          await saveImageToDatabase(finalImagemUrl, finalImagensArray, productId);
+        } else {
+          console.warn(`Erro no upload de ${file.name}:`, result.error);
+          setError(`Erro ao enviar "${file.name}": ${result.error || 'Erro desconhecido'}`);
         }
       }
 
-      // PASSO 3: Upload da imagem
-      setUploading(true);
-
-      const uploadService = new ImageUploadService((progressData) => {
-        setProgress(progressData);
-      });
-
-      const result = await uploadService.uploadImage(file, userId, {
-        maxSizeMB: 1,
-        maxWidthPx: 1280,
-        maxHeightPx: 1280,
-        quality: 0.80,
-        allowedFormats: ['image/jpeg', 'image/png'],
-        folder: 'produtos',
-      });
-
-      if (!result.success) {
-        setError(result.error || 'Erro desconhecido');
-        return;
-      }
-
-      // Adiciona na galeria ou como a principal se não existir principal
-      const imagensAtualizadas = [...(product.imagens || [])];
-      
-      let finalImagemUrl: string = product.imagem_url || '';
-      if (!finalImagemUrl) {
-         finalImagemUrl = result.url || '';
-         onChange('imagem_url', result.url);
-      } else {
-         if (imagensAtualizadas.length < 3) { // 💡 Limite: 3 imagens por produto (era 5)
-            imagensAtualizadas.push(String(result.url));
-            onChange('imagens', imagensAtualizadas);
-         }
-      }
-      
-      // PASSO 4: Salvar URL da imagem no banco
-      await saveImageToDatabase(finalImagemUrl, imagensAtualizadas, productId!);
-
-      // PASSO 5: Atualizar estado local
-      onChange('mostrar_imagem', true);
-      setImageKey(Date.now());
-
-      // PASSO 6: Feedback de sucesso
-      setSuccess('Produto salvo e imagem enviada com sucesso!');
-      setTimeout(() => setSuccess(null), 4000);
-
-      // PASSO 7: Aguardar processamento completo no Supabase Storage
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // PASSO 8: Notificar componente pai para reload imperceptível
-      if (onImageUploadSuccess) {
-        console.log('🔄 Iniciando reload automático após upload de imagem...');
-        onImageUploadSuccess();
-      }
-
-      // Log de sucesso
-      if (result.metadata) {
-        console.log('✅ Upload completo:', {
-          productId,
-          url: result.url,
-          originalSize: formatFileSize(result.metadata.originalSize),
-          compressedSize: formatFileSize(result.metadata.compressedSize),
-          compression: `${result.metadata.compressionRatio.toFixed(1)}%`,
-          dimensions: `${result.metadata.width}x${result.metadata.height}`,
-        });
+      if (successCount > 0) {
+        setImageKey(Date.now());
+        setSuccess(`${successCount} imagem(ns) enviada(s) com sucesso!`);
+        setTimeout(() => setSuccess(null), 4000);
       }
     } catch (error) {
-      console.error('Erro no upload:', error);
+      console.error('Erro no upload múltiplo:', error);
       setError(error instanceof Error ? error.message : 'Erro desconhecido');
     } finally {
       setUploading(false);
       setSaving(false);
-      setProgress(null);
+      setUploadingSlots([]);
+      setSlotProgress({});
     }
   };
 
@@ -269,9 +276,9 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
       const { error: updateError } = await supabase
         .from('produtos')
         .update({
-          imagem_url: imageUrl,
+          imagem_url: imageUrl || null,
           imagens: imagensArray,
-          mostrar_imagem: true,
+          mostrar_imagem: imageUrl ? true : false,
         })
         .eq('id', productId);
 
@@ -290,11 +297,10 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
    * Handler para input file
    */
   const handleFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleImageUpload(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      handleMultipleImagesUpload(Array.from(files));
     }
-    // Limpar input para permitir re-upload do mesmo arquivo
     event.target.value = '';
   };
 
@@ -317,114 +323,81 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
     setDragActive(false);
 
     const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      handleImageUpload(files[0]);
+    if (files && files.length > 0) {
+      handleMultipleImagesUpload(Array.from(files));
     }
   };
 
   /**
-   * 🔥 Remove imagem do produto (CORRIGIDO)
-   *
-   * Fluxo completo:
-   * 1. Deleta do Supabase Storage
-   * 2. Atualiza no banco de dados
-   * 3. Limpa estado local
-   * 4. Atualiza imageKey para forçar re-render
+   * Reorganizar/reordenar as imagens
    */
-  const handleRemoveImage = async () => {
-    if (!confirm('⚠️ Deseja remover a imagem deste produto?')) return;
+  const handleMoveImage = async (index: number, direction: 'left' | 'right') => {
+    const imagensAtualizadas = [
+      product.imagem_url,
+      ...(product.imagens || [])
+    ].filter(Boolean) as string[];
+
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= imagensAtualizadas.length) return;
+
+    // Swap
+    const temp = imagensAtualizadas[index];
+    imagensAtualizadas[index] = imagensAtualizadas[targetIndex];
+    imagensAtualizadas[targetIndex] = temp;
+
+    const finalImagemUrl = imagensAtualizadas[0] || '';
+    const finalImagensArray = imagensAtualizadas.slice(1);
+
+    onChange('imagem_url', finalImagemUrl);
+    onChange('imagens', finalImagensArray);
+
+    if (product.id) {
+      await saveImageToDatabase(finalImagemUrl, finalImagensArray, product.id);
+    }
+    setImageKey(Date.now());
+  };
+
+  /**
+   * Remove uma imagem por índice (principal ou da galeria)
+   */
+  const handleRemoveImageAtIndex = async (index: number) => {
+    if (!confirm('⚠️ Deseja remover esta imagem?')) return;
 
     setError(null);
-
     try {
-      // 1. Deletar do Storage (se existir)
-      if (product.imagem_url) {
-        console.log('🗑️ Removendo imagem do storage...');
-        const uploadService = new ImageUploadService();
-        const deleted = await uploadService.deleteImage(product.imagem_url);
+      const imagensAtualizadas = [
+        product.imagem_url,
+        ...(product.imagens || [])
+      ].filter(Boolean) as string[];
 
-        if (!deleted) {
-          console.warn('⚠️ Não foi possível deletar do storage, mas continuando...');
-        }
+      const imageUrlToRemove = imagensAtualizadas[index];
+
+      // Deletar do Storage
+      const uploadService = new ImageUploadService();
+      await uploadService.deleteImage(imageUrlToRemove);
+
+      // Remover do array
+      imagensAtualizadas.splice(index, 1);
+
+      const finalImagemUrl = imagensAtualizadas[0] || '';
+      const finalImagensArray = imagensAtualizadas.slice(1);
+
+      onChange('imagem_url', finalImagemUrl || undefined);
+      onChange('imagens', finalImagensArray);
+      if (imagensAtualizadas.length === 0) {
+        onChange('mostrar_imagem', false);
       }
 
-      // 2. Atualizar no banco de dados (se produto já existe)
       if (product.id) {
-        console.log('💾 Atualizando banco de dados...');
-        const { error: updateError } = await supabase
-          .from('produtos')
-          .update({
-            imagem_url: null,
-            mostrar_imagem: false,
-          })
-          .eq('id', product.id);
-
-        if (updateError) {
-          throw updateError;
-        }
+        await saveImageToDatabase(finalImagemUrl, finalImagensArray, product.id);
       }
 
-      // 3. Aguardar processamento completo no Supabase
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 4. Limpar estado local
-      onChange('imagem_url', undefined);
-      onChange('mostrar_imagem', false);
-
-      // 5. Atualizar imageKey para forçar re-render
       setImageKey(Date.now());
-
-      // 6. Mostrar mensagem de sucesso
       setSuccess('Imagem removida com sucesso!');
       setTimeout(() => setSuccess(null), 3000);
-
-      // 7. Notificar componente pai para reload imperceptível
-      if (onImageUploadSuccess) {
-        console.log('🔄 Iniciando reload automático após exclusão de imagem...');
-        onImageUploadSuccess();
-      }
-
-      console.log('✅ Imagem removida com sucesso!');
-    } catch (error) {
-      console.error('❌ Erro ao remover imagem:', error);
-      setError('Erro ao remover imagem. Tente novamente.');
-
-      // Ainda assim, limpar do estado local para permitir novo upload
-      onChange('imagem_url', undefined);
-      onChange('mostrar_imagem', false);
-      setImageKey(Date.now());
-    }
-  };
-
-  /**
-   * Remove uma imagem da galeria secundária
-   */
-  const handleRemoveSubImage = async (indexToRemove: number) => {
-    if (!confirm('⚠️ Deseja remover esta imagem da galeria auxiliar?')) return;
-
-    setError(null);
-    try {
-      setSaving(true);
-      const targetUrl = product.imagens![indexToRemove];
-      
-      const uploadService = new ImageUploadService();
-      await uploadService.deleteImage(targetUrl);
-
-      const novasImagens = [...(product.imagens || [])];
-      novasImagens.splice(indexToRemove, 1);
-      
-      onChange('imagens', novasImagens);
-      if (product.id) {
-         await saveImageToDatabase(product.imagem_url ?? '', novasImagens, product.id!);
-      }
-      setImageKey(Date.now());
-      setSuccess('Imagem da galeria removida.');
-      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      console.error('Erro sub imagem', err);
-      setError('Erro ao remover imagem da galeria.');
-    } finally {
-      setSaving(false);
+      console.error('Erro ao remover imagem:', err);
+      setError('Erro ao remover imagem.');
     }
   };
 
@@ -551,41 +524,119 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
       {/* Upload de Imagem */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Imagem do Produto
+          Galeria de Fotos do Produto (Até 5 fotos)
         </label>
 
-        {product.imagem_url && (
-          // Preview da imagem com overlay e retry automático
-          <div className="relative">
-            <ImageWithFallback
-              src={(() => {
-                // 🔥 CORREÇÃO: Adicionar cache-busting sem duplicar query params
-                const cacheSuffix = product.imagem_url?.includes('?') ? `&v=${imageKey}` : `?v=${imageKey}`;
-                return `${product.imagem_url}${cacheSuffix}`;
-              })()}
-              alt={product.nome}
-              className="w-full h-48 object-cover rounded-lg border border-gray-300"
-              fallbackClassName="w-full h-48 rounded-lg border border-gray-300"
-              retries={3}
-              retryDelay={1500}
-              onError={() => {
-                console.error('❌ Erro ao carregar imagem após retries:', product.imagem_url);
-              }}
-            />
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={handleFileInput}
+            className="hidden"
+            disabled={uploading || saving}
+          />
 
-            {/* Botão de remover */}
-            <button
-              type="button"
-              onClick={handleRemoveImage}
-              className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg transition-colors"
-              title="Remover imagem"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+          <div 
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-xl p-4 transition-all ${
+              dragActive ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'
+            }`}
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {Array.from({ length: 5 }).map((_, idx) => {
+                const currentImages = [
+                  product.imagem_url,
+                  ...(product.imagens || [])
+                ].filter(Boolean) as string[];
+                const imgUrl = currentImages[idx];
+                const isUploading = uploadingSlots.includes(idx);
+                const progressPercent = slotProgress[idx] || 0;
 
-            {/* Toggle mostrar/ocultar */}
-            <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <label className="flex items-center gap-3 cursor-pointer mb-3">
+                return (
+                  <div key={idx} className="relative aspect-square rounded-xl bg-white dark:bg-slate-900 border border-gray-200 overflow-hidden group shadow-sm flex flex-col items-center justify-center">
+                    {imgUrl ? (
+                      <>
+                        <ImageWithFallback
+                          src={imgUrl.includes('?') ? `${imgUrl}&v=${imageKey}` : `${imgUrl}?v=${imageKey}`}
+                          alt={`${product.nome} - Foto ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          fallbackClassName="w-full h-full"
+                        />
+                        
+                        {/* Badge indicando imagem principal no primeiro slot */}
+                        {idx === 0 && (
+                          <span className="absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md shadow uppercase">
+                            Principal
+                          </span>
+                        )}
+                        
+                        {/* Control bar overlay */}
+                        <div className="absolute bottom-0 inset-x-0 bg-black/75 py-1 px-1.5 flex justify-around items-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleMoveImage(idx, 'left'); }}
+                            disabled={idx === 0}
+                            className="p-1 text-gray-300 hover:text-white disabled:opacity-30 disabled:hover:text-gray-300 transition-colors"
+                            title="Mover para esquerda"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleRemoveImageAtIndex(idx); }}
+                            className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                            title="Excluir imagem"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleMoveImage(idx, 'right'); }}
+                            disabled={idx === currentImages.length - 1}
+                            className="p-1 text-gray-300 hover:text-white disabled:opacity-30 disabled:hover:text-gray-300 transition-colors"
+                            title="Mover para direita"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                          </button>
+                        </div>
+                      </>
+                    ) : isUploading ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-blue-50/30 gap-2">
+                        <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                        <span className="text-[10px] font-semibold text-blue-700">{progressPercent}%</span>
+                        <div className="w-3/4 bg-gray-200 rounded-full h-1">
+                          <div
+                            className="bg-blue-600 h-1 rounded-full transition-all duration-150"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => !(uploading || saving) && fileInputRef.current?.click()}
+                        disabled={uploading || saving}
+                        className="w-full h-full flex flex-col items-center justify-center gap-1.5 p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50/10 transition-colors"
+                      >
+                        <Upload className="w-5 h-5 text-gray-400" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Slot {idx + 1}</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Toggle buttons and settings */}
+          {(product.imagem_url || (product.imagens && product.imagens.length > 0)) && (
+            <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={product.mostrar_imagem}
@@ -593,7 +644,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">
-                  Exibir imagem principal no orçamento
+                  Exibir imagens no orçamento
                 </span>
               </label>
               
@@ -611,143 +662,28 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
                 </label>
               )}
             </div>
-            
-            {/* Galeria de Thumbnails Auxiliares */}
-            {product.imagens && product.imagens.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase">Galeria do Produto</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {product.imagens.map((img, idx) => (
-                    <div key={idx} className="relative aspect-square rounded overflow-hidden border border-gray-200">
-                      <ImageWithFallback
-                        src={`${img}?v=${imageKey}`}
-                        alt={`Galeria ${idx}`}
-                        className="w-full h-full object-cover"
-                        fallbackClassName="w-full h-full bg-gray-100"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSubImage(idx)}
-                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded hover:bg-red-700 shadow-sm"
-                        title="Remover"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-          </div>
-        )}
-        
-        {(!product.imagem_url || (product.imagens && product.imagens.length < 3)) && (
-          // Área de upload — limite 3 fotos por produto
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png"
-              onChange={handleFileInput}
-              className="hidden"
-              disabled={uploading || saving}
-            />
+          )}
 
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => !(uploading || saving) && fileInputRef.current?.click()}
-              className={`
-                border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
-                transition-all duration-200
-                ${dragActive
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-300 hover:border-gray-400 bg-gray-50'
-                }
-                ${(uploading || saving) ? 'opacity-60 cursor-not-allowed' : ''}
-              `}
-            >
-              {(uploading || saving) ? (
-                <div className="space-y-3">
-                  <Loader2 className="w-12 h-12 text-blue-600 mx-auto animate-spin" />
-                  {progress && (
-                    <>
-                      <p className="text-sm font-medium text-gray-700">
-                        {progress.message}
-                      </p>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progress.percent}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {progress.percent}%
-                      </p>
-                    </>
-                  )}
-                  {saving && !progress && (
-                    <p className="text-sm font-medium text-gray-700">
-                      Preparando produto para receber imagem...
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">
-                      Clique ou arraste uma imagem
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      JPG, PNG, WEBP até 5MB
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      A imagem será otimizada automaticamente
-                    </p>
-                    {!product.id && (
-                      <p className="text-xs text-blue-600 font-medium mt-2 bg-blue-50 rounded px-2 py-1 inline-block">
-                        O produto será salvo automaticamente ao enviar a imagem
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
+          {/* Mensagens de feedback */}
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800">Erro no upload</p>
+                <p className="text-xs text-red-600 mt-1">{error}</p>
+              </div>
             </div>
+          )}
 
-            {/* Mensagem de erro */}
-            {error && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-800">Erro no upload</p>
-                  <p className="text-xs text-red-600 mt-1">{error}</p>
-                </div>
+          {success && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-800">{success}</p>
               </div>
-            )}
-
-            {/* Mensagem de sucesso */}
-            {success && (
-              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-green-800">{success}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Indicador de salvamento */}
-            {saving && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
-                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-                <p className="text-sm text-blue-700">Salvando no banco de dados...</p>
-              </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Checkbox Obrigatório */}

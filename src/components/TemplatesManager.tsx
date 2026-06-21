@@ -17,10 +17,11 @@ interface Template {
   ocultar_data_criacao?: boolean;
   created_at: string;
 }
-import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List } from 'lucide-react';
+import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { TemplateAnalyticsSummary } from './TemplateAnalyticsSummary';
+import { QuoteAnalytics } from './QuoteAnalytics';
 import {
   DndContext,
   closestCenter,
@@ -63,6 +64,7 @@ function SortableTemplateCard({
   onDuplicate,
   onDelete,
 }: SortableTemplateCardProps) {
+  const [showFullAnalytics, setShowFullAnalytics] = useState(false);
   const {
     attributes,
     listeners,
@@ -178,6 +180,31 @@ function SortableTemplateCard({
 
         {/* Analytics Section */}
         <TemplateAnalyticsSummary templateId={template.id} />
+
+        <div className="mt-4 pt-3 border-t border-gray-100 dark:border-[rgba(255,255,255,0.08)] flex justify-center">
+          <button
+            onClick={() => setShowFullAnalytics(!showFullAnalytics)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          >
+            {showFullAnalytics ? (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" />
+                Ocultar Relatório Completo
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3.5 h-3.5" />
+                Ver Relatório Completo (Métricas Avançadas)
+              </>
+            )}
+          </button>
+        </div>
+
+        {showFullAnalytics && (
+          <div className="mt-4 p-4 border border-blue-100 dark:border-[rgba(59,130,246,0.2)] bg-blue-50/20 dark:bg-[rgba(59,130,246,0.02)] rounded-lg">
+            <QuoteAnalytics templateId={template.id} />
+          </div>
+        )}
       </div>
     </div>
   );

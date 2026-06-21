@@ -7,6 +7,7 @@ import { PublicProfileMinimalist } from '../components/PublicProfileMinimalist';
 import { PublicProfileModern } from '../components/PublicProfileModern';
 import { PublicProfileMagazine } from '../components/PublicProfileMagazine';
 import { PublicProfileDarkStudio } from '../components/PublicProfileDarkStudio';
+import { PublicProfilePdfElegante } from '../components/PublicProfilePdfElegante';
 
 interface Profile {
   id: string;
@@ -20,6 +21,22 @@ interface Profile {
   slug_usuario: string;
   meta_description: string;
   tema_perfil?: string;
+  fonte_personalizada?: string;
+  tema_personalizado_id?: string;
+  tema_personalizado?: {
+    id: string;
+    nome: string;
+    cores: {
+      bgPrincipal: string;
+      bgCard: string;
+      primaria: string;
+      textoPrincipal: string;
+      textoSecundario: string;
+      borda: string;
+    };
+  };
+  portfolio_link?: string | null;
+  portfolio_fotos?: string[] | null;
 }
 
 interface Template {
@@ -65,7 +82,7 @@ export function PublicProfilePage() {
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, tema_personalizado:temas_personalizados(*)')
         .eq('slug_usuario', slugUsuario)
         .eq('perfil_publico', true)
         .maybeSingle();
@@ -175,6 +192,9 @@ export function PublicProfilePage() {
       case 'darkstudio':
         console.log('✅ [RENDER] Componente: PublicProfileDarkStudio');
         return <PublicProfileDarkStudio {...commonProps} />;
+      case 'pdf_elegante':
+        console.log('✅ [RENDER] Componente: PublicProfilePdfElegante');
+        return <PublicProfilePdfElegante {...commonProps} />;
       case 'original':
         console.log('✅ [RENDER] Componente: PublicProfileOriginal');
         return <PublicProfileOriginal {...commonProps} />;
@@ -203,9 +223,121 @@ export function PublicProfilePage() {
           <meta name="twitter:image" content={profile.profile_image_url} />
         )}
         <link rel="canonical" href={pageUrl} />
+        {profile.fonte_personalizada && (
+          <link
+            rel="stylesheet"
+            href={`https://fonts.googleapis.com/css2?family=${encodeURIComponent(profile.fonte_personalizada)}:wght@300;400;500;600;700;800;900&display=swap`}
+          />
+        )}
       </Helmet>
 
-      {renderProfileTheme()}
+      {profile.fonte_personalizada && (
+        <style>{`
+          .public-profile-root,
+          .public-profile-root *,
+          .public-profile-root p,
+          .public-profile-root h1,
+          .public-profile-root h2,
+          .public-profile-root h3,
+          .public-profile-root h4,
+          .public-profile-root span,
+          .public-profile-root a,
+          .public-profile-root button {
+            font-family: '${profile.fonte_personalizada}', sans-serif !important;
+          }
+        `}</style>
+      )}
+
+      {profile.tema_personalizado && (
+        <style>{`
+          ${profile.tema_personalizado.cores.bgPrincipal ? `
+            .public-profile-root,
+            .public-profile-root .min-h-screen {
+              background: ${profile.tema_personalizado.cores.bgPrincipal} !important;
+              background-image: none !important;
+            }
+          ` : ''}
+          ${profile.tema_personalizado.cores.bgCard ? `
+            .public-profile-root .bg-white,
+            .public-profile-root .bg-gray-50,
+            .public-profile-root .bg-slate-50,
+            .public-profile-root .bg-amber-50,
+            .public-profile-root .bg-[#07101f],
+            .public-profile-root .bg-[#0a1628],
+            .public-profile-root [class*="bg-white"],
+            .public-profile-root .bg-white\\/5,
+            .public-profile-root .rounded-3xl,
+            .public-profile-root .shadow-2xl {
+              background-color: ${profile.tema_personalizado.cores.bgCard} !important;
+              background-image: none !important;
+            }
+          ` : ''}
+          ${profile.tema_personalizado.cores.primaria ? `
+            .public-profile-root a.bg-blue-600,
+            .public-profile-root a.bg-green-600,
+            .public-profile-root a.bg-gradient-to-r,
+            .public-profile-root button.border-blue-600,
+            .public-profile-root .bg-blue-600,
+            .public-profile-root .bg-green-600,
+            .public-profile-root .bg-gradient-to-r,
+            .public-profile-root .bg-blue-500,
+            .public-profile-root .bg-green-500 {
+              background: ${profile.tema_personalizado.cores.primaria} !important;
+              background-image: none !important;
+              border-color: ${profile.tema_personalizado.cores.primaria} !important;
+              color: #ffffff !important;
+            }
+            .public-profile-root .text-blue-600,
+            .public-profile-root .text-blue-750,
+            .public-profile-root .text-blue-700,
+            .public-profile-root .text-green-600,
+            .public-profile-root .text-green-700,
+            .public-profile-root .group-hover\\:text-blue-600 {
+              color: ${profile.tema_personalizado.cores.primaria} !important;
+            }
+          ` : ''}
+          ${profile.tema_personalizado.cores.textoPrincipal ? `
+            .public-profile-root h1,
+            .public-profile-root h2,
+            .public-profile-root h3,
+            .public-profile-root h4,
+            .public-profile-root h5,
+            .public-profile-root h6,
+            .public-profile-root strong,
+            .public-profile-root .text-gray-900,
+            .public-profile-root .text-slate-900,
+            .public-profile-root .text-neutral-900 {
+              color: ${profile.tema_personalizado.cores.textoPrincipal} !important;
+            }
+          ` : ''}
+          ${profile.tema_personalizado.cores.textoSecundario ? `
+            .public-profile-root p,
+            .public-profile-root span,
+            .public-profile-root label,
+            .public-profile-root .text-gray-700,
+            .public-profile-root .text-slate-700,
+            .public-profile-root .text-neutral-700,
+            .public-profile-root .text-gray-600,
+            .public-profile-root .text-slate-600,
+            .public-profile-root .text-neutral-600 {
+              color: ${profile.tema_personalizado.cores.textoSecundario} !important;
+            }
+          ` : ''}
+          ${profile.tema_personalizado.cores.borda ? `
+            .public-profile-root .border-2,
+            .public-profile-root .border-4,
+            .public-profile-root .border,
+            .public-profile-root .border-blue-200,
+            .public-profile-root .border-gray-200 {
+              border-color: ${profile.tema_personalizado.cores.borda} !important;
+            }
+          ` : ''}
+        `}</style>
+      )}
+
+      <div className="public-profile-root">
+        {renderProfileTheme()}
+      </div>
     </>
   );
 }

@@ -17,6 +17,7 @@ import { ContractVerificationPage } from './pages/ContractVerificationPage'; // 
 import { ContractPreviewPage } from './pages/ContractPreviewPage' // Adicionado
 import { ReviewPage } from './pages/ReviewPage'
 import { InteractiveTutorialsPage } from './pages/InteractiveTutorialsPage'
+import { PublicBookingPage } from './pages/PublicBookingPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
@@ -76,6 +77,7 @@ function App() {
           />
           {/* Rotas públicas de tutoriais e com slug */}
           <Route path="/tutoriais" element={<InteractiveTutorialsPage />} />
+          <Route path="/agendar/:leadId" element={<PublicBookingPage />} />
           <Route path="/:slugUsuario" element={<PublicProfilePage />} />
           <Route path="/:slugUsuario/:slugTemplate" element={<QuotePage />} />
           <Route path="/avaliar/:token" element={<ReviewPage />} />

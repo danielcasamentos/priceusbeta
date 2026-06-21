@@ -49,3 +49,15 @@ export function formatDateTime(date: string | Date): string {
 
   return `${dateStr} às ${timeStr}`
 }
+
+/**
+ * Formata minutos para string legível (ex: 90 -> "1h 30min")
+ */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || minutes <= 0) return '';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}min`;
+  if (h > 0) return `${h}h`;
+  return `${m}min`;
+}

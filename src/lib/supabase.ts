@@ -120,6 +120,7 @@ export interface Lead {
   status: 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em_negociacao' | 'fazer_followup' | 'finalizado';
   data_orcamento: string;
   data_ultimo_contato: string | null;
+  agendamento_config?: any;
   created_at: string;
   updated_at: string;
 }

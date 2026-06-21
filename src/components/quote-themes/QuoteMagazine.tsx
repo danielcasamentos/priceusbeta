@@ -140,26 +140,37 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                         : selectedProdutos[produto.id] ? 'border-amber-600 bg-amber-50' : 'border-amber-300 hover:border-amber-400'
                     }`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className={`flex flex-col gap-4 ${template?.layout_produtos_desktop === 'quadro' ? 'sm:items-center' : 'sm:flex-row sm:items-start'}`}>
                       {produto.mostrar_imagem && (produto.imagem_url || (produto.imagens?.length > 0)) && (
-                        <div className="w-20 h-20 shrink-0 overflow-hidden rounded-lg">
-                          {produto.imagens && produto.imagens.length > 0 ? (
-                            <ProductGalleryCarousel
-                              images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
-                              autoPlay={produto.carrossel_automatico}
-                              productName={produto.nome}
-                            />
-                          ) : (
-                            <ImageWithFallback
-                              src={produto.imagem_url}
-                              alt={produto.nome}
-                              className="w-full h-full object-cover rounded-lg"
-                              fallbackClassName="w-full h-full rounded-lg bg-amber-100"
-                            />
-                          )}
-                        </div>
+                        (() => {
+                          const sizeClasses = {
+                            pequeno: 'w-24 h-24 sm:w-32 sm:h-32',
+                            medio: 'w-32 h-32 sm:w-48 sm:h-48',
+                            grande: 'w-full h-48 sm:w-72 sm:h-72',
+                          };
+                          const imageSize = template?.tamanho_imagem_grid || 'medio';
+                          const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
+                          return (
+                            <div className={`rounded-lg overflow-hidden flex-shrink-0 mx-auto sm:mx-0 border border-amber-100 ${finalClass}`}>
+                              {produto.imagens && produto.imagens.length > 0 ? (
+                                <ProductGalleryCarousel
+                                  images={[produto.imagem_url, ...produto.imagens].filter(Boolean)}
+                                  autoPlay={produto.carrossel_automatico}
+                                  productName={produto.nome}
+                                />
+                              ) : (
+                                <ImageWithFallback
+                                  src={produto.imagem_url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover rounded-lg"
+                                  fallbackClassName="w-full h-full rounded-lg bg-amber-100"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()
                       )}
-                      <div className="flex-1">
+                      <div className="flex-1 w-full">
                         {produto.destacar_produto && produto.destaque_texto && (
                           <div className="inline-flex items-center gap-1 bg-amber-700 text-white rounded px-2 py-0.5 text-[9px] font-black tracking-widest uppercase mb-1.5 shadow-sm">
                             ★ {produto.destaque_texto}
@@ -167,35 +178,85 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                         )}
                         <h4 className="font-black text-lg text-amber-900 uppercase">{produto.nome}</h4>
                         {produto.resumo && <p className="text-sm text-amber-700 mt-1 italic">{produto.resumo}</p>}
-                        {!template.ocultar_valores_intermediarios && (
-                          <p className="text-xl font-black text-amber-700 mt-2">{formatCurrency(produto.valor)}</p>
-                        )}
+                        {!template.ocultar_valores_intermediarios && (() => {
+                          const desconto = produto.desconto_percentual ?? 0;
+                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          return (
+                            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                              {desconto > 0 && (
+                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full font-sans">
+                                  🏷️ {desconto}% OFF
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {desconto > 0 && (
+                                  <span className="text-sm text-gray-400 line-through">{formatCurrency(produto.valor)}</span>
+                                )}
+                                <span className="text-xl font-black text-amber-700">{formatCurrency(valorFinal)}</span>
+                              </div>
+                              {desconto > 0 && (
+                                <span className="text-xs text-green-600 font-semibold font-sans">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
-                          disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                          className="w-10 h-10 bg-amber-200 hover:bg-amber-300 rounded-lg font-black disabled:opacity-50"
-                        >
-                          -
-                        </button>
-                        <span className="w-12 text-center font-black text-xl">{selectedProdutos[produto.id] || 0}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                              alert(fieldsValidation.validationMessage);
-                              return;
-                            }
-                            props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
-                          }}
-                          disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                          className="w-10 h-10 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-black disabled:opacity-50"
-                        >
-                          +
-                        </button>
-                      </div>
+                      {(produto.permite_multiplas_unidades ?? true) ? (
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)}
+                            disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                            className="w-10 h-10 bg-amber-200 hover:bg-amber-300 rounded-lg font-black disabled:opacity-50"
+                          >
+                            -
+                          </button>
+                          <span className="w-12 text-center font-black text-xl">{selectedProdutos[produto.id] || 0}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                              props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) + 1);
+                            }}
+                            disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
+                            className="w-10 h-10 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-black disabled:opacity-50"
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          {produto.obrigatorio ? (
+                            <div className="py-2 px-4 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-semibold">
+                              Incluído
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!fieldsValidation.canAddProducts && !selectedProdutos[produto.id]) {
+                                  alert(fieldsValidation.validationMessage);
+                                  return;
+                                }
+                                props.handleProdutoQuantityChange(
+                                  produto.id,
+                                  selectedProdutos[produto.id] ? 0 : 1
+                                );
+                              }}
+                              className={`py-2 px-4 rounded-lg text-sm font-semibold transition-all ${
+                                selectedProdutos[produto.id]
+                                  ? 'bg-amber-700 text-white hover:bg-amber-800 font-sans'
+                                  : 'bg-amber-100 text-amber-700 hover:bg-amber-200 font-sans'
+                              }`}
+                            >
+                              {selectedProdutos[produto.id] ? '✓ Selecionado' : 'Selecionar'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

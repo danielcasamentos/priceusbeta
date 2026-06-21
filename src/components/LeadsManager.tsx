@@ -83,6 +83,16 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [leadsViewMode, setLeadsViewMode] = useState<'list' | 'grid'>('list');
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
 
+  // Estados para configuração do agendamento
+  const [bookingMode, setBookingMode] = useState<'avulso' | 'dinamico'>('avulso');
+  const [bookingDates, setBookingDates] = useState<string[]>([]);
+  const [bookingMonth, setBookingMonth] = useState('');
+  const [newDateInput, setNewDateInput] = useState('');
+  const [savingBookingConfig, setSavingBookingConfig] = useState(false);
+  const [copiedBookingLink, setCopiedBookingLink] = useState(false);
+  const [busyDaysPreview, setBusyDaysPreview] = useState<Set<string>>(new Set());
+  const [loadingBusy, setLoadingBusy] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'producao') {
@@ -158,12 +168,80 @@ export function LeadsManager({ userId }: { userId: string }) {
       } else {
         setDisponibilidadeLead(null);
       }
+
+      // Inicializa configurações de agendamento do lead
+      const cfg = selectedLead.agendamento_config || {};
+      setBookingMode(cfg.modo || 'avulso');
+      setBookingDates(cfg.datas_sugeridas || []);
+      setBookingMonth(cfg.mes_referencia || (() => {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        return `${y}-${m}`;
+      })());
+
+      // Carrega datas ocupadas para preview (próximos 3 meses)
+      loadBusyDaysPreview(selectedLead.user_id || userId);
     } else {
       setWhatsappMessageBody(''); // Limpa a mensagem anterior
       setDetalhesOrcamento(null);
       setDisponibilidadeLead(null);
+      setBookingDates([]);
+      setBusyDaysPreview(new Set());
     }
   }, [selectedLead]);
+
+  const loadBusyDaysPreview = async (ownerUserId: string) => {
+    setLoadingBusy(true);
+    try {
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = new Date(today.getFullYear(), today.getMonth() + 4, 0);
+      const endStr = endDate.toISOString().split('T')[0];
+      const { data } = await supabase
+        .from('eventos_agenda')
+        .select('data_evento')
+        .eq('user_id', ownerUserId)
+        .gte('data_evento', startDate)
+        .lte('data_evento', endStr)
+        .not('status', 'eq', 'cancelado');
+      const busy = new Set((data || []).map((e: any) => e.data_evento.split('T')[0]));
+      setBusyDaysPreview(busy);
+    } catch (err) {
+      console.error('Erro ao carregar datas ocupadas:', err);
+    } finally {
+      setLoadingBusy(false);
+    }
+  };
+
+  const handleSaveBookingConfig = async () => {
+    if (!selectedLead) return;
+    setSavingBookingConfig(true);
+    try {
+      const configData = {
+        modo: bookingMode,
+        datas_sugeridas: bookingMode === 'avulso' ? bookingDates : [],
+        mes_referencia: bookingMode === 'dinamico' ? bookingMonth : null
+      };
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ agendamento_config: configData })
+        .eq('id', selectedLead.id);
+
+      if (error) throw error;
+
+      // Atualiza o lead selecionado e a lista
+      setSelectedLead(prev => prev ? { ...prev, agendamento_config: configData } : null);
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, agendamento_config: configData } : l));
+      alert('✅ Configuração de agendamento salva com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar config de agendamento:', error);
+      alert('❌ Erro ao salvar configuração de agendamento');
+    } finally {
+      setSavingBookingConfig(false);
+    }
+  };
 
   const loadDetalhesOrcamento = async (lead: Lead, updateState: boolean): Promise<LeadOrcamentoDetalhe | null> => {
     if (!lead.orcamento_detalhe) return null;
@@ -255,6 +333,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         sistema_sazonal_ativo: template?.sistema_sazonal_ativo ?? savedOrcamentoDetalhe.sistema_sazonal_ativo ?? false,
         sistema_geografico_ativo: template?.sistema_geografico_ativo ?? savedOrcamentoDetalhe.sistema_geografico_ativo ?? false,
         ocultar_valores_intermediarios: savedOrcamentoDetalhe.ocultar_valores_intermediarios || false,
+        ocultar_taxa_deslocamento: template?.ocultar_taxa_deslocamento || false,
       },
       products: savedOrcamentoDetalhe.produtos || [], // Full list of products from template
       selectedProducts: savedOrcamentoDetalhe.selectedProdutos || {}, // Map of selected products
@@ -1405,6 +1484,205 @@ export function LeadsManager({ userId }: { userId: string }) {
                         {status === 'em_negociacao' ? '🤝 Em Negociação' : status === 'fazer_followup' ? '📞 Follow-up' : status.charAt(0).toUpperCase() + status.slice(1)}
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                {/* Painel de Agendamento de Ensaio */}
+                <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-4 mt-4">
+                  <h3 className="font-semibold text-gray-700 dark:text-white mb-2 flex items-center gap-2">
+                    📅 Agendamento Online de Ensaio / Pre-Casamento
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Configure as datas disponíveis para o cliente escolher e agendar sem precisar preencher formulários adicionais.
+                  </p>
+
+                  <div className="bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] p-4 rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.05)] space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Modalidade do Agendamento</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBookingMode('avulso')}
+                          className={`py-2 px-3 border text-xs font-bold rounded-lg transition-colors ${
+                            bookingMode === 'avulso'
+                              ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400'
+                              : 'border-gray-200 hover:border-gray-300 dark:border-white/10 dark:text-white'
+                          }`}
+                        >
+                          Sugerir Datas (Avulso)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBookingMode('dinamico')}
+                          className={`py-2 px-3 border text-xs font-bold rounded-lg transition-colors ${
+                            bookingMode === 'dinamico'
+                              ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400'
+                              : 'border-gray-200 hover:border-gray-300 dark:border-white/10 dark:text-white'
+                          }`}
+                        >
+                          Calendário Livre (Dinâmico)
+                        </button>
+                      </div>
+                    </div>
+
+                    {bookingMode === 'avulso' ? (
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400">Escolha as datas sugeridas (Máx 5):</label>
+                        
+                        {/* Aviso de datas ocupadas */}
+                        {loadingBusy ? (
+                          <p className="text-[10px] text-gray-400">Carregando agenda...</p>
+                        ) : busyDaysPreview.size > 0 && (
+                          <div className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
+                            ⚠️ <strong>Datas já ocupadas na agenda:</strong>{' '}
+                            {Array.from(busyDaysPreview).sort().slice(0,5).map(d => new Date(d+'T00:00:00').toLocaleDateString('pt-BR')).join(', ')}
+                            {busyDaysPreview.size > 5 && ` +${busyDaysPreview.size - 5} mais`}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={newDateInput}
+                            onChange={(e) => setNewDateInput(e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                            className={`flex-1 px-3 py-1.5 text-sm border rounded-lg bg-white dark:bg-[#0c1b30] dark:text-white ${
+                              newDateInput && busyDaysPreview.has(newDateInput)
+                                ? 'border-red-400 bg-red-50 dark:bg-red-950/30'
+                                : 'border-gray-300 dark:border-white/10'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newDateInput) return;
+                              if (bookingDates.includes(newDateInput)) {
+                                alert('Esta data já foi adicionada.');
+                                return;
+                              }
+                              if (bookingDates.length >= 5) {
+                                alert('Você pode sugerir no máximo 5 datas.');
+                                return;
+                              }
+                              if (busyDaysPreview.has(newDateInput)) {
+                                const ok = window.confirm(`⚠️ Esta data (${new Date(newDateInput+'T00:00:00').toLocaleDateString('pt-BR')}) já tem um evento na sua agenda. Deseja adicioná-la mesmo assim?`);
+                                if (!ok) return;
+                              }
+                              setBookingDates([...bookingDates, newDateInput].sort());
+                              setNewDateInput('');
+                            }}
+                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            + Adicionar
+                          </button>
+                        </div>
+
+                        {newDateInput && busyDaysPreview.has(newDateInput) && (
+                          <p className="text-[10px] text-red-600 dark:text-red-400 font-semibold">⛔ Esta data já está ocupada na sua agenda!</p>
+                        )}
+
+                        {bookingDates.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 pt-2">
+                            {bookingDates.map((date) => (
+                              <span
+                                key={date}
+                                className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                                  busyDaysPreview.has(date)
+                                    ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
+                                    : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-100 dark:border-blue-900'
+                                }`}
+                              >
+                                {busyDaysPreview.has(date) && <span title="Data ocupada">⚠️</span>}
+                                {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                <button
+                                  type="button"
+                                  onClick={() => setBookingDates(bookingDates.filter(d => d !== date))}
+                                  className="text-red-500 hover:text-red-700 font-bold ml-1 text-sm leading-none"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">Nenhuma data adicionada. O cliente não poderá agendar.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Mês de Referência Inicial</label>
+                        <input
+                          type="month"
+                          value={bookingMonth}
+                          onChange={(e) => setBookingMonth(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#0c1b30] dark:text-white"
+                        />
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400">O cliente abrirá a agenda diretamente neste mês para escolher qualquer data livre. Datas já ocupadas na sua agenda serão bloqueadas automaticamente.</p>
+                        {busyDaysPreview.size > 0 && (
+                          <div className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
+                            🔒 <strong>{busyDaysPreview.size} data(s) já bloqueadas</strong> na sua agenda (o cliente não poderá selecioná-las).
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => loadBusyDaysPreview(userId)}
+                          disabled={loadingBusy}
+                          className="text-[10px] text-blue-600 dark:text-blue-400 underline"
+                        >
+                          {loadingBusy ? 'Atualizando...' : '🔄 Atualizar datas ocupadas'}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 justify-end pt-2 border-t border-gray-150 dark:border-white/5">
+                      <button
+                        type="button"
+                        onClick={handleSaveBookingConfig}
+                        disabled={savingBookingConfig}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                      >
+                        {savingBookingConfig ? 'Salvando...' : 'Salvar Configuração'}
+                      </button>
+                    </div>
+
+                    {/* Exibir o link se configurado e salvo no lead */}
+                    {selectedLead.agendamento_config && (
+                      <div className="bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-100 dark:border-blue-900 mt-2 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">Link para o Cliente:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const bookingLink = `${window.location.origin}/agendar/${selectedLead.id}`;
+                              navigator.clipboard.writeText(bookingLink);
+                              setCopiedBookingLink(true);
+                              setTimeout(() => setCopiedBookingLink(false), 2000);
+                            }}
+                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                          >
+                            {copiedBookingLink ? '✓ Copiado!' : 'Copiar Link'}
+                          </button>
+                        </div>
+                        <code className="block text-[11px] bg-white dark:bg-[#0c1b30] p-2 rounded border border-blue-100 dark:border-blue-900 text-blue-700 dark:text-blue-300 font-mono break-all leading-tight">
+                          {`${window.location.origin}/agendar/${selectedLead.id}`}
+                        </code>
+                        
+                        {/* Enviar link pelo WhatsApp */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const bookingLink = `${window.location.origin}/agendar/${selectedLead.id}`;
+                            const msg = `Olá, ${selectedLead.nome_cliente || 'cliente'}! Segue o link para você escolher a melhor data para o nosso agendamento: ${bookingLink}`;
+                            const link = generateWaLinkToClient(selectedLead.telefone_cliente || '', msg);
+                            window.open(link, '_blank');
+                          }}
+                          className="w-full py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          Enviar Convite de Agendamento via WhatsApp
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
