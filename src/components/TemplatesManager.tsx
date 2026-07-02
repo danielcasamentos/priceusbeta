@@ -16,6 +16,7 @@ interface Template {
   ocultar_valores_intermediarios?: boolean;
   ocultar_data_criacao?: boolean;
   created_at: string;
+  ativo?: boolean;
 }
 import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -53,6 +54,7 @@ interface SortableTemplateCardProps {
   onViewTemplate: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onToggleAtivo: () => void;
 }
 
 function SortableTemplateCard({
@@ -63,6 +65,7 @@ function SortableTemplateCard({
   onViewTemplate,
   onDuplicate,
   onDelete,
+  onToggleAtivo,
 }: SortableTemplateCardProps) {
   const [showFullAnalytics, setShowFullAnalytics] = useState(false);
   const {
@@ -120,7 +123,24 @@ function SortableTemplateCard({
             <span className="font-medium">Criado em:</span>
             <span>{new Date(template.created_at).toLocaleDateString('pt-BR')}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`px-2 py-1 text-xs font-bold rounded-full uppercase tracking-wider ${
+              template.ativo !== false 
+                ? 'bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400' 
+                : 'bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400'
+            }`}>
+              {template.ativo !== false ? '● Ativo' : '● Pausado'}
+            </span>
+            <button
+              onClick={onToggleAtivo}
+              className={`px-2 py-0.5 rounded text-xs font-semibold border transition-all ${
+                template.ativo !== false
+                  ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-950/30 dark:text-red-400'
+                  : 'border-green-200 text-green-600 hover:bg-green-50 dark:border-green-950/30 dark:text-green-400'
+              }`}
+            >
+              {template.ativo !== false ? 'Pausar' : 'Reativar'}
+            </button>
             {template.bloquear_campos_obrigatorios && (
               <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
                 🔒 Campos Bloqueados
@@ -570,6 +590,23 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
     }
   };
 
+  const handleToggleTemplateAtivo = async (template: Template) => {
+    const newAtivo = template.ativo !== false ? false : true;
+    try {
+      const { error } = await supabase
+        .from('templates')
+        .update({ ativo: newAtivo })
+        .eq('id', template.id);
+
+      if (error) throw error;
+
+      setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, ativo: newAtivo } : t));
+    } catch (error) {
+      console.error('Erro ao alternar status do template:', error);
+      alert('❌ Erro ao alternar status do template');
+    }
+  };
+
   const getLimitProgressColor = () => {
     const percentage = (planLimits.templatesUsed / planLimits.templatesLimit) * 100;
     if (percentage >= 90) return 'bg-red-600';
@@ -752,6 +789,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                     onViewTemplate={() => window.open(getTemplateUrl(template), '_blank')}
                     onDuplicate={() => handleDuplicateClick(template)}
                     onDelete={() => handleDeleteTemplate(template.id)}
+                    onToggleAtivo={() => handleToggleTemplateAtivo(template)}
                   />
                 ))}
               </div>

@@ -787,7 +787,7 @@ export function QuotePromocional(props: QuotePromocionalProps) {
             }}
           >
             {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
-            {fieldsValidation.canUseWhatsApp ? '🔥 Garantir Minha Oferta via WhatsApp' : 'Preencha os campos obrigatórios'}
+            {fieldsValidation.canUseWhatsApp ? (template?.texto_botao_envio || '🔥 Garantir Minha Oferta via WhatsApp') : 'Preencha os campos obrigatórios'}
           </button>
 
         </form>

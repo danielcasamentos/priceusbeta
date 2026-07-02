@@ -79,6 +79,10 @@ interface Template {
   upsell_titulo?: string;
   upsell_subtitulo?: string;
   upsell_layout?: 'grid' | 'carousel' | 'list';
+  exibir_valores_upsell?: boolean;
+  ativo?: boolean;
+  mensagem_pausada?: string | null;
+  estilo_mensagem_pausada?: string | null;
   // Deslocamento
   ocultar_taxa_deslocamento?: boolean;
   exibir_duracao_produto?: boolean;
@@ -1456,6 +1460,25 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={template?.exibir_valores_upsell ?? true}
+                    onChange={(e) =>
+                      handleUpdateTemplateConfig('exibir_valores_upsell', e.target.checked)
+                    }
+                    className="w-5 h-5 text-blue-600 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      Exibir valores no Upsell
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Mostra os preços dos produtos no carrossel de adicionais do orçamento
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
                     checked={template?.forma_pagamento_obrigatoria || false}
                     onChange={(e) =>
                       handleUpdateTemplateConfig('forma_pagamento_obrigatoria', e.target.checked)
@@ -1494,6 +1517,61 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </p>
                     </div>
                   </label>
+                </div>
+
+                {/* Ativo / Pausado Settings */}
+                <div className="border border-red-200 dark:border-red-900/30 bg-red-50/20 dark:bg-red-900/5 rounded-lg p-4 space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={template?.ativo ?? true}
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('ativo', e.target.checked)
+                      }
+                      className="w-5 h-5 text-red-600 rounded"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        🛑 Link do Orçamento Ativo
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Quando desativado, o link fica pausado temporariamente e exibe uma tela customizada para os clientes.
+                      </div>
+                    </div>
+                  </label>
+
+                  {template?.ativo === false && (
+                    <div className="space-y-3 pl-8 animate-fade-in">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                          Estilo do Banner da Mensagem Pausada
+                        </label>
+                        <select
+                          value={template?.estilo_mensagem_pausada || 'amigavel'}
+                          onChange={(e) => handleUpdateTemplateConfig('estilo_mensagem_pausada', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg text-sm"
+                        >
+                          <option value="amigavel">😊 Amigável e Caloroso</option>
+                          <option value="formal">👔 Profissional e Formal</option>
+                          <option value="divertido">🎉 Descontraído e Divertido</option>
+                          <option value="urgente">⚠️ Importante e Direto</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                          Mensagem Customizada de Pausa
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={template?.mensagem_pausada || ''}
+                          onChange={(e) => handleUpdateTemplateConfig('mensagem_pausada', e.target.value)}
+                          placeholder="Ex: No momento estamos com a nossa agenda temporariamente fechada para novos orçamentos..."
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg text-sm resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border border-green-200 dark:border-green-900/30 bg-green-50 dark:bg-green-900/10 rounded-lg p-4">

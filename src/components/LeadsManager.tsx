@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Re-
 import { EditLeadQuoteModal } from './EditLeadQuoteModal';
 import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
@@ -59,6 +60,12 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [leads, setLeads] = useState<LeadWithReview[]>([]);
   const [contracts, setContracts] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [partnerShareInput, setPartnerShareInput] = useState('');
+  const [sharingLead, setSharingLead] = useState(false);
+  const [followupType, setFollowupType] = useState<'padrao' | 'desconto' | 'brinde'>('padrao');
+  const [followupDiscountPercent, setFollowupDiscountPercent] = useState<number>(10);
+  const [followupCouponCode, setFollowupCouponCode] = useState<string>('FECHARHOJE');
+  const [followupBonusGift, setFollowupBonusGift] = useState<string>('Um Álbum Pocket de Destaque');
   const [filter, setFilter] = useState<'all' | 'novo' | 'contatado' | 'convertido' | 'perdido' | 'abandonado' | 'em_negociacao' | 'fazer_followup'>('all');
   const [filterTemplate, setFilterTemplate] = useState<string>('all');
   const [selectedLead, setSelectedLead] = useState<LeadWithReview | null>(null);
@@ -82,6 +89,19 @@ export function LeadsManager({ userId }: { userId: string }) {
 
   // Aba principal: 'leads' | 'producao' | 'finalizados'
   const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('tab') === 'producao') {
+      setMainTab('producao');
+    } else if (params.get('tab') === 'finalizados') {
+      setMainTab('finalizados');
+    } else {
+      setMainTab('leads');
+    }
+  }, [location.search]);
+
   const [leadsViewMode, setLeadsViewMode] = useState<'list' | 'grid'>('list');
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
 
@@ -237,11 +257,91 @@ export function LeadsManager({ userId }: { userId: string }) {
       setSelectedLead(prev => prev ? { ...prev, agendamento_config: configData } : null);
       setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, agendamento_config: configData } : l));
       alert('✅ Configuração de agendamento salva com sucesso!');
-    } catch (error) {
-      console.error('Erro ao salvar config de agendamento:', error);
-      alert('❌ Erro ao salvar configuração de agendamento');
     } finally {
       setSavingBookingConfig(false);
+    }
+  };
+
+  const handleSendLeadToPartner = async () => {
+    if (!selectedLead || !partnerShareInput) return;
+    setSharingLead(true);
+    try {
+      const searchTerm = partnerShareInput.trim();
+      const igNormalized = searchTerm.replace('@', '').toLowerCase();
+
+      // Busca por email ou instagram ou slug no profiles
+      const { data: profiles, error: searchError } = await supabase
+        .from('profiles')
+        .select('user_id, nome_profissional')
+        .or(`email_recebimento.eq.${searchTerm},instagram.ilike.%${igNormalized}%,slug_usuario.eq.${searchTerm}`)
+        .limit(1);
+
+      if (searchError) throw searchError;
+
+      if (!profiles || profiles.length === 0) {
+        alert('❌ Parceiro não encontrado no PriceUs. Verifique se o e-mail ou Instagram está correto.');
+        return;
+      }
+
+      const partner = profiles[0];
+      const partnerUserId = partner.user_id;
+
+      if (partnerUserId === userId) {
+        alert('⚠️ Você não pode enviar o lead para si mesmo.');
+        return;
+      }
+
+      // Obter nome do perfil atual para a notificação
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('nome_profissional')
+        .eq('id', userId)
+        .single();
+
+      // Duplica o lead
+      const leadCopy = {
+        template_id: selectedLead.template_id,
+        user_id: partnerUserId,
+        nome_cliente: selectedLead.nome_cliente,
+        email_cliente: selectedLead.email_cliente,
+        telefone_cliente: selectedLead.telefone_cliente,
+        dados_formulario: selectedLead.dados_formulario,
+        orcamento_detalhe: selectedLead.orcamento_detalhe,
+        valor_total: selectedLead.valor_total,
+        status: 'novo',
+        session_id: selectedLead.session_id ? `${selectedLead.session_id}_shared_${Date.now()}` : null,
+        url_origem: selectedLead.url_origem,
+        user_agent: selectedLead.user_agent,
+        tempo_preenchimento_segundos: selectedLead.tempo_preenchimento_segundos,
+        data_evento: selectedLead.data_evento,
+        cidade_evento: selectedLead.cidade_evento,
+        tipo_evento: selectedLead.tipo_evento,
+      };
+
+      const { data: newLead, error: insertError } = await supabase
+        .from('leads')
+        .insert([leadCopy])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Cria a notificação para o parceiro
+      await supabase.from('notifications').insert({
+        user_id: partnerUserId,
+        type: 'new_lead',
+        message: `Você recebeu um lead enviado por ${myProfile?.nome_profissional || 'um parceiro'}!`,
+        related_id: newLead.id,
+        link: '/dashboard/leads',
+      });
+
+      alert(`✅ Lead compartilhado com sucesso com ${partner.nome_profissional}!`);
+      setPartnerShareInput('');
+    } catch (err: any) {
+      console.error('Erro ao enviar lead para parceiro:', err);
+      alert('❌ Ocorreu um erro ao compartilhar o lead.');
+    } finally {
+      setSharingLead(false);
     }
   };
 
@@ -308,7 +408,12 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
 
   // Função para gerar e armazenar o corpo da mensagem do WhatsApp
-  const generateAndSetWhatsappMessage = async (lead: Lead, savedOrcamentoDetalhe: LeadOrcamentoDetalhe, updateState: boolean): Promise<string> => {
+  const generateAndSetWhatsappMessage = async (
+    lead: Lead,
+    savedOrcamentoDetalhe: LeadOrcamentoDetalhe,
+    updateState: boolean,
+    customFollowup?: { type: 'padrao' | 'desconto' | 'brinde', discountPercent?: number, couponCode?: string, bonusGift?: string }
+  ): Promise<string> => {
     const template: TemplateFromDB = templates[lead.template_id];
     const { data: profile } = await supabase
       .from('profiles')
@@ -318,7 +423,30 @@ export function LeadsManager({ userId }: { userId: string }) {
 
     const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || undefined;
 
-    const mensagem = generateWhatsAppMessage({
+    let initialBreakdown = savedOrcamentoDetalhe.priceBreakdown || {
+      subtotal: lead.valor_total,
+      ajusteSazonal: 0,
+      ajusteGeografico: { percentual: 0, taxa: 0 },
+      descontoCupom: 0,
+      acrescimoFormaPagamento: 0,
+      total: lead.valor_total,
+    };
+
+    let couponCode = undefined;
+    let couponDiscount = undefined;
+
+    if (customFollowup?.type === 'desconto') {
+      couponCode = customFollowup.couponCode;
+      couponDiscount = customFollowup.discountPercent;
+      const discountVal = (initialBreakdown.subtotal * (customFollowup.discountPercent || 0)) / 100;
+      initialBreakdown = {
+        ...initialBreakdown,
+        descontoCupom: discountVal,
+        total: Math.max(0, initialBreakdown.subtotal - discountVal),
+      };
+    }
+
+    let mensagem = generateWhatsAppMessage({
       clientName: lead.nome_cliente || '', // Corrected: Ensure clientName is always a string
       clientEmail: lead.email_cliente || '',
       clientPhone: lead.telefone_cliente || '',
@@ -383,14 +511,9 @@ export function LeadsManager({ userId }: { userId: string }) {
         date.setMonth(date.getMonth() + maxP);
         return date.toISOString().split('T')[0];
       })(),
-      priceBreakdown: savedOrcamentoDetalhe.priceBreakdown || { // Use priceBreakdown from details
-        subtotal: lead.valor_total,
-        ajusteSazonal: 0,
-        ajusteGeografico: { percentual: 0, taxa: 0 },
-        descontoCupom: 0,
-        acrescimoFormaPagamento: 0,
-        total: lead.valor_total,
-      },
+      priceBreakdown: initialBreakdown,
+      couponCode,
+      couponDiscount,
       eventDate: lead.data_evento || undefined,
       eventCity: cityName || undefined, 
       availabilityStatus: disponibilidadeLead?.status, // Passa o status da disponibilidade
@@ -401,12 +524,43 @@ export function LeadsManager({ userId }: { userId: string }) {
       context: 'photographer-to-client',
     });
 
+    if (customFollowup?.type === 'desconto') {
+      mensagem = `🎉 *CONDIÇÃO ESPECIAL!* 🎉\n\nOlá, ${lead.nome_cliente || 'cliente'}! Estou passando para liberar um desconto exclusivo de *${customFollowup.discountPercent}%* na sua proposta se fecharmos nas próximas 24h! Use o cupom *${customFollowup.couponCode}*.\n\nSeguem os detalhes atualizados:\n\n${mensagem}`;
+    } else if (customFollowup?.type === 'brinde') {
+      mensagem = `🎁 *PRESENTE EXCLUSIVO!* 🎁\n\nOlá, ${lead.nome_cliente || 'cliente'}! Se você confirmar seu fechamento nas próximas 24h, vou incluir totalmente grátis de bônus no seu pacote: *${customFollowup.bonusGift}*!\n\nRelembrando os detalhes do orçamento:\n\n${mensagem}`;
+    }
+
     if (updateState) {
       setWhatsappMessageBody(mensagem);
     }
 
     return mensagem;
   };
+
+  // Efeito para atualizar dinamicamente a prévia da mensagem do WhatsApp ao alterar opções de follow-up
+  useEffect(() => {
+    if (whatsappLeadConfig.isOpen && whatsappLeadConfig.lead && whatsappLeadConfig.savedOrcamentoDetalhe) {
+      generateAndSetWhatsappMessage(
+        whatsappLeadConfig.lead, 
+        whatsappLeadConfig.savedOrcamentoDetalhe, 
+        true, 
+        {
+          type: followupType,
+          discountPercent: followupDiscountPercent,
+          couponCode: followupCouponCode,
+          bonusGift: followupBonusGift
+        }
+      );
+    }
+  }, [
+    whatsappLeadConfig.isOpen, 
+    whatsappLeadConfig.lead, 
+    whatsappLeadConfig.savedOrcamentoDetalhe, 
+    followupType, 
+    followupDiscountPercent, 
+    followupCouponCode, 
+    followupBonusGift
+  ]);
 
   useEffect(() => {
     loadLeads();
@@ -691,14 +845,19 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
-  const executeWhatsAppMessage = async (lead: Lead, savedOrcamentoDetalhe: LeadOrcamentoDetalhe, ocultarExtras: boolean) => {
+  const executeWhatsAppMessage = async (
+    lead: Lead,
+    savedOrcamentoDetalhe: LeadOrcamentoDetalhe,
+    ocultarExtras: boolean,
+    customFollowup?: { type: 'padrao' | 'desconto' | 'brinde', discountPercent?: number, couponCode?: string, bonusGift?: string }
+  ) => {
     try {
       if (ocultarExtras) {
         savedOrcamentoDetalhe.ocultar_valores_intermediarios = true;
       }
 
       await checkAvailability(userId, lead.data_evento || ''); // Só chamando p consistência (status é passado como prop?)
-      const mensagem = await generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, false);
+      const mensagem = await generateAndSetWhatsappMessage(lead, savedOrcamentoDetalhe, false, customFollowup);
 
       // 🔥 GERAR LINK WA.ME
       const waLink = generateWaLinkToClient(lead.telefone_cliente, mensagem);
@@ -1688,6 +1847,34 @@ export function LeadsManager({ userId }: { userId: string }) {
                   </div>
                 </div>
 
+                {/* Enviar Lead para Parceiro */}
+                <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-4 mt-4">
+                  <h3 className="font-semibold text-gray-700 dark:text-white mb-2 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-500" />
+                    Enviar Lead para Parceiro (Co-parceria)
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Compartilhe este lead instantaneamente com outro profissional cadastrado no PriceUs.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="E-mail ou Instagram do parceiro..."
+                      value={partnerShareInput}
+                      onChange={(e) => setPartnerShareInput(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-350 dark:border-gray-700 rounded-lg bg-white dark:bg-[#07101f] text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendLeadToPartner}
+                      disabled={sharingLead || !partnerShareInput}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+                    >
+                      {sharingLead ? 'Enviando...' : 'Enviar Lead'}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="pt-4 flex flex-col gap-3">
                   <div className="flex gap-3">
                     {selectedLead.telefone_cliente && (
@@ -1770,53 +1957,154 @@ export function LeadsManager({ userId }: { userId: string }) {
       {/* Modal de Confirmação para WhatsApp */}
       {whatsappLeadConfig.isOpen && whatsappLeadConfig.lead && whatsappLeadConfig.savedOrcamentoDetalhe && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm shadow-2xl flex items-center justify-center z-[70] p-4">
-          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.05)] rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
-            <div className="p-6">
-              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-[rgba(59,130,246,0.2)] flex items-center justify-center mb-4 mx-auto">
-                <FileSignature className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,0.05)] rounded-xl shadow-2xl max-w-lg w-full overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-[rgba(34,197,94,0.2)] flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Enviar WhatsApp para {whatsappLeadConfig.lead.nome_cliente}
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Selecione a abordagem ideal para abordar seu cliente.
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
-                Apresentação de Valores
-              </h3>
-              <p className="text-gray-600 dark:text-[rgba(255,255,255,0.6)] text-center text-sm mb-6">
-                Como você gostaria de apresentar os valores na mensagem de follow-up para o cliente?
-              </p>
 
-              <div className="space-y-3">
-                <button
-                  onClick={() => executeWhatsAppMessage(whatsappLeadConfig.lead!, whatsappLeadConfig.savedOrcamentoDetalhe!, true)}
-                  className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-[rgba(59,130,246,0.1)] dark:to-[rgba(59,130,246,0.15)] hover:border-blue-500 dark:hover:border-blue-400 rounded-xl transition-all duration-200 text-left"
-                >
-                  <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400 mr-2"></span>
-                    Ocultar valores intermediários
-                  </p>
-                  <p className="text-xs text-blue-800/80 dark:text-[rgba(147,197,253,0.8)] mt-1 pl-4">
-                    Os produtos e eventuais taxas extras não terão seus preços listados separadamente. Apenas o valor total da proposta será exibido.
-                  </p>
-                </button>
+              {/* Seletor de Tipo de Abordagem */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  Tipo de Abordagem (Follow-up)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['padrao', 'desconto', 'brinde'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setFollowupType(type)}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                        followupType === type
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-gray-100 dark:bg-white/5 text-gray-750 dark:text-gray-300 hover:bg-gray-250 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {type === 'padrao' ? '📨 Padrão' : type === 'desconto' ? '🏷️ Desconto' : '🎁 Brinde'}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                <button
-                   onClick={() => executeWhatsAppMessage(whatsappLeadConfig.lead!, whatsappLeadConfig.savedOrcamentoDetalhe!, false)}
-                   className="w-full relative group p-4 border-2 border-transparent bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-[rgba(255,255,255,0.02)] dark:to-[rgba(255,255,255,0.05)] hover:border-gray-500 dark:hover:border-gray-400 rounded-xl transition-all duration-200 text-left"
-                >
-                  <p className="font-semibold text-gray-700 dark:text-gray-300 flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>
-                    Mostrar detalhado
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 pl-4">
-                    Mantém transparente a listagem de preços individuais por produto/serviço e exibe eventuais custos extras do orçamento.
-                  </p>
-                </button>
+              {/* Configurações Dinâmicas por Tipo */}
+              {followupType === 'desconto' && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100 dark:border-blue-950 rounded-lg">
+                  <div>
+                    <label className="block text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                      Desconto (%)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={followupDiscountPercent}
+                      onChange={(e) => setFollowupDiscountPercent(Math.max(1, parseInt(e.target.value) || 0))}
+                      className="w-full px-3 py-1.5 border border-blue-200 dark:border-blue-900 rounded-lg bg-white dark:bg-[#07101f] text-xs text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                      Código do Cupom
+                    </label>
+                    <input
+                      type="text"
+                      value={followupCouponCode}
+                      onChange={(e) => setFollowupCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                      className="w-full px-3 py-1.5 border border-blue-200 dark:border-blue-900 rounded-lg bg-white dark:bg-[#07101f] text-xs text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {followupType === 'brinde' && (
+                <div className="p-3 bg-purple-50/50 dark:bg-purple-950/10 border border-purple-100 dark:border-purple-950 rounded-lg">
+                  <label className="block text-xs font-semibold text-purple-900 dark:text-purple-300 mb-1">
+                    Brinde Especial
+                  </label>
+                  <input
+                    type="text"
+                    value={followupBonusGift}
+                    onChange={(e) => setFollowupBonusGift(e.target.value)}
+                    placeholder="Ex: Um Ensaio de Bônus, 1 Álbum Pocket..."
+                    className="w-full px-3 py-1.5 border border-purple-200 dark:border-purple-900 rounded-lg bg-white dark:bg-[#07101f] text-xs text-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
+
+              {/* Opções de Apresentação de Valores */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-150 dark:border-white/5">
+                <div>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Ocultar preços dos itens</span>
+                  <p className="text-[10px] text-gray-500">Exibe apenas o valor final do orçamento na mensagem.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={whatsappLeadConfig.savedOrcamentoDetalhe.ocultar_valores_intermediarios ?? false}
+                    onChange={(e) => {
+                      const updated = {
+                        ...whatsappLeadConfig.savedOrcamentoDetalhe!,
+                        ocultar_valores_intermediarios: e.target.checked,
+                      };
+                      setWhatsappLeadConfig(prev => ({
+                        ...prev,
+                        savedOrcamentoDetalhe: updated,
+                      }));
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              {/* Prévia da Mensagem */}
+              <div>
+                <span className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  Prévia da Mensagem (Copie ou Envie)
+                </span>
+                <div className="p-3 bg-gray-50 dark:bg-black/25 border border-gray-150 dark:border-white/5 rounded-lg max-h-48 overflow-y-auto">
+                  <pre className="text-xs font-sans whitespace-pre-wrap text-gray-800 dark:text-gray-300">
+                    {whatsappMessageBody || 'Gerando mensagem...'}
+                  </pre>
+                </div>
               </div>
             </div>
-            
-            <div className="bg-gray-50 dark:bg-[#07101f] px-6 py-4 flex justify-end">
+
+            <div className="bg-gray-50 dark:bg-[#07101f] px-6 py-4 flex justify-between items-center border-t dark:border-white/5">
               <button
+                type="button"
                 onClick={() => setWhatsappLeadConfig({ lead: null, savedOrcamentoDetalhe: null, isOpen: false })}
-                className="text-gray-500 hover:text-gray-700 dark:text-[rgba(255,255,255,0.6)] dark:hover:text-white text-sm font-medium transition-colors"
-               >
-                Cancelar envio
+                className="text-gray-500 hover:text-gray-700 dark:text-[rgba(255,255,255,0.6)] dark:hover:text-white text-xs font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => executeWhatsAppMessage(
+                  whatsappLeadConfig.lead!,
+                  whatsappLeadConfig.savedOrcamentoDetalhe!,
+                  whatsappLeadConfig.savedOrcamentoDetalhe!.ocultar_valores_intermediarios || false,
+                  {
+                    type: followupType,
+                    discountPercent: followupDiscountPercent,
+                    couponCode: followupCouponCode,
+                    bonusGift: followupBonusGift
+                  }
+                )}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Enviar via WhatsApp
               </button>
             </div>
           </div>

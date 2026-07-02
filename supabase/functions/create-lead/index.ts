@@ -105,118 +105,200 @@ serve(async (req) => {
       dados_formulario: formData,
       orcamento_detalhe: orcamentoDetalhe,
       valor_total: valorTotal,
-      status: status || 'novo', // Usa o status enviado ou 'novo' como padrão
-      session_id: sessionId,
-      url_origem: urlOrigem,
-      user_agent: userAgent,
-      tempo_preenchimento_segundos: tempoPreenchimento,
-      data_evento: dataEvento,
-      cidade_evento: cidadeEvento,
-      tipo_evento: tipoEvento,
-    }
+    console.log('📥 Normalizando dados para inserção do lead...')
 
-    console.log('📤 Preparando dados do lead:', JSON.stringify(leadData, null, 2))
+    // Se for auto-save, inserimos normalmente no profissional do template
+    if (isAutoSave) {
+      const leadData = {
+        template_id: templateId,
+        user_id: userId,
+        nome_cliente: nomeCliente,
+        email_cliente: emailCliente,
+        telefone_cliente: telefoneCliente,
+        dados_formulario: formData,
+        orcamento_detalhe: orcamentoDetalhe,
+        valor_total: valorTotal,
+        status: 'abandonado',
+        session_id: sessionId,
+        url_origem: urlOrigem,
+        user_agent: userAgent,
+        tempo_preenchimento_segundos: tempoPreenchimento,
+        data_evento: dataEvento,
+        cidade_evento: cidadeEvento,
+        tipo_evento: tipoEvento,
+      }
 
-    // Verificar se já existe um lead com o mesmo session_id para evitar duplicatas
-    let newLead = null
-    let insertError = null
-    
-    if (sessionId) {
-      // Primeiro tenta encontrar um lead existente com o mesmo session_id
-      // 🔥 CORREÇÃO: Só deve atualizar se o status for 'abandonado'
-      const { data: existingLead } = await supabaseAdmin
-        .from('leads')
-        .select('id')
-        .eq('session_id', sessionId)
-        .eq('status', 'abandonado')
-        .maybeSingle()
-      
+      let existingLead = null
+      if (sessionId) {
+        const { data } = await supabaseAdmin
+          .from('leads')
+          .select('id')
+          .eq('session_id', sessionId)
+          .eq('status', 'abandonado')
+          .maybeSingle()
+        existingLead = data
+      }
+
+      let savedLead = null
       if (existingLead) {
-        console.log('🔄 Lead existente encontrado, atualizando...')
-        // Atualiza o lead existente
-        const { data: updatedLead, error: updateError } = await supabaseAdmin
+        const { data, error } = await supabaseAdmin
           .from('leads')
           .update(leadData)
           .eq('id', existingLead.id)
           .select()
           .single()
-        
-        newLead = updatedLead
-        insertError = updateError
+        if (error) throw error
+        savedLead = data
       } else {
-        // Insere um novo lead
-        console.log('🆕 Criando novo lead...')
-        const { data: insertedLead, error: insertErr } = await supabaseAdmin
+        const { data, error } = await supabaseAdmin
           .from('leads')
           .insert(leadData)
           .select()
           .single()
-        
-        newLead = insertedLead
-        insertError = insertErr
+        if (error) throw error
+        savedLead = data
       }
-    } else {
-      // Se não tem session_id, insere normalmente
+
+      return new Response(JSON.stringify(savedLead), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 201,
+      })
+    }
+
+    // --- SE FOR LEAD FINAL: SUPORTE A CO-PARCERIA (SPLIT DE LEADS) ---
+    console.log('👥 Iniciando verificação de provedores para split de leads...')
+    const selectedProds = orcamentoDetalhe.produtos || []
+    const selectedUpsells = orcamentoDetalhe.upsell_produtos || []
+    const allProdIds = [
+      ...selectedProds.map((p: any) => p.produto_id),
+      ...selectedUpsells.map((p: any) => p.produto_id)
+    ].filter(Boolean)
+
+    let dbProducts: any[] = []
+    if (allProdIds.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from('produtos')
+        .select('id, provedor_id, valor, desconto_percentual')
+        .in('id', allProdIds)
+      if (error) {
+        console.error('Erro ao buscar provedores dos produtos:', error)
+      } else {
+        dbProducts = data || []
+      }
+    }
+
+    const prodDetailsMap = new Map(dbProducts.map(p => [p.id, p]))
+    const grouped: Record<string, { prods: any[], upsells: any[], val: number }> = {}
+
+    // Inicializa o grupo do dono do template
+    grouped[userId] = { prods: [], upsells: [], val: 0 }
+
+    // Agrupa produtos
+    for (const p of selectedProds) {
+      const details = prodDetailsMap.get(p.produto_id)
+      const provId = details?.provedor_id || userId
+      
+      if (!grouped[provId]) {
+        grouped[provId] = { prods: [], upsells: [], val: 0 }
+      }
+      
+      grouped[provId].prods.push(p)
+      const unitVal = details ? (details.valor * (1 - (details.desconto_percentual || 0) / 100)) : 0
+      grouped[provId].val += unitVal * Number(p.quantidade || 1)
+    }
+
+    // Agrupa upsell
+    for (const p of selectedUpsells) {
+      const details = prodDetailsMap.get(p.produto_id)
+      const provId = details?.provedor_id || userId
+
+      if (!grouped[provId]) {
+        grouped[provId] = { prods: [], upsells: [], val: 0 }
+      }
+
+      grouped[provId].upsells.push(p)
+      const unitVal = details ? (details.valor * (1 - (details.desconto_percentual || 0) / 100)) : (Number(p.valor) || 0)
+      grouped[provId].val += unitVal
+    }
+
+    // Se o grupo do dono do template acabou vazio e há outros parceiros, mantemos o dono com R$ 0 ou tiramos se necessário.
+    // Para fins práticos, inserimos leads para cada provedor que tenha produtos selecionados.
+    let mainSavedLead = null
+
+    for (const [provId, group] of Object.entries(grouped)) {
+      if (group.prods.length === 0 && group.upsells.length === 0) {
+        continue // Pula provedores sem itens selecionados nesta proposta
+      }
+
+      const isMainOwner = provId === userId
+      const leadDataForProvider = {
+        template_id: templateId,
+        user_id: provId,
+        nome_cliente: nomeCliente,
+        email_cliente: emailCliente,
+        telefone_cliente: telefoneCliente,
+        dados_formulario: formData,
+        orcamento_detalhe: {
+          produtos: group.prods,
+          upsell_produtos: group.upsells,
+          forma_pagamento_id: orcamentoDetalhe.forma_pagamento_id || null,
+          priceBreakdown: orcamentoDetalhe.priceBreakdown || {},
+        },
+        valor_total: group.val,
+        status: 'novo',
+        session_id: sessionId ? `${sessionId}_${provId}` : null,
+        url_origem: urlOrigem,
+        user_agent: userAgent,
+        tempo_preenchimento_segundos: tempoPreenchimento,
+        data_evento: dataEvento,
+        cidade_evento: cidadeEvento,
+        tipo_evento: tipoEvento,
+      }
+
+      console.log(`📥 Inserindo lead para provedor ${provId} com valor ${group.val}`)
       const { data: insertedLead, error: insertErr } = await supabaseAdmin
         .from('leads')
-        .insert(leadData)
+        .insert(leadDataForProvider)
         .select()
         .single()
-      
-      newLead = insertedLead
-      insertError = insertErr
-    }
 
-    if (insertError) {
-      console.error('❌ Erro ao salvar lead:', JSON.stringify(insertError, null, 2))
-      throw insertError
-    }
-    
-    console.log('✅ Lead salvo com sucesso:', newLead?.id)
-
-    // ✅ ETAPA 2: Criar a notificação para o usuário (fotógrafo)
-    // REGRA 1: Só criar notificação se for um submit FINAL (não um auto-save com status 'abandonado')
-    // REGRA 2: Verificar deduplicação — se já existe uma notificação para este lead, não criar outra
-    if (newLead && !isAutoSave) {
-      console.log('🔔 Lead final detectado, verificando deduplicação antes de criar notificação...')
-      
-      // Verificar se já existe uma notificação do tipo 'new_lead' para este lead específico
-      const { data: existingNotification } = await supabaseAdmin
-        .from('notifications')
-        .select('id')
-        .eq('related_id', newLead.id)
-        .eq('type', 'new_lead')
-        .maybeSingle()
-      
-      if (existingNotification) {
-        console.log('⚠️ Notificação já existe para este lead, pulando criação duplicada:', existingNotification.id)
-      } else {
-        const notificationPayload = {
-          user_id: userId,
-          type: 'new_lead',
-          message: `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`,
-          related_id: newLead.id,
-          link: '/dashboard/leads',
-        }
-        
-        const { error: notificationError } = await supabaseAdmin.from('notifications').insert(notificationPayload)
-        if (notificationError) {
-          console.error('Erro ao criar notificação (não fatal):', notificationError)
-        } else {
-          console.log('✅ Notificação de novo lead criada com sucesso para:', nomeCliente)
-        }
+      if (insertErr) {
+        console.error(`Erro ao inserir lead para o provedor ${provId}:`, insertErr)
+        throw insertErr
       }
-    } else if (isAutoSave) {
-      console.log('🔄 Auto-save detectado — notificação NÃO será criada para evitar duplicatas.')
+
+      // Notificação para o profissional
+      const msg = isMainOwner 
+        ? `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`
+        : `Você recebeu um lead compartilhado de ${nomeCliente || 'um cliente'}!`
+
+      const notificationPayload = {
+        user_id: provId,
+        type: 'new_lead',
+        message: msg,
+        related_id: insertedLead.id,
+        link: '/dashboard/leads',
+      }
+      
+      const { error: notificationError } = await supabaseAdmin
+        .from('notifications')
+        .insert(notificationPayload)
+      if (notificationError) {
+        console.error('Erro ao criar notificação de split lead:', notificationError)
+      }
+
+      if (isMainOwner) {
+        mainSavedLead = insertedLead
+      } else if (!mainSavedLead) {
+        mainSavedLead = insertedLead
+      }
     }
-    
-    // Retornar os dados do lead salvo com sucesso
-    return new Response(JSON.stringify(newLead), {
+
+    return new Response(JSON.stringify(mainSavedLead), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 201, // 201 Created
+      status: 201,
     })
   } catch (err) {
-    // Capturar qualquer outro erro e retornar uma resposta de erro
     console.error('Erro na Edge Function:', err)
     return new Response(
       JSON.stringify({

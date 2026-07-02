@@ -87,10 +87,15 @@ export function DashboardPage() {
   }
 
   const handlePageChange = (page: string) => {
-    setCurrentPage(page);
-    setEditingTemplateId(null);
-    // Navega para a URL correspondente
-    navigate(`/dashboard/${page}`);
+    if (page === 'workflow') {
+      setCurrentPage('leads');
+      setEditingTemplateId(null);
+      navigate('/dashboard/leads?tab=producao');
+    } else {
+      setCurrentPage(page);
+      setEditingTemplateId(null);
+      navigate(`/dashboard/${page}`);
+    }
   };
 
   const getPageTitle = () => {

@@ -99,6 +99,7 @@ export interface Profile {
   data_expiracao_trial: string | null;
   portfolio_link: string | null;
   portfolio_fotos: string[] | null;
+  dias_adiar_tarefas?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -121,6 +122,11 @@ export interface Lead {
   data_orcamento: string;
   data_ultimo_contato: string | null;
   agendamento_config?: any;
+  dados_formulario?: any;
+  session_id?: string | null;
+  url_origem?: string | null;
+  user_agent?: string | null;
+  tempo_preenchimento_segundos?: number | null;
   created_at: string;
   updated_at: string;
 }

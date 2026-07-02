@@ -737,7 +737,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
             }}
           >
             {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
-            Enviar Orçamento via WhatsApp
+            {template?.texto_botao_envio || 'Enviar Orçamento via WhatsApp'}
           </button>
         </form>
       </section>

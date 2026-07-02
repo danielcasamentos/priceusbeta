@@ -620,7 +620,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
               }}
             >
               {!fieldsValidation.canUseWhatsApp ? <Lock className="w-4 h-4" /> : <MessageCircle className="w-4.5 h-4.5 text-white fill-white" />}
-              Negociar Orçamento no WhatsApp
+              {template?.texto_botao_envio || 'Negociar Orçamento no WhatsApp'}
             </button>
           </div>
 

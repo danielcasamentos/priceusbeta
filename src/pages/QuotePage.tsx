@@ -46,6 +46,7 @@ interface Produto {
   duracao_minutos?: number | null;
   destacar_produto?: boolean;
   destaque_texto?: string | null;
+  keywords_upsell?: string | null;
 }
 
 interface FormaPagamento {
@@ -211,9 +212,19 @@ export function QuotePage() {
     );
 
     return upsellProdutos.filter(produto => {
-      const upsellSignificantWords = getSignificantWords(produto.nome);
-      const isDuplicate = upsellSignificantWords.some(word => cartTextNormalized.includes(word));
-      return !isDuplicate;
+      let activationTerms: string[] = [];
+
+      if (produto.keywords_upsell) {
+        activationTerms = produto.keywords_upsell
+          .split(',')
+          .map((word: string) => normalizeText(word.trim()))
+          .filter((word: string) => word.length > 0);
+      } else {
+        activationTerms = getSignificantWords(produto.nome);
+      }
+
+      const isRedundant = activationTerms.some(term => cartTextNormalized.includes(term));
+      return !isRedundant;
     });
   }, [upsellProdutos, produtos, selectedProdutos]);
 
@@ -2023,7 +2034,9 @@ export function QuotePage() {
                     <span>
                       {item.permite_multiplas_unidades === false ? item.name : `${item.quantity}x ${item.name}`}
                     </span>
-                    <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                    {!template?.ocultar_valores_intermediarios && (
+                      <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -2115,6 +2128,64 @@ export function QuotePage() {
     );
   }
 
+  if (template && template.ativo === false) {
+    const estilo = template.estilo_mensagem_pausada || 'amigavel';
+    const msg = template.mensagem_pausada || 'Este orçamento está temporariamente pausado. Por favor, entre em contato direto com o profissional para mais informações.';
+    
+    let containerStyle = "min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-[#07101f]";
+    let cardStyle = "bg-white dark:bg-[#0a1628] rounded-xl shadow-2xl border dark:border-white/5 max-w-lg w-full overflow-hidden text-center animate-fade-in";
+    let bannerStyle = "";
+    let titleText = "";
+    
+    if (estilo === 'formal') {
+      bannerStyle = "bg-slate-800 text-white py-3 px-4 text-xs font-bold tracking-wider uppercase";
+      titleText = "Orçamento Indisponível";
+    } else if (estilo === 'divertido') {
+      bannerStyle = "bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-4 text-xs font-bold uppercase";
+      titleText = "Ops! Pausamos por aqui!";
+    } else if (estilo === 'urgente') {
+      bannerStyle = "bg-red-600 text-white py-3 px-4 text-xs font-bold uppercase tracking-wider animate-pulse";
+      titleText = "Aviso Importante";
+    } else { // amigavel
+      bannerStyle = "bg-amber-500 text-white py-3 px-4 text-xs font-bold uppercase";
+      titleText = "Agenda Temporariamente Pausada";
+    }
+    
+    return (
+      <div className={containerStyle}>
+        <div className={cardStyle}>
+          <div className={bannerStyle}>
+            {estilo === 'amigavel' && '😊 Mensagem do Profissional'}
+            {estilo === 'formal' && '👔 Comunicado Oficial'}
+            {estilo === 'divertido' && '🎉 Novidades em Breve!'}
+            {estilo === 'urgente' && '⚠️ Atenção'}
+          </div>
+          
+          <div className="p-8 space-y-6">
+            <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center mx-auto">
+              {estilo === 'amigavel' && <span className="text-3xl">👋</span>}
+              {estilo === 'formal' && <span className="text-3xl">💼</span>}
+              {estilo === 'divertido' && <span className="text-3xl">🥳</span>}
+              {estilo === 'urgente' && <span className="text-3xl">🚨</span>}
+            </div>
+            
+            <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white leading-tight">
+              {titleText}
+            </h1>
+            
+            <p className="text-gray-650 dark:text-gray-300 text-sm md:text-base leading-relaxed whitespace-pre-line">
+              {msg}
+            </p>
+            
+            <div className="pt-4 border-t dark:border-white/5 text-xs text-gray-400 dark:text-gray-500">
+              Caso precise de ajuda imediata, entre em contato direto pelo WhatsApp ou redes sociais.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Função de seção de upsell (carrossel) ─────────────────────────────
   const renderUpsellSection = () => {
     if (!template?.upsell_ativo || filteredUpsellProdutos.length === 0 || !selectedFormaPagamento) return null;
@@ -2193,7 +2264,7 @@ export function QuotePage() {
                   )}
 
                   {/* Badge de desconto */}
-                  {desconto > 0 && (
+                  {desconto > 0 && (template?.exibir_valores_upsell !== false) && (
                     <div style={{
                       position: 'absolute', top: 8, left: 8, zIndex: 2,
                       background: '#dc2626', color: '#fff', borderRadius: 6,
@@ -2228,16 +2299,18 @@ export function QuotePage() {
                         {produto.resumo}
                       </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: selecionado ? '#2563eb' : '#059669' }}>
-                        {formatCurrency(valorFinal)}
-                      </span>
-                      {desconto > 0 && (
-                        <span style={{ fontSize: 11, color: '#9ca3af', textDecoration: 'line-through' }}>
-                          {formatCurrency(produto.valor)}
+                    {template?.exibir_valores_upsell !== false && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: selecionado ? '#2563eb' : '#059669' }}>
+                          {formatCurrency(valorFinal)}
                         </span>
-                      )}
-                    </div>
+                        {desconto > 0 && (
+                          <span style={{ fontSize: 11, color: '#9ca3af', textDecoration: 'line-through' }}>
+                            {formatCurrency(produto.valor)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

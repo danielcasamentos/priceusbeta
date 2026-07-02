@@ -26,6 +26,7 @@ interface Product {
   /** Texto exibido no badge de destaque (ex: Mais Vendido) */
   destaque_texto?: string;
   duracao_minutos?: number | null;
+  keywords_upsell?: string | null;
 }
 
 interface ProductEditorProps {
@@ -108,6 +109,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         destacar_produto: product.destacar_produto ?? false,
         destaque_texto: product.destaque_texto ?? null,
         duracao_minutos: product.duracao_minutos ?? null,
+        keywords_upsell: product.keywords_upsell || null,
       };
 
       const { data, error: insertError } = await supabase
@@ -811,6 +813,23 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
             )}
           </div>
         )}
+      </div>
+
+      {/* Palavras-chave de Ativação (Upsell) */}
+      <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/30 space-y-2">
+        <label className="block text-sm font-semibold text-gray-800">
+          Palavras-chave de Ativação do Upsell
+        </label>
+        <input
+          type="text"
+          value={product.keywords_upsell || ''}
+          onChange={(e) => onChange('keywords_upsell', e.target.value)}
+          placeholder="Ex: album, encadernacao, revelacao (separadas por vírgula)"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+        />
+        <p className="text-xs text-gray-500">
+          Se o cliente selecionar um pacote contendo alguma destas palavras-chave, este produto de upsell será automaticamente OMITIDO (para evitar redundância). Se deixado em branco, o sistema usará o nome do produto como termo de correspondência.
+        </p>
       </div>
 
       {/* Botões de Ação */}

@@ -363,7 +363,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
 
           <button type="submit" disabled={!fieldsValidation.canUseWhatsApp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#b45309,#f59e0b,#fbbf24)' : 'rgba(255,255,255,.1)', border: 'none', color: '#000', padding: '16px 32px', borderRadius: 14, fontSize: 16, fontWeight: 800, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', boxShadow: fieldsValidation.canUseWhatsApp ? '0 4px 24px rgba(245,158,11,.4)' : 'none', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}>
             {!fieldsValidation.canUseWhatsApp ? <Lock size={20} style={{ color: '#fff' }} /> : <Send size={20} />}
-            🎆 Enviar Proposta de Réveillon via WhatsApp
+            {template?.texto_botao_envio || '🎆 Enviar Proposta de Réveillon via WhatsApp'}
           </button>
         </form>
       </section>

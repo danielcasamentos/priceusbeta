@@ -39,7 +39,7 @@ export function formatDuration(minutes: number | null | undefined): string {
 
 import {
   Plus, Trash2, Save, ChevronDown, ChevronUp,
-  Pause, Check, FolderOpen, X, Loader2
+  Pause, Check, FolderOpen, X, Loader2, CalendarClock
 } from 'lucide-react';
 import { WorkflowStep, WorkflowTemplate, WorkflowTemplateStep, SlaResult } from '../types/workflow';
 import { useWorkflowSla, calcularSlaEtapa } from '../hooks/useWorkflowSla';
@@ -672,6 +672,33 @@ export function WorkflowStepper({
   leadProdutos = [],
 }: WorkflowStepperProps) {
   const [workflow, setWorkflow] = useState<WorkflowStep[]>(initialWorkflow);
+  const [diasAdiar, setDiasAdiar] = useState<number>(7);
+
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('dias_adiar_tarefas')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data && data.dias_adiar_tarefas !== undefined && data.dias_adiar_tarefas !== null) {
+          setDiasAdiar(data.dias_adiar_tarefas);
+        }
+      });
+  }, [userId]);
+
+  const handleAdiarEtapa = (stepId: string) => {
+    const step = workflow.find(s => s.id === stepId);
+    if (!step) return;
+
+    // Se a etapa não tiver prazo definido, começamos a partir de hoje
+    const baseDate = step.deadline ? new Date(step.deadline + 'T12:00:00') : new Date();
+    baseDate.setDate(baseDate.getDate() + diasAdiar);
+
+    const newDeadline = baseDate.toISOString().split('T')[0];
+    updateStep(stepId, { deadline: newDeadline });
+  };
+
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
@@ -1077,6 +1104,13 @@ export function WorkflowStepper({
                     }`}
                   >
                     <Pause className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleAdiarEtapa(step.id)}
+                    title={`Adiar etapa em ${diasAdiar} dias`}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                  >
+                    <CalendarClock className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => removeStep(step.id)}

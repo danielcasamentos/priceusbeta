@@ -500,6 +500,12 @@ export async function importarEventosInteligente(
       const chunk = eventos.slice(i, i + chunkSize);
       await Promise.all(chunk.map(async (evento) => {
         try {
+          if (evento.uid_externo && (evento.uid_externo.includes('workflow_') || evento.uid_externo.includes('priceus'))) {
+            console.log(`[importarEventosInteligente] Ignorando evento de sincronismo reverso/workflow: ${evento.nome} (${evento.uid_externo})`);
+            result.eventos_ignorados++;
+            return;
+          }
+
           if (estrategia === 'adicionar_novos') {
             const existente = await findExistente(evento);
             if (existente) {

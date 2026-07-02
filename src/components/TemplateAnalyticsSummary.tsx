@@ -86,7 +86,7 @@ export function TemplateAnalyticsSummary({ templateId }: Props) {
         <h4 className="text-sm font-bold text-gray-900">Desempenho Rastreável</h4>
       </div>
       
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
         <div className="bg-white p-2 rounded-lg border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
           <Users className="w-4 h-4 text-gray-500 mb-1" />
           <span className="text-xs text-gray-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis w-[100%]">Acessos Tracking</span>

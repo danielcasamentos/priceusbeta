@@ -274,7 +274,7 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
               disabled={!fieldsValidation.canUseWhatsApp}
             >
               {!fieldsValidation.canUseWhatsApp ? <Lock className="w-6 h-6" /> : <Send className="w-6 h-6" />}
-              Enviar Orçamento via WhatsApp
+              {template?.texto_botao_envio || 'Enviar Orçamento via WhatsApp'}
             </button>
           </form>
         </div>

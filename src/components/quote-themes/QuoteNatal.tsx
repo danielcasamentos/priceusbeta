@@ -436,7 +436,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
           {/* Submit */}
           <button type="submit" disabled={!fieldsValidation.canUseWhatsApp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#dc2626,#f59e0b)' : 'rgba(255,255,255,.1)', border: 'none', color: '#fff', padding: '16px 32px', borderRadius: 14, fontSize: 16, fontWeight: 800, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', boxShadow: fieldsValidation.canUseWhatsApp ? '0 4px 24px rgba(220,38,38,.4)' : 'none', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}>
             {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
-            🎄 Enviar Proposta de Natal via WhatsApp
+            {template?.texto_botao_envio || '🎄 Enviar Proposta de Natal via WhatsApp'}
           </button>
         </form>
       </section>

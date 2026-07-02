@@ -132,6 +132,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         incentivo_avaliacao_texto: profile.incentivo_avaliacao_texto || null,
         portfolio_link: profile.portfolio_link || null,
         portfolio_fotos: profile.portfolio_fotos || null,
+        dias_adiar_tarefas: profile.dias_adiar_tarefas ?? 7,
         updated_at: new Date().toISOString(),
       };
 
@@ -539,6 +540,24 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                   placeholder="seu_instagram"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
+                Dias Padrão para Adiar Tarefas no Workflow
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={profile.dias_adiar_tarefas ?? 7}
+                onChange={(e) => handleUpdateField('dias_adiar_tarefas', parseInt(e.target.value) || 7)}
+                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="7"
+              />
+              <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-1">
+                Quantidade de dias adicionados por padrão ao clicar em "Adiar" no workflow
+              </p>
             </div>
           </div>
         </div>
