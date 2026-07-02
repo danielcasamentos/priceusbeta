@@ -336,20 +336,27 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
             <div className="flex flex-col gap-3">
               {produtos.map((produto) => {
                 const isSelected = !!selectedProdutos[produto.id];
+                const isHighlighted = produto.destacar_produto === true;
                 return (
                   <div
                     key={produto.id}
-                    className={`pdf-prod-card p-4 ${isSelected ? 'selected' : ''}`}
+                    className={`pdf-prod-card p-4 transition-all relative ${
+                      isHighlighted
+                        ? 'border-amber-400 bg-amber-50/10 shadow-[0_8px_20px_rgba(245,158,11,0.08)] ring-1 ring-amber-400/20'
+                        : isSelected
+                        ? 'selected'
+                        : ''
+                    }`}
                   >
                     <div className={`flex flex-col gap-4 ${template?.layout_produtos_desktop === 'quadro' ? 'sm:items-center' : 'sm:flex-row sm:items-start'}`}>
                       {/* Product image */}
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
                         (() => {
                           const sizeClasses = {
-                            pequeno: 'w-24 h-24 sm:w-32 sm:h-32',
-                            medio: 'w-32 h-32 sm:w-48 sm:h-48',
-                            grande: 'w-full h-48 sm:w-72 sm:h-72',
-                          };
+                             pequeno: 'w-24 h-24 sm:w-20 sm:h-20',
+                             medio: 'w-32 h-32 sm:w-32 sm:h-32',
+                             grande: 'w-full h-48 sm:w-48 sm:h-48',
+                           };
                           const imageSize = template?.tamanho_imagem_grid || 'medio';
                           const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
                           return (
@@ -375,6 +382,11 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
 
                       {/* Service info */}
                       <div className="flex-1 min-w-0" ref={produtos.indexOf(produto) === 0 ? firstProductRef : undefined}>
+                        {isHighlighted && produto.destaque_texto && (
+                          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-red-500 text-white rounded px-2 py-0.5 text-[9px] font-black tracking-wider uppercase mb-1.5 shadow-sm pdf-sans">
+                            ⭐ {produto.destaque_texto}
+                          </div>
+                        )}
                         <h4 className="text-base font-semibold text-neutral-900 tracking-tight leading-snug flex items-center flex-wrap gap-2">
                           <span>{produto.nome}</span>
                           {template?.exibir_duracao_produto && produto.duracao_minutos && produto.duracao_minutos > 0 && (

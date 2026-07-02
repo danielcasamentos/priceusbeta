@@ -123,7 +123,8 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
         style={{
           position: 'relative',
           width: '100%',
-          margin: 0,
+          maxWidth: '576px',
+          margin: '0 auto',
           padding: 0,
           overflow: 'hidden',
           lineHeight: 0,
@@ -420,9 +421,9 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
                       {produto.mostrar_imagem && (produto.imagem_url || produto.imagens?.length > 0) && (
                         (() => {
                           const sizeClasses = {
-                            pequeno: 'w-24 h-24 sm:w-32 sm:h-32',
-                            medio: 'w-32 h-32 sm:w-48 sm:h-48',
-                            grande: 'w-full h-48 sm:w-72 sm:h-72',
+                            pequeno: 'w-24 h-24 sm:w-20 sm:h-20',
+                            medio: 'w-32 h-32 sm:w-32 sm:h-32',
+                            grande: 'w-full h-48 sm:w-48 sm:h-48',
                           };
                           const imageSize = template?.tamanho_imagem_grid || 'medio';
                           const finalClass = sizeClasses[imageSize as keyof typeof sizeClasses] || sizeClasses.medio;
