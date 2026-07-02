@@ -25,6 +25,7 @@ export function useLeadAnalytics(userId: string) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterPeriod, setFilterPeriod] = useState<'tudo' | 'semana' | 'mes' | 'ano'>('tudo');
 
   const fetchLeadsForAnalytics = useCallback(async () => {
     if (!userId) return;
@@ -71,8 +72,30 @@ export function useLeadAnalytics(userId: string) {
     };
   }, [userId, fetchLeadsForAnalytics]);
 
+  // Filtrar leads com base no período selecionado
+  const filteredLeads = useMemo(() => {
+    if (filterPeriod === 'tudo') return leads;
+
+    const now = new Date();
+    const cutoff = new Date();
+
+    if (filterPeriod === 'semana') {
+      cutoff.setDate(now.getDate() - 7);
+    } else if (filterPeriod === 'mes') {
+      cutoff.setDate(now.getDate() - 30);
+    } else if (filterPeriod === 'ano') {
+      cutoff.setDate(now.getDate() - 365);
+    }
+
+    return leads.filter((lead) => {
+      if (!lead.created_at) return false;
+      const date = new Date(lead.created_at);
+      return date >= cutoff;
+    });
+  }, [leads, filterPeriod]);
+
   const metrics = useMemo((): LeadAnalyticsMetrics => {
-    const totalLeads = leads.length;
+    const totalLeads = filteredLeads.length;
 
     const statusCounts = {
       novo: 0,
@@ -86,7 +109,7 @@ export function useLeadAnalytics(userId: string) {
     let closedValue = 0;
     let lostValue = 0;
 
-    leads.forEach((lead) => {
+    filteredLeads.forEach((lead) => {
       const status = lead.status || 'novo';
       if (status in statusCounts) {
         statusCounts[status as keyof typeof statusCounts]++;
@@ -151,7 +174,7 @@ export function useLeadAnalytics(userId: string) {
       monthlyGroups[key] = { recebidos: 0, fechados: 0 };
     }
 
-    leads.forEach((lead) => {
+    filteredLeads.forEach((lead) => {
       const date = new Date(lead.created_at);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
@@ -186,12 +209,14 @@ export function useLeadAnalytics(userId: string) {
       funnelData,
       monthlyTrend,
     };
-  }, [leads]);
+  }, [filteredLeads]);
 
   return {
     metrics,
     loading,
     error,
+    filterPeriod,
+    setFilterPeriod,
     refetch: fetchLeadsForAnalytics,
   };
 }

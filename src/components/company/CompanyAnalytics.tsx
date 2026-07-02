@@ -16,7 +16,9 @@ export function CompanyAnalytics({ userId }: CompanyAnalyticsProps) {
   const { transactions, categories, loading: loadingTransactions } = useCompanyTransactions(userId);
   const {
     metrics: leadMetrics,
-    loading: loadingLeads
+    loading: loadingLeads,
+    filterPeriod,
+    setFilterPeriod
   } = useLeadAnalytics(userId);
   
   const {
@@ -329,11 +331,32 @@ export function CompanyAnalytics({ userId }: CompanyAnalyticsProps) {
       ) : (
         /* Aba de Leads */
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h2 className="text-2xl font-bold dark:text-white">Métricas de Leads e Conversão</h2>
-            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/20 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900/35 text-xs text-blue-700 dark:text-blue-400 font-medium">
-              <Sparkles className="w-4 h-4" />
-              Atualizado em tempo real
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+                {(['semana', 'mes', 'ano', 'tudo'] as const).map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => setFilterPeriod(period)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      filterPeriod === period
+                        ? 'bg-white dark:bg-[#0a1628] text-blue-600 dark:text-blue-450 shadow-sm font-bold'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {period === 'semana' && 'Esta Semana'}
+                    {period === 'mes' && 'Este Mês'}
+                    {period === 'ano' && 'Este Ano'}
+                    {period === 'tudo' && 'Todo Período'}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="hidden xs:flex items-center gap-2 bg-blue-50 dark:bg-blue-950/20 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900/35 text-xs text-blue-700 dark:text-blue-400 font-medium">
+                <Sparkles className="w-4 h-4" />
+                Tempo Real
+              </div>
             </div>
           </div>
 
