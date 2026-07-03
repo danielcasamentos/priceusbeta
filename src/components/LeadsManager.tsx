@@ -60,8 +60,6 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [leads, setLeads] = useState<LeadWithReview[]>([]);
   const [contracts, setContracts] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [partnerShareInput, setPartnerShareInput] = useState('');
-  const [sharingLead, setSharingLead] = useState(false);
   const [followupType, setFollowupType] = useState<'padrao' | 'desconto' | 'brinde'>('padrao');
   const [followupDiscountPercent, setFollowupDiscountPercent] = useState<number>(10);
   const [followupCouponCode, setFollowupCouponCode] = useState<string>('FECHARHOJE');
@@ -78,12 +76,18 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [whatsappMessageBody, setWhatsappMessageBody] = useState<string>('');
   const [disponibilidadeLead, setDisponibilidadeLead] = useState<AvailabilityResult | null>(null);
   const [editingLeadQuote, setEditingLeadQuote] = useState<{lead: Lead | null, detalhes: LeadOrcamentoDetalhe | null}>({lead: null, detalhes: null});
+  const [importingLeadData, setImportingLeadData] = useState<any | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportJsonModal, setShowImportJsonModal] = useState(false);
+  const [jsonImportText, setJsonImportText] = useState('');
+  const [isImportingJson, setIsImportingJson] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingIds, setDeletingIds] = useState(new Set<string>());
   const [deleteConfirmSingle, setDeleteConfirmSingle] = useState<string | null>(null);
   const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
+  const [duplicatingIds, setDuplicatingIds] = useState(new Set<string>());
   const planLimits = usePlanLimits();
   const { solicitarAvaliacao } = useReviewRequest();
 
@@ -262,88 +266,52 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
-  const handleSendLeadToPartner = async () => {
-    if (!selectedLead || !partnerShareInput) return;
-    setSharingLead(true);
+  const handleDuplicateLead = async (lead: LeadWithReview) => {
+    if (duplicatingIds.has(lead.id)) return;
+    setDuplicatingIds(prev => new Set(prev).add(lead.id));
     try {
-      const searchTerm = partnerShareInput.trim();
-      const igNormalized = searchTerm.replace('@', '').toLowerCase();
-
-      // Busca por email ou instagram ou slug no profiles
-      const { data: profiles, error: searchError } = await supabase
-        .from('profiles')
-        .select('user_id, nome_profissional')
-        .or(`email_recebimento.eq.${searchTerm},instagram.ilike.%${igNormalized}%,slug_usuario.eq.${searchTerm}`)
-        .limit(1);
-
-      if (searchError) throw searchError;
-
-      if (!profiles || profiles.length === 0) {
-        alert('❌ Parceiro não encontrado no PriceUs. Verifique se o e-mail ou Instagram está correto.');
-        return;
-      }
-
-      const partner = profiles[0];
-      const partnerUserId = partner.user_id;
-
-      if (partnerUserId === userId) {
-        alert('⚠️ Você não pode enviar o lead para si mesmo.');
-        return;
-      }
-
-      // Obter nome do perfil atual para a notificação
-      const { data: myProfile } = await supabase
-        .from('profiles')
-        .select('nome_profissional')
-        .eq('id', userId)
-        .single();
-
-      // Duplica o lead
-      const leadCopy = {
-        template_id: selectedLead.template_id,
-        user_id: partnerUserId,
-        nome_cliente: selectedLead.nome_cliente,
-        email_cliente: selectedLead.email_cliente,
-        telefone_cliente: selectedLead.telefone_cliente,
-        dados_formulario: selectedLead.dados_formulario,
-        orcamento_detalhe: selectedLead.orcamento_detalhe,
-        valor_total: selectedLead.valor_total,
+      const { error } = await supabase.from('leads').insert([{
+        user_id: userId,
+        template_id: lead.template_id,
+        nome_cliente: lead.nome_cliente ? `${lead.nome_cliente} (cópia)` : '(cópia)',
+        email_cliente: lead.email_cliente,
+        telefone_cliente: lead.telefone_cliente,
+        valor_total: lead.valor_total,
+        dados_formulario: lead.dados_formulario,
+        orcamento_detalhe: lead.orcamento_detalhe,
         status: 'novo',
-        session_id: selectedLead.session_id ? `${selectedLead.session_id}_shared_${Date.now()}` : null,
-        url_origem: selectedLead.url_origem,
-        user_agent: selectedLead.user_agent,
-        tempo_preenchimento_segundos: selectedLead.tempo_preenchimento_segundos,
-        data_evento: selectedLead.data_evento,
-        cidade_evento: selectedLead.cidade_evento,
-        tipo_evento: selectedLead.tipo_evento,
-      };
-
-      const { data: newLead, error: insertError } = await supabase
-        .from('leads')
-        .insert([leadCopy])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      // Cria a notificação para o parceiro
-      await supabase.from('notifications').insert({
-        user_id: partnerUserId,
-        type: 'new_lead',
-        message: `Você recebeu um lead enviado por ${myProfile?.nome_profissional || 'um parceiro'}!`,
-        related_id: newLead.id,
-        link: '/dashboard/leads',
-      });
-
-      alert(`✅ Lead compartilhado com sucesso com ${partner.nome_profissional}!`);
-      setPartnerShareInput('');
+        data_evento: lead.data_evento,
+        cidade_evento: lead.cidade_evento,
+        tipo_evento: lead.tipo_evento,
+        origem: 'duplicado',
+      }]);
+      if (error) throw error;
+      await loadLeads();
     } catch (err: any) {
-      console.error('Erro ao enviar lead para parceiro:', err);
-      alert('❌ Ocorreu um erro ao compartilhar o lead.');
+      console.error('Erro ao duplicar lead:', err);
+      alert(`❌ Não foi possível duplicar o lead: ${err?.message || 'Erro desconhecido'}`);
     } finally {
-      setSharingLead(false);
+      setDuplicatingIds(prev => { const s = new Set(prev); s.delete(lead.id); return s; });
     }
   };
+
+  const getLeadExportCode = (lead: LeadWithReview) => {
+    const exportCity = lead.cidade_evento ? (cities[lead.cidade_evento]?.nome || lead.cidade_evento) : '';
+    const exportData = {
+      nome_cliente: lead.nome_cliente,
+      email_cliente: lead.email_cliente,
+      telefone_cliente: lead.telefone_cliente,
+      valor_total: lead.valor_total,
+      dados_formulario: lead.dados_formulario,
+      orcamento_detalhe: lead.orcamento_detalhe,
+      data_evento: lead.data_evento,
+      cidade_evento: exportCity,
+      tipo_evento: lead.tipo_evento,
+    };
+    return JSON.stringify(exportData);
+  };
+
+
 
   const loadDetalhesOrcamento = async (lead: Lead, updateState: boolean): Promise<LeadOrcamentoDetalhe | null> => {
     if (!lead.orcamento_detalhe) return null;
@@ -362,18 +330,26 @@ export function LeadsManager({ userId }: { userId: string }) {
     if (produtosRaw.length > 0 && typeof produtosRaw[0] === 'object' && ('produto_id' in produtosRaw[0])) {
       const ids = produtosRaw.map((p: any) => p.produto_id || p.id);
       const { data: fetchProdutos } = await supabase.from('produtos').select('*').in('id', ids);
-      if (fetchProdutos) {
+      if (fetchProdutos && fetchProdutos.length > 0) {
         produtosCompletos = fetchProdutos;
         produtosRaw.forEach((p: any) => {
           selectedProdutosDict[p.produto_id || p.id] = p.quantidade;
+        });
+      } else {
+        // Se os produtos não forem achados localmente (ex: lead importador), usa os dados que vieram no orcamento_detalhe
+        produtosCompletos = produtosRaw;
+        produtosRaw.forEach((p: any) => {
+          selectedProdutosDict[p.produto_id || p.id] = p.quantidade || 1;
         });
       }
     } else if (savedOrcamentoDetalhe.selectedProdutos) {
       Object.assign(selectedProdutosDict, savedOrcamentoDetalhe.selectedProdutos);
       const ids = Object.keys(selectedProdutosDict);
       const { data: fetchProdutos } = await supabase.from('produtos').select('*').in('id', ids);
-      if (fetchProdutos) {
+      if (fetchProdutos && fetchProdutos.length > 0) {
         produtosCompletos = fetchProdutos;
+      } else {
+        produtosCompletos = savedOrcamentoDetalhe.produtos || [];
       }
     } else {
       produtosCompletos = savedOrcamentoDetalhe.produtos || [];
@@ -574,6 +550,69 @@ export function LeadsManager({ userId }: { userId: string }) {
       loadContractsForLeads();
     }, 60000);
 
+    return () => clearInterval(refreshInterval);
+  }, []);
+
+  // Efeito para interceptar link de compartilhamento e carregar modal de importação
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const encodedLead = params.get('import_lead');
+    if (encodedLead) {
+      try {
+        const decodedString = decodeURIComponent(escape(atob(encodedLead)));
+        const leadData = JSON.parse(decodedString);
+        if (leadData && leadData.nome_cliente) {
+          setImportingLeadData(leadData);
+        }
+      } catch (e) {
+        console.error('Erro ao decodificar lead para importação:', e);
+      }
+      
+      // Limpar parâmetro da URL de forma limpa sem regerar a renderização
+      const newParams = new URLSearchParams(window.location.search);
+      newParams.delete('import_lead');
+      const queryStr = newParams.toString();
+      const newUrl = window.location.pathname + (queryStr ? `?${queryStr}` : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
+  const handleExecuteImportLead = async () => {
+    if (!importingLeadData) return;
+    setIsImporting(true);
+    try {
+      const newLead = {
+        user_id: userId,
+        nome_cliente: importingLeadData.nome_cliente,
+        email_cliente: importingLeadData.email_cliente,
+        telefone_cliente: importingLeadData.telefone_cliente,
+        valor_total: importingLeadData.valor_total,
+        dados_formulario: importingLeadData.dados_formulario,
+        orcamento_detalhe: importingLeadData.orcamento_detalhe,
+        status: 'novo',
+        data_evento: importingLeadData.data_evento,
+        cidade_evento: importingLeadData.cidade_evento,
+        tipo_evento: importingLeadData.tipo_evento,
+      };
+
+      const { error } = await supabase
+        .from('leads')
+        .insert([newLead]);
+
+      if (error) throw error;
+
+      alert(`✅ Lead de ${importingLeadData.nome_cliente} importado com sucesso para sua lista!`);
+      setImportingLeadData(null);
+      loadLeads();
+    } catch (err: any) {
+      console.error('Erro ao importar lead:', err);
+      alert('❌ Ocorreu um erro ao importar o lead.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  useEffect(() => {
     const channel = supabase
       .channel('realtime-leads')
       .on<Lead>(
@@ -593,17 +632,12 @@ export function LeadsManager({ userId }: { userId: string }) {
             if (prevLeads.some(l => l.id === newLead.id)) return prevLeads;
             return [newLead, ...prevLeads];
           });
-
-          // NOTA: A notificação real (do banco) é criada no QuotePage e o som é gerado pelo hook useNotifications.
-          // Comentado para evitar som e alerta duplicado:
-          // new Audio('/notification.mp3').play().catch(() => {});
         }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(refreshInterval);
     };
   }, [userId]);
 
@@ -1252,15 +1286,28 @@ export function LeadsManager({ userId }: { userId: string }) {
             Excluir ({selectedIds.length})
           </button>
         )}
-        {/* Botão Novo Lead */}
-        <button
-          id="btn-novo-lead"
-          onClick={() => setShowNewLeadModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg font-semibold text-sm transition-all shadow-sm ml-auto"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-          Novo Lead
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Botão Importar Código */}
+          <button
+            onClick={() => setShowImportJsonModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-150 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-250 border dark:border-white/5 rounded-lg font-semibold text-sm transition-all shadow-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Importar Código
+          </button>
+          
+          {/* Botão Novo Lead */}
+          <button
+            id="btn-novo-lead"
+            onClick={() => setShowNewLeadModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg font-semibold text-sm transition-all shadow-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+            Novo Lead
+          </button>
+        </div>
         <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg">
           <button 
             onClick={() => setLeadsViewMode('grid')}
@@ -1388,6 +1435,21 @@ export function LeadsManager({ userId }: { userId: string }) {
                         👁️
                       </button>
                       <button
+                        onClick={() => handleDuplicateLead(lead)}
+                        disabled={duplicatingIds.has(lead.id)}
+                        className={`text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 ${duplicatingIds.has(lead.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
+                        title="Duplicar lead"
+                      >
+                        {duplicatingIds.has(lead.id) ? (
+                          <div className="w-4 h-4 inline-block border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
                         onClick={() => setDeleteConfirmSingle(lead.id)}
                         className={`text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 ${deletingIds.has(lead.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
                         title="Excluir lead"
@@ -1480,6 +1542,21 @@ export function LeadsManager({ userId }: { userId: string }) {
                     title="Contrato"
                   >
                     <FileSignature className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDuplicateLead(lead)}
+                    disabled={duplicatingIds.has(lead.id)}
+                    className={`p-1.5 text-indigo-500 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 rounded-lg transition-colors ${duplicatingIds.has(lead.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`}
+                    title="Duplicar lead"
+                  >
+                    {duplicatingIds.has(lead.id) ? (
+                      <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                      </svg>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1847,30 +1924,55 @@ export function LeadsManager({ userId }: { userId: string }) {
                   </div>
                 </div>
 
-                {/* Enviar Lead para Parceiro */}
-                <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-4 mt-4">
-                  <h3 className="font-semibold text-gray-700 dark:text-white mb-2 flex items-center gap-2">
+                {/* Exportar Lead para Co-parceria */}
+                <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-4 mt-4 space-y-3">
+                  <h3 className="font-semibold text-gray-700 dark:text-white mb-1 flex items-center gap-2">
                     <Users className="w-4 h-4 text-blue-500" />
-                    Enviar Lead para Parceiro (Co-parceria)
+                    Compartilhar Lead (Copiar Código)
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                    Compartilhe este lead instantaneamente com outro profissional cadastrado no PriceUs.
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Copie o código do lead abaixo e envie para o seu parceiro. Ele poderá colar esse código no painel dele para importar este lead de forma simples.
                   </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="E-mail ou Instagram do parceiro..."
-                      value={partnerShareInput}
-                      onChange={(e) => setPartnerShareInput(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-350 dark:border-gray-700 rounded-lg bg-white dark:bg-[#07101f] text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
+                  
+                  <div className="bg-gray-50 dark:bg-[#07101f] p-3 rounded-lg border dark:border-[rgba(255,255,255,.05)] flex flex-col gap-2.5">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedLead ? getLeadExportCode(selectedLead) : ''}
+                        className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-100 dark:bg-[#0c192c] text-xs text-gray-500 dark:text-gray-400 select-all outline-none font-mono truncate"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (selectedLead) {
+                            const code = getLeadExportCode(selectedLead);
+                            await navigator.clipboard.writeText(code);
+                            alert('📋 Código do lead copiado com sucesso! Envie para seu parceiro PriceUs.');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap"
+                      >
+                        Copiar Código
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={handleSendLeadToPartner}
-                      disabled={sharingLead || !partnerShareInput}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+                      onClick={() => {
+                        if (selectedLead) {
+                          const code = getLeadExportCode(selectedLead);
+                          const clientName = selectedLead.nome_cliente || 'Cliente';
+                          const totalVal = selectedLead.valor_total ? formatCurrency(selectedLead.valor_total) : 'não informado';
+                          const msg = `Olá! Quero compartilhar os dados de um Lead do PriceUs com você:\n\n*Cliente:* ${clientName}\n*Valor:* ${totalVal}\n\n*Código de Importação:* \`\`\`${code}\`\`\`\n\nCopie o código de importação acima, abra seu painel do PriceUs, clique em "Importar Código" e cole para carregar.`;
+                          const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+                          window.open(waUrl, '_blank');
+                        }
+                      }}
+                      className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                     >
-                      {sharingLead ? 'Enviando...' : 'Enviar Lead'}
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      Enviar Código via WhatsApp para Parceiro
                     </button>
                   </div>
                 </div>
@@ -2236,8 +2338,159 @@ export function LeadsManager({ userId }: { userId: string }) {
           }}
         />
       )}
-      </> // fecha aba Timeline
-      )} {/* fecha mainTab === 'leads' */}
+      
+      {/* Modal de Importação de Lead Compartilhado */}
+      {importingLeadData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,.08)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-left">
+            <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 mx-auto">
+              <ClipboardList className="w-6 h-6" />
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Importar Lead Compartilhado</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Você recebeu dados de um cliente compartilhado por <strong>{importingLeadData.shared_by}</strong>.
+              </p>
+            </div>
+
+            <div className="p-4 bg-gray-50 dark:bg-[#07101f] rounded-xl border dark:border-[rgba(255,255,255,.05)] text-sm space-y-2">
+              <div>
+                <span className="text-gray-400 text-xs uppercase block font-semibold">Cliente</span>
+                <span className="text-gray-800 dark:text-white font-medium">{importingLeadData.nome_cliente}</span>
+              </div>
+              {importingLeadData.telefone_cliente && (
+                <div>
+                  <span className="text-gray-400 text-xs uppercase block font-semibold">WhatsApp</span>
+                  <span className="text-gray-800 dark:text-white font-medium">{importingLeadData.telefone_cliente}</span>
+                </div>
+              )}
+              {importingLeadData.valor_total > 0 && (
+                <div>
+                  <span className="text-gray-400 text-xs uppercase block font-semibold">Valor Estimado</span>
+                  <span className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(importingLeadData.valor_total)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setImportingLeadData(null)}
+                className="flex-1 px-4 py-2 bg-gray-150 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Ignorar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteImportLead}
+                disabled={isImporting}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                {isImporting ? 'Importando...' : 'Importar Lead'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Importação Manual de Lead via Código */}
+      {showImportJsonModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in">
+          <div className="bg-white dark:bg-[#0a1628] border dark:border-[rgba(255,255,255,.08)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-left">
+            <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Importar Lead via Código</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Cole o código do lead que você copiou do seu parceiro para importá-lo instantaneamente para a sua conta.
+              </p>
+            </div>
+
+            <textarea
+              rows={6}
+              value={jsonImportText}
+              onChange={(e) => setJsonImportText(e.target.value)}
+              placeholder='Cole o código do lead aqui...'
+              className="w-full p-3 border border-gray-350 dark:border-gray-700 rounded-xl bg-white dark:bg-[#07101f] text-xs font-mono text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportJsonModal(false);
+                  setJsonImportText('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-150 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!jsonImportText.trim()) {
+                    alert('⚠️ Por favor, cole o código do lead.');
+                    return;
+                  }
+                  setIsImportingJson(true);
+                  try {
+                    const parsedData = JSON.parse(jsonImportText.trim());
+                    if (!parsedData || !parsedData.nome_cliente) {
+                      throw new Error('Formato do lead inválido. O campo "nome_cliente" é obrigatório.');
+                    }
+                    
+                    // Associa o lead importado ao primeiro template do próprio usuário para que ele possa gerenciar no painel dele
+                    const firstTemplateId = Object.keys(templates)[0] || '';
+
+                    const newLead = {
+                      user_id: userId,
+                      template_id: firstTemplateId || parsedData.template_id,
+                      nome_cliente: parsedData.nome_cliente,
+                      email_cliente: parsedData.email_cliente,
+                      telefone_cliente: parsedData.telefone_cliente,
+                      valor_total: parsedData.valor_total,
+                      dados_formulario: parsedData.dados_formulario,
+                      orcamento_detalhe: parsedData.orcamento_detalhe,
+                      status: 'novo',
+                      data_evento: parsedData.data_evento,
+                      cidade_evento: parsedData.cidade_evento,
+                      tipo_evento: parsedData.tipo_evento,
+                    };
+
+                    const { error } = await supabase
+                      .from('leads')
+                      .insert([newLead]);
+
+                    if (error) throw error;
+
+                    alert(`✅ Lead importado com sucesso!`);
+                    setShowImportJsonModal(false);
+                    setJsonImportText('');
+                    loadLeads();
+                  } catch (err: any) {
+                    console.error('Erro ao importar código:', err);
+                    const errMsg = err?.message || err?.details || JSON.stringify(err) || 'Verifique se o código foi copiado corretamente.';
+                    alert(`❌ Não foi possível importar o lead.\n\n${errMsg}`);
+                  } finally {
+                    setIsImportingJson(false);
+                  }
+                }}
+                disabled={isImportingJson}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                {isImportingJson ? 'Importando...' : 'Confirmar Importação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>
+      )}
 
     </div>
   );

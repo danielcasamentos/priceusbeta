@@ -12,7 +12,7 @@ import {
 
 // ─── Constante da versão atual ────────────────────────────────────────────────
 const CURRENT_VERSION = '3.1.0';
-const STORAGE_KEY = 'priceus_changelog_seen_version';
+const STORAGE_KEY = 'priceus_changelog_seen_date';
 
 // ─── Dados do changelog ───────────────────────────────────────────────────────
 const CHANGELOG_ENTRIES = [
@@ -80,8 +80,9 @@ export function ChangelogModal() {
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
-    const seenVersion = localStorage.getItem(STORAGE_KEY);
-    if (seenVersion !== CURRENT_VERSION) {
+    const today = new Date().toISOString().split('T')[0];
+    const seenDate = localStorage.getItem(STORAGE_KEY);
+    if (seenDate !== today) {
       // Pequeno delay para não sobrepor o carregamento da página
       const t = setTimeout(() => setVisible(true), 1200);
       return () => clearTimeout(t);
@@ -90,7 +91,8 @@ export function ChangelogModal() {
 
   const handleClose = () => {
     setClosing(true);
-    localStorage.setItem(STORAGE_KEY, CURRENT_VERSION);
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(STORAGE_KEY, today);
     setTimeout(() => {
       setVisible(false);
       setClosing(false);
