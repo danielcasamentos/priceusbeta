@@ -13,6 +13,7 @@ import { formatCurrency } from './utils';
 
 export interface Product {
   id: string;
+  provedor_id?: string | null;
   nome: string;
   valor: number;
   permite_multiplos?: boolean;

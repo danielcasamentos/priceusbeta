@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp } from 'lucide-react';
+import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp, Users, Share2 } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkTemplateSlugAvailability } from '../lib/slugUtils';
 import { ProductList } from './ProductList';
 import { PaymentMethodEditor } from './PaymentMethodEditor';
@@ -15,6 +15,7 @@ import { TemplateEditorWithThemeSelector } from './TemplateEditorWithThemeSelect
 
 interface Produto {
   id?: string;
+  provedor_id?: string | null;
   nome: string;
   resumo: string;
   valor: number;
@@ -86,6 +87,11 @@ interface Template {
   // Deslocamento
   ocultar_taxa_deslocamento?: boolean;
   exibir_duracao_produto?: boolean;
+  // Collab
+  collab_ativo?: boolean;
+  collab_regra_deslocamento?: string;
+  collab_valores_manuais?: Record<string, number>;
+  exibir_nome_parceiro?: boolean;
 }
 
 interface TemplateEditorProps {
@@ -104,7 +110,9 @@ const DIAS_SEMANA = [
 ];
 
 export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
-  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'upsell' | 'config'>('produtos');
+  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'upsell' | 'config' | 'collab'>('produtos');
+  const [collabProfiles, setCollabProfiles] = useState<Record<string, { nome_profissional?: string; nome_admin?: string; nome?: string }>>({});
+
   const [template, setTemplate] = useState<Template | null>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
@@ -117,6 +125,120 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
   const [userSlug, setUserSlug] = useState('');
+
+  // Estados e handler para importação de produto de collab
+  const [showImportCollab, setShowImportCollab] = useState(false);
+  const [collabProdCode, setCollabProdCode] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleImportCollabProduct = async () => {
+    if (!collabProdCode.trim() || !templateId) return;
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      // 1. Buscar detalhes do produto
+      const { data: extProd, error: fetchError } = await supabase
+        .from('produtos')
+        .select('*')
+        .eq('id', collabProdCode.trim())
+        .single();
+
+      if (fetchError || !extProd) {
+        throw new Error('Produto de Collab não encontrado. Verifique se o código está correto.');
+      }
+
+      // 2. Buscar o template associado para descobrir o ID do dono dele (user_id)
+      const { data: extTemplate, error: tempError } = await supabase
+        .from('templates')
+        .select('user_id')
+        .eq('id', extProd.template_id)
+        .single();
+
+      if (tempError || !extTemplate) {
+        throw new Error('Não foi possível identificar o proprietário deste produto.');
+      }
+
+      const extTemplateOwner = extTemplate.user_id;
+
+      if (extTemplateOwner === userId) {
+        throw new Error('Este produto já pertence ao seu próprio usuário!');
+      }
+
+      // 3. Montar objeto para inserção local
+      const newProductData = {
+        template_id: templateId,
+        nome: extProd.nome,
+        resumo: extProd.resumo || '',
+        valor: extProd.valor,
+        unidade: extProd.unidade,
+        obrigatorio: false,
+        ordem: produtos.length,
+        imagem_url: extProd.imagem_url || null,
+        mostrar_imagem: extProd.mostrar_imagem ?? false,
+        imagens: extProd.imagens || [],
+        carrossel_automatico: extProd.carrossel_automatico ?? false,
+        permite_multiplas_unidades: extProd.permite_multiplas_unidades ?? true,
+        desconto_percentual: extProd.desconto_percentual ?? 0,
+        destacar_produto: extProd.destacar_produto ?? false,
+        destaque_texto: extProd.destaque_texto || null,
+        duracao_minutos: extProd.duracao_minutos || null,
+        keywords_upsell: extProd.keywords_upsell || null,
+        provedor_id: extProd.provedor_id || extTemplateOwner,
+      };
+
+      // 4. Salvar no banco
+      const { data: savedData, error: insertError } = await supabase
+        .from('produtos')
+        .insert(newProductData)
+        .select('*')
+        .single();
+
+      if (insertError || !savedData) {
+        throw insertError || new Error('Erro ao salvar produto importado.');
+      }
+
+      alert(`✅ Produto "${savedData.nome}" importado com sucesso!`);
+      
+      setShowImportCollab(false);
+      setCollabProdCode('');
+      
+      // 5. Recarregar todos os dados do template
+      await loadTemplateData();
+    } catch (err: any) {
+      console.error('Erro ao importar produto de collab:', err);
+      setImportError(err.message || 'Erro inesperado ao importar o produto.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchCollabProfiles = async () => {
+      const uniqueProviderIds = Array.from(new Set(produtos.map(p => p.provedor_id).filter(id => id && id !== userId)));
+      if (uniqueProviderIds.length === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, nome_profissional, nome_admin, nome')
+          .in('id', uniqueProviderIds);
+        if (error) throw error;
+
+        const profileMap: Record<string, any> = {};
+        data?.forEach(p => {
+          profileMap[p.id] = p;
+        });
+        setCollabProfiles(profileMap);
+      } catch (err) {
+        console.error('Erro ao carregar perfis de collab:', err);
+      }
+    };
+
+    if (produtos.length > 0 && userId) {
+      fetchCollabProfiles();
+    }
+  }, [produtos, userId]);
   const [configSaveStatus, setConfigSaveStatus] = useState<{
     saving: boolean;
     message: string | null;
@@ -649,6 +771,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     { id: 'precos', label: 'Preços', icon: MapPin },
     { id: 'aparencia', label: 'Aparência', icon: Palette },
     { id: 'upsell', label: 'Upsell', icon: TrendingUp },
+    { id: 'collab', label: 'Colaboração', icon: Users },
     { id: 'config', label: 'Configurações', icon: null },
   ];
 
@@ -1091,6 +1214,242 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </p>
                     </div>
                   )}
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'collab' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold dark:text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-blue-600" />
+                    Configurações de Colaboração (Collab)
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Apresente serviços de parceiros e divida os leads de forma automatizada.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={template?.collab_ativo || false}
+                    onChange={(e) => handleUpdateTemplateConfig('collab_ativo', e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {template?.collab_ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </label>
+              </div>
+
+              {!template?.collab_ativo && (
+                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 rounded-lg p-4 text-sm text-blue-700 dark:text-blue-400">
+                  🤝 Ative a colaboração para vincular produtos de parceiros a este orçamento e configurar o rateio de taxas.
+                </div>
+              )}
+
+              {template?.collab_ativo && (
+                <>
+                  {/* Configurações básicas */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4 space-y-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      1. Exibição e Apresentação
+                    </h4>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={template?.exibir_nome_parceiro ?? true}
+                        onChange={(e) => handleUpdateTemplateConfig('exibir_nome_parceiro', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Exibir assinatura do parceiro no orçamento</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Mostra "Parceria com [Nome]" abaixo do nome do produto no orçamento público.</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Regras de Deslocamento */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4 space-y-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                      2. Divisão de Taxas Fixas (Deslocamento)
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Escolha como taxas fixas de deslocamento ou adicionais cobradas do cliente serão divididas entre os profissionais contratados.
+                    </p>
+                    <select
+                      value={template?.collab_regra_deslocamento || 'owner_100'}
+                      onChange={(e) => handleUpdateTemplateConfig('collab_regra_deslocamento', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="owner_100">100% para o Dono do Template (Você)</option>
+                      <option value="equal_split">Dividido igualmente entre os contratados (ex: 50/50)</option>
+                      <option value="proportional">Dividido proporcionalmente ao valor dos pacotes de cada um</option>
+                      <option value="manual_split">Definir porcentagem manual personalizada</option>
+                    </select>
+
+                    {/* Divisão manual */}
+                    {template?.collab_regra_deslocamento === 'manual_split' && (
+                      <div className="mt-4 p-4 bg-gray-50 dark:bg-[#0a1628] border border-gray-200 dark:border-[rgba(255,255,255,.08)] rounded-lg space-y-3">
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                          Definir Porcentagens de Rateio:
+                        </p>
+                        {/* Dono do template */}
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Você (Dono do Template)</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={template?.collab_valores_manuais?.owner ?? 100}
+                              onChange={(e) => {
+                                const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                const currentVals = template?.collab_valores_manuais || {};
+                                handleUpdateTemplateConfig('collab_valores_manuais', {
+                                  ...currentVals,
+                                  owner: val
+                                });
+                              }}
+                              className="w-20 px-2 py-1 text-center border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded"
+                            />
+                            <span className="text-sm text-gray-500">%</span>
+                          </div>
+                        </div>
+
+                        {/* Colaboradores identificados nos produtos */}
+                        {Array.from(new Set(produtos.map(p => p.provedor_id).filter(id => id && id !== userId))).map(provId => {
+                          const profile = collabProfiles[provId || ''];
+                          const nomeParceiro = profile?.nome_profissional || profile?.nome_admin || profile?.nome || `Parceiro (${provId?.slice(0, 8)})`;
+                          return (
+                            <div key={provId} className="flex items-center justify-between gap-4 border-t border-gray-200 dark:border-[rgba(255,255,255,.08)] pt-3">
+                              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{nomeParceiro}</span>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={template?.collab_valores_manuais?.[provId || ''] ?? 0}
+                                  onChange={(e) => {
+                                    const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                    const currentVals = template?.collab_valores_manuais || {};
+                                    handleUpdateTemplateConfig('collab_valores_manuais', {
+                                      ...currentVals,
+                                      [provId || '']: val
+                                    });
+                                  }}
+                                  className="w-20 px-2 py-1 text-center border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded"
+                                />
+                                <span className="text-sm text-gray-500">%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Visualização de Produtos Importados */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-gray-900 dark:text-white">
+                        3. Produtos Importados de Collab
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowImportCollab(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Importar Produto de Parceiro
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Produtos vinculados a este template que pertencem a seus parceiros de co-parceria:
+                    </p>
+
+                    {/* Caixa de Importação Collab */}
+                    {showImportCollab && (
+                      <div className="bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-900/30 rounded-xl p-4 space-y-3 shadow-sm">
+                        <h5 className="font-semibold text-purple-900 dark:text-purple-300 text-xs flex items-center gap-2">
+                          🤝 Importar Produto via Código
+                        </h5>
+                        <p className="text-xs text-purple-700 dark:text-purple-400">
+                          Cole o código do produto (ID) enviado pelo seu parceiro de Collab abaixo:
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={collabProdCode}
+                            onChange={(e) => setCollabProdCode(e.target.value)}
+                            placeholder="Cole o código do produto (Ex: UUID)"
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                            disabled={isImporting}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleImportCollabProduct}
+                            disabled={isImporting || !collabProdCode.trim()}
+                            className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                          >
+                            {isImporting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                            Importar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowImportCollab(false);
+                              setCollabProdCode('');
+                              setImportError(null);
+                            }}
+                            className="px-2.5 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                        {importError && (
+                          <p className="text-xs text-red-650 dark:text-red-400 font-semibold mt-1">{importError}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {produtos.filter(p => p.provedor_id && p.provedor_id !== userId).length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 dark:bg-[#07101f] border border-dashed border-gray-300 dark:border-[rgba(255,255,255,.08)] rounded-lg text-sm text-gray-500">
+                        Nenhum produto de parceiro vinculado a este template no momento.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {produtos.filter(p => p.provedor_id && p.provedor_id !== userId).map(p => {
+                          const profile = collabProfiles[p.provedor_id || ''];
+                          const nomeParceiro = profile?.nome_profissional || profile?.nome_admin || profile?.nome || 'Carregando parceiro...';
+                          return (
+                            <div key={p.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#0a1628] border border-gray-200 dark:border-[rgba(255,255,255,.08)] rounded-lg">
+                              {p.imagem_url ? (
+                                <img src={p.imagem_url} alt={p.nome} className="w-12 h-12 object-cover rounded" />
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-200 dark:bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400">Sem Foto</div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{p.nome}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  Fornecedor: <span className="font-semibold text-blue-600">{nomeParceiro}</span>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className="text-sm font-semibold text-gray-900 dark:text-white">R$ {p.valor.toFixed(2).replace('.', ',')}</div>
+                                {p.desconto_percentual && p.desconto_percentual > 0 ? (
+                                  <div className="text-xs text-green-600 font-semibold">{p.desconto_percentual}% OFF</div>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

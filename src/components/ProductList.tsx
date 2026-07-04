@@ -126,8 +126,6 @@ export function ProductList({
   };
 
   useEffect(() => {
-    // Atualizar produtos locais quando houver mudanças no array de produtos
-    // Isso inclui: novos produtos, remoções, ou alterações (como upload de imagens)
     const productsChanged = products.length !== localProducts.length ||
       products.some((p, i) => {
         const local = localProducts[i];
@@ -212,7 +210,6 @@ export function ProductList({
                 onProductSaved={(productId) => onProductSaved?.(index, productId)}
               />
             ))}
-
           </div>
         </SortableContext>
       </DndContext>

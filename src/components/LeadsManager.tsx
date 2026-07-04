@@ -48,6 +48,10 @@ interface TemplateFromDB {
   ocultar_valores_intermediarios: boolean;
   ocultar_taxa_deslocamento?: boolean;
   limitar_parcelas_pelo_evento?: boolean;
+  collab_ativo?: boolean;
+  exibir_nome_parceiro?: boolean;
+  collab_regra_deslocamento?: 'owner_100' | 'equal_split' | 'proportional' | 'manual_split';
+  collab_valores_manuais?: Record<string, number>;
 }
 
 
@@ -58,6 +62,15 @@ interface LeadWithReview extends Lead {
 
 export function LeadsManager({ userId }: { userId: string }) {
   const [leads, setLeads] = useState<LeadWithReview[]>([]);
+  const [collabProfiles, setCollabProfiles] = useState<Record<string, { id: string; nome_profissional?: string; nome_admin?: string; nome?: string }>>({});
+
+  const isCollabLead = (lead: any) => {
+    const prods = lead.orcamento_detalhe?.produtos || [];
+    const upsells = lead.orcamento_detalhe?.upsell_produtos || [];
+    const hasCollabProds = prods.some((p: any) => p.provedor_id && p.provedor_id !== lead.user_id && p.provedor_id !== userId);
+    const hasCollabUpsells = upsells.some((p: any) => p.provedor_id && p.provedor_id !== lead.user_id && p.provedor_id !== userId);
+    return hasCollabProds || hasCollabUpsells;
+  };
   const [contracts, setContracts] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [followupType, setFollowupType] = useState<'padrao' | 'desconto' | 'brinde'>('padrao');
@@ -217,6 +230,70 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   }, [selectedLead]);
 
+  // Efeito para importação automática de lead via link com parâmetro query '?import=...'
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const importCode = params.get('import');
+    if (importCode && userId) {
+      // Remove o parâmetro 'import' da URL para evitar re-importação no refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('import');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+      
+      handleAutoImportFromUrl(importCode);
+    }
+  }, [userId]);
+
+  const handleAutoImportFromUrl = async (importCode: string) => {
+    try {
+      let rawText = importCode.trim();
+      // Decodificar Base64
+      if (!rawText.startsWith('{') && !rawText.startsWith('[')) {
+        try {
+          rawText = decodeURIComponent(escape(atob(rawText)));
+        } catch (e) {
+          console.warn('Falha ao decodificar Base64:', e);
+        }
+      }
+      
+      const parsedData = JSON.parse(rawText);
+      if (!parsedData || !parsedData.nome_cliente) {
+        throw new Error('Formato do lead inválido. O campo "nome_cliente" é obrigatório.');
+      }
+      
+      // Associa ao primeiro template do usuário
+      const firstTemplateId = Object.keys(templates)[0] || '';
+
+      const newLead = {
+        user_id: userId,
+        template_id: firstTemplateId || parsedData.template_id,
+        nome_cliente: parsedData.nome_cliente,
+        email_cliente: parsedData.email_cliente,
+        telefone_cliente: parsedData.telefone_cliente,
+        valor_total: parsedData.valor_total,
+        dados_formulario: parsedData.dados_formulario,
+        orcamento_detalhe: parsedData.orcamento_detalhe,
+        status: 'novo',
+        data_evento: parsedData.data_evento,
+        cidade_evento: parsedData.cidade_evento,
+        tipo_evento: parsedData.tipo_evento,
+      };
+
+      const { error } = await supabase
+        .from('leads')
+        .insert([newLead]);
+
+      if (error) throw error;
+
+      alert(`🤝 Lead de parceria para "${parsedData.nome_cliente}" importado com sucesso!`);
+      loadLeads();
+    } catch (err: any) {
+      console.error('Erro ao importar lead via URL:', err);
+      const errMsg = err?.message || err?.details || JSON.stringify(err) || 'Verifique se o link foi gerado corretamente.';
+      alert(`❌ Não foi possível importar o lead de collab automaticamente.\n\n${errMsg}`);
+    }
+  };
+
   const loadBusyDaysPreview = async (ownerUserId: string) => {
     setLoadingBusy(true);
     try {
@@ -372,6 +449,29 @@ export function LeadsManager({ userId }: { userId: string }) {
       paymentMethod: formaPagamentoCompleta,
       upsell_produtos: savedOrcamentoDetalhe.upsell_produtos || []
     };
+
+    // Buscar perfis de collab para exibição e exportação no modal
+    const providerIds = new Set<string>();
+    produtosCompletos.forEach((p: any) => { if (p.provedor_id && p.provedor_id !== lead.user_id && p.provedor_id !== userId) providerIds.add(p.provedor_id); });
+    (savedOrcamentoDetalhe.upsell_produtos || []).forEach((p: any) => { if (p.provedor_id && p.provedor_id !== lead.user_id && p.provedor_id !== userId) providerIds.add(p.provedor_id); });
+    const uniqueIds = Array.from(providerIds);
+
+    if (uniqueIds.length > 0) {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, nome_profissional, nome_admin, nome')
+          .in('id', uniqueIds);
+
+        const profileMap: Record<string, any> = {};
+        data?.forEach(p => {
+          profileMap[p.id] = p;
+        });
+        setCollabProfiles(prev => ({ ...prev, ...profileMap }));
+      } catch (err) {
+        console.error('Erro ao carregar perfis de collab no LeadsManager:', err);
+      }
+    }
 
     if (updateState) {
       setDetalhesOrcamento(orcamentoEnriquecido);
@@ -1366,10 +1466,15 @@ export function LeadsManager({ userId }: { userId: string }) {
                         className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-[#0a1628] border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded focus:ring-blue-500"
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap flex items-center">
+                    <td className="px-6 py-4 whitespace-nowrap flex items-center gap-2">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {lead.nome_cliente || 'Não informado'}
                       </div>
+                      {isCollabLead(lead) && (
+                        <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm" title="Lead com produtos de co-parceria (Collab)">
+                          🤝 Collab
+                        </span>
+                      )}
                       {contracts[lead.id] && (
                         <span title="Contrato gerado para este lead"><CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400 ml-2" /></span>
                       )}
@@ -1485,6 +1590,11 @@ export function LeadsManager({ userId }: { userId: string }) {
                 <div className="mb-3 pr-6">
                   <h3 className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-2" title={lead.nome_cliente || undefined}>
                     {lead.nome_cliente || 'Não informado'}
+                    {isCollabLead(lead) && (
+                      <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm" title="Lead com produtos de co-parceria (Collab)">
+                        🤝 Collab
+                      </span>
+                    )}
                     {contracts[lead.id] && (
                       <span title="Contrato Gerado">
                         <CheckSquare className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -1637,23 +1747,63 @@ export function LeadsManager({ userId }: { userId: string }) {
                     </div>
                   ) : detalhesOrcamento && detalhesOrcamento.selectedProdutos && (
                     <>
-                      {Object.keys(detalhesOrcamento.selectedProdutos).length > 0 && (
-                        <div className="mt-4">
-                          <h4 className="font-semibold text-gray-600 dark:text-[rgba(255,255,255,0.8)]">Itens Selecionados:</h4>
-                          <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-gray-800 dark:text-gray-200">
-                            {(detalhesOrcamento?.produtos || [])
-                              .filter(
-                                p =>
-                                  detalhesOrcamento?.selectedProdutos?.[p.id] > 0
-                              )
-                              .map(p => (
-                                <li key={p.id}>{`${
-                                  detalhesOrcamento.selectedProdutos[p.id]
-                                }x ${p.nome} (${formatCurrency(p.valor)})`}</li>
-                              ))}
-                          </ul>
-                        </div>
-                      )}
+                      {Object.keys(detalhesOrcamento.selectedProdutos).length > 0 && (() => {
+                        const selectedProds = (detalhesOrcamento.produtos || []).filter(
+                          p => detalhesOrcamento.selectedProdutos?.[p.id] > 0
+                        );
+                        const selectedUpsells = detalhesOrcamento.upsell_produtos || [];
+
+                        // Agrupar por provedor_id
+                        const groups: Record<string, { prods: any[], upsells: any[] }> = {};
+
+                        // Inicializar grupo do dono
+                        groups[selectedLead.user_id || userId] = { prods: [], upsells: [] };
+
+                        selectedProds.forEach(p => {
+                          const provId = p.provedor_id || selectedLead.user_id || userId;
+                          if (!groups[provId]) groups[provId] = { prods: [], upsells: [] };
+                          groups[provId].prods.push(p);
+                        });
+
+                        selectedUpsells.forEach(p => {
+                          const provId = p.provedor_id || selectedLead.user_id || userId;
+                          if (!groups[provId]) groups[provId] = { prods: [], upsells: [] };
+                          groups[provId].upsells.push(p);
+                        });
+
+                        return (
+                          <div className="mt-4 space-y-4">
+                            <h4 className="font-semibold text-gray-700 dark:text-white border-b border-gray-100 dark:border-white/[0.05] pb-2">
+                              📦 Itens Selecionados por Provedor:
+                            </h4>
+                            {Object.entries(groups).map(([provId, group]) => {
+                              if (group.prods.length === 0 && group.upsells.length === 0) return null;
+
+                              const isOwner = provId === selectedLead.user_id || provId === userId;
+                              const profile = collabProfiles[provId];
+                              const providerName = isOwner 
+                                ? 'Seus Serviços (Dono do Orçamento)' 
+                                : `🤝 Collab: ${profile?.nome_profissional || profile?.nome_admin || profile?.nome || 'Parceiro'}`;
+
+                              return (
+                                <div key={provId} className="bg-gray-50 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-100 dark:border-white/[0.05]">
+                                  <h5 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-2 uppercase tracking-wider">
+                                    {providerName}
+                                  </h5>
+                                  <ul className="list-disc list-inside space-y-1 text-sm text-gray-800 dark:text-gray-200">
+                                    {group.prods.map(p => (
+                                      <li key={p.id}>{`${detalhesOrcamento.selectedProdutos[p.id]}x ${p.nome} (${formatCurrency(p.valor)})`}</li>
+                                    ))}
+                                    {group.upsells.map(p => (
+                                      <li key={p.id}>{`• ${p.nome} (Upsell) - (${formatCurrency(p.valor)})`}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                       {detalhesOrcamento.paymentMethod && (
                         <div className="mt-3">
                           <p className="text-sm"><strong>Forma de Pagamento:</strong> {detalhesOrcamento.paymentMethod.nome}</p>
@@ -1724,6 +1874,126 @@ export function LeadsManager({ userId }: { userId: string }) {
                     ))}
                   </div>
                 </div>
+
+                {/* Painel Collab de Fechamento / Compartilhamento */}
+                {isCollabLead(selectedLead) && detalhesOrcamento && (
+                  <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-4 mt-4 bg-purple-50/20 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                    <h3 className="font-semibold text-gray-700 dark:text-white mb-2 flex items-center gap-2">
+                      🤝 Compartilhamento de Collab (Fechar com Parceiros)
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      Este orçamento possui serviços de parceiros. Quando a venda for fechada, você pode exportar a parte de cada um para que eles importem em suas contas.
+                    </p>
+
+                    <div className="space-y-3">
+                      {Object.keys(collabProfiles).map(provId => {
+                        const prods = (detalhesOrcamento.produtos || []).filter(
+                          p => p.provedor_id === provId && detalhesOrcamento.selectedProdutos?.[p.id] > 0
+                        );
+                        const upsells = (detalhesOrcamento.upsell_produtos || []).filter(
+                          p => p.provedor_id === provId
+                        );
+
+                        if (prods.length === 0 && upsells.length === 0) return null;
+
+                        const profile = collabProfiles[provId];
+                        const partnerName = profile?.nome_profissional || profile?.nome_admin || profile?.nome || 'Parceiro';
+
+                        // Calcular subtotal de produtos do parceiro
+                        const baseVal = prods.reduce((sum, p) => sum + p.valor * (detalhesOrcamento.selectedProdutos[p.id] || 1), 0);
+                        const upsellVal = upsells.reduce((sum, p) => sum + p.valor, 0);
+                        let subtotalParceiro = baseVal + upsellVal;
+
+                        // Aplicar desconto de cupom proporcional se houver
+                        const breakdown = detalhesOrcamento.priceBreakdown;
+                        if (breakdown.descontoCupom > 0 && breakdown.subtotal > 0) {
+                          const pctCupom = breakdown.descontoCupom / breakdown.subtotal;
+                          subtotalParceiro -= subtotalParceiro * pctCupom;
+                        }
+
+                        // Rateio de Taxa de Deslocamento
+                        let taxaParceiro = 0;
+                        const totalTaxa = breakdown.ajusteGeografico?.taxa || 0;
+
+                        if (totalTaxa > 0) {
+                          // Buscar regra do template
+                          const templateInfo = templates[selectedLead.template_id];
+                          const regra = templateInfo?.collab_regra_deslocamento || 'owner_100';
+
+                          if (regra === 'equal_split') {
+                            // Conta quantos provedores únicos participam com produtos ativos
+                            const activeProviders = new Set<string>();
+                            (detalhesOrcamento.produtos || []).forEach((p: any) => {
+                              if (detalhesOrcamento.selectedProdutos?.[p.id] > 0) activeProviders.add(p.provedor_id || selectedLead.user_id || userId);
+                            });
+                            (detalhesOrcamento.upsell_produtos || []).forEach((p: any) => {
+                              activeProviders.add(p.provedor_id || selectedLead.user_id || userId);
+                            });
+                            const count = activeProviders.size;
+                            taxaParceiro = totalTaxa / (count || 1);
+                          } else if (regra === 'proportional') {
+                            taxaParceiro = totalTaxa * (subtotalParceiro / (breakdown.subtotal || 1));
+                          } else if (regra === 'manual_split') {
+                            const pctManual = templateInfo?.collab_valores_manuais?.[provId] ?? 0;
+                            taxaParceiro = (totalTaxa * pctManual) / 100;
+                          }
+                        }
+
+                        const valorTotalParceiro = subtotalParceiro + taxaParceiro;
+
+                        // Função para gerar o link de importação do parceiro
+                        const handleExportPartnerLead = () => {
+                          const exportData = {
+                            nome_cliente: selectedLead.nome_cliente,
+                            email_cliente: selectedLead.email_cliente,
+                            telefone_cliente: selectedLead.telefone_cliente,
+                            valor_total: valorTotalParceiro,
+                            dados_formulario: selectedLead.dados_formulario,
+                            orcamento_detalhe: {
+                              produtos: prods,
+                              upsell_produtos: upsells,
+                              selectedProdutos: prods.reduce((acc, p) => ({ ...acc, [p.id]: detalhesOrcamento.selectedProdutos[p.id] }), {}),
+                              priceBreakdown: {
+                                subtotal: subtotalParceiro,
+                                total: valorTotalParceiro,
+                                ajusteGeografico: {
+                                  taxa: taxaParceiro,
+                                  percentual: 0
+                                }
+                              }
+                            },
+                            data_evento: selectedLead.data_evento,
+                            cidade_evento: selectedLead.cidade_evento,
+                            tipo_evento: selectedLead.tipo_evento,
+                          };
+
+                          const base64Code = btoa(unescape(encodeURIComponent(JSON.stringify(exportData))));
+                          const importUrl = `${window.location.origin}${window.location.pathname}?import=${base64Code}`;
+                          navigator.clipboard.writeText(importUrl);
+                          alert(`✅ Link de importação de Collab para ${partnerName} copiado com sucesso! Envie o link a ele pelo WhatsApp.`);
+                        };
+
+                        return (
+                          <div key={provId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-white dark:bg-[#07101f] border border-purple-100 dark:border-purple-900/30 rounded-lg gap-2 shadow-sm">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-800 dark:text-white">{partnerName}</p>
+                              <p className="text-xs text-gray-500">
+                                Valor Calculado: <span className="font-bold text-purple-700 dark:text-purple-400">{formatCurrency(valorTotalParceiro)}</span> (Produtos: {formatCurrency(subtotalParceiro)} + Taxa: {formatCurrency(taxaParceiro)})
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleExportPartnerLead}
+                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 shrink-0"
+                            >
+                              📋 Copiar Link
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Painel de Agendamento de Ensaio */}
                 <div className="border-t border-gray-200 dark:border-[rgba(255,255,255,0.08)] pt-4 mt-4">
@@ -2439,7 +2709,15 @@ export function LeadsManager({ userId }: { userId: string }) {
                   }
                   setIsImportingJson(true);
                   try {
-                    const parsedData = JSON.parse(jsonImportText.trim());
+                    let rawText = jsonImportText.trim();
+                    if (!rawText.startsWith('{') && !rawText.startsWith('[')) {
+                      try {
+                        rawText = decodeURIComponent(escape(atob(rawText)));
+                      } catch (e) {
+                        console.warn('Falha ao decodificar Base64, tentando parse direto:', e);
+                      }
+                    }
+                    const parsedData = JSON.parse(rawText);
                     if (!parsedData || !parsedData.nome_cliente) {
                       throw new Error('Formato do lead inválido. O campo "nome_cliente" é obrigatório.');
                     }

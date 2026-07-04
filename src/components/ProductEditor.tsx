@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy } from 'lucide-react';
+import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2 } from 'lucide-react';
 import { ImageUploadService } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
@@ -833,7 +833,26 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
       </div>
 
       {/* Botões de Ação */}
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
+        {product.id && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(product.id!);
+                alert('📋 Código de colaboração do produto copiado com sucesso! Envie este código para seu parceiro de Collab para que ele possa importar este produto no orçamento dele.');
+              } catch (err) {
+                console.error('Erro ao copiar código:', err);
+                alert(`Código do produto: ${product.id}`);
+              }
+            }}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-medium transition-colors border border-purple-200"
+            title="Copiar código de colaboração deste produto"
+          >
+            <Share2 className="w-4 h-4" />
+            Exportar Collab
+          </button>
+        )}
         {onDuplicate && (
           <button
             type="button"

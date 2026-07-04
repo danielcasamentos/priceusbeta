@@ -165,136 +165,57 @@ serve(async (req) => {
       })
     }
 
-    // --- SE FOR LEAD FINAL: SUPORTE A CO-PARCERIA (SPLIT DE LEADS) ---
-    console.log('👥 Iniciando verificação de provedores para split de leads...')
-    const selectedProds = orcamentoDetalhe.produtos || []
-    const selectedUpsells = orcamentoDetalhe.upsell_produtos || []
-    const allProdIds = [
-      ...selectedProds.map((p: any) => p.produto_id),
-      ...selectedUpsells.map((p: any) => p.produto_id)
-    ].filter(Boolean)
-
-    let dbProducts: any[] = []
-    if (allProdIds.length > 0) {
-      const { data, error } = await supabaseAdmin
-        .from('produtos')
-        .select('id, provedor_id, valor, desconto_percentual')
-        .in('id', allProdIds)
-      if (error) {
-        console.error('Erro ao buscar provedores dos produtos:', error)
-      } else {
-        dbProducts = data || []
-      }
+    // --- SE FOR LEAD FINAL ---
+    console.log('📥 Normalizando dados para inserção do lead final (collab unificado)...')
+    const leadDataFinal = {
+      template_id: templateId,
+      user_id: userId,
+      nome_cliente: nomeCliente,
+      email_cliente: emailCliente,
+      telefone_cliente: telefoneCliente,
+      dados_formulario: formData,
+      orcamento_detalhe: orcamentoDetalhe,
+      valor_total: valorTotal,
+      status: 'novo',
+      session_id: sessionId,
+      url_origem: urlOrigem,
+      user_agent: userAgent,
+      tempo_preenchimento_segundos: tempoPreenchimento,
+      data_evento: dataEvento,
+      cidade_evento: cidadeEvento,
+      tipo_evento: tipoEvento,
     }
 
-    const prodDetailsMap = new Map(dbProducts.map(p => [p.id, p]))
-    const grouped: Record<string, { prods: any[], upsells: any[], val: number }> = {}
+    console.log('📥 Inserindo lead final único na conta do dono do template...')
+    const { data: insertedLead, error: insertErr } = await supabaseAdmin
+      .from('leads')
+      .insert(leadDataFinal)
+      .select()
+      .single()
 
-    // Inicializa o grupo do dono do template
-    grouped[userId] = { prods: [], upsells: [], val: 0 }
-
-    // Agrupa produtos
-    for (const p of selectedProds) {
-      const details = prodDetailsMap.get(p.produto_id)
-      const provId = details?.provedor_id || userId
-      
-      if (!grouped[provId]) {
-        grouped[provId] = { prods: [], upsells: [], val: 0 }
-      }
-      
-      grouped[provId].prods.push(p)
-      const unitVal = details ? (details.valor * (1 - (details.desconto_percentual || 0) / 100)) : 0
-      grouped[provId].val += unitVal * Number(p.quantidade || 1)
+    if (insertErr) {
+      console.error('Erro ao inserir lead final:', insertErr)
+      throw insertErr
     }
 
-    // Agrupa upsell
-    for (const p of selectedUpsells) {
-      const details = prodDetailsMap.get(p.produto_id)
-      const provId = details?.provedor_id || userId
-
-      if (!grouped[provId]) {
-        grouped[provId] = { prods: [], upsells: [], val: 0 }
-      }
-
-      grouped[provId].upsells.push(p)
-      const unitVal = details ? (details.valor * (1 - (details.desconto_percentual || 0) / 100)) : (Number(p.valor) || 0)
-      grouped[provId].val += unitVal
+    // Notificação para o profissional (dono do template)
+    const msg = `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`
+    const notificationPayload = {
+      user_id: userId,
+      type: 'new_lead',
+      message: msg,
+      related_id: insertedLead.id,
+      link: '/dashboard/leads',
+    }
+    
+    const { error: notificationError } = await supabaseAdmin
+      .from('notifications')
+      .insert(notificationPayload)
+    if (notificationError) {
+      console.error('Erro ao criar notificação de lead:', notificationError)
     }
 
-    // Se o grupo do dono do template acabou vazio e há outros parceiros, mantemos o dono com R$ 0 ou tiramos se necessário.
-    // Para fins práticos, inserimos leads para cada provedor que tenha produtos selecionados.
-    let mainSavedLead = null
-
-    for (const [provId, group] of Object.entries(grouped)) {
-      if (group.prods.length === 0 && group.upsells.length === 0) {
-        continue // Pula provedores sem itens selecionados nesta proposta
-      }
-
-      const isMainOwner = provId === userId
-      const leadDataForProvider = {
-        template_id: templateId,
-        user_id: provId,
-        nome_cliente: nomeCliente,
-        email_cliente: emailCliente,
-        telefone_cliente: telefoneCliente,
-        dados_formulario: formData,
-        orcamento_detalhe: {
-          produtos: group.prods,
-          upsell_produtos: group.upsells,
-          forma_pagamento_id: orcamentoDetalhe.forma_pagamento_id || null,
-          priceBreakdown: orcamentoDetalhe.priceBreakdown || {},
-        },
-        valor_total: group.val,
-        status: 'novo',
-        session_id: sessionId ? `${sessionId}_${provId}` : null,
-        url_origem: urlOrigem,
-        user_agent: userAgent,
-        tempo_preenchimento_segundos: tempoPreenchimento,
-        data_evento: dataEvento,
-        cidade_evento: cidadeEvento,
-        tipo_evento: tipoEvento,
-      }
-
-      console.log(`📥 Inserindo lead para provedor ${provId} com valor ${group.val}`)
-      const { data: insertedLead, error: insertErr } = await supabaseAdmin
-        .from('leads')
-        .insert(leadDataForProvider)
-        .select()
-        .single()
-
-      if (insertErr) {
-        console.error(`Erro ao inserir lead para o provedor ${provId}:`, insertErr)
-        throw insertErr
-      }
-
-      // Notificação para o profissional
-      const msg = isMainOwner 
-        ? `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`
-        : `Você recebeu um lead compartilhado de ${nomeCliente || 'um cliente'}!`
-
-      const notificationPayload = {
-        user_id: provId,
-        type: 'new_lead',
-        message: msg,
-        related_id: insertedLead.id,
-        link: '/dashboard/leads',
-      }
-      
-      const { error: notificationError } = await supabaseAdmin
-        .from('notifications')
-        .insert(notificationPayload)
-      if (notificationError) {
-        console.error('Erro ao criar notificação de split lead:', notificationError)
-      }
-
-      if (isMainOwner) {
-        mainSavedLead = insertedLead
-      } else if (!mainSavedLead) {
-        mainSavedLead = insertedLead
-      }
-    }
-
-    return new Response(JSON.stringify(mainSavedLead), {
+    return new Response(JSON.stringify(insertedLead), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 201,
     })

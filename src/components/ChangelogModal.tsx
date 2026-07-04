@@ -8,14 +8,40 @@ import {
   X,
   ArrowRight,
   CheckCircle2,
+  Users,
+  Share2,
 } from 'lucide-react';
 
 // ─── Constante da versão atual ────────────────────────────────────────────────
-const CURRENT_VERSION = '3.1.0';
-const STORAGE_KEY = 'priceus_changelog_seen_date';
+const CURRENT_VERSION = '3.2.0';
+const STORAGE_KEY = 'priceus_changelog_seen_version';
 
 // ─── Dados do changelog ───────────────────────────────────────────────────────
 const CHANGELOG_ENTRIES = [
+  {
+    icon: Users,
+    color: '#a78bfa',
+    bg: 'rgba(167,139,250,0.12)',
+    title: '🤝 Co-Parcerias & Colaboração (Collab)',
+    description:
+      'Ative a co-parceria em seus orçamentos e defina regras flexíveis de rateio (split proporcional, manual, 100% dono ou divisão igual) com seus parceiros comerciais.',
+  },
+  {
+    icon: Share2,
+    color: '#3b82f6',
+    bg: 'rgba(59,130,246,0.12)',
+    title: '📋 Importação/Exportação de Produtos via Código',
+    description:
+      'Exporte produtos copiando seus códigos e permita que parceiros os importem diretamente na nova aba "Colaboração", vinculando o produto ao respectivo fornecedor de forma automatizada.',
+  },
+  {
+    icon: Zap,
+    color: '#10b981',
+    bg: 'rgba(16,185,129,0.12)',
+    title: '📈 Splits Diferidos & Exportação de Leads',
+    description:
+      'Veja leads integrados sinalizados com a tag "Collab", verifique os splits correspondentes a cada fornecedor e gere links inteligentes para exportar o lead de co-parceria para o painel de seus colaboradores.',
+  },
   {
     icon: Sparkles,
     color: '#3b82f6',
@@ -80,9 +106,8 @@ export function ChangelogModal() {
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const seenDate = localStorage.getItem(STORAGE_KEY);
-    if (seenDate !== today) {
+    const seenVersion = localStorage.getItem(STORAGE_KEY);
+    if (seenVersion !== CURRENT_VERSION) {
       // Pequeno delay para não sobrepor o carregamento da página
       const t = setTimeout(() => setVisible(true), 1200);
       return () => clearTimeout(t);
@@ -91,8 +116,7 @@ export function ChangelogModal() {
 
   const handleClose = () => {
     setClosing(true);
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem(STORAGE_KEY, today);
+    localStorage.setItem(STORAGE_KEY, CURRENT_VERSION);
     setTimeout(() => {
       setVisible(false);
       setClosing(false);

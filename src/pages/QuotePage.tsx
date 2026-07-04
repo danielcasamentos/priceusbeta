@@ -29,6 +29,7 @@ import { QuoteRevellon } from '../components/quote-themes/QuoteRevellon';
 
 interface Produto {
   id: string;
+  provedor_id?: string | null;
   nome: string;
   resumo: string;
   descricao?: string;
@@ -945,14 +946,13 @@ export function QuotePage() {
 
       console.log('[QuotePage] ✅ All data loaded successfully');
 
-      setTemplate(templateData);
-      setProfile(profileData);
-      setProdutos(produtosData || []);
-      setFormasPagamento(pagamentosData || []);
-      setCamposExtras(camposData || []);
-      setRetryCount(0);
+      // 🤝 Collab: Buscar perfis de parceiros se houver provedor_id
+      const allProductList = [
+        ...(produtosData || []),
+      ];
 
-      // 🎁 Carregar produtos de upsell se configurado
+      // Buscar produtos de upsell antes para unificar a busca de perfis de collab
+      let upsellData: any[] = [];
       if (
         templateData.upsell_ativo &&
         templateData.upsell_template_id &&
@@ -960,24 +960,75 @@ export function QuotePage() {
         templateData.upsell_produtos_ids.length > 0
       ) {
         try {
-          const { data: upsellData } = await supabase
+          const { data: fetchedUpsell } = await supabase
             .from('produtos')
             .select('*')
             .in('id', templateData.upsell_produtos_ids)
             .order('ordem');
-
-          // Deduplicação: remover produtos cujo nome já está no template principal
-          const mainNames = (produtosData || []).map((p: any) =>
-            p.nome.toLowerCase().trim()
-          );
-          const filtered = (upsellData || []).filter(
-            (p: any) => !mainNames.includes(p.nome.toLowerCase().trim())
-          );
-          setUpsellProdutos(filtered);
+          upsellData = fetchedUpsell || [];
         } catch (e) {
           console.warn('[QuotePage] ⚠️ Erro ao carregar produtos upsell:', e);
         }
       }
+
+      const uniqueProviderIds = Array.from(
+        new Set(
+          [
+            ...allProductList.map(p => p.provedor_id),
+            ...upsellData.map(p => p.provedor_id)
+          ].filter(id => id && id !== templateData.user_id)
+        )
+      );
+
+      const profileMap: Record<string, any> = {};
+      if (uniqueProviderIds.length > 0) {
+        try {
+          const { data: colabs } = await supabase
+            .from('profiles')
+            .select('id, nome_profissional, nome_admin, nome')
+            .in('id', uniqueProviderIds);
+          colabs?.forEach(p => {
+            profileMap[p.id] = p;
+          });
+        } catch (err) {
+          console.error('Erro ao carregar perfis de collab:', err);
+        }
+      }
+
+      // Processar nomes dos produtos com a assinatura de parceria
+      const processedProdutos = (produtosData || []).map((p: any) => {
+        if (templateData.collab_ativo && templateData.exibir_nome_parceiro && p.provedor_id && p.provedor_id !== templateData.user_id) {
+          const partner = profileMap[p.provedor_id];
+          const name = partner ? (partner.nome_profissional || partner.nome_admin || partner.nome) : '';
+          if (name) {
+            return { ...p, nome: `${p.nome} (🤝 Parceria: ${name})` };
+          }
+        }
+        return p;
+      });
+
+      const processedUpsell = upsellData.map((p: any) => {
+        if (templateData.collab_ativo && templateData.exibir_nome_parceiro && p.provedor_id && p.provedor_id !== templateData.user_id) {
+          const partner = profileMap[p.provedor_id];
+          const name = partner ? (partner.nome_profissional || partner.nome_admin || partner.nome) : '';
+          if (name) {
+            return { ...p, nome: `${p.nome} (🤝 Parceria: ${name})` };
+          }
+        }
+        return p;
+      });
+
+      // Deduplicação do upsell
+      const mainNames = processedProdutos.map((p: any) => p.nome.toLowerCase().trim());
+      const filteredUpsell = processedUpsell.filter((p: any) => !mainNames.includes(p.nome.toLowerCase().trim()));
+
+      setTemplate(templateData);
+      setProfile(profileData);
+      setProdutos(processedProdutos);
+      setFormasPagamento(pagamentosData || []);
+      setCamposExtras(camposData || []);
+      setUpsellProdutos(filteredUpsell);
+      setRetryCount(0);
 
       // Carregar configuração da agenda para verificação de disponibilidade
       const config = await getOrCreateAgendaConfig(templateData.user_id);
@@ -1631,7 +1682,7 @@ export function QuotePage() {
       window.location.href = waLink;
                 }
               }}
-              photographerName={profile?.nome_completo || profile?.nome_empresa}
+              photographerName={profile?.nome_profissional || profile?.nome_admin || profile?.nome}
               showRefreshButton={true}
             />
 
