@@ -48,6 +48,7 @@ interface TemplatesManagerProps {
 
 interface SortableTemplateCardProps {
   template: Template;
+  viewMode: 'grid' | 'list';
   onEdit: () => void;
   onEditName: () => void;
   onCopyUrl: () => void;
@@ -59,6 +60,7 @@ interface SortableTemplateCardProps {
 
 function SortableTemplateCard({
   template,
+  viewMode,
   onEdit,
   onEditName,
   onCopyUrl,
@@ -199,7 +201,7 @@ function SortableTemplateCard({
         </div>
 
         {/* Analytics Section */}
-        <TemplateAnalyticsSummary templateId={template.id} />
+        <TemplateAnalyticsSummary templateId={template.id} viewMode={viewMode} />
 
         <div className="mt-4 pt-3 border-t border-gray-100 dark:border-[rgba(255,255,255,0.08)] flex justify-center">
           <button
@@ -783,6 +785,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
                   <SortableTemplateCard
                     key={template.id}
                     template={template}
+                    viewMode={viewMode}
                     onEdit={() => onEditTemplate?.(template.id)}
                     onEditName={() => handleEditNameClick(template)}
                     onCopyUrl={() => copyTemplateUrl(template)}
