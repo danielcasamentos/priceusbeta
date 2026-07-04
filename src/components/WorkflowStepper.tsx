@@ -661,6 +661,50 @@ function ManageTemplatesModal({
   );
 }
 
+const SYSTEM_DEFAULT_TEMPLATES: WorkflowTemplate[] = [
+  {
+    id: 'sys-wedding',
+    user_id: 'system',
+    nome: '🎥 [Padrão] Casamento Completo',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    etapas: [
+      { label: 'Reunião de Alinhamento', description: 'Briefing final, alinhamento de horários e entrega do roteiro.', duracao_minutos: 60, ambiente: 'interno' },
+      { label: 'Ensaio Pré-Casamento', description: 'Sessão de fotos pré-wedding em local externo acordado.', duracao_minutos: 120, ambiente: 'externo' },
+      { label: 'Fotografar Casamento', description: 'Cobertura completa do making of, cerimônia e recepção.', duracao_minutos: 480, ambiente: 'externo' },
+      { label: 'Tratamento & Seleção', description: 'Fazer o backup, curadoria e tratamento de cor das fotos.', duracao_minutos: 240, ambiente: 'interno' },
+      { label: 'Entrega da Galeria Online', description: 'Envio do link da galeria digital finalizada para o casal.', duracao_minutos: 60, ambiente: 'interno' },
+      { label: 'Diagramação & Envio do Álbum', description: 'Montagem do layout do álbum e envio para a encadernadora.', duracao_minutos: 180, ambiente: 'interno' },
+    ],
+  },
+  {
+    id: 'sys-session',
+    user_id: 'system',
+    nome: '📸 [Padrão] Ensaio Fotográfico',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    etapas: [
+      { label: 'Planejamento do Ensaio', description: 'Definir locação, roupas e referências visuais com o cliente.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Sessão de Fotos', description: 'Execução do ensaio fotográfico (estúdio ou externa).', duracao_minutos: 120, ambiente: 'externo' },
+      { label: 'Curadoria & Edição', description: 'Criação do backup, seleção e pós-processamento das imagens.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Entrega Final', description: 'Envio dos arquivos tratados em alta resolução para download.', duracao_minutos: 30, ambiente: 'interno' },
+    ],
+  },
+  {
+    id: 'sys-event',
+    user_id: 'system',
+    nome: '🎉 [Padrão] Evento / Aniversário',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    etapas: [
+      { label: 'Ajuste de Cronograma', description: 'Verificar com a assessoria os horários e momentos chave.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Cobertura do Evento', description: 'Fotografia de protocolo, decoração e momentos dinâmicos da festa.', duracao_minutos: 240, ambiente: 'externo' },
+      { label: 'Edição das Imagens', description: 'Tratamento básico e organização em galeria digital.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Envio ao Cliente', description: 'Link para download e compartilhamento dos arquivos.', duracao_minutos: 30, ambiente: 'interno' },
+    ],
+  },
+];
+
 // ── WorkflowStepper (componente principal) ───────────────
 export function WorkflowStepper({
   leadId,
@@ -705,8 +749,10 @@ export function WorkflowStepper({
   const [showManageTemplates, setShowManageTemplates] = useState(false);
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const [showStartChoice, setShowStartChoice] = useState(false);
   const [highlightedStepId, setHighlightedStepId] = useState<string | null>(null);
   const templateMenuRef = useRef<HTMLDivElement>(null);
+  const startMenuRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [searchParams] = useSearchParams();
 
@@ -741,6 +787,9 @@ export function WorkflowStepper({
       if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
         setShowTemplateMenu(false);
       }
+      if (startMenuRef.current && !startMenuRef.current.contains(e.target as Node)) {
+        setShowStartChoice(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -753,7 +802,8 @@ export function WorkflowStepper({
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    setTemplates((data as WorkflowTemplate[]) || []);
+    const userTemplates = (data as WorkflowTemplate[]) || [];
+    setTemplates([...SYSTEM_DEFAULT_TEMPLATES, ...userTemplates]);
   };
 
   // Persistir workflow no Supabase
@@ -890,6 +940,10 @@ export function WorkflowStepper({
 
   // Deletar template
   const deleteTemplate = async (id: string) => {
+    if (id.startsWith('sys-')) {
+      alert('Modelos padrão do sistema não podem ser excluídos.');
+      return;
+    }
     await supabase.from('workflow_templates').delete().eq('id', id);
     setTemplates(prev => prev.filter(t => t.id !== id));
   };
@@ -902,12 +956,57 @@ export function WorkflowStepper({
           Nenhum workflow iniciado
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleIniciarWorkflow}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
-          </button>
+          <div ref={startMenuRef} className="relative">
+            <button
+              onClick={() => setShowStartChoice(!showStartChoice)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
+            </button>
+            
+            {showStartChoice && (
+              <div className="absolute bottom-full right-0 mb-1 w-64 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden py-1 text-left">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowStartChoice(false);
+                    await handleIniciarWorkflow();
+                  }}
+                  className="w-full text-left px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors border-b border-gray-100 dark:border-white/5"
+                >
+                  <span className="text-sm mt-0.5">🪄</span>
+                  <div>
+                    <div className="font-bold text-blue-600 dark:text-blue-400">Sugerir Inteligente</div>
+                    <div className="text-[10px] text-gray-400 font-normal mt-0.5">Analisa os produtos e gera etapas inteligentes automaticamente.</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStartChoice(false);
+                    setExpanded(true);
+                    updateWorkflow([{
+                      id: uuidv4(),
+                      label: 'Nova etapa',
+                      description: 'Descreva a tarefa...',
+                      deadline: '',
+                      status: 'pendente',
+                      duracao_minutos: null,
+                      horario_inicio: null,
+                      ambiente: 'externo',
+                    }]);
+                  }}
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors"
+                >
+                  <span className="text-sm mt-0.5">📝</span>
+                  <div>
+                    <div className="font-bold">Começar Vazio / Personalizado</div>
+                    <div className="text-[10px] text-gray-400 font-normal mt-0.5">Inicie do zero com uma única etapa personalizada.</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
           <div ref={templateMenuRef} className="relative">
             <button
               onClick={() => { setShowTemplateMenu(!showTemplateMenu); loadTemplates(); }}
