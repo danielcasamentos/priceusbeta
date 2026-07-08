@@ -64,6 +64,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     calendar_ics_url: '',
     auto_sync_enabled: false,
     last_calendar_sync: null as string | null,
+    bloquear_tarefas_internas: true,
+    bloquear_tarefas_externas: true,
   });
 
   const [importStatus, setImportStatus] = useState<{
@@ -113,6 +115,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
           calendar_ics_url: configData.calendar_ics_url || '',
           auto_sync_enabled: configData.auto_sync_enabled || false,
           last_calendar_sync: configData.last_calendar_sync || null,
+          bloquear_tarefas_internas: configData.bloquear_tarefas_internas ?? true,
+          bloquear_tarefas_externas: configData.bloquear_tarefas_externas ?? true,
         });
       }
 
@@ -1734,6 +1738,40 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </label>
                 <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] ml-7">
                   Quando ativo, o sistema verifica a disponibilidade de datas no orçamento
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    checked={configEdit.bloquear_tarefas_internas ?? true}
+                    onChange={(e) =>
+                      setConfigEdit({ ...configEdit, bloquear_tarefas_internas: e.target.checked })
+                    }
+                    className="w-5 h-5 text-indigo-600 dark:text-indigo-400 rounded focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <span className="font-medium text-gray-900 dark:text-white">Bloquear agenda com tarefas internas</span>
+                </label>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] ml-7">
+                  Quando ativo, tarefas internas cadastradas na agenda ocupam espaço de horários e bloqueiam novas vagas.
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    checked={configEdit.bloquear_tarefas_externas ?? true}
+                    onChange={(e) =>
+                      setConfigEdit({ ...configEdit, bloquear_tarefas_externas: e.target.checked })
+                    }
+                    className="w-5 h-5 text-indigo-600 dark:text-indigo-400 rounded focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <span className="font-medium text-gray-900 dark:text-white">Bloquear agenda com tarefas externas</span>
+                </label>
+                <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] ml-7">
+                  Quando ativo, tarefas externas (deslocamentos, visitas) ocupam vagas de horários no dia selecionado.
                 </p>
               </div>
 

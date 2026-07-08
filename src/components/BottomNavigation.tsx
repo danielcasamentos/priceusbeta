@@ -4,11 +4,6 @@ import {
   FileText, 
   Building, 
   ChevronUp,
-  Home,
-  TrendingUp,
-  BarChart3,
-  Lightbulb,
-  Settings,
   UserCircle,
   Sun,
   FileSignature,
@@ -43,14 +38,7 @@ const leadsSubItems = [
   { id: 'leads-finalizados', label: 'Finalizados', icon: CheckCircle2 },
 ];
 
-// Sub-itens do menu Empresa
-const empresaSubItems = [
-  { id: 'empresa-dashboard', label: 'Visão Geral', icon: Home },
-  { id: 'empresa-transacoes', label: 'Transações', icon: TrendingUp },
-  { id: 'empresa-analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'empresa-insights', label: 'Insights', icon: Lightbulb },
-  { id: 'empresa-dados', label: 'Dados', icon: Settings },
-];
+
 
 export function BottomNavigation({ currentPage, onPageChange }: BottomNavigationProps) {
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
@@ -86,17 +74,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
       setExpandedMenu(null);
       window.history.pushState(null, '', '/dashboard/leads?tab=finalizados');
       window.dispatchEvent(new PopStateEvent('popstate'));
-    } else if (itemId === 'empresa') {
-      // Toggle do submenu Empresa
-      if (expandedMenu === 'empresa') {
-        setExpandedMenu(null);
-      } else {
-        setExpandedMenu('empresa');
-      }
-    } else if (itemId.startsWith('empresa-')) {
-      // É um sub-item de Empresa
-      onPageChange(itemId);
-      setExpandedMenu(null);
+
     } else {
       // Navegação normal
       onPageChange(itemId);
@@ -106,7 +84,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
 
   const isCurrentPage = (itemId: string): boolean => {
     if (itemId === 'empresa') {
-      return currentPage.startsWith('empresa-');
+      return currentPage === 'empresa' || currentPage.startsWith('empresa-');
     }
     if (itemId === 'leads') {
       return currentPage === 'leads' || currentPage.startsWith('leads-');
@@ -121,7 +99,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
         <div className="flex justify-around items-center h-16 px-1">
           {mainItems.map((item) => {
             const isActive = isCurrentPage(item.id);
-            const isExpanded = (expandedMenu === 'empresa' && item.id === 'empresa') || (expandedMenu === 'leads' && item.id === 'leads');
+            const isExpanded = (expandedMenu === 'leads' && item.id === 'leads');
             
             return (
               <button
@@ -135,7 +113,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
               >
                 <div className="relative">
                   <item.icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px] drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]' : ''}`} />
-                  {(item.id === 'empresa' || item.id === 'leads') && (
+                  {(item.id === 'leads') && (
                     <ChevronUp 
                       className={`absolute -top-3 -right-2 w-3 h-3 transition-transform ${
                         isExpanded ? 'rotate-0' : 'rotate-180'
@@ -185,30 +163,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
           </div>
         )}
 
-        {/* Submenu Empresa Expandido */}
-        {expandedMenu === 'empresa' && (
-          <div className="absolute left-0 right-0 bottom-20 bg-[#022215]/95 backdrop-blur-md rounded-2xl border border-emerald-500/20 overflow-hidden shadow-2xl z-50">
-            <div className="max-h-64 overflow-y-auto">
-              {empresaSubItems.map((subItem) => {
-                const isSubItemActive = currentPage === subItem.id;
-                return (
-                  <button
-                    key={subItem.id}
-                    onClick={() => handleItemClick(subItem.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                      isSubItemActive
-                        ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
-                        : 'text-emerald-100/80 hover:text-emerald-100 hover:bg-emerald-500/10'
-                    }`}
-                  >
-                    <subItem.icon className="w-5 h-5" />
-                    <span className="font-medium">{subItem.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+
       </nav>
 
       {/* Faixa Animada (Upgrade) acima do bottom menu */}

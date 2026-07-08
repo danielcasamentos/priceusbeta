@@ -18,10 +18,11 @@ interface QuoteClassicoProps {
   camposExtrasData: Record<string, string>;
   setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
+  upsellSection?: React.ReactNode;
 }
 
 export function QuoteClassico(props: QuoteClassicoProps) {
-  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData } = props;
+  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, upsellSection } = props;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-50 via-white to-green-50">
@@ -248,6 +249,8 @@ export function QuoteClassico(props: QuoteClassicoProps) {
                 ))}
               </div>
             </div>
+
+            {upsellSection}
 
             <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-6 text-center border-2 border-blue-200">
               <p className="text-sm text-gray-600 mb-2">Valor Total</p>

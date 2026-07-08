@@ -73,14 +73,7 @@ export function Sidebar({
           id: 'empresa',
           label: 'Empresa',
           icon: Building,
-          section: 'gestao',
-          subItems: [
-            { id: 'empresa-dashboard', label: 'Visão Geral' },
-            { id: 'empresa-transacoes', label: 'Transações' },
-            { id: 'empresa-analytics', label: 'Analytics' },
-            { id: 'empresa-insights', label: 'Insights' },
-            { id: 'empresa-dados', label: 'Dados Empresariais' },
-          ]
+          section: 'gestao'
         },
       ]
     },
@@ -111,7 +104,7 @@ export function Sidebar({
 
   const isCurrentPage = (itemId: string) => {
     if (itemId === 'empresa') {
-      return currentPage.startsWith('empresa-');
+      return currentPage === 'empresa' || currentPage.startsWith('empresa-');
     }
     return currentPage === itemId;
   };
@@ -131,20 +124,18 @@ export function Sidebar({
         <div className="fixed inset-y-0 left-0 w-80 bg-white dark:bg-[#0a1628] shadow-xl overflow-y-auto transition-colors duration-300">
           <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)]">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleItemClick('profile')}
-                  title="Ir para Meu Perfil"
-                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-full p-0.5 hover:ring-2 hover:ring-green-500/50"
-                >
-                  {userPhoto ? (
-                    <img src={userPhoto} alt={userName} className="h-12 w-12 rounded-full object-cover border border-green-500/30" />
-                  ) : (
-                    <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 font-bold">
-                      {(userName || userEmail || 'U').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </button>
+              <button
+                onClick={() => handleItemClick('profile')}
+                title="Ir para Meu Perfil"
+                className="flex items-center gap-3 text-left cursor-pointer hover:opacity-80 transition-opacity rounded-xl p-1 -m-1 hover:bg-gray-100/50 dark:hover:bg-white/5"
+              >
+                {userPhoto ? (
+                  <img src={userPhoto} alt={userName} className="h-12 w-12 rounded-full object-cover border border-green-500/30" />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 font-bold">
+                    {(userName || userEmail || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h2 className="text-sm font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</h2>
                   <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">
@@ -154,7 +145,7 @@ export function Sidebar({
                     <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>
                   )}
                 </div>
-              </div>
+              </button>
               <div className="flex items-center gap-2">
                 <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white">
                   <X className="w-6 h-6" />
@@ -289,26 +280,24 @@ export function Sidebar({
     }`}>
           <div className="p-4 border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] flex items-center justify-between">
             {!isCollapsed && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleItemClick('profile')}
-                  title="Ir para Meu Perfil"
-                  className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-full p-0.5 hover:ring-2 hover:ring-green-500/50"
-                >
-                  {userPhoto ? (
-                    <img src={userPhoto} alt={userName} className="h-11 w-11 rounded-full object-cover border border-green-500/30" />
-                  ) : (
-                    <div className="h-11 w-11 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 font-bold">
-                      {(userName || userEmail || 'U').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </button>
+              <button
+                onClick={() => handleItemClick('profile')}
+                title="Ir para Meu Perfil"
+                className="flex items-center gap-3 text-left cursor-pointer hover:opacity-80 transition-opacity rounded-xl p-1.5 -ml-1.5 hover:bg-gray-100/50 dark:hover:bg-white/5"
+              >
+                {userPhoto ? (
+                  <img src={userPhoto} alt={userName} className="h-11 w-11 rounded-full object-cover border border-green-500/30" />
+                ) : (
+                  <div className="h-11 w-11 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-green-500/30 text-gray-700 dark:text-gray-200 font-bold">
+                    {(userName || userEmail || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,.45)] leading-tight">Seja bem-vindo,</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">{userName || userEmail?.split('@')[0] || 'Usuário'}</p>
                   {userEmail && <p className="text-xs text-gray-400 dark:text-[rgba(255,255,255,.35)] truncate max-w-[140px]">{userEmail}</p>}
                 </div>
-              </div>
+              </button>
             )}
             <div className="flex items-center gap-1 ml-auto">
               <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,.07)] dark:text-white" title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}>

@@ -35,6 +35,7 @@ export function QuoteDocumento(props: any) {
     renderLocationDateFields,
     isSubmitting, // Adicionado para o estado do botão
     handleResetQuote,
+    upsellSection,
   } = props;
 
   const tema = {
@@ -325,6 +326,9 @@ export function QuoteDocumento(props: any) {
                 ))}
               </div>
             </div>
+
+            {/* 🎁 Upselling */}
+            {upsellSection}
 
             {/* Formas de Pagamento */}
             {formasPagamento.length > 0 && (

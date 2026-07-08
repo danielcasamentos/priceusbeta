@@ -1,4 +1,5 @@
-import { MessageCircle, X } from 'lucide-react';
+import { useState } from 'react';
+import { MessageCircle, X, Edit3, Sparkles } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/utils';
 
 interface CobrancaModalProps {
@@ -20,6 +21,10 @@ export function CobrancaModal({
   dataVencimento,
   descricao,
 }: CobrancaModalProps) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('amigavel');
+  const [mensagemEditada, setMensagemEditada] = useState<string>('');
+  const [prevPropsKey, setPrevPropsKey] = useState<string>('');
+
   if (!isOpen) return null;
 
   const nomeExibido = clienteNome || 'Cliente';
@@ -60,12 +65,25 @@ export function CobrancaModal({
     },
   ];
 
-  const handleSend = (texto: string) => {
+  // Sincronizar props com estado local se mudar de cliente/transação
+  const currentPropsKey = `${clienteNome}-${valor}-${dataVencimento}-${descricao}`;
+  if (currentPropsKey !== prevPropsKey) {
+    setPrevPropsKey(currentPropsKey);
+    setSelectedTemplateId('amigavel');
+    setMensagemEditada(templates[0].texto);
+  }
+
+  const handleSelectTemplate = (id: string, texto: string) => {
+    setSelectedTemplateId(id);
+    setMensagemEditada(texto);
+  };
+
+  const handleSend = () => {
     let cleanPhone = clienteTelefone.replace(/\D/g, '');
     if (cleanPhone.length === 11 && !cleanPhone.startsWith('55')) {
       cleanPhone = '55' + cleanPhone;
     }
-    const encoded = encodeURIComponent(texto);
+    const encoded = encodeURIComponent(mensagemEditada);
     const url = `https://wa.me/${cleanPhone || ''}?text=${encoded}`;
     window.open(url, '_blank');
     onClose();
@@ -77,9 +95,12 @@ export function CobrancaModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">✉️ Escolher Mensagem de Cobrança</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-indigo-500" />
+              Escolher Mensagem de Cobrança
+            </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Selecione o tom de cobrança para enviar para {nomeExibido}
+              Selecione o tom de cobrança e personalize o texto para {nomeExibido}
             </p>
           </div>
           <button
@@ -91,58 +112,86 @@ export function CobrancaModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
           {/* Resumo da Pendência */}
           <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-900/30 rounded-2xl flex flex-wrap gap-x-6 gap-y-2 justify-between items-center text-sm">
             <div>
-              <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wider">Item a cobrar</p>
+              <p className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wider">Item a cobrar</p>
               <p className="font-bold text-gray-800 dark:text-gray-200 mt-0.5">{descricao}</p>
             </div>
             <div>
-              <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wider">Valor devido</p>
+              <p className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wider">Valor devido</p>
               <p className="font-black text-gray-900 dark:text-white mt-0.5 text-lg">{valorFormatado}</p>
             </div>
             <div>
-              <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wider">Atraso</p>
+              <p className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wider">Atraso</p>
               <p className="font-bold text-red-600 dark:text-red-400 mt-0.5">{diasVencidoText}</p>
             </div>
           </div>
 
-          {/* Cards de Opções */}
-          <div className="space-y-3">
-            {templates.map((tpl) => (
-              <div
-                key={tpl.id}
-                className="group relative p-5 bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 hover:border-blue-400 dark:hover:border-blue-500/50 rounded-2xl transition-all duration-200"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">{tpl.titulo}</h4>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{tpl.descricao}</p>
-                  </div>
-                  <button
-                    onClick={() => handleSend(tpl.texto)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    Enviar
-                  </button>
-                </div>
-                <div className="p-3 bg-white dark:bg-[#07101f] border border-gray-100 dark:border-white/5 rounded-xl text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
-                  {tpl.texto}
-                </div>
-              </div>
-            ))}
+          {/* Cards de Opções / Tons */}
+          <div>
+            <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block mb-2">
+              1. Escolha o tom de cobrança
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {templates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => handleSelectTemplate(tpl.id, tpl.texto)}
+                  className={`flex flex-col items-center gap-0.5 p-3 rounded-2xl border text-center transition-all ${
+                    selectedTemplateId === tpl.id
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                      : 'bg-gray-50 dark:bg-white/3 border-gray-200 dark:border-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                  }`}
+                >
+                  <span className="text-xs font-extrabold">{tpl.titulo}</span>
+                  <span className={`text-[9px] ${selectedTemplateId === tpl.id ? 'text-white/80' : 'text-gray-400'}`}>
+                    {tpl.id === 'amigavel' ? 'Suave' : tpl.id === 'direto' ? 'Direto' : 'Formal'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Área de Edição */}
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                <Edit3 className="w-3.5 h-3.5" />
+                2. Personalize a mensagem de cobrança
+              </label>
+              <span className="text-[10px] text-gray-400 font-medium">Caracteres: {mensagemEditada.length}</span>
+            </div>
+            <textarea
+              value={mensagemEditada}
+              onChange={(e) => setMensagemEditada(e.target.value)}
+              rows={5}
+              placeholder="Edite a mensagem..."
+              className="w-full px-4 py-3 text-sm rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-all leading-relaxed"
+            />
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50/50 dark:bg-indigo-950/15 p-2 rounded-xl border border-indigo-200/20">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>Dica: Ajuste os detalhes da cobrança ou anexe chaves Pix alternativas diretamente no texto.</span>
+            </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 dark:border-white/5 flex justify-end bg-gray-50 dark:bg-white/[0.02]">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-white/5 flex justify-between bg-gray-50 dark:bg-white/[0.02]">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl transition-all"
+            className="px-4 py-2.5 border border-gray-300 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl transition-all"
           >
             Cancelar
+          </button>
+          <button
+            onClick={handleSend}
+            className="flex items-center gap-1.5 px-5 py-2.5 bg-green-600 hover:bg-green-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-green-500/20 transition-all"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Enviar via WhatsApp
           </button>
         </div>
       </div>

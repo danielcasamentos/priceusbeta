@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { AuthProvider } from './lib/auth';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
@@ -47,55 +48,57 @@ function App() {
 
   return (
     <ThemeProvider>
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/success" element={<SuccessPage />} />
-          <Route path="/orcamento/:templateUuid" element={<QuotePage />} />
-          {/* Rotas do Dashboard DEVEM vir antes das rotas dinâmicas com :slugUsuario */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/:page"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          {/* Rotas públicas de tutoriais e com slug */}
-          <Route path="/tutoriais" element={<InteractiveTutorialsPage />} />
-          <Route path="/agendar/:leadId" element={<PublicBookingPage />} />
-          <Route path="/:slugUsuario" element={<PublicProfilePage />} />
-          <Route path="/:slugUsuario/:slugTemplate" element={<QuotePage />} />
-          <Route path="/avaliar/:token" element={<ReviewPage />} />
-          <Route path="/contrato/:token" element={<ContractSignPage />} />
-          <Route path="/contrato/:token/preview" element={<ContractPreviewPage />} />
-          <Route path="/verificar/:token" element={<ContractVerificationPage />} />
-          <Route path="/contrato/:token/completo" element={<ContractCompletePage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </div>
-    </Router>
+      <AuthProvider>
+        <Router>
+          <div className="App">
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/success" element={<SuccessPage />} />
+              <Route path="/orcamento/:templateUuid" element={<QuotePage />} />
+              {/* Rotas do Dashboard DEVEM vir antes das rotas dinâmicas com :slugUsuario */}
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/:page"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Rotas públicas de tutoriais e com slug */}
+              <Route path="/tutoriais" element={<InteractiveTutorialsPage />} />
+              <Route path="/agendar/:leadId" element={<PublicBookingPage />} />
+              <Route path="/:slugUsuario" element={<PublicProfilePage />} />
+              <Route path="/:slugUsuario/:slugTemplate" element={<QuotePage />} />
+              <Route path="/avaliar/:token" element={<ReviewPage />} />
+              <Route path="/contrato/:token" element={<ContractSignPage />} />
+              <Route path="/contrato/:token/preview" element={<ContractPreviewPage />} />
+              <Route path="/verificar/:token" element={<ContractVerificationPage />} />
+              <Route path="/contrato/:token/completo" element={<ContractCompletePage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </div>
+        </Router>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

@@ -18,10 +18,11 @@ interface QuoteMagazineProps {
   camposExtrasData: Record<string, string>;
   setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
+  upsellSection?: React.ReactNode;
 }
 
 export function QuoteMagazine(props: QuoteMagazineProps) {
-  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData } = props;
+  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, upsellSection } = props;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-100 font-serif">
@@ -261,7 +262,7 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                   </div>
                 ))}
               </div>
-            </div>
+            {upsellSection}
 
             <div className="bg-amber-50 rounded-xl p-6 text-center border-2 border-amber-600">
               <p className="text-sm text-amber-700 font-bold uppercase tracking-widest mb-2">Valor Total</p>

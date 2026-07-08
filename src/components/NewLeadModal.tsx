@@ -61,6 +61,33 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   const [status, setStatus] = useState<LeadStatus>('novo');
   const [notas, setNotas] = useState('');
 
+  // Cidades e Temporadas do Usuário
+  const [cidadesAjuste, setCidadesAjuste] = useState<any[]>([]);
+  const [temporadas, setTemporadas] = useState<any[]>([]);
+  
+  // Controle de cidade personalizada
+  const [selectedCidadeId, setSelectedCidadeId] = useState<string>('');
+  const [isCustomCity, setIsCustomCity] = useState(false);
+  const [customCityName, setCustomCityName] = useState('');
+  const [customCityPercent, setCustomCityPercent] = useState('0');
+  const [customCityTax, setCustomCityTax] = useState('0');
+  const [salvarCidadeLista, setSalvarCidadeLista] = useState(false);
+  const [estados, setEstados] = useState<any[]>([]);
+  const [selectedEstadoId, setSelectedEstadoId] = useState<string>('');
+  const [paises, setPaises] = useState<any[]>([]);
+  const [selectedPaisId, setSelectedPaisId] = useState<string>('');
+
+  // Ajustes Manuais
+  const [descontoManual, setDescontoManual] = useState('0');
+  const [acrescimoManual, setAcrescimoManual] = useState('0');
+
+  // Cupom de Desconto
+  const [cupomCodigo, setCupomCodigo] = useState('');
+  const [cupomAtivo, setCupomAtivo] = useState(false);
+  const [cupomDesconto, setCupomDesconto] = useState(0);
+  const [cupomMensagem, setCupomMensagem] = useState('');
+  const [validandoCupom, setValidandoCupom] = useState(false);
+
   // Disponibilidade
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
@@ -81,18 +108,64 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     return acc + p.valor * (1 - desc / 100);
   }, 0);
 
-  // Carrega templates ao abrir
+  // Carrega templates e cidades ao abrir
   useEffect(() => {
-    async function loadTemplates() {
-      const { data } = await supabase
-        .from('templates')
-        .select('id, nome_template')
-        .eq('user_id', userId)
-        .order('nome_template');
-      if (data) setTemplates(data);
+    async function loadInitialData() {
+      try {
+        const { data: templatesData } = await supabase
+          .from('templates')
+          .select('id, nome_template')
+          .eq('user_id', userId)
+          .order('nome_template');
+        if (templatesData) setTemplates(templatesData);
+
+        const { data: cidadesData } = await supabase
+          .from('cidades_ajuste')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('ativo', true)
+          .order('nome');
+        if (cidadesData) setCidadesAjuste(cidadesData);
+
+        const { data: estData } = await supabase
+          .from('estados')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('ativo', true)
+          .order('nome');
+        if (estData) setEstados(estData);
+
+        const { data: paisesData } = await supabase
+          .from('paises')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('ativo', true)
+          .order('nome');
+        if (paisesData) setPaises(paisesData);
+      } catch (err) {
+        console.error('Erro ao carregar dados iniciais do modal:', err);
+      }
     }
-    loadTemplates();
+    loadInitialData();
   }, [userId]);
+
+  // Carrega temporadas do template selecionado
+  useEffect(() => {
+    if (!templateId) {
+      setTemporadas([]);
+      return;
+    }
+    async function loadTemporadas() {
+      const { data } = await supabase
+        .from('temporadas')
+        .select('*')
+        .eq('template_id', templateId)
+        .eq('ativo', true)
+        .order('data_inicio');
+      if (data) setTemporadas(data);
+    }
+    loadTemporadas();
+  }, [templateId]);
 
   // Verifica disponibilidade da agenda quando a data muda
   useEffect(() => {
@@ -161,16 +234,10 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
           
           // Por padrão, seleciona todos os produtos do template
           const initialSelection: Record<string, number> = {};
-          let totalSum = 0;
           prods.forEach((p) => {
             initialSelection[p.id] = 1;
-            totalSum += p.valor;
           });
           setSelectedProducts(initialSelection);
-          
-          if (!isManualValueOverride) {
-            setValor((totalSum * 100).toString());
-          }
         }
 
         // Verificar se o template tem upsell configurado
@@ -208,25 +275,152 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     };
   }, [templateId]);
 
-  // Recalcula o valor total baseado nos produtos selecionados caso não tenha override manual
-  useEffect(() => {
-    if (isManualValueOverride || templateProducts.length === 0) return;
-
+  // Cálculo de valores em tempo real
+  const calculateTotals = () => {
     let subtotal = 0;
     templateProducts.forEach((p) => {
       const qty = selectedProducts[p.id] || 0;
       subtotal += p.valor * qty;
     });
 
-    setValor((subtotal * 100).toString());
-  }, [selectedProducts, templateProducts, isManualValueOverride]);
+    // 1. Ajuste Sazonal
+    let ajusteSazonal = 0;
+    let seasonalPercent = 0;
+    if (dataEvento && temporadas.length > 0) {
+      const parts = dataEvento.split('-');
+      const evDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const tempAtiva = temporadas.find((temp) => {
+        const dIni = temp.data_inicio.split('T')[0].split('-');
+        const dFim = temp.data_fim.split('T')[0].split('-');
+        const ini = new Date(parseInt(dIni[0]), parseInt(dIni[1]) - 1, parseInt(dIni[2]));
+        const fim = new Date(parseInt(dFim[0]), parseInt(dFim[1]) - 1, parseInt(dFim[2]));
+        return evDate >= ini && evDate <= fim;
+      });
+      if (tempAtiva) {
+        const mult = tempAtiva.multiplicador || 1;
+        ajusteSazonal = subtotal * (mult - 1);
+        seasonalPercent = Math.round((mult - 1) * 100);
+      }
+    }
+
+    // 2. Ajuste Geográfico
+    let geoPercentual = 0;
+    let geoTaxa = 0;
+    let geoPercentValue = 0;
+
+    if (isCustomCity) {
+      geoPercentValue = parseFloat(customCityPercent) || 0;
+      geoPercentual = ((subtotal + ajusteSazonal) * geoPercentValue) / 100;
+      geoTaxa = parseFloat(customCityTax) || 0;
+    } else if (selectedCidadeId) {
+      const cidadeObj = cidadesAjuste.find((c) => c.id === selectedCidadeId);
+      if (cidadeObj) {
+        geoPercentValue = cidadeObj.ajuste_percentual || 0;
+        geoPercentual = ((subtotal + ajusteSazonal) * geoPercentValue) / 100;
+        geoTaxa = cidadeObj.taxa_deslocamento || 0;
+      }
+    }
+
+    const manualDesc = parseFloat(descontoManual) || 0;
+    const manualAcres = parseFloat(acrescimoManual) || 0;
+
+    let descontoCupomValor = 0;
+    if (cupomAtivo && cupomDesconto > 0) {
+      descontoCupomValor = ((subtotal + ajusteSazonal + geoPercentual + geoTaxa) * cupomDesconto) / 100;
+    }
+
+    const baseCalculatedTotal = subtotal + ajusteSazonal + geoPercentual + geoTaxa + manualAcres - manualDesc - descontoCupomValor;
+
+    return {
+      subtotal,
+      ajusteSazonal,
+      seasonalPercent,
+      geoPercentual,
+      geoPercentValue,
+      geoTaxa,
+      manualDesc,
+      manualAcres,
+      descontoCupomValor,
+      total: Math.max(0, baseCalculatedTotal),
+    };
+  };
+
+  const calculated = calculateTotals();
+
+  // Recalcula o valor total baseado nos produtos selecionados caso não tenha override manual
+  useEffect(() => {
+    if (isManualValueOverride) return;
+    setValor((calculated.total * 100).toString());
+  }, [selectedProducts, templateProducts, isManualValueOverride, dataEvento, temporadas, selectedCidadeId, isCustomCity, customCityPercent, customCityTax, descontoManual, acrescimoManual, cupomAtivo, cupomDesconto]);
 
   // Auto-fill tipoEvento ao selecionar template
   const handleTemplateChange = (id: string) => {
     setTemplateId(id);
+    setCupomCodigo('');
+    setCupomAtivo(false);
+    setCupomDesconto(0);
+    setCupomMensagem('');
     if (id) {
       const tpl = templates.find((t) => t.id === id);
       if (tpl && !tipoEvento) setTipoEvento(tpl.nome_template);
+    }
+  };
+
+  const handleValidarCupom = async () => {
+    if (!cupomCodigo.trim()) {
+      setCupomMensagem('Digite um código de cupom');
+      return;
+    }
+    setValidandoCupom(true);
+    setCupomMensagem('');
+    try {
+      const { data, error } = await supabase
+        .from('cupons')
+        .select('*')
+        .eq('codigo', cupomCodigo.toUpperCase())
+        .eq('ativo', true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        setCupomMensagem('❌ Cupom inválido ou inativo');
+        setCupomAtivo(false);
+        setCupomDesconto(0);
+        return;
+      }
+
+      // Se tiver data_validade, verifica
+      if (data.data_validade) {
+        const validade = new Date(data.data_validade);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        if (validade < hoje) {
+          setCupomMensagem('❌ Cupom expirado');
+          setCupomAtivo(false);
+          setCupomDesconto(0);
+          return;
+        }
+      }
+
+      // Se tiver template_id, verifica se bate
+      if (data.template_id && templateId && data.template_id !== templateId) {
+        setCupomMensagem('❌ Cupom não aplicável a este template');
+        setCupomAtivo(false);
+        setCupomDesconto(0);
+        return;
+      }
+
+      setCupomAtivo(true);
+      setCupomDesconto(data.porcentagem || 0);
+      setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+    } catch (err) {
+      console.error('Erro ao validar cupom:', err);
+      setCupomMensagem('❌ Erro ao validar cupom');
+      setCupomAtivo(false);
+      setCupomDesconto(0);
+    } finally {
+      setValidandoCupom(false);
     }
   };
 
@@ -238,16 +432,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
 
   const resetManualValue = () => {
     setIsManualValueOverride(false);
-    if (templateProducts.length > 0) {
-      let subtotal = 0;
-      templateProducts.forEach((p) => {
-        const qty = selectedProducts[p.id] || 0;
-        subtotal += p.valor * qty;
-      });
-      setValor((subtotal * 100).toString());
-    } else {
-      setValor('');
-    }
+    setValor((calculated.total * 100).toString());
   };
 
   const handleToggleProduct = (productId: string, checked: boolean) => {
@@ -289,21 +474,57 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     setError('');
 
     try {
-      // Monta priceBreakdown
-      let subtotal = 0;
-      templateProducts.forEach((p) => {
-        const qty = selectedProducts[p.id] || 0;
-        subtotal += p.valor * qty;
-      });
-
+      const effectiveTotal = isManualValueOverride ? valorNumerico : calculated.total;
+      
       const priceBreakdown: PriceBreakdown = {
-        subtotal: subtotal,
-        ajusteSazonal: 0,
-        ajusteGeografico: { percentual: 0, taxa: 0 },
-        acrescimoFormaPagamento: 0,
-        descontoCupom: 0,
-        total: valorNumerico || subtotal,
+        subtotal: calculated.subtotal,
+        ajusteSazonal: calculated.ajusteSazonal,
+        ajusteGeografico: { percentual: calculated.geoPercentual, taxa: calculated.geoTaxa },
+        acrescimoFormaPagamento: calculated.manualAcres,
+        descontoCupom: calculated.manualDesc + calculated.descontoCupomValor,
+        total: effectiveTotal,
       };
+
+      let finalCityName = cidade.trim() || null;
+
+      if (isCustomCity && customCityName.trim()) {
+        const nameTrimmed = customCityName.trim();
+        if (salvarCidadeLista) {
+          if (paises.length > 0 && !selectedPaisId) {
+            setError('Por favor, selecione um país para salvar a cidade na sua lista de atuação.');
+            setSaving(false);
+            return;
+          }
+          const hasStatesForCountry = estados.some((e) => e.pais_id === selectedPaisId);
+          if (hasStatesForCountry && !selectedEstadoId) {
+            setError('Por favor, selecione um estado para salvar a cidade na sua lista de atuação.');
+            setSaving(false);
+            return;
+          }
+          const { data: newCity, error: cityErr } = await supabase
+            .from('cidades_ajuste')
+            .insert({
+              user_id: userId,
+              estado_id: selectedEstadoId || null,
+              nome: nameTrimmed,
+              ajuste_percentual: parseFloat(customCityPercent) || 0,
+              taxa_deslocamento: parseFloat(customCityTax) || 0,
+              ativo: true
+            })
+            .select()
+            .single();
+
+          if (cityErr) {
+            console.error('Erro ao salvar cidade na lista:', cityErr);
+          } else if (newCity) {
+            finalCityName = newCity.id;
+          }
+        } else {
+          finalCityName = nameTrimmed;
+        }
+      } else if (selectedCidadeId && selectedCidadeId !== 'custom') {
+        finalCityName = selectedCidadeId;
+      }
 
       const payload: Record<string, any> = {
         user_id: userId,
@@ -313,8 +534,8 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
         template_id: templateId || null,
         tipo_evento: tipoEvento.trim() || null,
         data_evento: dataEvento || null,
-        cidade_evento: cidade.trim() || null,
-        valor_total: (valorNumerico || subtotal || 0) + upsellSubtotal,
+        cidade_evento: finalCityName,
+        valor_total: effectiveTotal + upsellSubtotal,
         status,
         origem: origem || 'manual',
         orcamento_detalhe: {
@@ -336,8 +557,11 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
               imagem_url: (p as any).imagem_url || '',
               quantidade: 1,
             })),
-          valor_base: valorNumerico || subtotal || 0,
+          valor_base: effectiveTotal,
           valor_upsell: upsellSubtotal,
+          cupomCodigo: cupomAtivo ? cupomCodigo : null,
+          cupomAtivo,
+          cupomDesconto,
         },
       };
 
@@ -514,16 +738,132 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                   <label className={labelCls}>
                     <MapPin className="w-3 h-3" /> Cidade
                   </label>
-                  <input
-                    type="text"
-                    id="new-lead-cidade"
-                    value={cidade}
-                    onChange={(e) => setCidade(e.target.value)}
-                    placeholder="Ex: São Paulo - SP"
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <select
+                      id="new-lead-cidade-select"
+                      value={isCustomCity ? 'custom' : selectedCidadeId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'custom') {
+                          setIsCustomCity(true);
+                          setSelectedCidadeId('');
+                        } else {
+                          setIsCustomCity(false);
+                          setSelectedCidadeId(val);
+                          const chosen = cidadesAjuste.find(c => c.id === val);
+                          setCidade(chosen ? chosen.nome : '');
+                        }
+                      }}
+                      className={`${inputCls} pr-8 appearance-none`}
+                    >
+                      <option value="">Selecione uma cidade padronizada...</option>
+                      {cidadesAjuste.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome} {c.ajuste_percentual > 0 ? `(+${c.ajuste_percentual}%)` : ''} {c.taxa_deslocamento > 0 ? `(+R$ ${c.taxa_deslocamento})` : ''}
+                        </option>
+                      ))}
+                      <option value="custom">+ Outra cidade (personalizar localidade)</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
+
+              {/* Formulário de Cidade Customizada */}
+              {isCustomCity && (
+                <div className="p-4 bg-indigo-50/20 dark:bg-indigo-950/10 border border-indigo-150 dark:border-indigo-900/30 rounded-xl space-y-3 mt-2 animate-in slide-in-from-top-1 duration-200">
+                  <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2">
+                    📍 Configuração de Cidade Customizada
+                  </p>
+                  <div>
+                    <label className={labelCls}>Nome da Cidade</label>
+                    <input
+                      type="text"
+                      value={customCityName}
+                      onChange={(e) => setCustomCityName(e.target.value)}
+                      placeholder="Ex: Campinas - SP"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Ajuste Regional (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={customCityPercent}
+                        onChange={(e) => setCustomCityPercent(e.target.value)}
+                        placeholder="0"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Taxa de Deslocamento (R$)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={customCityTax}
+                        onChange={(e) => setCustomCityTax(e.target.value)}
+                        placeholder="0,00"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={salvarCidadeLista}
+                        onChange={(e) => setSalvarCidadeLista(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer bg-white dark:bg-white/5"
+                      />
+                      Salvar esta cidade na minha lista de atuação
+                    </label>
+                  </div>
+                  {salvarCidadeLista && paises.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 pt-1 animate-in slide-in-from-top-1 duration-200">
+                      <div className="space-y-1">
+                        <label className={labelCls}>País *</label>
+                        <div className="relative">
+                          <select
+                            value={selectedPaisId}
+                            onChange={(e) => {
+                              setSelectedPaisId(e.target.value);
+                              setSelectedEstadoId('');
+                            }}
+                            className="w-full pl-3 pr-8 py-2 text-sm border border-gray-350 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-[#0c192e] text-gray-800 dark:text-gray-200 appearance-none"
+                          >
+                            <option value="">Selecione...</option>
+                            {paises.map((p) => (
+                              <option key={p.id} value={p.id}>{p.nome}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className={labelCls}>Estado *</label>
+                        <div className="relative">
+                          <select
+                            value={selectedEstadoId}
+                            disabled={!selectedPaisId}
+                            onChange={(e) => setSelectedEstadoId(e.target.value)}
+                            className="w-full pl-3 pr-8 py-2 text-sm border border-gray-350 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-[#0c192e] text-gray-800 dark:text-gray-200 appearance-none disabled:opacity-50"
+                          >
+                            <option value="">Selecione...</option>
+                            {estados
+                              .filter((e) => e.pais_id === selectedPaisId)
+                              .map((e) => (
+                                <option key={e.id} value={e.id}>{e.nome} ({e.sigla})</option>
+                              ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Seção de seleção de produtos do Template */}
               {templateId && (
@@ -653,6 +993,124 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                 </div>
               )}
 
+              {/* Seção de Cupom de Desconto */}
+              <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-[rgba(255,255,255,0.05)] space-y-2">
+                <label className={labelCls}>🎫 Cupom de Desconto</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={cupomCodigo}
+                    onChange={(e) => setCupomCodigo(e.target.value.toUpperCase())}
+                    placeholder="DIGITE O CÓDIGO DO CUPOM"
+                    className={`${inputCls} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleValidarCupom}
+                    disabled={validandoCupom}
+                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {validandoCupom ? 'Validando...' : 'Aplicar'}
+                  </button>
+                </div>
+                {cupomMensagem && (
+                  <p className={`text-xs font-semibold ${cupomAtivo ? 'text-green-600' : 'text-red-500'}`}>
+                    {cupomMensagem}
+                  </p>
+                )}
+              </div>
+
+              {/* Ajustes e Descontos Manuais */}
+              <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-[rgba(255,255,255,0.05)] space-y-3">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  💸 Descontos e Acréscimos Manuais
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Acréscimo Manual / Taxas (R$)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={acrescimoManual}
+                      onChange={(e) => setAcrescimoManual(e.target.value)}
+                      placeholder="0,00"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Desconto Manual / Cupom (R$)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={descontoManual}
+                      onChange={(e) => setDescontoManual(e.target.value)}
+                      placeholder="0,00"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo e Cálculo Final */}
+              <div className="p-4 bg-indigo-50/30 dark:bg-white/5 rounded-xl border border-indigo-100 dark:border-[rgba(255,255,255,0.08)]">
+                <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider mb-2">
+                  📝 Detalhamento de Cálculo (Breakdown)
+                </p>
+                <div className="text-xs space-y-1.5 text-gray-600 dark:text-[rgba(255,255,255,0.7)]">
+                  <div className="flex justify-between">
+                    <span>Subtotal dos Produtos:</span>
+                    <span className="font-semibold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.subtotal)}</span>
+                  </div>
+                  
+                  {calculated.ajusteSazonal !== 0 && (
+                    <div className="flex justify-between text-amber-700 dark:text-amber-400 font-semibold">
+                      <span>Ajuste Sazonal ({calculated.seasonalPercent}%):</span>
+                      <span>+{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.ajusteSazonal)}</span>
+                    </div>
+                  )}
+
+                  {(calculated.geoPercentual > 0 || calculated.geoTaxa > 0) && (
+                    <div className="flex justify-between text-indigo-600 dark:text-blue-400">
+                      <span>Ajuste Reg. / Deslocamento ({calculated.geoPercentValue}% + Taxa):</span>
+                      <span className="font-semibold">+{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.geoPercentual + calculated.geoTaxa)}</span>
+                    </div>
+                  )}
+
+                  {calculated.manualAcres > 0 && (
+                    <div className="flex justify-between text-gray-500 font-semibold">
+                      <span>Acréscimo Manual:</span>
+                      <span>+{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.manualAcres)}</span>
+                    </div>
+                  )}
+
+                  {calculated.manualDesc > 0 && (
+                    <div className="flex justify-between text-green-600 font-semibold">
+                      <span>Desconto Manual:</span>
+                      <span>-{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.manualDesc)}</span>
+                    </div>
+                  )}
+
+                  {calculated.descontoCupomValor > 0 && (
+                    <div className="flex justify-between text-green-600 font-semibold">
+                      <span>Desconto Cupom ({cupomDesconto}%):</span>
+                      <span>-{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.descontoCupomValor)}</span>
+                    </div>
+                  )}
+
+                  {upsellSubtotal > 0 && (
+                    <div className="flex justify-between text-amber-600 dark:text-amber-300 font-bold border-t border-dashed border-gray-200 dark:border-white/10 pt-1 mt-1">
+                      <span>🎁 Adicionais (Upsell):</span>
+                      <span>+{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(upsellSubtotal)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-sm font-black text-gray-900 dark:text-white border-t border-gray-200 dark:border-white/10 pt-2 mt-2">
+                    <span>Valor Calculado Total:</span>
+                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.total + upsellSubtotal)}</span>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="block text-xs font-semibold text-gray-500 dark:text-[rgba(255,255,255,0.5)] uppercase tracking-wider">
@@ -664,13 +1122,13 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                       onClick={resetManualValue}
                       className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
                     >
-                      <Info className="w-3 h-3" /> Resetar para soma dos produtos
+                      <Info className="w-3 h-3" /> Resetar para soma calculada
                     </button>
                   )}
                 </div>
                 {isManualValueOverride && (
                   <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mb-1">
-                    ⚠️ Valor editado manualmente (sobrescreve cálculo do template)
+                    ⚠️ Valor editado manualmente (sobrescreve cálculo automático)
                   </p>
                 )}
                 <div className="relative">

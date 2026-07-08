@@ -133,6 +133,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         portfolio_link: profile.portfolio_link || null,
         portfolio_fotos: profile.portfolio_fotos || null,
         dias_adiar_tarefas: profile.dias_adiar_tarefas ?? 7,
+        google_auth_data: profile.google_auth_data || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -157,6 +158,49 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       alert('❌ Erro ao salvar perfil');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLinkGoogle = async () => {
+    try {
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.href,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          scopes: 'https://www.googleapis.com/auth/calendar',
+          skipBrowserRedirect: true
+        }
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch (err: any) {
+      alert(`Erro ao vincular conta do Google: ${err.message || err}`);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    if (!confirm('Deseja realmente desconectar sua conta do Google? Isso desativará a sincronização com a sua agenda.')) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ google_auth_data: null })
+        .eq('id', userId);
+        
+      if (error) throw error;
+      
+      handleUpdateField('google_auth_data', null);
+      alert('Conta do Google desconectada com sucesso.');
+    } catch (err: any) {
+      alert(`Erro ao desconectar: ${err.message || err}`);
     }
   };
 
@@ -485,6 +529,89 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                     {profile.visualizacoes_perfil || 0}
                   </span>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Integração Google */}
+        <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+              <path
+                fill="#EA4335"
+                d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582l3.51-3.51C17.745 1.09 14.981 0 12 0 7.354 0 3.307 2.665 1.299 6.554l3.967 3.211z"
+              />
+              <path
+                fill="#4285F4"
+                d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.536a5.58 5.58 0 0 1-2.427 3.663l3.8 2.945c2.227-2.054 3.731-5.072 3.731-8.817z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.266 14.235A7.09 7.09 0 0 1 4.909 12c0-.79.136-1.545.357-2.235L1.3 6.554A11.96 11.96 0 0 0 0 12c0 1.92.455 3.736 1.258 5.355l4.008-3.12z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.97-1.073 7.96-2.918l-3.8-2.945c-1.055.709-2.409 1.136-4.16 1.136-3.21 0-5.928-2.164-6.897-5.091L1.135 17.3A11.967 11.967 0 0 0 12 24z"
+              />
+            </svg>
+            Integração Google Calendar
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Conecte sua conta do Google para dar permissão de escrita de eventos na sua agenda.
+          </p>
+
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-[rgba(255,255,255,0.08)] bg-gray-50 dark:bg-white/5">
+            {profile.google_auth_data ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                    <span className="font-semibold text-gray-900 dark:text-white">Conectado ao Google Calendar</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Credenciais atualizadas: {profile.google_auth_data.updated_at ? new Date(profile.google_auth_data.updated_at).toLocaleString('pt-BR') : 'Sem registro'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUnlinkGoogle}
+                  className="px-4 py-2 border border-red-200 hover:border-red-300 text-red-600 hover:text-red-700 bg-white dark:bg-transparent rounded-lg text-sm font-semibold transition-colors"
+                >
+                  Desconectar Google
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">Conta não vinculada</p>
+                  <p className="text-xs text-gray-500 mt-1">Vincule para permitir que o sistema escreva novos eventos na sua agenda do Google.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLinkGoogle}
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-gray-300 dark:border-[rgba(255,255,255,0.08)] text-gray-700 dark:text-white rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#EA4335"
+                      d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582l3.51-3.51C17.745 1.09 14.981 0 12 0 7.354 0 3.307 2.665 1.299 6.554l3.967 3.211z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.536a5.58 5.58 0 0 1-2.427 3.663l3.8 2.945c2.227-2.054 3.731-5.072 3.731-8.817z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.266 14.235A7.09 7.09 0 0 1 4.909 12c0-.79.136-1.545.357-2.235L1.3 6.554A11.96 11.96 0 0 0 0 12c0 1.92.455 3.736 1.258 5.355l4.008-3.12z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.97-1.073 7.96-2.918l-3.8-2.945c-1.055.709-2.409 1.136-4.16 1.136-3.21 0-5.928-2.164-6.897-5.091L1.135 17.3A11.967 11.967 0 0 0 12 24z"
+                    />
+                  </svg>
+                  Vincular Conta Google
+                </button>
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@ import { supabase, Lead } from '../lib/supabase';
 import {
   Calendar, DollarSign, CheckSquare, Sun, RefreshCw,
   Zap, ChevronRight, Plus, ArrowRight, Trash2, MessageCircle, Users,
-  AlertCircle, Star, Sliders,
+  AlertCircle, Star, Sliders, Clock, Link,
 } from 'lucide-react';
 import { CobrancaModal } from './company/CobrancaModal';
 
@@ -76,6 +76,11 @@ interface CompanyTask {
   prioridade: 'baixa' | 'media' | 'alta';
   data_limite?: string | null; concluida: boolean;
   concluida_em?: string | null; created_at: string;
+  duracao_minutos?: number | null;
+  tipo?: 'interno' | 'externo';
+  sincronizar_agenda?: boolean;
+  horario_inicio?: string | null;
+  evento_id?: string | null;
 }
 interface CashflowPeriod {
   entradas: number; entradasPendentes: number;
@@ -321,6 +326,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [customStart] = useState('');
   const [customEnd] = useState('');
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'rotina' | 'caixa' | 'crescimento'>('rotina');
 
   // ── CRM data ───────────────────────────────────────────────────────────────
   const [abaAgenda, setAbaAgenda] = useState<'hoje' | 'amanha' | 'semana'>('hoje');
@@ -340,6 +346,17 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [newTaskText, setNewTaskText] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'baixa' | 'media' | 'alta'>('media');
+  const [newTaskDuration, setNewTaskDuration] = useState('60');
+  const [newTaskType, setNewTaskType] = useState<'interno' | 'externo'>('interno');
+  const [newTaskSyncAgenda, setNewTaskSyncAgenda] = useState(false);
+  const [newTaskStartTime, setNewTaskStartTime] = useState('');
+
+  // ── WhatsApp Growth Tab ──────────────────────────────────────────────────
+  const [leads, setLeads] = useState<any[]>([]);
+  const [whatsappTemplates, setWhatsappTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedLeadId, setSelectedLeadId] = useState<string>('');
+  const [customMessageText, setCustomMessageText] = useState<string>('');
 
   // ── Cashflow & Profile (new) ──────────────────────────────────────────────
   const [cashflowTr, setCashflowTr] = useState<Transacao[]>([]);
@@ -359,6 +376,43 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [conversaoReal, setConversaoReal] = useState<number | null>(null);
 
   const range = getRangeForPeriodo(periodo, customStart, customEnd);
+
+  const formatWhatsappMessage = (templateText: string, lead: any) => {
+    if (!templateText) return '';
+    let msg = templateText;
+    msg = msg.replace(/{{CLIENTE}}/g, lead.nome_cliente || '');
+    msg = msg.replace(/{{VALOR}}/g, lead.valor_total ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.valor_total) : '');
+    msg = msg.replace(/{{TIPO_EVENTO}}/g, lead.tipo_evento || '');
+    msg = msg.replace(/{{CIDADE}}/g, lead.cidade_evento || '');
+    if (lead.data_evento) {
+      const parts = lead.data_evento.split('-');
+      msg = msg.replace(/{{DATA}}/g, `${parts[2]}/${parts[1]}/${parts[0]}`);
+    } else {
+      msg = msg.replace(/{{DATA}}/g, '');
+    }
+    return msg;
+  };
+
+  const cleanPhoneForWa = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 11 || cleaned.length === 10) {
+      return `55${cleaned}`;
+    }
+    return cleaned;
+  };
+
+  useEffect(() => {
+    if (!selectedTemplateId || !selectedLeadId) {
+      setCustomMessageText('');
+      return;
+    }
+    const template = whatsappTemplates.find(t => t.id === selectedTemplateId);
+    const lead = leads.find(l => l.id === selectedLeadId);
+    if (template && lead) {
+      const formatted = formatWhatsappMessage(template.texto_whatsapp, lead);
+      setCustomMessageText(formatted);
+    }
+  }, [selectedTemplateId, selectedLeadId, whatsappTemplates, leads]);
 
   const clientRecommendations = useMemo(() => {
     const today = new Date();
@@ -471,16 +525,21 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const fim3Meses = dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() + 4, 0));
 
     try {
-      const [leadsRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes, avaliacoesPendentesRes] =
+      const [leadsRes, trMesRes, trAnoRes, cashflowRes, profileRes, allEvRes, avaliacoesPendentesRes, templatesRes] =
         await Promise.all([
-          supabase.from('leads').select('id, nome_cliente, workflow, valor_total, status').eq('user_id', userId),
+          supabase.from('leads').select('id, nome_cliente, telefone_cliente, email_cliente, tipo_evento, data_evento, cidade_evento, template_id, workflow, valor_total, status').eq('user_id', userId),
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioMes).lte('data', hoje),
           supabase.from('company_transactions').select('valor, tipo, status').eq('user_id', userId).gte('data', inicioAno).lte('data', hoje),
           supabase.from('company_transactions').select('id, descricao, valor, data, status, tipo, leads:lead_id(nome_cliente, telefone_cliente)').eq('user_id', userId).gte('data', dateStr(new Date(todayObj.getFullYear(), todayObj.getMonth() - 5, 1))).lte('data', fim3Meses).order('data'),
           supabase.from('profiles').select('lucro_desejado').eq('id', userId).maybeSingle(),
           supabase.from('eventos_agenda').select('id, data_evento, tipo_evento, cliente_nome, status, lead_id, leads(telefone_cliente)').eq('user_id', userId).order('data_evento', { ascending: false }),
           supabase.from('avaliacoes').select('id, rating, comentario, nome_cliente, created_at, tipo_evento').eq('profile_id', userId).eq('visivel', false).order('created_at', { ascending: false }).limit(10),
+          supabase.from('templates').select('id, nome_template, texto_whatsapp').eq('user_id', userId)
         ]);
+
+      if (templatesRes.data) {
+        setWhatsappTemplates(templatesRes.data);
+      }
 
       const mappedCashflow = ((cashflowRes.data || []) as any[]).map((t: any) => ({
         ...t,
@@ -500,6 +559,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       setReceitaAno(calcReceita((trAnoRes.data as { tipo: string; status: string; valor: number }[]) || []));
 
       const allLeads = (leadsRes.data || []) as any[];
+      setLeads(allLeads);
       const convertedLeads = allLeads.filter(l => l.status === 'convertido');
       const totalTicket = convertedLeads.reduce((sum, lead) => sum + (lead.valor_total || 0), 0);
       const avgTicket = convertedLeads.length > 0 ? Math.round(totalTicket / convertedLeads.length) : 5000;
@@ -562,6 +622,34 @@ export function MeuDia({ userId }: MeuDiaProps) {
     const text = newTaskText.trim();
     if (!text) return;
     try {
+      let createdEventId: string | null = null;
+      if (newTaskSyncAgenda && newTaskDate) {
+        const timePart = newTaskStartTime || '09:00';
+        const dur = parseInt(newTaskDuration) || 60;
+
+        const { data: eventData, error: eventErr } = await supabase
+          .from('eventos_agenda')
+          .insert({
+            user_id: userId,
+            data_evento: newTaskDate,
+            tipo_evento: 'Tarefa Administrativa',
+            cliente_nome: `Tarefa: ${text}`,
+            status: 'confirmado',
+            origem: 'manual',
+            cidade: '',
+            horario_inicio: timePart,
+            duracao_minutos: dur,
+            ambiente: newTaskType,
+            observacoes: 'Gerado automaticamente a partir de tarefa administrativa'
+          })
+          .select('id')
+          .single();
+
+        if (!eventErr && eventData) {
+          createdEventId = eventData.id;
+        }
+      }
+
       const { data, error } = await supabase
         .from('company_tasks')
         .insert({
@@ -569,32 +657,59 @@ export function MeuDia({ userId }: MeuDiaProps) {
           descricao: text,
           prioridade: newTaskPriority,
           data_limite: newTaskDate || null,
-          concluida: false
+          concluida: false,
+          duracao_minutos: parseInt(newTaskDuration) || 60,
+          tipo: newTaskType,
+          sincronizar_agenda: newTaskSyncAgenda,
+          horario_inicio: newTaskStartTime || null,
+          evento_id: createdEventId
         })
         .select().single();
+
       if (!error && data) {
         setCompanyTasks(prev => [data as CompanyTask, ...prev]);
         setNewTaskText('');
         setNewTaskDate('');
         setNewTaskPriority('media');
+        setNewTaskDuration('60');
+        setNewTaskType('interno');
+        setNewTaskSyncAgenda(false);
+        setNewTaskStartTime('');
       }
-    } catch { /* table may not exist yet */ }
-  }, [newTaskText, newTaskDate, newTaskPriority, userId]);
+    } catch (err) {
+      console.error('Erro ao adicionar tarefa:', err);
+    }
+  }, [newTaskText, newTaskDate, newTaskPriority, newTaskDuration, newTaskType, newTaskSyncAgenda, newTaskStartTime, userId]);
 
   const toggleTask = useCallback(async (id: string, current: boolean) => {
     const next = !current;
+    const task = companyTasks.find(t => t.id === id);
     setCompanyTasks(prev => prev.map(t => t.id === id ? { ...t, concluida: next } : t));
     try {
       await supabase.from('company_tasks').update({
         concluida: next, concluida_em: next ? new Date().toISOString() : null,
       }).eq('id', id).eq('user_id', userId);
+
+      if (task?.evento_id) {
+        await supabase
+          .from('eventos_agenda')
+          .update({ status: next ? 'concluido' : 'agendado' })
+          .eq('id', task.evento_id)
+          .eq('user_id', userId);
+      }
     } catch { }
-  }, [userId]);
+  }, [companyTasks, userId]);
 
   const deleteTask = useCallback(async (id: string) => {
+    const taskToDelete = companyTasks.find(t => t.id === id);
     setCompanyTasks(prev => prev.filter(t => t.id !== id));
-    try { await supabase.from('company_tasks').delete().eq('id', id).eq('user_id', userId); } catch { }
-  }, [userId]);
+    try {
+      await supabase.from('company_tasks').delete().eq('id', id).eq('user_id', userId);
+      if (taskToDelete?.evento_id) {
+        await supabase.from('eventos_agenda').delete().eq('id', taskToDelete.evento_id).eq('user_id', userId);
+      }
+    } catch {}
+  }, [companyTasks, userId]);
 
   // ── Computed: Cashflow Matrix ──────────────────────────────────────────────
   const cashflow = useMemo((): Cashflow => {
@@ -860,6 +975,28 @@ export function MeuDia({ userId }: MeuDiaProps) {
         </button>
       </div>
 
+      {/* ── Tabs Selector ── */}
+      <div className="flex border-b border-gray-200 dark:border-white/10 gap-6 overflow-x-auto pb-1 scrollbar-hide">
+        {[
+          { id: 'rotina', label: '📅 Minha Rotina', desc: 'Tarefas e compromissos do dia' },
+          { id: 'caixa', label: '💰 Caixa do Dia', desc: 'Metas e fluxo financeiro' },
+          { id: 'crescimento', label: '🚀 Crescimento', desc: 'Growth e marketing advisor' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`pb-4 px-1 border-b-2 font-bold text-sm transition-all whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
 
 
       {loading ? (
@@ -903,7 +1040,8 @@ export function MeuDia({ userId }: MeuDiaProps) {
             {/* ── BLOCO 1: CENTRAL DE TAREFAS (7 cols) ── */}
             <div className="lg:col-span-7 space-y-6">
 
-              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden p-6 space-y-6">
+              {activeTab === 'rotina' && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden p-6 space-y-6">
 
                 {/* Saúde da Empresa */}
                 <div className="bg-gradient-to-r from-gray-900 via-slate-900 to-zinc-900 text-white rounded-2xl p-5 border border-white/5 relative overflow-hidden">
@@ -1008,7 +1146,29 @@ export function MeuDia({ userId }: MeuDiaProps) {
                           )}
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-semibold truncate ${t.concluida ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>{t.nome}</p>
-                            {t.subnome && <p className="text-[10px] text-gray-400 truncate">{t.subnome}</p>}
+                            <div className="flex flex-wrap gap-2 items-center text-[10px] text-gray-400 mt-0.5">
+                              <span>{t.subnome}</span>
+                              {t.tipo === 'company' && t.taskObject && (
+                                <>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-0.5">
+                                    <Clock className="w-3 h-3" />
+                                    {t.taskObject.duracao_minutos ? `${t.taskObject.duracao_minutos} min` : '60 min'}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{t.taskObject.tipo === 'externo' ? '🚗 Externo' : '🏠 Interno'}</span>
+                                  {t.taskObject.sincronizar_agenda && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="flex items-center gap-0.5 text-indigo-400">
+                                        <Link className="w-3 h-3" />
+                                        Agenda ({t.taskObject.horario_inicio || '09:00'})
+                                      </span>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {t.tipo === 'company' && t.prioridade && (
@@ -1068,7 +1228,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
                           type="date"
                           value={newTaskDate}
                           onChange={e => setNewTaskDate(e.target.value)}
-                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-850 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                         />
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -1076,20 +1236,72 @@ export function MeuDia({ userId }: MeuDiaProps) {
                         <select
                           value={newTaskPriority}
                           onChange={e => setNewTaskPriority(e.target.value as 'baixa' | 'media' | 'alta')}
-                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-850 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                         >
                           <option value="baixa">🟢 Baixa</option>
                           <option value="media">🟡 Média</option>
                           <option value="alta">🔴 Alta</option>
                         </select>
                       </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-400">Tipo:</span>
+                        <select
+                          value={newTaskType}
+                          onChange={e => setNewTaskType(e.target.value as 'interno' | 'externo')}
+                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                        >
+                          <option value="interno">🏠 Interna</option>
+                          <option value="externo">🚗 Externa</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-400">Duração:</span>
+                        <select
+                          value={newTaskDuration}
+                          onChange={e => setNewTaskDuration(e.target.value)}
+                          className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                        >
+                          <option value="15">15 min</option>
+                          <option value="30">30 min</option>
+                          <option value="45">45 min</option>
+                          <option value="60">1 hora</option>
+                          <option value="90">1h 30m</option>
+                          <option value="120">2 horas</option>
+                          <option value="180">3 horas</option>
+                          <option value="240">4 horas</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={newTaskSyncAgenda}
+                            onChange={e => setNewTaskSyncAgenda(e.target.checked)}
+                            className="w-3.5 h-3.5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 bg-white dark:bg-white/5"
+                          />
+                          <span className="text-gray-400">Sincronizar</span>
+                        </label>
+                      </div>
+                      {newTaskSyncAgenda && (
+                        <div className="flex items-center gap-1.5 animate-fadeIn">
+                          <span className="text-gray-400">Hora:</span>
+                          <input
+                            type="time"
+                            value={newTaskStartTime}
+                            onChange={e => setNewTaskStartTime(e.target.value)}
+                            className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Avaliações Pendentes */}
-              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+              {activeTab === 'crescimento' && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden animate-fadeIn">
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/2">
                   <div className="flex items-center gap-2">
                     <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
@@ -1131,80 +1343,12 @@ export function MeuDia({ userId }: MeuDiaProps) {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* ── BLOCO 3: EMPRESA & OPERAÇÕES (5 cols) ── */}
-            <div className="lg:col-span-5 space-y-6">
-
-              {/* Agenda */}
-              <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-blue-500" />
-                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">🗓️ Agenda</h3>
-                  </div>
-                  <button onClick={() => navigate('/dashboard/agenda')} className="text-xs font-bold text-blue-500 hover:text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                    Ver tudo <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Abas da Agenda */}
-                <div className="px-6 py-3.5 bg-gray-50/50 dark:bg-white/1 border-b border-gray-100 dark:border-white/5 flex gap-1.5 overflow-x-auto">
-                  {[
-                    { id: 'hoje', label: 'Hoje', count: agendaFiltrada.hoje.length },
-                    { id: 'amanha', label: 'Amanhã', count: agendaFiltrada.amanha.length },
-                    { id: 'semana', label: 'Esta Semana', count: agendaFiltrada.semana.length },
-                  ].map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setAbaAgenda(tab.id as any)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
-                        abaAgenda === tab.id
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                          : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
-                      }`}
-                    >
-                      {tab.label}
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                        abaAgenda === tab.id
-                          ? 'bg-white/20 text-white'
-                          : 'bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400'
-                      }`}>
-                        {tab.count}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
-                  {agendaFiltrada[abaAgenda].length === 0 ? (
-                    <div className="py-10 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
-                      <Calendar className="w-10 h-10 text-gray-200 dark:text-gray-700" />
-                      <p className="font-medium">Sem compromissos para este período</p>
-                    </div>
-                  ) : agendaFiltrada[abaAgenda].map(ev => (
-                    <div key={ev.id}
-                      onClick={() => navigate(`/dashboard/agenda?id=${ev.id}`)}
-                      className="flex items-center gap-3 px-6 py-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/2 transition-all group">
-                      <div className="flex flex-col items-center bg-blue-500/10 rounded-xl p-2 w-12 shrink-0 text-center">
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase">
-                          {new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}
-                        </span>
-                        <span className="text-lg font-black text-blue-700 dark:text-blue-300 leading-none">
-                          {new Date(ev.data_evento + 'T12:00:00').getDate()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-500 transition-colors">{ev.cliente_nome}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{ev.tipo_evento}{ev.cidade ? ` · ${ev.cidade}` : ''}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors shrink-0" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cashflow */}
+            )}
+            
+              {/* ── FINANCEIRO (Caixa) ── */}
+              {activeTab === 'caixa' && (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Cashflow */}
               <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
                   <div className="flex items-center gap-2">
@@ -1266,83 +1410,13 @@ export function MeuDia({ userId }: MeuDiaProps) {
                   </div>
                 </div>
               </div>
-
-              {/* Pagamentos Vencidos */}
-              {pagamentosVencidos.length > 0 && (
-                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-red-200/60 dark:border-red-900/30 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between px-6 py-4 bg-red-50 dark:bg-red-950/20 border-b border-red-100 dark:border-red-900/30">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-5 h-5 text-red-500" />
-                      <h3 className="font-bold text-red-800 dark:text-red-300 text-sm">⚠️ Pagamentos Vencidos</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-red-600 dark:text-red-400">{fmtCurrency(totalVencido)}</span>
-                      <span className="text-[10px] bg-red-600 text-white font-black px-2 py-0.5 rounded-full">{pagamentosVencidos.length}</span>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
-                    {pagamentosVencidos.map((tr) => {
-                      const diasVencido = Math.round((new Date().setHours(0,0,0,0) - new Date(tr.data + 'T00:00:00').getTime()) / 86400000);
-                      return (
-                        <div key={tr.id} className="px-6 py-3.5 hover:bg-red-50/30 dark:hover:bg-red-900/10 transition-all">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">{tr.descricao || 'Pagamento pendente'}</p>
-                              <p className="text-[11px] text-red-500 font-semibold mt-0.5">Venceu há {diasVencido} dia{diasVencido > 1 ? 's' : ''} • {fmtCurrency(tr.valor)}</p>
-                            </div>
-                            <button
-                              onClick={() => setCobrancaTransaction(tr)}
-                              title="Cobrar via WhatsApp"
-                              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold rounded-xl transition-all active:scale-95"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                              Cobrar
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
-
-              {/* Follow-ups Sugeridos */}
-              {clientRecommendations.length > 0 && (
-                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
-                    <div className="flex items-center gap-2">
-                      <MessageCircle className="w-5 h-5 text-green-500" />
-                      <h3 className="font-bold text-gray-900 dark:text-white text-sm">💬 Follow-ups Sugeridos</h3>
-                    </div>
-                    <span className="text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
-                      {clientRecommendations.length}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
-                    {clientRecommendations.map((rec, i) => (
-                      <div key={i} className="px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-white/2 transition-all">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">{rec.clienteNome}</p>
-                            <p className="text-[11px] text-gray-400 truncate">{rec.titulo}</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{rec.dica}</p>
-                          </div>
-                          <a href={`https://wa.me/${cleanPhone(rec.telefone)}?text=${encodeURIComponent(rec.mensagemWhatsapp)}`}
-                            target="_blank" rel="noopener noreferrer"
-                            className="shrink-0 p-2 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all active:scale-95">
-                            <MessageCircle className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-white/5 text-[10px] font-bold text-gray-500 rounded-full">{rec.tag}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── BLOCO 4: GROWTH HUB ── */}
+            
+              {/* ── GROWTH (Crescimento) ── */}
+              {activeTab === 'crescimento' && (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* ── BLOCO 4: GROWTH HUB ── */}
           <div className="bg-gradient-to-br from-gray-900 via-slate-900 to-zinc-950 text-white rounded-3xl border border-white/5 shadow-2xl overflow-hidden">
             <div className="relative px-6 sm:px-8 pt-8 pb-6">
               <div className="absolute top-0 right-0 w-96 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1455,6 +1529,122 @@ export function MeuDia({ userId }: MeuDiaProps) {
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {GROWTH_TIPS.clientes.map((tip, i) => (
+                        <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/10 hover:bg-white/8 transition-colors">
+                          <div className="flex items-start justify-between mb-3">
+                            <span className="text-2xl">{tip.emoji}</span>
+                            <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-violet-500/20 text-violet-300">{tip.tag}</span>
+                          </div>
+                          <p className="font-black text-white text-sm mb-2">{tip.titulo}</p>
+                          <p className="text-xs text-gray-300 leading-relaxed">{tip.dica}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : growthTab === 'whatsapp' ? (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                    <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5 text-emerald-400" />
+                      Central de Mensagens do WhatsApp
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Seleção de Script e Lead */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-400 uppercase mb-2">1. Escolha o Roteiro (Template)</label>
+                          <select
+                            value={selectedTemplateId}
+                            onChange={e => setSelectedTemplateId(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-[#07101f] text-white text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                          >
+                            <option value="">Selecione um template de script...</option>
+                            {whatsappTemplates.map(t => (
+                              <option key={t.id} value={t.id}>{t.nome_template}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-400 uppercase mb-2">2. Escolha o Lead (Cliente Oportunidade)</label>
+                          <select
+                            value={selectedLeadId}
+                            onChange={e => setSelectedLeadId(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-[#07101f] text-white text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                          >
+                            <option value="">Selecione um cliente ativo...</option>
+                            {leads.filter(l => ['novo', 'contatado', 'em_negociacao', 'fazer_followup'].includes(l.status)).map(l => (
+                              <option key={l.id} value={l.id}>
+                                {l.nome_cliente} ({l.tipo_evento || 'Serviço'} - {l.cidade_evento || 'Sem cidade'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {selectedLeadId && (
+                          <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-xs">
+                            <p className="font-bold text-violet-300">Dados do Lead Selecionado:</p>
+                            {(() => {
+                              const lead = leads.find(l => l.id === selectedLeadId);
+                              if (!lead) return null;
+                              return (
+                                <div className="space-y-1 text-gray-300">
+                                  <p><strong>Nome:</strong> {lead.nome_cliente}</p>
+                                  <p><strong>Telefone:</strong> {lead.telefone_cliente || 'Não cadastrado'}</p>
+                                  <p><strong>Cidade:</strong> {lead.cidade_evento || 'Não informada'}</p>
+                                  <p><strong>Serviço:</strong> {lead.tipo_evento || 'Não informado'}</p>
+                                  <p><strong>Valor:</strong> {lead.valor_total ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.valor_total) : 'N/A'}</p>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Visualização e Envio de Mensagem */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-400 uppercase mb-2">3. Mensagem Formatada (Editar se necessário)</label>
+                          <textarea
+                            value={customMessageText}
+                            onChange={e => setCustomMessageText(e.target.value)}
+                            rows={8}
+                            placeholder="Selecione um script e um lead para gerar a mensagem automaticamente..."
+                            className="w-full px-4 py-3 rounded-xl border border-white/10 bg-[#07101f] text-white text-sm outline-none focus:ring-2 focus:ring-violet-500 resize-none font-sans leading-relaxed"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lead = leads.find(l => l.id === selectedLeadId);
+                            if (!lead) {
+                              alert('Selecione um lead primeiro.');
+                              return;
+                            }
+                            const phone = lead.telefone_cliente ? cleanPhoneForWa(lead.telefone_cliente) : '';
+                            const waUrl = phone
+                              ? `https://wa.me/${phone}?text=${encodeURIComponent(customMessageText)}`
+                              : `https://wa.me/?text=${encodeURIComponent(customMessageText)}`;
+                            window.open(waUrl, '_blank');
+                          }}
+                          disabled={!selectedLeadId || !customMessageText}
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                          Enviar via WhatsApp
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-white/10">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+                      💡 Estratégias de Disparo no WhatsApp
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {GROWTH_TIPS.whatsapp.map((tip, i) => (
                         <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/10 hover:bg-white/8 transition-colors">
                           <div className="flex items-start justify-between mb-3">
                             <span className="text-2xl">{tip.emoji}</span>
@@ -1588,6 +1778,167 @@ export function MeuDia({ userId }: MeuDiaProps) {
               </div>
             </div>
           </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── BLOCO 3: EMPRESA & OPERAÇÕES (5 cols) ── */}
+            <div className="lg:col-span-5 space-y-6">
+
+              {/* Agenda */}
+              {activeTab === 'rotina' && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden animate-fadeIn">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-500" />
+                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">🗓️ Agenda</h3>
+                  </div>
+                  <button onClick={() => navigate('/dashboard/agenda')} className="text-xs font-bold text-blue-500 hover:text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                    Ver tudo <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Abas da Agenda */}
+                <div className="px-6 py-3.5 bg-gray-50/50 dark:bg-white/1 border-b border-gray-100 dark:border-white/5 flex gap-1.5 overflow-x-auto">
+                  {[
+                    { id: 'hoje', label: 'Hoje', count: agendaFiltrada.hoje.length },
+                    { id: 'amanha', label: 'Amanhã', count: agendaFiltrada.amanha.length },
+                    { id: 'semana', label: 'Esta Semana', count: agendaFiltrada.semana.length },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setAbaAgenda(tab.id as any)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
+                        abaAgenda === tab.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                          : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {tab.label}
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                        abaAgenda === tab.id
+                          ? 'bg-white/20 text-white'
+                          : 'bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
+                  {agendaFiltrada[abaAgenda].length === 0 ? (
+                    <div className="py-10 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                      <Calendar className="w-10 h-10 text-gray-200 dark:text-gray-700" />
+                      <p className="font-medium">Sem compromissos para este período</p>
+                    </div>
+                  ) : agendaFiltrada[abaAgenda].map(ev => (
+                    <div key={ev.id}
+                      onClick={() => navigate(`/dashboard/agenda?id=${ev.id}`)}
+                      className="flex items-center gap-3 px-6 py-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/2 transition-all group">
+                      <div className="flex flex-col items-center bg-blue-500/10 rounded-xl p-2 w-12 shrink-0 text-center">
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase">
+                          {new Date(ev.data_evento + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}
+                        </span>
+                        <span className="text-lg font-black text-blue-700 dark:text-blue-300 leading-none">
+                          {new Date(ev.data_evento + 'T12:00:00').getDate()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-500 transition-colors">{ev.cliente_nome}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{ev.tipo_evento}{ev.cidade ? ` · ${ev.cidade}` : ''}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              )}
+
+
+
+
+              {activeTab === 'caixa' && (
+                <div className="space-y-6 animate-fadeIn">
+              {/* Pagamentos Vencidos */}
+              {pagamentosVencidos.length > 0 && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-red-200/60 dark:border-red-900/30 shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 bg-red-50 dark:bg-red-950/20 border-b border-red-100 dark:border-red-900/30">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      <h3 className="font-bold text-red-800 dark:text-red-300 text-sm">⚠️ Pagamentos Vencidos</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-red-600 dark:text-red-400">{fmtCurrency(totalVencido)}</span>
+                      <span className="text-[10px] bg-red-600 text-white font-black px-2 py-0.5 rounded-full">{pagamentosVencidos.length}</span>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
+                    {pagamentosVencidos.map((tr) => {
+                      const diasVencido = Math.round((new Date().setHours(0,0,0,0) - new Date(tr.data + 'T00:00:00').getTime()) / 86400000);
+                      return (
+                        <div key={tr.id} className="px-6 py-3.5 hover:bg-red-50/30 dark:hover:bg-red-900/10 transition-all">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">{tr.descricao || 'Pagamento pendente'}</p>
+                              <p className="text-[11px] text-red-500 font-semibold mt-0.5">Venceu há {diasVencido} dia{diasVencido > 1 ? 's' : ''} • {fmtCurrency(tr.valor)}</p>
+                            </div>
+                            <button
+                              onClick={() => setCobrancaTransaction(tr)}
+                              title="Cobrar via WhatsApp"
+                              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold rounded-xl transition-all active:scale-95"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              Cobrar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Follow-ups Sugeridos */}
+              {clientRecommendations.length > 0 && (
+                <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-gray-200/50 dark:border-white/5 shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5 text-green-500" />
+                      <h3 className="font-bold text-gray-900 dark:text-white text-sm">💬 Follow-ups Sugeridos</h3>
+                    </div>
+                    <span className="text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                      {clientRecommendations.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[280px] overflow-y-auto">
+                    {clientRecommendations.map((rec, i) => (
+                      <div key={i} className="px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-white/2 transition-all">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">{rec.clienteNome}</p>
+                            <p className="text-[11px] text-gray-400 truncate">{rec.titulo}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{rec.dica}</p>
+                          </div>
+                          <a href={`https://wa.me/${cleanPhone(rec.telefone)}?text=${encodeURIComponent(rec.mensagemWhatsapp)}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="shrink-0 p-2 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all active:scale-95">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-white/5 text-[10px] font-bold text-gray-500 rounded-full">{rec.tag}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+                </div>
+              )}
+            </div>
+          </div>
+
+
+
 
         </div>
       )}

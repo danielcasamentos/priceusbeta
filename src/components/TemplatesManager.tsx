@@ -248,7 +248,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   const [duplicating, setDuplicating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userSlug, setUserSlug] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   
   const planLimits = usePlanLimits();
 

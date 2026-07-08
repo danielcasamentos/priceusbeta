@@ -19,11 +19,7 @@ import { TemplatesContracts } from '../components/TemplatesContracts';
 import { Sidebar } from '../components/Sidebar';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { ReviewsManager } from '../components/ReviewsManager';
-import { CompanyDashboard } from '../components/company/CompanyDashboard';
-import { CompanyTransactions } from '../components/company/CompanyTransactions'; // Já estava aqui
-import { CompanyAnalytics } from '../components/company/CompanyAnalytics'; // Adicionado
-import { CompanyInsights } from '../components/company/CompanyInsights'; // Adicionado
-import { BusinessSettingsEditor } from '../components/BusinessSettingsEditor'; // Adicionado
+import { CompanyDashboardHub } from '../components/company/CompanyDashboardHub';
 import NotificationCenter from '../components/NotificationCenter'; // Import NotificationCenter
 import { AppInstallBanner } from '../components/AppInstallBanner';
 import { TawkToChat } from '../components/TawkToChat';
@@ -116,6 +112,8 @@ export function DashboardPage() {
         return 'Tutoriais em Vídeo';
       case 'ajuda':
         return 'FAQ e Ajuda';
+      case 'empresa':
+        return 'Minha Empresa';
       case 'empresa-dashboard':
         return 'Visão Geral da Empresa';
       case 'empresa-transacoes':
@@ -136,8 +134,8 @@ export function DashboardPage() {
   const getBreadcrumbs = () => {
     const crumbs: { label: string; onClick?: () => void }[] = [{ label: 'Dashboard' }];
 
-    if (currentPage.startsWith('empresa-')) {
-      crumbs.push({ label: 'Empresa', onClick: () => handlePageChange('empresa-dashboard') });
+    if (currentPage === 'empresa' || currentPage.startsWith('empresa-')) {
+      crumbs.push({ label: 'Empresa', onClick: () => handlePageChange('empresa') });
       crumbs.push({ label: getPageTitle() });
     } else if (editingTemplateId) {
       crumbs.push({ label: 'Meus Templates', onClick: () => setEditingTemplateId(null) });
@@ -330,59 +328,8 @@ export function DashboardPage() {
                 </div>
                 {contractTab === 'templates' ? <TemplatesContracts userId={user.id} /> : <ContractsManager userId={user.id} />}
               </div>
-            ) : currentPage === 'empresa-transacoes' ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Transações</h2>
-                  <p className="text-gray-600">
-                    Gerencie transações, dados empresariais, analytics e insights do seu negócio.
-                  </p>
-                </div>
-                <CompanyTransactions userId={user.id} />
-              </>
-            ) : currentPage === 'empresa-dashboard' ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Visão Geral da Empresa</h2>
-                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
-                    Acompanhe o desempenho financeiro do seu negócio.
-                  </p>
-                </div>
-                <CompanyDashboard
-                  userId={user.id}
-                  onNewTransaction={() => handlePageChange('empresa-transacoes')}
-                />
-              </>
-            ) : currentPage === 'empresa-analytics' ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Analytics</h2>
-                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
-                    Análise detalhada do desempenho financeiro.
-                  </p>
-                </div>
-                <CompanyAnalytics userId={user.id} />
-              </>
-            ) : currentPage === 'empresa-insights' ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Insights</h2>
-                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
-                    Recomendações inteligentes para otimizar seu negócio.
-                  </p>
-                </div>
-                <CompanyInsights userId={user.id} />
-              </>
-            ) : currentPage === 'empresa-dados' ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Dados Empresariais</h2>
-                  <p className="text-gray-600 dark:text-[rgba(255,255,255,.5)]">
-                    Configure os dados da sua empresa para usar nos contratos digitais.
-                  </p>
-                </div>
-                <BusinessSettingsEditor userId={user.id} />
-              </>
+            ) : currentPage === 'empresa' || currentPage.startsWith('empresa-') ? (
+              <CompanyDashboardHub userId={user.id} />
             ) : currentPage === 'meu-dia' ? (
               <MeuDia userId={user.id} />
             ) : currentPage === 'profile' ? (

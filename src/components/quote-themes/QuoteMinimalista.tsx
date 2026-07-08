@@ -18,10 +18,11 @@ interface QuoteMinimalistaProps {
   camposExtrasData: Record<string, string>;
   setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
+  upsellSection?: React.ReactNode;
 }
 
 export function QuoteMinimalista(props: QuoteMinimalistaProps) {
-  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData } = props;
+  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, upsellSection } = props;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-200 via-gray-200 to-slate-300">
@@ -243,8 +244,7 @@ export function QuoteMinimalista(props: QuoteMinimalistaProps) {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
+            {upsellSection}
 
             <div className="bg-slate-100 rounded-xl p-6 text-center border-2 border-slate-400">
               <p className="text-sm text-slate-600 font-light tracking-wide mb-2">Valor Total</p>

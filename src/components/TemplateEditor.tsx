@@ -1031,7 +1031,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     Sistema de Upselling
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Ofereça produtos extras ao cliente após ele visualizar o orçamento principal.
+                    Ofereça produtos extras ao cliente, exibidos antes do faturamento para atualizar parcelas em tempo real.
                   </p>
                 </div>
                 {/* Toggle ativar upsell */}
@@ -1210,7 +1210,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 rounded-lg p-4">
                       <p className="text-sm font-medium text-emerald-800 dark:text-emerald-400">
                         ✅ {(template?.upsell_produtos_ids || []).length} produto(s) de upsell configurado(s).
-                        Eles aparecerão automaticamente no orçamento do cliente após os produtos principais.
+                        Eles aparecerão automaticamente no orçamento do cliente antes do faturamento, atualizando o parcelamento em tempo real.
                       </p>
                     </div>
                   )}

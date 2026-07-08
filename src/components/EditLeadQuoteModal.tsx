@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase, Lead } from '../lib/supabase';
 import { LeadOrcamentoDetalhe } from './LeadsManager';
-import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone } from 'lucide-react';
+import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, DollarSign, Loader2, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
+import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
 
 interface EditLeadQuoteModalProps {
   lead: Lead;
@@ -27,6 +28,34 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     lead.data_evento ? lead.data_evento.split('T')[0] : ''
   );
   const [cidadeEvento, setCidadeEvento] = useState(lead.cidade_evento || '');
+
+  // Cidades e Temporadas do Usuário
+  const [selectedCidadeId, setSelectedCidadeId] = useState<string>('');
+  const [isCustomCity, setIsCustomCity] = useState(false);
+  const [customCityName, setCustomCityName] = useState('');
+  const [customCityPercent, setCustomCityPercent] = useState('0');
+  const [customCityTax, setCustomCityTax] = useState('0');
+  const [salvarCidadeLista, setSalvarCidadeLista] = useState(false);
+  const [estados, setEstados] = useState<any[]>([]);
+  const [selectedEstadoId, setSelectedEstadoId] = useState<string>('');
+  const [paises, setPaises] = useState<any[]>([]);
+  const [selectedPaisId, setSelectedPaisId] = useState<string>('');
+  const [temporadas, setTemporadas] = useState<any[]>([]);
+
+  // Disponibilidade
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
+
+  // Cupom de Desconto
+  const [cupomCodigo, setCupomCodigo] = useState((savedOrcamentoDetalhe as any).cupomCodigo || '');
+  const [cupomAtivo, setCupomAtivo] = useState(!!(savedOrcamentoDetalhe as any).cupomAtivo);
+  const [cupomDesconto, setCupomDesconto] = useState((savedOrcamentoDetalhe as any).cupomDesconto || 0);
+  const [cupomMensagem, setCupomMensagem] = useState(
+    (savedOrcamentoDetalhe as any).cupomAtivo
+      ? `✅ Cupom ativo: ${(savedOrcamentoDetalhe as any).cupomDesconto}% de desconto`
+      : ''
+  );
+  const [validandoCupom, setValidandoCupom] = useState(false);
 
   // ── Campos personalizados do orçamento ──────────────────────────────────
   const [customFieldsData, setCustomFieldsData] = useState<Record<string, string>>(
@@ -126,6 +155,24 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         .eq('template_id', lead.template_id);
       if (formataData) setFormasPagamento(formataData);
 
+      // Carregar estados do usuário
+      const { data: estData } = await supabase
+        .from('estados')
+        .select('*')
+        .eq('user_id', lead.user_id)
+        .eq('ativo', true)
+        .order('nome');
+      if (estData) setEstados(estData);
+
+      // Carregar países do usuário
+      const { data: paisesData } = await supabase
+        .from('paises')
+        .select('*')
+        .eq('user_id', lead.user_id)
+        .eq('ativo', true)
+        .order('nome');
+      if (paisesData) setPaises(paisesData);
+
       // Carregar cidades do sistema geográfico do usuário
       const { data: cidData } = await supabase
         .from('cidades_ajuste')
@@ -133,7 +180,40 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         .eq('user_id', lead.user_id)
         .eq('ativo', true)
         .order('nome');
-      if (cidData) setCidadesAjuste(cidData);
+      
+      if (cidData) {
+        setCidadesAjuste(cidData);
+        const matched = cidData.find(c => 
+          c.id === lead.cidade_evento || 
+          c.nome.toLowerCase() === (lead.cidade_evento || '').toLowerCase()
+        );
+        if (matched) {
+          setSelectedCidadeId(matched.id);
+          setIsCustomCity(false);
+          setCidadeEvento(matched.nome);
+        } else if (lead.cidade_evento) {
+          setSelectedCidadeId('custom');
+          setIsCustomCity(true);
+          setCustomCityName(lead.cidade_evento);
+          const bp = savedOrcamentoDetalhe.priceBreakdown;
+          const subtotal = bp?.subtotal || lead.valor_total || 0;
+          const sazonal = bp?.ajusteSazonal || 0;
+          const baseForGeo = subtotal + sazonal;
+          const geoPercent = baseForGeo > 0 ? ((bp?.ajusteGeografico?.percentual || 0) / baseForGeo) * 100 : 0;
+          setCustomCityPercent(Math.round(geoPercent).toString());
+          setCustomCityTax((bp?.ajusteGeografico?.taxa || 0).toString());
+        }
+      }
+
+      // Carregar temporadas
+      const { data: tempRes } = await supabase
+        .from('temporadas')
+        .select('*')
+        .eq('template_id', lead.template_id)
+        .eq('ativo', true);
+      if (tempRes) {
+        setTemporadas(tempRes);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -142,24 +222,53 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
   };
 
   useEffect(() => {
+    if (!dataEvento) {
+      setDisponibilidade(null);
+      return;
+    }
+
+    let isMounted = true;
+    async function checkDate() {
+      setCheckingAvailability(true);
+      try {
+        const res = await checkAvailability(lead.user_id, dataEvento);
+        if (isMounted) {
+          setDisponibilidade(res);
+        }
+      } catch (err) {
+        console.error('Erro ao verificar disponibilidade no modal de edição:', err);
+      } finally {
+        if (isMounted) {
+          setCheckingAvailability(false);
+        }
+      }
+    }
+    checkDate();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [lead.user_id, dataEvento]);
+
+  useEffect(() => {
     if (allProducts.length > 0) recalculateValues();
-  }, [selectedProducts, selectedForma, allProducts, formasPagamento, activeDiscounts]);
+  }, [
+    selectedProducts,
+    selectedForma,
+    allProducts,
+    formasPagamento,
+    activeDiscounts,
+    selectedCidadeId,
+    isCustomCity,
+    customCityPercent,
+    customCityTax,
+    dataEvento,
+    temporadas,
+    cupomAtivo,
+    cupomDesconto,
+  ]);
 
   const recalculateValues = () => {
-    const ob = savedOrcamentoDetalhe.priceBreakdown || {
-      subtotal: lead.valor_total || 0,
-      ajusteSazonal: 0,
-      ajusteGeografico: { percentual: 0, taxa: 0 },
-      acrescimoFormaPagamento: 0,
-      descontoCupom: 0,
-      total: lead.valor_total || 0,
-    };
-
-    const seasonalRatio = ob.subtotal > 0 ? (ob.ajusteSazonal || 0) / ob.subtotal : 0;
-    const baseForGeo = ob.subtotal + (ob.ajusteSazonal || 0);
-    const geoPercentageRatio =
-      baseForGeo > 0 ? (ob.ajusteGeografico?.percentual || 0) / baseForGeo : 0;
-
     const newSubtotal = allProducts.reduce((total, p) => {
       const qty = selectedProducts[p.id] || 0;
       const discountActive = activeDiscounts[p.id];
@@ -170,9 +279,41 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
       return total + effectivePrice * qty;
     }, 0);
 
-    const newAjusteSazonal = newSubtotal * seasonalRatio;
-    const newGeoPercentual = (newSubtotal + newAjusteSazonal) * geoPercentageRatio;
-    const geoTaxaFixed = ob.ajusteGeografico?.taxa || 0;
+    // 1. Ajuste Sazonal
+    let newAjusteSazonal = 0;
+    if (dataEvento && temporadas.length > 0) {
+      const parts = dataEvento.split('-');
+      const evDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const tempAtiva = temporadas.find((temp) => {
+        const dIni = temp.data_inicio.split('T')[0].split('-');
+        const dFim = temp.data_fim.split('T')[0].split('-');
+        const ini = new Date(parseInt(dIni[0]), parseInt(dIni[1]) - 1, parseInt(dIni[2]));
+        const fim = new Date(parseInt(dFim[0]), parseInt(dFim[1]) - 1, parseInt(dFim[2]));
+        return evDate >= ini && evDate <= fim;
+      });
+      if (tempAtiva) {
+        const mult = tempAtiva.multiplicador || 1;
+        newAjusteSazonal = newSubtotal * (mult - 1);
+      }
+    }
+
+    // 2. Ajuste Geográfico
+    let geoPercentValue = 0;
+    let newGeoPercentual = 0;
+    let geoTaxaFixed = 0;
+
+    if (isCustomCity) {
+      geoPercentValue = parseFloat(customCityPercent) || 0;
+      newGeoPercentual = ((newSubtotal + newAjusteSazonal) * geoPercentValue) / 100;
+      geoTaxaFixed = parseFloat(customCityTax) || 0;
+    } else if (selectedCidadeId) {
+      const cidadeObj = cidadesAjuste.find((c) => c.id === selectedCidadeId);
+      if (cidadeObj) {
+        geoPercentValue = cidadeObj.ajuste_percentual || 0;
+        newGeoPercentual = ((newSubtotal + newAjusteSazonal) * geoPercentValue) / 100;
+        geoTaxaFixed = cidadeObj.taxa_deslocamento || 0;
+      }
+    }
 
     const totalAntesFormaPagamento =
       newSubtotal + newAjusteSazonal + newGeoPercentual + geoTaxaFixed;
@@ -181,18 +322,12 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     const acrescimoRatio = paymentMethodObj ? (paymentMethodObj.acrescimo || 0) / 100 : 0;
     const newAcrescimoFormaPagamento = totalAntesFormaPagamento * acrescimoRatio;
 
-    const totalAntesCupom = totalAntesFormaPagamento + newAcrescimoFormaPagamento;
-    const originalTotalAntesCupom =
-      ob.subtotal +
-      (ob.ajusteSazonal || 0) +
-      (ob.ajusteGeografico?.percentual || 0) +
-      (ob.ajusteGeografico?.taxa || 0) +
-      (ob.acrescimoFormaPagamento || 0);
-    const cupomRatio =
-      originalTotalAntesCupom > 0 ? (ob.descontoCupom || 0) / originalTotalAntesCupom : 0;
+    let newDescontoCupom = 0;
+    if (cupomAtivo && cupomDesconto > 0) {
+      newDescontoCupom = (totalAntesFormaPagamento * cupomDesconto) / 100;
+    }
 
-    const newDescontoCupom = totalAntesCupom * cupomRatio;
-    const newTotal = totalAntesCupom - newDescontoCupom;
+    const newTotal = totalAntesFormaPagamento + newAcrescimoFormaPagamento - newDescontoCupom;
 
     setPriceBreakdown({
       subtotal: newSubtotal,
@@ -216,9 +351,108 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     });
   };
 
+  const handleValidarCupom = async () => {
+    if (!cupomCodigo.trim()) {
+      setCupomMensagem('Digite um código de cupom');
+      return;
+    }
+    setValidandoCupom(true);
+    setCupomMensagem('');
+    try {
+      const { data, error } = await supabase
+        .from('cupons')
+        .select('*')
+        .eq('codigo', cupomCodigo.toUpperCase())
+        .eq('ativo', true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        setCupomMensagem('❌ Cupom inválido ou inativo');
+        setCupomAtivo(false);
+        setCupomDesconto(0);
+        return;
+      }
+
+      // Se tiver data_validade, verifica
+      if (data.data_validade) {
+        const validade = new Date(data.data_validade);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        if (validade < hoje) {
+          setCupomMensagem('❌ Cupom expirado');
+          setCupomAtivo(false);
+          setCupomDesconto(0);
+          return;
+        }
+      }
+
+      // Se tiver template_id, verifica se bate
+      if (data.template_id && lead.template_id && data.template_id !== lead.template_id) {
+        setCupomMensagem('❌ Cupom não aplicável a este template');
+        setCupomAtivo(false);
+        setCupomDesconto(0);
+        return;
+      }
+
+      setCupomAtivo(true);
+      setCupomDesconto(data.porcentagem || 0);
+      setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+    } catch (err) {
+      console.error('Erro ao validar cupom:', err);
+      setCupomMensagem('❌ Erro ao validar cupom');
+      setCupomAtivo(false);
+      setCupomDesconto(0);
+    } finally {
+      setValidandoCupom(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      let finalCityName = cidadeEvento.trim() || null;
+
+      if (isCustomCity && customCityName.trim()) {
+        const nameTrimmed = customCityName.trim();
+        if (salvarCidadeLista) {
+          if (paises.length > 0 && !selectedPaisId) {
+            alert('Por favor, selecione um país para salvar a cidade na sua lista de atuação.');
+            setSaving(false);
+            return;
+          }
+          const hasStatesForCountry = estados.some((e) => e.pais_id === selectedPaisId);
+          if (hasStatesForCountry && !selectedEstadoId) {
+            alert('Por favor, selecione um estado para salvar a cidade na sua lista de atuação.');
+            setSaving(false);
+            return;
+          }
+          const { data: newCity, error: cityErr } = await supabase
+            .from('cidades_ajuste')
+            .insert({
+              user_id: lead.user_id,
+              estado_id: selectedEstadoId || null,
+              nome: nameTrimmed,
+              ajuste_percentual: parseFloat(customCityPercent) || 0,
+              taxa_deslocamento: parseFloat(customCityTax) || 0,
+              ativo: true
+            })
+            .select()
+            .single();
+
+          if (cityErr) {
+            console.error('Erro ao salvar cidade na lista:', cityErr);
+          } else if (newCity) {
+            finalCityName = newCity.id;
+          }
+        } else {
+          finalCityName = nameTrimmed;
+        }
+      } else if (selectedCidadeId && selectedCidadeId !== 'custom') {
+        finalCityName = selectedCidadeId;
+      }
+
       const novosDetalhes: LeadOrcamentoDetalhe = {
         ...savedOrcamentoDetalhe,
         selectedProdutos: selectedProducts,
@@ -237,13 +471,16 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         upsell_produtos: upsellItems,
         valor_base: efectiveTotal - upsellSubtotal,
         valor_upsell: upsellSubtotal,
+        cupomCodigo: cupomAtivo ? cupomCodigo : null,
+        cupomAtivo,
+        cupomDesconto,
       } as any;
 
       const updatedLeadData: Partial<Lead> = {
         nome_cliente: nomeCliente || null,
         telefone_cliente: telefoneCliente || null,
         data_evento: dataEvento || null,
-        cidade_evento: cidadeEvento || null,
+        cidade_evento: finalCityName,
         valor_total: efectiveTotal,
         orcamento_detalhe: novosDetalhes,
       };
@@ -353,9 +590,30 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                     type="date"
                     value={dataEvento}
                     onChange={(e) => setDataEvento(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-9 pr-10 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  {checkingAvailability && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                    </div>
+                  )}
                 </div>
+                {disponibilidade && (
+                  <div className={`mt-2 flex items-center gap-1.5 p-2.5 rounded-lg border text-xs font-semibold ${
+                    disponibilidade.status === 'disponivel'
+                      ? 'bg-green-50 border-green-200 text-green-800'
+                      : disponibilidade.status === 'parcial'
+                      ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                      : 'bg-red-50 border-red-200 text-red-800'
+                  }`}>
+                    {disponibilidade.status === 'disponivel' ? (
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>{disponibilidade.mensagem} ({disponibilidade.eventos_atual}/{disponibilidade.eventos_max})</span>
+                  </div>
+                )}
               </div>
 
               {/* Cidade */}
@@ -367,16 +625,28 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   {cidadesAjuste.length > 0 ? (
                     <select
-                      value={cidadeEvento}
-                      onChange={(e) => setCidadeEvento(e.target.value)}
+                      value={isCustomCity ? 'custom' : selectedCidadeId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'custom') {
+                          setIsCustomCity(true);
+                          setSelectedCidadeId('');
+                        } else {
+                          setIsCustomCity(false);
+                          setSelectedCidadeId(val);
+                          const chosen = cidadesAjuste.find(c => c.id === val);
+                          setCidadeEvento(chosen ? chosen.nome : '');
+                        }
+                      }}
                       className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white"
                     >
-                      <option value="">Selecione uma cidade livre ou padronizada...</option>
+                      <option value="">Selecione uma cidade padronizada...</option>
                       {cidadesAjuste.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.nome} {c.taxa_deslocamento > 0 ? `(+ Exclusividade de R$${c.taxa_deslocamento})` : ''} 
+                          {c.nome} {c.ajuste_percentual > 0 ? `(+${c.ajuste_percentual}%)` : ''} {c.taxa_deslocamento > 0 ? `(+R$ ${c.taxa_deslocamento})` : ''}
                         </option>
                       ))}
+                      <option value="custom">+ Outra cidade (personalizar localidade)</option>
                     </select>
                   ) : (
                     <input
@@ -390,6 +660,102 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                 </div>
               </div>
             </div>
+
+            {/* Formulário de Cidade Customizada */}
+            {isCustomCity && (
+              <div className="p-4 bg-indigo-50/20 border border-indigo-150 rounded-xl space-y-3 mt-3 animate-fade-in">
+                <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">
+                  📍 Configuração de Cidade Customizada
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Nome da Cidade</label>
+                  <input
+                    type="text"
+                    value={customCityName}
+                    onChange={(e) => setCustomCityName(e.target.value)}
+                    placeholder="Ex: Campinas - SP"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Ajuste Regional (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={customCityPercent}
+                      onChange={(e) => setCustomCityPercent(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Taxa de Deslocamento (R$)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={customCityTax}
+                      onChange={(e) => setCustomCityTax(e.target.value)}
+                      placeholder="0,00"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={salvarCidadeLista}
+                      onChange={(e) => setSalvarCidadeLista(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    Salvar esta cidade na minha lista de atuação
+                  </label>
+                </div>
+                {salvarCidadeLista && paises.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 pt-1 animate-fade-in">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-600">País *</label>
+                      <div className="relative">
+                        <select
+                          value={selectedPaisId}
+                          onChange={(e) => {
+                            setSelectedPaisId(e.target.value);
+                            setSelectedEstadoId('');
+                          }}
+                          className="w-full pl-3 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none"
+                        >
+                          <option value="">Selecione...</option>
+                          {paises.map((p) => (
+                            <option key={p.id} value={p.id}>{p.nome}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-600">Estado *</label>
+                      <div className="relative">
+                        <select
+                          value={selectedEstadoId}
+                          disabled={!selectedPaisId}
+                          onChange={(e) => setSelectedEstadoId(e.target.value)}
+                          className="w-full pl-3 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none disabled:opacity-50"
+                        >
+                          <option value="">Selecione...</option>
+                          {estados
+                            .filter((e) => e.pais_id === selectedPaisId)
+                            .map((e) => (
+                              <option key={e.id} value={e.id}>{e.nome} ({e.sigla})</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Campos personalizados do template ── */}
             {customFields.length > 0 && (
@@ -551,6 +917,35 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                 </div>
               </div>
 
+              {/* Seção de Cupom de Desconto */}
+              <div className="bg-white border border-gray-200 rounded-xl p-5">
+                <h4 className="font-semibold text-gray-800 text-sm uppercase tracking-wider mb-3">
+                  🎫 Cupom de Desconto
+                </h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={cupomCodigo}
+                    onChange={(e) => setCupomCodigo(e.target.value.toUpperCase())}
+                    placeholder="DIGITE O CÓDIGO DO CUPOM"
+                    className="flex-1 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50 px-3 py-2"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleValidarCupom}
+                    disabled={validandoCupom}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {validandoCupom ? 'Validando...' : 'Aplicar'}
+                  </button>
+                </div>
+                {cupomMensagem && (
+                  <p className={`text-xs font-semibold mt-2 ${cupomAtivo ? 'text-green-600' : 'text-red-500'}`}>
+                    {cupomMensagem}
+                  </p>
+                )}
+              </div>
+
               {formasPagamento.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                   <h4 className="font-semibold text-gray-800 text-sm uppercase tracking-wider mb-3">
@@ -667,7 +1062,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
                   {priceBreakdown.descontoCupom > 0 && (
                     <div className="flex justify-between text-green-600 font-medium">
-                      <span>Desconto Cupom</span>
+                      <span>Desconto Cupom {cupomDesconto > 0 ? `(${cupomDesconto}%)` : ''}</span>
                       <span>-{formatCurrency(priceBreakdown.descontoCupom)}</span>
                     </div>
                   )}

@@ -41,6 +41,8 @@ export interface ConfiguracaoAgenda {
   config_horarios_trabalho?: Record<string, string[]> | null;
   bloquear_agenda_workflow?: boolean;
   permitir_conflito_interno?: boolean;
+  bloquear_tarefas_internas?: boolean;
+  bloquear_tarefas_externas?: boolean;
 }
 
 export interface EventoAgenda {

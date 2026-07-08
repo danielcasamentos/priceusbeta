@@ -100,6 +100,7 @@ export interface Profile {
   portfolio_link: string | null;
   portfolio_fotos: string[] | null;
   dias_adiar_tarefas?: number | null;
+  google_auth_data?: any | null;
   created_at: string;
   updated_at: string;
 }

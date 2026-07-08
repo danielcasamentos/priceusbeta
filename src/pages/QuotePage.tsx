@@ -2239,7 +2239,7 @@ export function QuotePage() {
 
   // ── Função de seção de upsell (carrossel) ─────────────────────────────
   const renderUpsellSection = () => {
-    if (!template?.upsell_ativo || filteredUpsellProdutos.length === 0 || !selectedFormaPagamento) return null;
+    if (!template?.upsell_ativo || filteredUpsellProdutos.length === 0) return null;
 
     const titulo = template?.upsell_titulo || '🎁 Aproveite e adicione ao seu pacote';
     const subtitulo = template?.upsell_subtitulo || 'Itens especiais com condições exclusivas para você';
@@ -3785,6 +3785,9 @@ export function QuotePage() {
             </div>
             </div>
 
+            {/* 🎁 Upselling – acima das formas de pagamento */}
+            {renderUpsellSection()}
+
             {formasPagamentoProcessadas.length > 0 && (
               <div className="border-t pt-6" data-pagamento-section style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
                 <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2`} style={{ ...inlineStyles.heading2, fontSize: '1.25rem', borderBottom: 'none', paddingBottom: 0 }}>
@@ -3943,8 +3946,7 @@ export function QuotePage() {
               </div>
             )}
 
-            {/* 🎁 Upselling – abaixo das formas de pagamento */}
-            {renderUpsellSection()}
+
 
             {/* Cupom de Desconto */}
             {fieldsValidation.canUseCoupons && (

@@ -18,10 +18,11 @@ interface QuoteVibranteProps {
   camposExtrasData: Record<string, string>;
   setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
+  upsellSection?: React.ReactNode;
 }
 
 export function QuoteVibrante(props: QuoteVibranteProps) {
-  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, setFormData, setCamposExtrasData, handleProdutoQuantityChange } = props;
+  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, setFormData, setCamposExtrasData, handleProdutoQuantityChange, upsellSection } = props;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-100 font-sans">
@@ -253,8 +254,7 @@ export function QuoteVibrante(props: QuoteVibranteProps) {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
+            {upsellSection}
 
             <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-6 text-center border-2 border-pink-200">
               <p className="text-sm text-gray-600 mb-2">Valor Total</p>
