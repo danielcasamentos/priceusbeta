@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MessageCircle, X, Edit3, Sparkles } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
 
 interface WhatsAppMessageModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface WhatsAppMessageModalProps {
     diasPassados?: number;
     tag?: string;
   };
+  userId?: string;
 }
 
 export function WhatsAppMessageModal({
@@ -26,11 +28,42 @@ export function WhatsAppMessageModal({
   clienteTelefone,
   tipo,
   dados,
+  userId,
 }: WhatsAppMessageModalProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [mensagemEditada, setMensagemEditada] = useState<string>('');
+  const [businessSettings, setBusinessSettings] = useState<any>(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchSettings = async () => {
+      setLoadingSettings(true);
+      try {
+        let resolvedUserId = userId;
+        if (!resolvedUserId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          resolvedUserId = user?.id;
+        }
+        if (!resolvedUserId) return;
+
+        const { data } = await supabase
+          .from('user_business_settings')
+          .select('*')
+          .eq('user_id', resolvedUserId)
+          .maybeSingle();
+
+        if (data) {
+          setBusinessSettings(data);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar configurações em WhatsAppMessageModal:', err);
+      } finally {
+        setLoadingSettings(false);
+      }
+    };
+    fetchSettings();
+  }, [userId, isOpen]);
 
   const nomeExibido = clienteNome || 'Cliente';
   const valorFormatado = dados.valor ? formatCurrency(dados.valor) : '';
@@ -46,6 +79,31 @@ export function WhatsAppMessageModal({
   })();
   const diasAtrasoText = diasAtraso > 0 ? `há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}` : 'hoje';
 
+  const formatPixSuffix = (settings: any) => {
+    if (!settings?.pix_key) return '';
+    
+    const parts = [];
+    const pixType = settings.additional_info?.pix_type || 'Chave';
+    parts.push(`Chave PIX: ${settings.pix_key} (${pixType})`);
+    
+    const holderName = settings.additional_info?.pix_holder || settings.business_name || '';
+    if (holderName) {
+      parts.push(`Titular: ${holderName}`);
+    }
+    
+    if (settings.bank_name) {
+      let bankInfo = `Banco: ${settings.bank_name}`;
+      if (settings.bank_agency) bankInfo += ` | Ag: ${settings.bank_agency}`;
+      if (settings.bank_account) bankInfo += ` | CC: ${settings.bank_account}`;
+      if (settings.bank_account_type) bankInfo += ` (${settings.bank_account_type})`;
+      parts.push(bankInfo);
+    }
+    
+    return `\n\n*Dados para Pagamento via PIX:*\n${parts.join('\n')}`;
+  };
+
+  const suffix = tipo === 'cobranca' ? formatPixSuffix(businessSettings) : '';
+
   // ── DEFINIÇÃO DOS TEMPLATES DISPONÍVEIS ──────────────────────────
   const templates = tipo === 'cobranca'
     ? [
@@ -53,19 +111,19 @@ export function WhatsAppMessageModal({
           id: 'amigavel',
           titulo: '😊 Amigável',
           descricao: 'Lembrete leve e afetuoso, ideal para os primeiros dias de atraso.',
-          texto: `Oi, ${nomeExibido}! Tudo bem? Passando para te lembrar de forma super leve que temos uma parcela em aberto de ${valorFormatado} referente a "${dados.descricao || 'nosso contrato'}" que venceu ${diasAtrasoText}. Se precisar de uma nova via do Pix ou boleto, me avisa por aqui! Obrigado pela parceria. ❤️`,
+          texto: `Oi, ${nomeExibido}! Tudo bem? Passando para te lembrar de forma super leve que temos uma parcela em aberto de ${valorFormatado} referente a "${dados.descricao || 'nosso contrato'}" que venceu ${diasAtrasoText}. Se precisar de uma nova via do Pix ou boleto, me avisa por aqui! Obrigado pela parceria. ❤️${suffix}`,
         },
         {
           id: 'comercial',
           titulo: '🤝 Comercial / Formal',
           descricao: 'Mensagem objetiva e profissional, focada em resolver o pagamento.',
-          texto: `Olá, ${nomeExibido}, tudo bem? Constatamos em nosso sistema que a parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} (referente a "${dados.descricao || 'serviços fotográficos'}") está em aberto. Segue a chave Pix para regularização. Caso já tenha efetuado o pagamento, por favor envie o comprovante para darmos baixa. Obrigado!`,
+          texto: `Olá, ${nomeExibido}, tudo bem? Constatamos em nosso sistema que a parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} (referente a "${dados.descricao || 'serviços fotográficos'}") está em aberto. Segue a chave Pix para regularização. Caso já tenha efetuado o pagamento, por favor envie o comprovante para darmos baixa. Obrigado!${suffix}`,
         },
         {
           id: 'urgente',
           titulo: '🚨 Urgente / Facilitadora',
           descricao: 'Mensagem flexível oferecendo opções de parcelamento ou ajuda.',
-          texto: `Oi, ${nomeExibido}! Sei que a rotina é corrida e pode ter passado despercebido, mas a sua parcela de ${valorFormatado} venceu ${diasAtrasoText}. Quer que eu parcele o valor restante ou prefere pagar via Pix? Me avisa como fica melhor para você para mantermos tudo certinho! 🙏`,
+          texto: `Oi, ${nomeExibido}! Sei que a rotina é corrida e pode ter passado despercebido, mas a sua parcela de ${valorFormatado} venceu ${diasAtrasoText}. Quer que eu parcele o valor restante ou prefere pagar via Pix? Me avisa como fica melhor para você para mantermos tudo certinho! 🙏${suffix}`,
         },
       ]
     : [
@@ -91,11 +149,15 @@ export function WhatsAppMessageModal({
 
   // Iniciar o primeiro template por padrão
   useEffect(() => {
+    if (loadingSettings) return;
     if (templates.length > 0) {
-      setSelectedTemplateId(templates[0].id);
-      setMensagemEditada(templates[0].texto);
+      const activeTemplate = templates.find(t => t.id === (selectedTemplateId || templates[0].id)) || templates[0];
+      setSelectedTemplateId(activeTemplate.id);
+      setMensagemEditada(activeTemplate.texto);
     }
-  }, [tipo, dados.valor, dados.dataVencimento, clienteNome]);
+  }, [tipo, dados.valor, dados.dataVencimento, clienteNome, selectedTemplateId, businessSettings, loadingSettings]);
+
+  if (!isOpen) return null;
 
   const handleSelectTemplate = (id: string, texto: string) => {
     setSelectedTemplateId(id);

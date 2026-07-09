@@ -916,6 +916,7 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
           valor={cobrancaTransaction.valor}
           dataVencimento={cobrancaTransaction.data}
           descricao={cobrancaTransaction.descricao}
+          userId={userId}
         />
       )}
     </div>

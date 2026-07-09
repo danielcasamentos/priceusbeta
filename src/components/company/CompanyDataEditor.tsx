@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Building2, Save, AlertCircle, CheckCircle, PenTool } from 'lucide-react';
+import { Building2, Save, AlertCircle, CheckCircle, PenTool, CreditCard } from 'lucide-react';
 import { MaskedInput } from '../MaskedInput';
 import { ContractCanvas } from '../ContractCanvas';
 
@@ -17,6 +17,18 @@ interface BusinessSettings {
   email: string;
   signature_base64: string | null;
   signature_created_at: string | null;
+  pix_key?: string;
+  bank_name?: string;
+  bank_agency?: string;
+  bank_account?: string;
+  bank_account_type?: string;
+  additional_info?: {
+    pix_type?: string;
+    pix_holder?: string;
+    fine_rate?: number;
+    interest_rate?: number;
+    grace_period_days?: number;
+  } | null;
 }
 
 interface CompanyDataEditorProps {
@@ -37,6 +49,18 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
     email: '',
     signature_base64: null,
     signature_created_at: null,
+    pix_key: '',
+    bank_name: '',
+    bank_agency: '',
+    bank_account: '',
+    bank_account_type: '',
+    additional_info: {
+      pix_type: 'CPF',
+      pix_holder: '',
+      fine_rate: 0,
+      interest_rate: 0,
+      grace_period_days: 0,
+    },
   });
 
   const [loading, setLoading] = useState(true);
@@ -71,6 +95,12 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
           email: data.email || '',
           signature_base64: data.signature_base64 || null,
           signature_created_at: data.signature_created_at || null,
+          pix_key: data.pix_key || '',
+          bank_name: data.bank_name || '',
+          bank_agency: data.bank_agency || '',
+          bank_account: data.bank_account || '',
+          bank_account_type: data.bank_account_type || '',
+          additional_info: data.additional_info || { pix_type: 'CPF', pix_holder: '', fine_rate: 0, interest_rate: 0, grace_period_days: 0 },
         });
       }
     } catch (error) {
@@ -194,6 +224,178 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
           <MaskedInput mask="99999-999" value={settings.zip_code} onChange={(e) => setSettings({ ...settings, zip_code: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="border-t pt-6">
+        <div className="flex items-center gap-3 mb-4">
+          <CreditCard className="w-6 h-6 text-blue-600" />
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Dados para Recebimento (PIX e Banco)</h3>
+            <p className="text-sm text-gray-600">Essas informações serão incluídas nos seus lembretes de cobrança via WhatsApp</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Chave PIX</label>
+            <select
+              value={settings.additional_info?.pix_type || 'CPF'}
+              onChange={(e) => setSettings({
+                ...settings,
+                additional_info: {
+                  ...(settings.additional_info || {}),
+                  pix_type: e.target.value
+                }
+              })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
+            >
+              <option value="CPF">CPF</option>
+              <option value="CNPJ">CNPJ</option>
+              <option value="Celular">Celular</option>
+              <option value="E-mail">E-mail</option>
+              <option value="Chave Aleatória">Chave Aleatória</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Chave PIX</label>
+            <input
+              type="text"
+              value={settings.pix_key || ''}
+              onChange={(e) => setSettings({ ...settings, pix_key: e.target.value })}
+              placeholder="Sua chave PIX"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Titular da Conta / PIX (para conferência)</label>
+            <input
+              type="text"
+              value={settings.additional_info?.pix_holder || ''}
+              onChange={(e) => setSettings({
+                ...settings,
+                additional_info: {
+                  ...(settings.additional_info || {}),
+                  pix_holder: e.target.value
+                }
+              })}
+              placeholder="Nome do titular do PIX"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Banco</label>
+            <input
+              type="text"
+              value={settings.bank_name || ''}
+              onChange={(e) => setSettings({ ...settings, bank_name: e.target.value })}
+              placeholder="Ex: Banco do Brasil, Nubank..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Agência</label>
+            <input
+              type="text"
+              value={settings.bank_agency || ''}
+              onChange={(e) => setSettings({ ...settings, bank_agency: e.target.value })}
+              placeholder="Ex: 0001"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Conta</label>
+            <input
+              type="text"
+              value={settings.bank_account || ''}
+              onChange={(e) => setSettings({ ...settings, bank_account: e.target.value })}
+              placeholder="Ex: 12345-6"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Conta</label>
+            <select
+              value={settings.bank_account_type || 'Corrente'}
+              onChange={(e) => setSettings({ ...settings, bank_account_type: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
+            >
+              <option value="Corrente">Corrente</option>
+              <option value="Poupança">Poupança</option>
+              <option value="Pagamento">Conta de Pagamento</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Multa e Juros por Atraso */}
+        <div className="border-t border-gray-100 mt-6 pt-6 animate-in fade-in duration-200">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-3">Multas e Juros por Atraso (Opcional)</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Multa por Atraso (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={settings.additional_info?.fine_rate ?? ''}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  additional_info: {
+                    ...(settings.additional_info || {}),
+                    fine_rate: parseFloat(e.target.value) || 0
+                  }
+                })}
+                placeholder="Ex: 2.0"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              />
+              <p className="text-xs text-gray-500 mt-1">Percentual único aplicado logo após o vencimento</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Juros Diário (%)</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={settings.additional_info?.interest_rate ?? ''}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  additional_info: {
+                    ...(settings.additional_info || {}),
+                    interest_rate: parseFloat(e.target.value) || 0
+                  }
+                })}
+                placeholder="Ex: 0.033"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              />
+              <p className="text-xs text-gray-500 mt-1">Percentual de juros por cada dia corrido de atraso</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Carência de Cobrança (Dias)</label>
+              <input
+                type="number"
+                min="0"
+                value={settings.additional_info?.grace_period_days ?? ''}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  additional_info: {
+                    ...(settings.additional_info || {}),
+                    grace_period_days: parseInt(e.target.value, 10) || 0
+                  }
+                })}
+                placeholder="Ex: 5"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              />
+              <p className="text-xs text-gray-500 mt-1">Dias de tolerância antes de calcular multa e juros</p>
+            </div>
+          </div>
         </div>
       </div>
 

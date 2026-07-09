@@ -31,6 +31,7 @@ interface Contract {
   user_signature_base64: string; // Assinatura do profissional
   signature_base64?: string; // Assinatura do cliente
   user_data_json: any;
+  content_override?: string;
   contract_templates: {
     name: string;
     content_text?: string; // Opcional inicialmente
@@ -96,7 +97,7 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
       const clientData: ClientData = contract.client_data_json || {};
 
       const finalContent = replaceContractVariables(
-        template.content_text,
+        contract.content_override || template.content_text,
         businessSettings,
         clientData,
         leadData
@@ -153,12 +154,13 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
     try {
       const { error } = await supabase
         .from('contracts')
-        .update({ template_id: newTemplateId })
+        .update({ template_id: newTemplateId, content_override: null })
         .eq('id', contract.id);
         
       if (error) throw error;
       
       setSelectedTemplateId(newTemplateId);
+      contract.content_override = undefined;
       
       const selected = allTemplates.find(t => t.id === newTemplateId);
       if (selected) {

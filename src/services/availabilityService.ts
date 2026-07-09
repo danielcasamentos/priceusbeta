@@ -230,6 +230,32 @@ export async function getEventosByMonth(userId: string, year: number, month: num
   }
 }
 
+async function triggerGoogleCalendarSync(
+  userId: string,
+  action: 'insert' | 'update' | 'delete',
+  event: any,
+  eventId?: string
+) {
+  try {
+    const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+      body: {
+        action,
+        event,
+        eventId
+      }
+    });
+
+    if (error) {
+      console.warn('[GoogleSync] Erro no invoke:', error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('[GoogleSync] Erro ao disparar sincronização:', err);
+    return null;
+  }
+}
+
 export async function addEvento(evento: Partial<EventoAgenda>): Promise<EventoAgenda | null> {
   try {
     const { data, error } = await supabase
@@ -240,6 +266,17 @@ export async function addEvento(evento: Partial<EventoAgenda>): Promise<EventoAg
 
     if (error) throw error;
 
+    if (data && data.user_id && data.origem !== 'ics_sync') {
+      triggerGoogleCalendarSync(data.user_id, 'insert', data).then(async (res) => {
+        if (res?.success && res.googleEventId) {
+          await supabase
+            .from('eventos_agenda')
+            .update({ uid_externo: `gcal_${res.googleEventId}` })
+            .eq('id', data.id);
+        }
+      });
+    }
+
     return data;
   } catch (error) {
     console.error('Erro ao adicionar evento:', error);
@@ -249,12 +286,31 @@ export async function addEvento(evento: Partial<EventoAgenda>): Promise<EventoAg
 
 export async function updateEvento(id: string, updates: Partial<EventoAgenda>): Promise<boolean> {
   try {
+    const { data: existingEvent } = await supabase
+      .from('eventos_agenda')
+      .select('*')
+      .eq('id', id)
+      .single();
+
     const { error } = await supabase
       .from('eventos_agenda')
       .update(updates)
       .eq('id', id);
 
     if (error) throw error;
+
+    if (existingEvent && existingEvent.user_id && existingEvent.origem !== 'ics_sync') {
+      const gcalId = existingEvent.uid_externo?.startsWith('gcal_') 
+        ? existingEvent.uid_externo.substring(5) 
+        : undefined;
+
+      triggerGoogleCalendarSync(
+        existingEvent.user_id,
+        'update',
+        { ...existingEvent, ...updates },
+        gcalId
+      );
+    }
 
     return true;
   } catch (error) {
@@ -265,12 +321,31 @@ export async function updateEvento(id: string, updates: Partial<EventoAgenda>): 
 
 export async function deleteEvento(id: string): Promise<boolean> {
   try {
+    const { data: existingEvent } = await supabase
+      .from('eventos_agenda')
+      .select('*')
+      .eq('id', id)
+      .single();
+
     const { error } = await supabase
       .from('eventos_agenda')
       .delete()
       .eq('id', id);
 
     if (error) throw error;
+
+    if (existingEvent && existingEvent.user_id && existingEvent.origem !== 'ics_sync') {
+      const gcalId = existingEvent.uid_externo?.startsWith('gcal_') 
+        ? existingEvent.uid_externo.substring(5) 
+        : undefined;
+
+      triggerGoogleCalendarSync(
+        existingEvent.user_id,
+        'delete',
+        existingEvent,
+        gcalId
+      );
+    }
 
     return true;
   } catch (error) {
@@ -502,7 +577,10 @@ export async function importarEventosInteligente(
       const chunk = eventos.slice(i, i + chunkSize);
       await Promise.all(chunk.map(async (evento) => {
         try {
-          if (evento.uid_externo && (evento.uid_externo.includes('workflow_') || evento.uid_externo.includes('priceus'))) {
+          if (
+            (evento.nome && evento.nome.startsWith('[PriceU$]')) ||
+            (evento.uid_externo && (evento.uid_externo.includes('workflow_') || evento.uid_externo.includes('priceus')))
+          ) {
             console.log(`[importarEventosInteligente] Ignorando evento de sincronismo reverso/workflow: ${evento.nome} (${evento.uid_externo})`);
             result.eventos_ignorados++;
             return;
@@ -1033,10 +1111,14 @@ export async function syncWorkflowToCalendar(
             .update(eventPayload)
             .eq('id', eventId);
           existingEventsMap.delete(uid);
+
+          triggerGoogleCalendarSync(userId, 'update', eventPayload);
         } else {
           await supabase
             .from('eventos_agenda')
             .insert([eventPayload]);
+
+          triggerGoogleCalendarSync(userId, 'insert', eventPayload);
         }
       } else {
         if (existingEventsMap.has(uid)) {
@@ -1046,16 +1128,20 @@ export async function syncWorkflowToCalendar(
             .delete()
             .eq('id', eventId);
           existingEventsMap.delete(uid);
+
+          triggerGoogleCalendarSync(userId, 'delete', { uid_externo: uid });
         }
       }
     }
 
     // 4. Limpar eventos órfãos de etapas deletadas
-    for (const eventId of existingEventsMap.values()) {
+    for (const [uid, eventId] of existingEventsMap.entries()) {
       await supabase
         .from('eventos_agenda')
         .delete()
         .eq('id', eventId);
+
+      triggerGoogleCalendarSync(userId, 'delete', { uid_externo: uid });
     }
   } catch (err) {
     console.error('Erro ao sincronizar workflow com calendário:', err);

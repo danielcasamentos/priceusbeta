@@ -12,7 +12,7 @@ interface CompanyDashboardProps {
   onNewTransaction: () => void;
 }
 
-const PendingTransactionsPanel = ({ transactions }: { transactions: any[] }) => {
+const PendingTransactionsPanel = ({ transactions, userId }: { transactions: any[]; userId: string }) => {
   const [activeTx, setActiveTx] = useState<any | null>(null);
   const now = new Date();
   const startOfToday = new Date(now.setHours(0, 0, 0, 0));
@@ -76,6 +76,7 @@ const PendingTransactionsPanel = ({ transactions }: { transactions: any[] }) => 
           valor={activeTx.valor}
           dataVencimento={activeTx.data}
           descricao={activeTx.descricao}
+          userId={userId}
         />
       )}
     </div>
@@ -303,7 +304,7 @@ export function CompanyDashboard({ userId, onNewTransaction }: CompanyDashboardP
       )}
 
       {/* Painel de Contas a Pagar e Receber */}
-      <PendingTransactionsPanel transactions={transactions} />
+      <PendingTransactionsPanel transactions={transactions} userId={userId} />
 
       {/* ── Calculadora de Valor por Hora ── */}
       {(() => {

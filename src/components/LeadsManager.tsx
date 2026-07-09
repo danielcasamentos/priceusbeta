@@ -2,14 +2,14 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Re-
 import { EditLeadQuoteModal } from './EditLeadQuoteModal';
 import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users, Loader2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
 import { ConvertAndContractModal } from './company/ConvertAndContractModal';
 import { Product, CustomField, PriceBreakdown } from '../lib/whatsappMessageGenerator'; // Importar interfaces necessárias
-import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
+import { checkAvailability, AvailabilityResult, deleteEvento } from '../services/availabilityService';
 import { useReviewRequest } from '../hooks/useReviewRequest';
 import { WorkflowStepper } from './WorkflowStepper';
 import { WorkflowStep } from '../types/workflow';
@@ -86,6 +86,12 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [contractLead, setContractLead] = useState<Lead | null>(null);
   const [detalhesOrcamento, setDetalhesOrcamento] = useState<LeadOrcamentoDetalhe | null>(null);
   const [loadingDetalhes, setLoadingDetalhes] = useState(false);
+  const [cancelConversionConfig, setCancelConversionConfig] = useState<{
+    leadId: string;
+    newStatus: Lead['status'];
+    leadName: string;
+  } | null>(null);
+  const [isCancelingConversion, setIsCancelingConversion] = useState(false);
   const [whatsappMessageBody, setWhatsappMessageBody] = useState<string>('');
   const [disponibilidadeLead, setDisponibilidadeLead] = useState<AvailabilityResult | null>(null);
   const [editingLeadQuote, setEditingLeadQuote] = useState<{lead: Lead | null, detalhes: LeadOrcamentoDetalhe | null}>({lead: null, detalhes: null});
@@ -823,7 +829,88 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
+  const executeCancelConversion = async (leadId: string, newStatus: Lead['status']) => {
+    setIsCancelingConversion(true);
+    try {
+      const { error: txError } = await supabase
+        .from('company_transactions')
+        .delete()
+        .eq('lead_id', leadId);
+      if (txError) throw txError;
+
+      const { data: agendaEvents } = await supabase
+        .from('eventos_agenda')
+        .select('id')
+        .eq('lead_id', leadId);
+
+      if (agendaEvents && agendaEvents.length > 0) {
+        for (const evt of agendaEvents) {
+          await deleteEvento(evt.id);
+        }
+      }
+
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .delete()
+        .eq('lead_id', leadId);
+      if (contractError) throw contractError;
+
+      const { data: leadData } = await supabase
+        .from('leads')
+        .select('orcamento_detalhe')
+        .eq('id', leadId)
+        .single();
+        
+      if (leadData?.orcamento_detalhe) {
+        const updatedDetail = { ...leadData.orcamento_detalhe };
+        delete updatedDetail.plano_pagamento;
+        await supabase
+          .from('leads')
+          .update({ orcamento_detalhe: updatedDetail })
+          .eq('id', leadId);
+      }
+
+      const { error: statusError } = await supabase
+        .from('leads')
+        .update({
+          status: newStatus,
+          data_ultimo_contato: newStatus === 'contatado' ? new Date().toISOString() : null,
+        })
+        .eq('id', leadId);
+
+      if (statusError) throw statusError;
+
+      alert('✅ Conversão desfeita com sucesso! Lançamentos financeiros, datas na agenda e contratos foram removidos.');
+      setCancelConversionConfig(null);
+      loadLeads();
+      if (selectedLead && selectedLead.id === leadId) {
+        setSelectedLead(prev => prev ? { ...prev, status: newStatus } : null);
+      }
+    } catch (err: any) {
+      console.error('Erro ao cancelar conversão do lead:', err);
+      alert(`❌ Erro ao desfazer conversão: ${err.message}`);
+    } finally {
+      setIsCancelingConversion(false);
+    }
+  };
+
   const updateLeadStatus = async (leadId: string, newStatus: Lead['status']) => {
+    const lead = leads.find((l: LeadWithReview) => l.id === leadId);
+    const currentStatus = lead?.status;
+
+    if (
+      lead &&
+      (currentStatus === 'convertido' || currentStatus === 'finalizado') &&
+      (newStatus !== 'convertido' && newStatus !== 'finalizado')
+    ) {
+      setCancelConversionConfig({
+        leadId,
+        newStatus,
+        leadName: lead.nome_cliente || 'Cliente',
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('leads')
@@ -840,13 +927,11 @@ export function LeadsManager({ userId }: { userId: string }) {
         
         if (lead) {
           setSelectedLead(null);
-          // Não muda a aba ainda — o usuário confirma no modal primeiro
           loadDetalhesOrcamento(lead, false).then(detalhe => {
             setConvertModal({ lead, orcamentoDetalhe: detalhe, fromContract: false });
           });
         }
         
-        // Notificação de lead convertido (em background, sem .catch() direto)
         try {
           await supabase.from('notifications').insert({
             user_id: userId,
@@ -866,7 +951,7 @@ export function LeadsManager({ userId }: { userId: string }) {
         alert('✅ Status atualizado com sucesso!');
       }
 
-      loadLeads(); // Atualiza a lista em background
+      loadLeads();
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       alert('❌ Erro ao atualizar status');
@@ -2595,6 +2680,47 @@ export function LeadsManager({ userId }: { userId: string }) {
             loadLeads();
           }}
         />
+      )}
+
+      {/* Modal de Cancelamento de Conversão */}
+      {cancelConversionConfig && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-2xl shadow-2xl w-full max-w-md border dark:border-[rgba(255,255,255,0.06)] overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4 text-red-600 dark:text-red-400">
+                <AlertTriangle className="w-8 h-8" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Desfazer Conversão do Lead?</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+                Você está alterando o status de <strong>{cancelConversionConfig.leadName}</strong> para fora de "Convertido/Finalizado".
+                Isso irá limpar automaticamente todas as informações de produção criadas:
+              </p>
+              <ul className="space-y-2 text-xs text-gray-500 dark:text-gray-400 mb-6 bg-gray-50 dark:bg-white/5 p-3 rounded-lg border dark:border-white/5">
+                <li className="flex items-center gap-2">❌ Lançamentos e parcelas de receitas financeiras.</li>
+                <li className="flex items-center gap-2">❌ Eventos vinculados a este lead na agenda (inclusive Google Calendar).</li>
+                <li className="flex items-center gap-2">❌ Contratos gerados para este lead.</li>
+              </ul>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCancelConversionConfig(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  disabled={isCancelingConversion}
+                  onClick={() => executeCancelConversion(cancelConversionConfig.leadId, cancelConversionConfig.newStatus)}
+                  className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isCancelingConversion && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirmar e Desfazer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de Cadastro Manual de Lead */}

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageCircle, X, Edit3, Sparkles } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
 
 interface CobrancaModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface CobrancaModalProps {
   valor: number;
   dataVencimento: string;
   descricao: string;
+  userId?: string;
 }
 
 export function CobrancaModal({
@@ -20,12 +22,60 @@ export function CobrancaModal({
   valor,
   dataVencimento,
   descricao,
+  userId,
 }: CobrancaModalProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('amigavel');
   const [mensagemEditada, setMensagemEditada] = useState<string>('');
   const [prevPropsKey, setPrevPropsKey] = useState<string>('');
+  const [businessSettings, setBusinessSettings] = useState<any>(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [cobrarAtraso, setCobrarAtraso] = useState(false);
+  const [diasTolerancia, setDiasTolerancia] = useState(0);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (businessSettings) {
+      const graceDays = businessSettings.additional_info?.grace_period_days ?? 0;
+      setDiasTolerancia(graceDays);
+      
+      const fineRate = businessSettings.additional_info?.fine_rate ?? 0;
+      const interestRate = businessSettings.additional_info?.interest_rate ?? 0;
+      if (fineRate > 0 || interestRate > 0) {
+        setCobrarAtraso(true);
+      } else {
+        setCobrarAtraso(false);
+      }
+    }
+  }, [businessSettings]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchSettings = async () => {
+      setLoadingSettings(true);
+      try {
+        let resolvedUserId = userId;
+        if (!resolvedUserId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          resolvedUserId = user?.id;
+        }
+        if (!resolvedUserId) return;
+
+        const { data } = await supabase
+          .from('user_business_settings')
+          .select('*')
+          .eq('user_id', resolvedUserId)
+          .maybeSingle();
+
+        if (data) {
+          setBusinessSettings(data);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar configurações em CobrancaModal:', err);
+      } finally {
+        setLoadingSettings(false);
+      }
+    };
+    fetchSettings();
+  }, [userId, isOpen]);
 
   const nomeExibido = clienteNome || 'Cliente';
   const valorFormatado = formatCurrency(valor);
@@ -43,35 +93,83 @@ export function CobrancaModal({
 
   const diasVencidoText = diasVencido > 0 ? `há ${diasVencido} dia${diasVencido > 1 ? 's' : ''}` : 'hoje';
 
+  // Juros e multa calculations
+  const fineRate = businessSettings?.additional_info?.fine_rate || 0;
+  const interestRate = businessSettings?.additional_info?.interest_rate || 0;
+  
+  const diasJurosEfetivos = Math.max(0, diasVencido - diasTolerancia);
+
+  const multaValor = cobrarAtraso && fineRate > 0 && diasVencido > diasTolerancia
+    ? valor * (fineRate / 100)
+    : 0;
+
+  const jurosValor = cobrarAtraso && interestRate > 0 && diasJurosEfetivos > 0
+    ? valor * (interestRate / 100) * diasJurosEfetivos
+    : 0;
+
+  const valorTotalFinal = valor + multaValor + jurosValor;
+  
+  const valorExibidoText = cobrarAtraso && (multaValor > 0 || jurosValor > 0)
+    ? `${formatCurrency(valorTotalFinal)} (sendo R$ ${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(valor)} original + ${formatCurrency(multaValor)} de multa por atraso${jurosValor > 0 ? ` + ${formatCurrency(jurosValor)} de juros de mora por ${diasJurosEfetivos} dias` : ''})`
+    : valorFormatado;
+
+  const formatPixSuffix = (settings: any) => {
+    if (!settings?.pix_key) return '';
+    
+    const parts = [];
+    const pixType = settings.additional_info?.pix_type || 'Chave';
+    parts.push(`Chave PIX: ${settings.pix_key} (${pixType})`);
+    
+    const holderName = settings.additional_info?.pix_holder || settings.business_name || '';
+    if (holderName) {
+      parts.push(`Titular: ${holderName}`);
+    }
+    
+    if (settings.bank_name) {
+      let bankInfo = `Banco: ${settings.bank_name}`;
+      if (settings.bank_agency) bankInfo += ` | Ag: ${settings.bank_agency}`;
+      if (settings.bank_account) bankInfo += ` | CC: ${settings.bank_account}`;
+      if (settings.bank_account_type) bankInfo += ` (${settings.bank_account_type})`;
+      parts.push(bankInfo);
+    }
+    
+    return `\n\n*Dados para Pagamento via PIX:*\n${parts.join('\n')}`;
+  };
+
+  const suffix = formatPixSuffix(businessSettings);
+
   // Templates de Cobrança
   const templates = [
     {
       id: 'amigavel',
       titulo: '😊 Amigável',
       descricao: 'Lembrete leve e afetuoso, ideal para os primeiros dias de atraso.',
-      texto: `Olá, ${nomeExibido}! Tudo bem? Passando para te lembrar com carinho do pagamento de ${valorFormatado} referente a "${descricao}" que venceu ${diasVencidoText}. Se precisar de qualquer ajuda ou tiver alguma dúvida, estou por aqui! 😊`,
+      texto: `Olá, ${nomeExibido}! Tudo bem? Passando para te lembrar com carinho do pagamento de ${valorExibidoText} referente a "${descricao}" que venceu ${diasVencidoText}. Se precisar de qualquer ajuda ou tiver alguma dúvida, estou por aqui! 😊${suffix}`,
     },
     {
       id: 'direto',
       titulo: '🤝 Direto',
       descricao: 'Mensagem objetiva e profissional, focada em resolver o pagamento.',
-      texto: `Olá, ${nomeExibido}! Lembrete do vencimento da sua parcela de ${valorFormatado} (referente a "${descricao}") que está pendente ${diasVencidoText}. Se precisar dos dados do Pix ou conta para pagamento, por favor me avise. Obrigado!`,
+      texto: `Olá, ${nomeExibido}! Lembrete do vencimento da sua parcela de ${valorExibidoText} (referente a "${descricao}") que está pendente ${diasVencidoText}. Se precisar dos dados do Pix ou conta para pagamento, por favor me avise. Obrigado!${suffix}`,
     },
     {
       id: 'formal',
       titulo: '👔 Formal',
       descricao: 'Mensagem corporativa e estruturada para cobranças oficiais.',
-      texto: `Prezado(a) ${nomeExibido}, gostaríamos de lembrar sobre o vencimento da parcela no valor de ${valorFormatado}, referente ao serviço "${descricao}", vencida em ${dataFormatada}. Solicitamos a gentileza de realizar a liquidação do valor pendente assim que possível. Caso o pagamento já tenha sido efetuado, por favor desconsidere este aviso. Atenciosamente.`,
+      texto: `Prezado(a) ${nomeExibido}, gostaríamos de lembrar sobre o vencimento da parcela no valor de ${valorExibidoText}, referente ao serviço "${descricao}", vencida em ${dataFormatada}. Solicitamos a gentileza de realizar a liquidação do valor pendente assim que possível. Caso o pagamento já tenha sido efetuado, por favor desconsidere este aviso. Atenciosamente.${suffix}`,
     },
   ];
 
   // Sincronizar props com estado local se mudar de cliente/transação
   const currentPropsKey = `${clienteNome}-${valor}-${dataVencimento}-${descricao}`;
-  if (currentPropsKey !== prevPropsKey) {
-    setPrevPropsKey(currentPropsKey);
-    setSelectedTemplateId('amigavel');
-    setMensagemEditada(templates[0].texto);
-  }
+
+  useEffect(() => {
+    if (loadingSettings) return;
+    const activeTemplate = templates.find(t => t.id === selectedTemplateId) || templates[0];
+    setMensagemEditada(activeTemplate.texto);
+  }, [selectedTemplateId, currentPropsKey, businessSettings, loadingSettings]);
+
+  if (!isOpen) return null;
 
   const handleSelectTemplate = (id: string, texto: string) => {
     setSelectedTemplateId(id);
@@ -128,6 +226,80 @@ export function CobrancaModal({
               <p className="font-bold text-red-600 dark:text-red-400 mt-0.5">{diasVencidoText}</p>
             </div>
           </div>
+
+          {/* Painel de Controle de Juros e Multas (se atrasado) */}
+          {diasVencido > 0 && (
+            <div className="p-4 bg-red-50/50 dark:bg-red-950/10 border border-red-200/40 dark:border-red-900/20 rounded-2xl space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                  <span className="text-xs font-bold text-red-800 dark:text-red-400 uppercase tracking-wider">Atraso com Juros e Multas</span>
+                </div>
+                {(fineRate > 0 || interestRate > 0) ? (
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cobrarAtraso}
+                      onChange={(e) => setCobrarAtraso(e.target.checked)}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Aplicar na Cobrança
+                  </label>
+                ) : (
+                  <span className="text-[10px] text-gray-500">Nenhum juros/multa padrão configurado na empresa</span>
+                )}
+              </div>
+
+              {cobrarAtraso && (fineRate > 0 || interestRate > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 text-xs">
+                  <div className="p-2.5 bg-white dark:bg-white/3 rounded-xl border dark:border-white/5">
+                    <span className="text-gray-500 block mb-0.5">Multa ({fineRate}%)</span>
+                    <strong className="text-gray-800 dark:text-gray-200 text-sm">{formatCurrency(multaValor)}</strong>
+                  </div>
+                  <div className="p-2.5 bg-white dark:bg-white/3 rounded-xl border dark:border-white/5">
+                    <span className="text-gray-500 block mb-0.5">Juros Diário ({interestRate}%)</span>
+                    <strong className="text-gray-800 dark:text-gray-200 text-sm">{formatCurrency(jurosValor)} <span className="text-[10px] text-gray-500 font-normal">({diasJurosEfetivos} dias)</span></strong>
+                  </div>
+                  <div className="p-2.5 bg-white dark:bg-white/3 rounded-xl border dark:border-white/5">
+                    <span className="text-gray-500 block mb-0.5">Total Atualizado</span>
+                    <strong className="text-indigo-600 dark:text-indigo-400 text-sm">{formatCurrency(valorTotalFinal)}</strong>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-1 text-xs border-t border-gray-100 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Dias de tolerância/adiamento:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={diasTolerancia}
+                    onChange={(e) => setDiasTolerancia(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 px-2 py-1 text-center border border-gray-300 dark:border-white/10 dark:bg-[#07101f] dark:text-white rounded-lg text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDiasTolerancia(prev => prev + 7)}
+                    className="px-2.5 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 font-medium rounded-lg transition-colors text-xs"
+                  >
+                    +7 dias (Adiar)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiasTolerancia(0)}
+                    className="px-2.5 py-1 text-red-600 hover:text-red-700 font-semibold transition-colors text-xs"
+                  >
+                    Limpar Carência
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Cards de Opções / Tons */}
           <div>

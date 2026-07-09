@@ -23,6 +23,7 @@ interface Contract {
   created_at: string;
   signed_at?: string;
   client_ip?: string;
+  content_override?: string;
 }
 
 interface ContractTemplate {
@@ -97,10 +98,10 @@ export function ContractSignPage() {
       console.log('Lead Data:', leadData);
       console.log('Client Data:', currentClientData);
       console.log('Business Settings:', businessSettings);
-      console.log('Template Content:', template.content_text.substring(0, 200));
+      console.log('Template Content:', (contract.content_override || template.content_text).substring(0, 200));
 
       const processed = replaceContractVariables(
-        template.content_text,
+        contract.content_override || template.content_text,
         businessSettings,
         currentClientData,
         leadData

@@ -72,6 +72,7 @@ interface Contract {
   status: 'pending' | 'preview' | 'signed' | 'expired';
   pdf_url?: string;
   expires_at: string;
+  content_override?: string;
 }
 
 interface ContractTemplate {
@@ -133,7 +134,7 @@ export function ContractPreviewPage() {
       console.log('Business Settings:', businessSettings);
 
       const processed = replaceContractVariables(
-        template.content_text,
+        contract.content_override || template.content_text,
         businessSettings,
         clientDataFromState,
         leadData

@@ -1952,6 +1952,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
           valor={cobrancaTransaction.valor}
           dataVencimento={cobrancaTransaction.data}
           descricao={cobrancaTransaction.descricao}
+          userId={userId}
         />
       )}
 
