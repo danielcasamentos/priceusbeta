@@ -34,7 +34,7 @@ if (import.meta.env.DEV) {
     console.log('⚡ Conectado ao Supabase Local (Localhost). Validação estrita ignorada.')
   } else {
     // Validação específica para garantir que estamos no projeto correto
-    const PROJECT_ID_CORRETO = 'qrqcnrmaatthvyngwfkb'
+    const PROJECT_ID_CORRETO = 'vkwpcyahwzzeyesyytpa'
     if (!supabaseUrl.includes(PROJECT_ID_CORRETO)) {
       console.error(`❌ ERRO DE CONFIGURAÇÃO: O frontend está conectado ao projeto errado!`)
       console.error(`   Atual: ${supabaseUrl}`)
