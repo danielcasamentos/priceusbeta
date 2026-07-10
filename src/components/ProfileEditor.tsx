@@ -213,6 +213,11 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       return;
     }
 
+    const originalUrl = profile?.profile_image_url;
+    // Criar um preview local instantâneo
+    const localPreviewUrl = URL.createObjectURL(file);
+    handleUpdateField('profile_image_url', localPreviewUrl);
+
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -233,8 +238,14 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
       alert('❌ Erro ao fazer upload da imagem');
+      // Reverter para a imagem original em caso de erro
+      if (originalUrl) {
+        handleUpdateField('profile_image_url', originalUrl);
+      }
     } finally {
       setUploading(false);
+      // Liberar memória do preview local
+      URL.revokeObjectURL(localPreviewUrl);
     }
   };
 
