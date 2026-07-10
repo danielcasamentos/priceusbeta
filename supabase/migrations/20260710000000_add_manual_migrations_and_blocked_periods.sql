@@ -47,3 +47,14 @@ DROP POLICY IF EXISTS "images_public_read" ON storage.objects;
 DROP POLICY IF EXISTS "product_images_public_read" ON storage.objects;
 DROP POLICY IF EXISTS "profile_images_public_read" ON storage.objects;
 
+-- Criar políticas de SELECT restritas a usuários autenticados para permitir upload/leitura de metadados
+DROP POLICY IF EXISTS "images_select_authenticated" ON storage.objects;
+CREATE POLICY "images_select_authenticated" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'images');
+
+DROP POLICY IF EXISTS "product_images_select_authenticated" ON storage.objects;
+CREATE POLICY "product_images_select_authenticated" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'product_images');
+
+DROP POLICY IF EXISTS "profile_images_select_authenticated" ON storage.objects;
+CREATE POLICY "profile_images_select_authenticated" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'profile_images');
+
+
