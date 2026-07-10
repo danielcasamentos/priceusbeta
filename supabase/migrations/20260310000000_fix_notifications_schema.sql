@@ -6,7 +6,15 @@
 -- Versão simplificada - garante índices e políticas RLS corretos
 
 -- Criar índice para o campo is_read (se não existir)
-CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'notifications' AND column_name = 'is_read'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+  END IF;
+END $$;
 
 -- Atualizar políticas RLS
 DROP POLICY IF EXISTS "Users can view own notifications" ON notifications;

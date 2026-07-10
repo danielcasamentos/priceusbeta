@@ -26,6 +26,7 @@ import { QuotePdfElegante } from '../components/quote-themes/QuotePdfElegante';
 import { QuotePdfElegante2 } from '../components/quote-themes/QuotePdfElegante2';
 import { QuoteNatal } from '../components/quote-themes/QuoteNatal';
 import { QuoteRevellon } from '../components/quote-themes/QuoteRevellon';
+import { secureLocalStorage } from '../lib/secureStorage';
 
 interface Produto {
   id: string;
@@ -373,7 +374,7 @@ export function QuotePage() {
 
 
   // ⏱️ Cálculo de Duração Total dos Produtos Selecionados
-  const activeDuration = (() => {
+  const activeDuration = useMemo(() => {
     const totalDuration = Object.entries(selectedProdutos).reduce((acc, [produtoId, quantity]) => {
       if (quantity <= 0) return acc;
       const prod = produtos.find(p => p.id === produtoId);
@@ -383,7 +384,7 @@ export function QuotePage() {
       return acc;
     }, 0);
     return totalDuration > 0 ? totalDuration : 60;
-  })();
+  }, [selectedProdutos, produtos]);
 
   useEffect(() => {
     setHorarioSelecionado('');
@@ -737,7 +738,7 @@ export function QuotePage() {
 
     try {
       // Salva o objeto como uma string JSON
-      localStorage.setItem(storageKey, JSON.stringify(quoteStateToSave));
+      secureLocalStorage.setItem(storageKey, JSON.stringify(quoteStateToSave));
     } catch (error) {
       console.error('Falha ao salvar orçamento no localStorage:', error);
     }
@@ -1062,7 +1063,7 @@ export function QuotePage() {
       let loadedFromStorage = false;
       if (storageKey) {
         try {
-          const savedQuote = localStorage.getItem(storageKey);
+          const savedQuote = secureLocalStorage.getItem(storageKey);
           if (savedQuote) {
             console.log('✅ [QuotePage] Orçamento encontrado no localStorage. Carregando...');
             const parsedState = JSON.parse(savedQuote);
@@ -1101,7 +1102,7 @@ export function QuotePage() {
       // Lógica para carregar o orçamento salvo do localStorage
       if (storageKey) {
         try {
-          const savedQuote = localStorage.getItem(storageKey);
+          const savedQuote = secureLocalStorage.getItem(storageKey);
           if (savedQuote) {
             console.log('✅ [QuotePage] Orçamento encontrado no localStorage. Carregando...');
             const parsedState = JSON.parse(savedQuote);
@@ -1307,6 +1308,24 @@ export function QuotePage() {
     };
   };
 
+  const priceBreakdown = useMemo(() => {
+    return getPriceBreakdown();
+  }, [
+    selectedProdutos,
+    selectedUpsellIds,
+    selectedFormaPagamento,
+    dataEvento,
+    cidadeSelecionada,
+    selectedEstado,
+    selectedPais,
+    cupomCodigo,
+    cupomAtivo,
+    cupomDesconto,
+    template,
+    formasPagamento,
+    upsellSubtotal
+  ]);
+
   const getDynamicMaxParcelas = (forma: any) => {
     if (!forma) return 0;
     let max = forma.max_parcelas;
@@ -1359,7 +1378,7 @@ export function QuotePage() {
           produtos: produtos,
           paymentMethod: formasPagamentoProcessadas.find(f => f.id === selectedFormaPagamento),
           formasPagamento: formasPagamentoProcessadas,
-          priceBreakdown: getPriceBreakdown(),
+          priceBreakdown: priceBreakdown,
           // Campos necessários para o LeadsManager reconstruir a mensagem
           sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
           sistema_geografico_ativo: template?.sistema_geografico_ativo,
@@ -1368,7 +1387,7 @@ export function QuotePage() {
         valorTotal: calculateTotal(),
       });
     }
-  }, [template, produtos, selectedProdutos, selectedFormaPagamento, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas]);
+  }, [template, produtos, selectedProdutos, selectedFormaPagamento, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas, priceBreakdown]);
 
 
 
@@ -1475,13 +1494,13 @@ export function QuotePage() {
 
       // 5. Limpar localStorage
       if (storageKey) {
-        localStorage.removeItem(storageKey);
+        secureLocalStorage.removeItem(storageKey);
       }
     }
   };
 
   const buildWhatsAppMessage = () => {
-    const breakdown = getPriceBreakdown();
+    const breakdown = priceBreakdown;
     const formaPagamento = formasPagamento.find((f) => f.id === selectedFormaPagamento);
     const cidadeNome = cidadeSelecionada
       ? cidades.find((c) => c.id === cidadeSelecionada)?.nome || ''
@@ -1976,7 +1995,7 @@ export function QuotePage() {
                 .filter(p => selectedUpsellIds.has(p.id))
                 .map(p => ({ produto_id: p.id, nome: p.nome, valor: p.valor, desconto_percentual: p.desconto_percentual ?? 0 })),
               forma_pagamento_id: selectedFormaPagamento || null,
-              priceBreakdown: getPriceBreakdown(),
+              priceBreakdown: priceBreakdown,
             },
             valorTotal: calculateTotal(),
           };
@@ -1993,7 +2012,7 @@ export function QuotePage() {
 
           // Limpa o orçamento do navegador APENAS se o lead foi salvo com sucesso.
           if (storageKey) {
-            localStorage.removeItem(storageKey);
+            secureLocalStorage.removeItem(storageKey);
             console.log('✅ [setTimeout] Orçamento salvo no navegador foi limpo.');
           }
 
@@ -2439,7 +2458,7 @@ export function QuotePage() {
       setSelectedFormaPagamento,
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2456,7 +2475,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="promocional"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {renderSummaryModal()}
@@ -2486,7 +2505,7 @@ export function QuotePage() {
       setSelectedFormaPagamento,
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2503,7 +2522,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="oferta"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {renderSummaryModal()}
@@ -2532,7 +2551,7 @@ export function QuotePage() {
       setSelectedFormaPagamento,
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2549,7 +2568,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="pdf-elegante"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {renderSummaryModal()}
@@ -2578,7 +2597,7 @@ export function QuotePage() {
       setSelectedFormaPagamento,
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2595,7 +2614,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="pdf-elegante-2"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {renderSummaryModal()}
@@ -2626,7 +2645,7 @@ export function QuotePage() {
       // Refs e dados para o FloatingTotalPanel padrão
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2644,7 +2663,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="darkstudio"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {/* ── Modal de Resumo e Envio (igual todos os outros temas) ── */}
@@ -2752,7 +2771,7 @@ export function QuotePage() {
       setSelectedFormaPagamento,
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2769,7 +2788,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="natal"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {renderSummaryModal()}
@@ -2799,7 +2818,7 @@ export function QuotePage() {
       setSelectedFormaPagamento,
       firstProductRef,
       totalSectionRef,
-      breakdown: getPriceBreakdown(),
+      breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
     };
     return wrapWithFonts(
@@ -2816,7 +2835,7 @@ export function QuotePage() {
             firstProductRef={firstProductRef}
             totalSectionRef={totalSectionRef}
             temaNome="revellon"
-            breakdown={getPriceBreakdown()}
+            breakdown={priceBreakdown}
           />
         )}
         {renderSummaryModal()}
@@ -3239,6 +3258,7 @@ export function QuotePage() {
                 alt={profile.nome_profissional}
                 className={`w-32 h-32 sm:w-36 sm:h-36 rounded-full mx-auto mb-4 object-cover border-4 ${tema.cores.textoDestaque.replace('text-', 'border-')}`}
                 style={inlineStyles.avatarBorder}
+                fetchPriority="high"
               />
             )}
             <h1 className={`text-2xl sm:text-3xl ${tema.estilos.fontHeading} ${tema.cores.textoPrincipal} mb-2 leading-tight`} style={inlineStyles.heading1}>
@@ -4223,7 +4243,7 @@ export function QuotePage() {
           firstProductRef={firstProductRef}
           totalSectionRef={totalSectionRef}
           temaNome={template?.tema || 'padrao'}
-          breakdown={getPriceBreakdown()}
+          breakdown={priceBreakdown}
         />
       )}
 

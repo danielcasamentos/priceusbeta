@@ -87,6 +87,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // ✅ PASSO 2.5: Verificar se o template e o usuário existem e coincidem no banco
+    const { data: templateObj, error: tempErr } = await supabaseAdmin
+      .from('templates')
+      .select('id')
+      .eq('id', templateId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (tempErr || !templateObj) {
+      console.error('❌ Template ou Profissional inválido:', tempErr)
+      return new Response(JSON.stringify({ error: 'Template ou Profissional inválido' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // ✅ PASSO 3: Preparar o objeto para ser inserido na tabela 'leads'
     // Normalizar os dados do formulário para usar os nomes corretos dos campos
     const nomeCliente = formData?.nome_cliente || formData?.nomeCliente || formData?.name || ''
@@ -96,15 +112,6 @@ serve(async (req) => {
     const cidadeEvento = formData?.cidade_evento || formData?.cidadeEvento || formData?.city || ''
     const tipoEvento = formData?.tipo_evento || formData?.tipoEvento || ''
 
-    const leadData = {
-      template_id: templateId,
-      user_id: userId,
-      nome_cliente: nomeCliente,
-      email_cliente: emailCliente,
-      telefone_cliente: telefoneCliente,
-      dados_formulario: formData,
-      orcamento_detalhe: orcamentoDetalhe,
-      valor_total: valorTotal,
     console.log('📥 Normalizando dados para inserção do lead...')
 
     // Se for auto-save, inserimos normalmente no profissional do template

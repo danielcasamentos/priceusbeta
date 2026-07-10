@@ -109,12 +109,6 @@ export function usePlanLimits(): PlanLimits {
     };
 
     fetchCounts();
-
-    // 🔥 OTIMIZAÇÃO: Aumenta o intervalo para 2 minutos (120000 ms)
-    // Reduz a frequência de requisições, diminuindo a chance de erros de conexão
-    // em projetos que pausam por inatividade.
-    const interval = setInterval(fetchCounts, 120000);
-    return () => clearInterval(interval);
   }, [user]);
 
   const canCreateTemplate = isPremium

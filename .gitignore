@@ -28,3 +28,9 @@ dist/
 *.njsproj
 *.sln
 *.sw?
+
+# Backups and private dumps
+/*.sql
+*.tar.gz
+env_prod_backup.txt
+supabase/.temp/

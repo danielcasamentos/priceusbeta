@@ -1,4 +1,5 @@
 // src/lib/debug.ts
+import { secureLocalStorage } from './secureStorage';
 
 /**
  * Logs a message to the console and saves it to localStorage for mobile debugging.
@@ -17,7 +18,7 @@ export function debugMobile(label: string, data?: any) {
     };
 
     // Get existing logs from localStorage or initialize an empty array
-    const logs = JSON.parse(localStorage.getItem('mobileLogs') || '[]');
+    const logs = JSON.parse(secureLocalStorage.getItem('mobileLogs') || '[]');
     
     // Add the new log and keep the last 100 entries
     logs.push(log);
@@ -26,7 +27,7 @@ export function debugMobile(label: string, data?: any) {
     }
 
     // Save back to localStorage
-    localStorage.setItem('mobileLogs', JSON.stringify(logs));
+    secureLocalStorage.setItem('mobileLogs', JSON.stringify(logs));
 
     // Also log to the console for standard debugging
     console.log(`📱 [MOBILE_DEBUG] ${label}`, data);
@@ -56,7 +57,7 @@ const getCircularReplacer = () => {
  * Can be called from the browser console: `window.showMobileLogs()`
  */
 export function showMobileLogs() {
-  const logs = JSON.parse(localStorage.getItem('mobileLogs') || '[]');
+  const logs = JSON.parse(secureLocalStorage.getItem('mobileLogs') || '[]');
   console.table(logs);
 }
 

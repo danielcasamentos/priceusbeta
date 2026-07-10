@@ -73,7 +73,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   };
   const [contracts, setContracts] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [followupType, setFollowupType] = useState<'padrao' | 'desconto' | 'brinde'>('padrao');
+  const [followupType, setFollowupType] = useState<'padrao' | 'desconto' | 'brinde' | 'apresentacao' | 'lembrete' | 'urgencia'>('padrao');
   const [followupDiscountPercent, setFollowupDiscountPercent] = useState<number>(10);
   const [followupCouponCode, setFollowupCouponCode] = useState<string>('FECHARHOJE');
   const [followupBonusGift, setFollowupBonusGift] = useState<string>('Um Álbum Pocket de Destaque');
@@ -539,7 +539,15 @@ export function LeadsManager({ userId }: { userId: string }) {
       },
       template: {
         nome: template?.nome_template || '',
-        texto_whatsapp: template?.texto_whatsapp,
+        texto_whatsapp: customFollowup && customFollowup.type !== 'padrao'
+          ? `📦 *SERVIÇOS SOLICITADOS:*
+{{SERVICES_LIST}}
+
+💰 *VALOR TOTAL:* {{TOTAL_VALUE}}
+💳 *Forma de Pagamento:* {{PAYMENT_METHOD}}
+{{DOWN_PAYMENT}}
+{{INSTALLMENTS}}`
+          : template?.texto_whatsapp,
         // ✅ Usa configurações ATUAIS do template (banco), não as salvas no orcamento_detalhe
         // Os valores do orcamento_detalhe são fallback para leads antigos
         sistema_sazonal_ativo: template?.sistema_sazonal_ativo ?? savedOrcamentoDetalhe.sistema_sazonal_ativo ?? false,
@@ -607,9 +615,25 @@ export function LeadsManager({ userId }: { userId: string }) {
     });
 
     if (customFollowup?.type === 'desconto') {
-      mensagem = `🎉 *CONDIÇÃO ESPECIAL!* 🎉\n\nOlá, ${lead.nome_cliente || 'cliente'}! Estou passando para liberar um desconto exclusivo de *${customFollowup.discountPercent}%* na sua proposta se fecharmos nas próximas 24h! Use o cupom *${customFollowup.couponCode}*.\n\nSeguem os detalhes atualizados:\n\n${mensagem}`;
+      mensagem = `🎉 *CONDIÇÃO ESPECIAL!* 🎉\n\nOlá, ${lead.nome_cliente || 'cliente'}! Estou passando para liberar um desconto exclusivo de *${customFollowup.discountPercent}%* na sua proposta se fecharmos nas próximas 24h! Use o cupom *${customFollowup.couponCode}*.\n\nSeguem os detalhes atualizados:\n\n${mensagem}\n\nFico à total disposição para tirar qualquer dúvida! 😊`;
     } else if (customFollowup?.type === 'brinde') {
-      mensagem = `🎁 *PRESENTE EXCLUSIVO!* 🎁\n\nOlá, ${lead.nome_cliente || 'cliente'}! Se você confirmar seu fechamento nas próximas 24h, vou incluir totalmente grátis de bônus no seu pacote: *${customFollowup.bonusGift}*!\n\nRelembrando os detalhes do orçamento:\n\n${mensagem}`;
+      mensagem = `🎁 *PRESENTE EXCLUSIVO!* 🎁\n\nOlá, ${lead.nome_cliente || 'cliente'}! Se você confirmar seu fechamento nas próximas 24h, vou incluir totalmente grátis de bônus no seu pacote: *${customFollowup.bonusGift}*!\n\nRelembrando os detalhes do orçamento:\n\n${mensagem}\n\nEspero que possamos fechar! 😊`;
+    } else if (customFollowup?.type === 'apresentacao') {
+      mensagem = `📸 *PROPOSTA PERSONALIZADA!* 📸\n\nOlá, ${lead.nome_cliente || 'cliente'}! Tudo bem?\n\nPreparei com muito carinho a proposta comercial para o seu evento. Seguem abaixo os detalhes dos pacotes e formas de pagamento:\n\n${mensagem}\n\nFico à total disposição para tirar qualquer dúvida e fazermos esse registro incrível! ✨`;
+    } else if (customFollowup?.type === 'lembrete') {
+      mensagem = `👋 *LEMBRETE DE PROPOSTA!* 👋\n\nOlá, ${lead.nome_cliente || 'cliente'}! Tudo bem?\n\nPassando para saber se você conseguiu dar uma olhada na proposta que preparei para o seu evento. Seguem os valores e detalhes para você rever:\n\n${mensagem}\n\nQualquer dúvida ou ajuste que queira fazer no pacote, por favor me avise! 😊`;
+    } else if (customFollowup?.type === 'urgencia') {
+      let dataTexto = 'o mês do seu evento';
+      if (lead.data_evento) {
+        try {
+          const [year, month, day] = lead.data_evento.split('-');
+          const date = new Date(Number(year), Number(month) - 1, Number(day));
+          dataTexto = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        } catch (e) {
+          // fallback
+        }
+      }
+      mensagem = `⚠️ *POUCAS DATAS DISPONÍVEIS!* ⚠️\n\nOlá, ${lead.nome_cliente || 'cliente'}! Tudo bem?\n\nEscrevo para te avisar que nossa agenda para *${dataTexto}* está bastante concorrida e restam poucas datas livres.\n\nComo você já tem o orçamento em mãos, gostaria de saber se vamos garantir o seu dia? Seguem os detalhes da proposta:\n\n${mensagem}\n\nAbraços, espero que possamos fechar! 👋`;
     }
 
     if (updateState) {
@@ -649,14 +673,6 @@ export function LeadsManager({ userId }: { userId: string }) {
     loadTemplates();
     loadCities();
     loadContractsForLeads();
-
-    // Loop de atualização silenciosa a cada 60 segundos (1 min)
-    const refreshInterval = setInterval(() => {
-      loadLeads(true);
-      loadContractsForLeads();
-    }, 60000);
-
-    return () => clearInterval(refreshInterval);
   }, []);
 
   // Efeito para interceptar link de compartilhamento e carregar modal de importação
@@ -721,23 +737,31 @@ export function LeadsManager({ userId }: { userId: string }) {
   useEffect(() => {
     const channel = supabase
       .channel('realtime-leads')
-      .on<Lead>(
+      .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'leads',
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          console.log('Novo lead recebido!', payload);
-          const newLead = payload.new as LeadWithReview;
-          
-          // Adiciona o novo lead no início da lista
-          setLeads((prevLeads) => {
-            if (prevLeads.some(l => l.id === newLead.id)) return prevLeads;
-            return [newLead, ...prevLeads];
-          });
+          console.log('Alteração de lead recebida via Realtime:', payload);
+          if (payload.eventType === 'INSERT') {
+            const newLead = payload.new as LeadWithReview;
+            setLeads((prevLeads) => {
+              if (prevLeads.some(l => l.id === newLead.id)) return prevLeads;
+              return [newLead, ...prevLeads];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedLead = payload.new as LeadWithReview;
+            setLeads((prevLeads) =>
+              prevLeads.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = (payload.old as any).id;
+            setLeads((prevLeads) => prevLeads.filter((l) => l.id !== deletedId));
+          }
         }
       )
       .subscribe();
@@ -766,7 +790,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('templates')
@@ -783,9 +807,9 @@ export function LeadsManager({ userId }: { userId: string }) {
     } catch (error) {
       console.error('Erro ao carregar templates:', error);
     }
-  };
+  }, [userId]);
 
-  const loadContractsForLeads = async () => {
+  const loadContractsForLeads = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('contracts')
@@ -801,8 +825,9 @@ export function LeadsManager({ userId }: { userId: string }) {
       }, {} as Record<string, boolean>);
       setContracts(contractMap);
     } catch (error) { console.error('Erro ao carregar contratos dos leads:', error); }
-  };
-  const loadLeads = async (silent: boolean = false) => {
+  }, [userId]);
+
+  const loadLeads = useCallback(async (silent: boolean = false) => {
     if (!silent) setLoading(true);
     try {
       let query = supabase
@@ -827,7 +852,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [userId, filter]);
 
   const executeCancelConversion = async (leadId: string, newStatus: Lead['status']) => {
     setIsCancelingConversion(true);
@@ -986,7 +1011,7 @@ export function LeadsManager({ userId }: { userId: string }) {
   }, [leads, userId]);
 
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = useCallback(async () => {
     setIsDeleting(true);
     try {
       console.log('[handleDeleteSelected] Tentando excluir leads:', selectedIds);
@@ -1005,7 +1030,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       setIsDeleting(false);
       setDeleteConfirmMultiple(false);
     }
-  };
+  }, [selectedIds, loadLeads]);
 
   // Leads filtrados somente por template (base para os stats)
   const templateFilteredLeads = useMemo(() => {
@@ -1106,7 +1131,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
-  const handleSolicitarAvaliacao = async (lead: LeadWithReview) => {
+  const handleSolicitarAvaliacao = useCallback(async (lead: LeadWithReview) => {
     if (lead.status !== 'convertido' && lead.status !== 'finalizado') {
       alert('⚠️ Apenas leads convertidos ou finalizados podem receber solicitação de avaliação.');
       return;
@@ -1131,7 +1156,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     } else {
       alert(`❌ ${result.error || 'Erro ao solicitar avaliação'}`);
     }
-  };
+  }, [loadLeads]);
 
   const deleteLead = async (leadId: string) => {
     setDeletingIds(prev => { const s = new Set(prev); s.add(leadId); return s; });
@@ -2435,8 +2460,8 @@ export function LeadsManager({ userId }: { userId: string }) {
                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   Tipo de Abordagem (Follow-up)
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['padrao', 'desconto', 'brinde'] as const).map((type) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {(['padrao', 'apresentacao', 'lembrete', 'desconto', 'brinde', 'urgencia'] as const).map((type) => (
                     <button
                       key={type}
                       type="button"
@@ -2447,7 +2472,17 @@ export function LeadsManager({ userId }: { userId: string }) {
                           : 'bg-gray-100 dark:bg-white/5 text-gray-750 dark:text-gray-300 hover:bg-gray-250 dark:hover:bg-white/10'
                       }`}
                     >
-                      {type === 'padrao' ? '📨 Padrão' : type === 'desconto' ? '🏷️ Desconto' : '🎁 Brinde'}
+                      {type === 'padrao'
+                        ? '📨 Padrão'
+                        : type === 'apresentacao'
+                        ? '📸 Apresentação'
+                        : type === 'lembrete'
+                        ? '👋 Lembrete'
+                        : type === 'desconto'
+                        ? '🏷️ Desconto'
+                        : type === 'brinde'
+                        ? '🎁 Brinde'
+                        : '⚠️ Urgência'}
                     </button>
                   ))}
                 </div>
@@ -2914,7 +2949,7 @@ interface ProducaoTabProps {
   onSolicitarAvaliacao?: (lead: any) => void;
 }
 
-function ProducaoTab({
+const ProducaoTab = React.memo(function ProducaoTab({
   leads,
   userId,
   templates,
@@ -2998,7 +3033,7 @@ function ProducaoTab({
       </div>
     </div>
   );
-}
+});
 
 // ── Card individual de Produção ───────────────────────────
 interface ProducaoCardProps {
@@ -3107,7 +3142,7 @@ interface FinalizadosTabProps {
   onReativar: (lead: any) => void;
 }
 
-function FinalizadosTab({
+const FinalizadosTab = React.memo(function FinalizadosTab({
   leads,
   templates,
   formatCurrency,
@@ -3233,4 +3268,4 @@ function FinalizadosTab({
       </div>
     </div>
   );
-}
+});

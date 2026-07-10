@@ -70,14 +70,8 @@ export function useNotifications(user: User | null) {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Auto-refresh silencioso a cada 30 segundos (reduzido de 60s)
-    const refreshInterval = setInterval(() => {
-      loadNotifications(true);
-    }, 30000);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(refreshInterval);
     };
   }, [userId, loadNotifications]);
 

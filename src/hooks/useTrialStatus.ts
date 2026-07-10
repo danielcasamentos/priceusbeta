@@ -172,10 +172,6 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
     }
 
     fetchTrialStatus();
-
-    const interval = setInterval(fetchTrialStatus, 60000);
-
-    return () => clearInterval(interval);
   }, [userArg]);
 
   return trialStatus;

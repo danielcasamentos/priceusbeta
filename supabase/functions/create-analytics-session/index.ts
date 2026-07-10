@@ -43,6 +43,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ✅ Verificar se o template e o usuário existem e coincidem no banco
+    const { data: templateObj, error: tempErr } = await supabaseAdmin
+      .from('templates')
+      .select('id')
+      .eq('id', template_id)
+      .eq('user_id', user_id)
+      .maybeSingle();
+
+    if (tempErr || !templateObj) {
+      console.error('❌ Template ou Profissional inválido:', tempErr);
+      return new Response(JSON.stringify({ error: 'Template ou Profissional inválido' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Preparar dados para inserção
     const analyticsData = {
       template_id,

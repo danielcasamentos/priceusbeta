@@ -44,6 +44,9 @@ export default defineConfig({
     // instead of hundreds of individual icon ESM files (fixes ERR_INSUFFICIENT_RESOURCES).
     include: ['lucide-react'],
   },
+  build: {
+    sourcemap: false,
+  },
   server: {
     host: true,
   },
