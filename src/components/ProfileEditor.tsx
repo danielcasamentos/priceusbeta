@@ -20,6 +20,20 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
 
   useEffect(() => {
     loadProfile();
+
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadProfile();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [userId]);
 
   const loadProfile = async () => {
@@ -110,7 +124,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         .eq('id', userId)
         .maybeSingle();
 
-      const profileData = {
+      const profileData: any = {
         id: userId,
         nome_admin: profile.nome_admin,
         nome_profissional: profile.nome_profissional,
@@ -133,9 +147,14 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         portfolio_link: profile.portfolio_link || null,
         portfolio_fotos: profile.portfolio_fotos || null,
         dias_adiar_tarefas: profile.dias_adiar_tarefas ?? 7,
-        google_auth_data: profile.google_auth_data || null,
         updated_at: new Date().toISOString(),
       };
+
+      // Apenas insere google_auth_data no insert inicial (se for novo perfil)
+      // para evitar sobrescrever tokens salvos de forma assíncrona por outras abas
+      if (!existingProfile) {
+        profileData.google_auth_data = profile.google_auth_data || null;
+      }
 
       if (existingProfile) {
         const { error } = await supabase
