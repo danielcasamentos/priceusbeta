@@ -31,8 +31,8 @@ export function CompanyTransactions({ userId }: CompanyTransactionsProps) {
   const [filterInstallment, setFilterInstallment] = useState<'all' | 'installment' | 'single'>('all');
   
   // Novos filtros
-  const [filterMonth, setFilterMonth] = useState<string>(String(new Date().getMonth() + 1));
-  const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [filterYear, setFilterYear] = useState<string>('all');
   const [filterDay, setFilterDay] = useState<string>('all');
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
