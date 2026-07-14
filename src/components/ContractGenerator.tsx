@@ -171,6 +171,46 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
 
       let produtos: any[] = [];
       let formaPagamentoNome = '';
+      let planoPagamentoDoCaixa: any = null;
+
+      try {
+        const { data: transacoes } = await supabase
+          .from('company_transactions')
+          .select('*')
+          .eq('lead_id', lead.id)
+          .order('data', { ascending: true });
+
+        if (transacoes && transacoes.length > 0) {
+          const entradaTx = transacoes.find((t: any) => !t.is_installment && t.descricao.toLowerCase().includes('entrada'));
+          const parcelasTxs = transacoes.filter((t: any) => t.is_installment);
+          const avistaTx = transacoes.find((t: any) => !t.is_installment && !t.descricao.toLowerCase().includes('entrada'));
+
+          let modo: 'avista' | 'parcelado' | 'entrada_parcelas' = 'avista';
+          if (entradaTx && parcelasTxs.length > 0) {
+            modo = 'entrada_parcelas';
+          } else if (parcelasTxs.length > 0) {
+            modo = 'parcelado';
+          }
+
+          const fpNome = transacoes[0].forma_pagamento || lead.forma_pagamento || '';
+
+          planoPagamentoDoCaixa = {
+            modo,
+            forma_pagamento_nome: fpNome,
+            valor_total: transacoes.reduce((sum: number, t: any) => sum + Number(t.valor || 0), 0),
+            entrada: entradaTx ? { valor: Number(entradaTx.valor), data: entradaTx.data, status: entradaTx.status } : null,
+            parcelas: parcelasTxs.map((t: any, idx: number) => ({
+              numero: t.installment_number || (idx + 1),
+              valor: Number(t.valor),
+              data: t.data,
+              status: t.status
+            }))
+          };
+        }
+      } catch (txErr) {
+        console.error('Erro ao buscar transacoes do caixa para o lead:', txErr);
+      }
+
       const priceBreakdown = orcamentoDetalhe.priceBreakdown || {};
 
       // ── Normalização de produtos: suporta 3 formatos ──────────────────
@@ -193,10 +233,13 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         produtos = produtosRaw
           .filter((p: any) => Object.keys(selectedMap).length === 0 || (selectedMap[p.id] && selectedMap[p.id] > 0))
           .map((p: any) => ({
+            id: p.id,
             nome: p.nome || 'Produto',
             preco: parseFloat(p.valor || p.preco || 0),
             quantidade: selectedMap[p.id] || p.quantidade || 1,
             permite_multiplas_unidades: p.permite_multiplas_unidades,
+            resumo: p.resumo || '',
+            brindes_vinculados: p.brindes_vinculados || [],
           }));
 
       } else if (isProdutoIdFormat) {
@@ -205,7 +248,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         if (produtoIds.length > 0) {
           const { data: produtosData } = await supabase
             .from('produtos')
-            .select('id, nome, valor, permite_multiplas_unidades')
+            .select('id, nome, valor, permite_multiplas_unidades, resumo, brindes_vinculados')
             .in('id', produtoIds);
 
           if (produtosData) {
@@ -216,10 +259,13 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
               .map((p: any) => {
                 const dbProduto = produtoMap[p.produto_id];
                 return {
+                  id: dbProduto.id,
                   nome: dbProduto.nome,
                   preco: parseFloat(dbProduto.valor || 0),
                   quantidade: p.quantidade || 1,
                   permite_multiplas_unidades: dbProduto.permite_multiplas_unidades,
+                  resumo: dbProduto.resumo || '',
+                  brindes_vinculados: dbProduto.brindes_vinculados || [],
                 };
               });
           }
@@ -232,14 +278,17 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           const produtoIds = Object.keys(selectedMap);
           const { data: produtosData } = await supabase
             .from('produtos')
-            .select('id, nome, valor')
+            .select('id, nome, valor, resumo, brindes_vinculados')
             .in('id', produtoIds);
 
           if (produtosData) {
             produtos = produtosData.map((p: any) => ({
+              id: p.id,
               nome: p.nome,
               preco: parseFloat(p.valor || 0),
               quantidade: typeof selectedMap[p.id] === 'number' ? selectedMap[p.id] : 1,
+              resumo: p.resumo || '',
+              brindes_vinculados: p.brindes_vinculados || [],
             }));
           }
         }
@@ -285,7 +334,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         forma_pagamento_detalhes: formaPagamentoCompleta || null,
         ocultar_valores_intermediarios: ocultarValoresIntermediarios,
         // Plano de pagamento final definido pelo usuário no ConvertLeadModal (se já existir)
-        plano_pagamento: orcamentoDetalhe.plano_pagamento || null,
+        plano_pagamento: planoPagamentoDoCaixa || orcamentoDetalhe.plano_pagamento || null,
         upsell_produtos: upsellProdutos,
         valor_base: valorBase,
         valor_upsell: valorUpsell,

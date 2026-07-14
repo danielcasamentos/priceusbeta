@@ -27,6 +27,11 @@ const PLACEHOLDERS = {
     { key: '{{ENDERECO_USUARIO}}', label: 'Endereço do Usuário' },
     { key: '{{TELEFONE_USUARIO}}', label: 'Telefone do Usuário' },
     { key: '{{EMAIL_USUARIO}}', label: 'Email do Usuário' },
+    { key: '{{PIX_USUARIO}}', label: 'Chave PIX do Usuário' },
+    { key: '{{BANCO_USUARIO}}', label: 'Banco do Usuário' },
+    { key: '{{AGENCIA_USUARIO}}', label: 'Agência do Usuário' },
+    { key: '{{CONTA_USUARIO}}', label: 'Conta do Usuário' },
+    { key: '{{PIX}}', label: 'Dados Bancários e PIX' },
   ],
   'DO LEAD (importado automaticamente)': [
     { key: '{{NOME_CLIENTE}}', label: 'Nome do Cliente' },

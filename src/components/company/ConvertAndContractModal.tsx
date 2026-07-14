@@ -16,22 +16,11 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
   const [financialPayload, setFinancialPayload] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // When step 1 finishes WITH contract generation
-  const handleProceedToContract = (payload: any) => {
-    setFinancialPayload(payload);
-    setStep(2);
-  };
-
-  // When step 2 (Contract) finishes, we save EVERYTHING to DB
-  const handleFinalizeWorkflow = async () => {
-    if (!financialPayload) {
-      onSuccess();
-      return;
-    }
-
+  // When step 1 finishes WITH contract generation, we save financial data and agenda events immediately!
+  const handleProceedToContract = async (payload: any) => {
     setIsSaving(true);
     try {
-      const { dbRows, planoJson, datasValidas } = financialPayload;
+      const { dbRows, planoJson, datasValidas } = payload;
 
       // 1. Inserir Transações Financeiras (Caixa)
       if (dbRows && dbRows.length > 0) {
@@ -64,12 +53,17 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
       if (datasValidas && datasValidas.length > 0) {
         for (const d of datasValidas) {
           try {
+            const { data: leadData } = await supabase.from('leads').select('cidade_evento').eq('id', lead.id).single();
             await supabase.from('eventos_agenda').insert({
               user_id: userId,
               lead_id: lead.id,
               data_evento: d.data,
-              tipo_evento: d.tipo_evento,
-              observacoes: `Gerado automaticamente via fechamento de contrato.`
+              tipo_evento: d.tipo_evento || 'Evento',
+              cliente_nome: lead.nome_cliente || 'Cliente',
+              cidade: leadData?.cidade_evento || '',
+              status: 'confirmado',
+              origem: 'lead_convertido',
+              observacoes: `Gerado via conversão e fechamento de contrato.`
             });
           } catch (agErr) {
             console.error('Erro ao inserir data na agenda:', agErr);
@@ -77,13 +71,19 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
         }
       }
 
-      onSuccess();
+      setFinancialPayload(payload);
+      setStep(2);
     } catch (error) {
-      console.error('Error saving unified workflow:', error);
-      alert('Erro ao salvar os dados financeiros. O contrato foi gerado, mas o caixa não foi atualizado.');
+      console.error('Error saving unified workflow financial data upfront:', error);
+      alert('Erro ao salvar as configurações financeiras do lead.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // When step 2 (Contract) finishes, the database is already fully populated
+  const handleFinalizeWorkflow = async () => {
+    onSuccess();
   };
 
   if (step === 1) {
@@ -99,7 +99,7 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
         userId={userId}
         leadId={lead.id}
         leadName={lead.nome_cliente || 'Cliente'}
-        templateName={lead.template_id ? '' : ''} // We don't have templateName directly here, it's looked up inside usually, or passed
+        templateName={lead.tipo_evento || ''}
         valorTotal={lead.valor_total || 0}
         dataEvento={lead.data_evento}
         paymentMethodData={paymentMethodData}
@@ -129,12 +129,12 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
         onSuccess={handleFinalizeWorkflow}
       />
       
-      {/* Overlay de carregamento enquanto salva o BD após o contrato */}
+      {/* Overlay de carregamento enquanto salva o BD */}
       {isSaving && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center">
           <div className="bg-white dark:bg-[#0a1628] p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            <p className="text-gray-700 dark:text-gray-300 font-medium">Finalizando fechamento e sincronizando caixa...</p>
+            <p className="text-gray-700 dark:text-gray-300 font-medium">Salvando dados no caixa e preparando contrato...</p>
           </div>
         </div>
       )}

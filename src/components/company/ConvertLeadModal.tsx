@@ -41,6 +41,17 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
   // --- Financeiro ---
   const [mode, setMode] = useState<PaymentMode>(detected.mode);
   const [valorOverride, setValorOverride] = useState(valorTotal);
+  const [ajuste, setAjuste] = useState(0);
+
+  const handleAjusteChange = (val: number) => {
+    setAjuste(val);
+    setValorOverride(valorTotal + val);
+  };
+
+  const handleValorOverrideChange = (val: number) => {
+    setValorOverride(val);
+    setAjuste(val - valorTotal);
+  };
   const [categoria, setCategoria] = useState('');
   const [formaPagamento, setFormaPagamento] = useState(paymentMethodData?.nome ?? 'pix');
   const [observacoes, setObservacoes] = useState('');
@@ -63,22 +74,32 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
   const [salvarFinanceiro, setSalvarFinanceiro] = useState(true);
 
   // --- Agenda (múltiplas datas) ---
-  const [agendaDates, setAgendaDates] = useState<AgendaDate[]>(
-    eventoDate ? [{ id: uid(), data: eventoDate, tipo_evento: templateName || 'Evento' }] : []
-  );
+  const [agendaDates, setAgendaDates] = useState<AgendaDate[]>(() => {
+    const formattedDate = eventoDate 
+      ? new Date(eventoDate + 'T12:00:00').toLocaleDateString('pt-BR')
+      : '';
+    const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
+    const defaultBase = `Evento de ${leadName}${templateName ? ` - ${templateName}` : ''}`;
+    const initName = `${defaultBase}${dateSuffix}`;
+    return eventoDate ? [{ id: uid(), data: eventoDate, tipo_evento: initName }] : [];
+  });
 
   const valorRestante = mode === 'entrada_parcelas' ? valorOverride - entradaValor : valorOverride;
 
-  const buildParcelas = (n: number, valRest: number, startDate: string): Installment[] => {
+  const buildParcelas = (n: number, valRest: number, startDate: string, isEntradaParcelas: boolean): Installment[] => {
     const valParc = parseFloat((valRest / n).toFixed(2));
     return Array.from({ length: n }, (_, i) => ({
       numero: i + 1,
       valor: i === n - 1 ? parseFloat((valRest - valParc * (n - 1)).toFixed(2)) : valParc,
-      data: addMonths(startDate, i), status: 'pendente' as const,
+      data: addMonths(startDate, isEntradaParcelas ? i + 1 : i),
+      status: 'pendente' as const,
     }));
   };
 
-  useEffect(() => { setParcelas(buildParcelas(numParcelas, valorRestante, dataInicial)); }, [numParcelas, dataInicial, valorOverride, entradaValor, mode]);
+  useEffect(() => {
+    const referenceDate = mode === 'entrada_parcelas' ? entradaData : dataInicial;
+    setParcelas(buildParcelas(numParcelas, valorRestante, referenceDate, mode === 'entrada_parcelas'));
+  }, [numParcelas, dataInicial, entradaData, valorOverride, entradaValor, mode]);
   useEffect(() => {
     supabase.from('company_categories').select('id, nome').eq('user_id', userId).eq('tipo', 'receita').order('nome')
       .then(({ data }) => { if (data) setCategorias(data); });
@@ -92,9 +113,32 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
   const updateParcela = (i: number, field: keyof Installment, val: any) => setParcelas(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: val } : p));
   const removeParcela = (i: number) => { setParcelas(prev => prev.filter((_, idx) => idx !== i).map((p, idx) => ({ ...p, numero: idx + 1 }))); setNumParcelas(p => Math.max(1, p - 1)); };
 
-  const addAgendaDate = () => setAgendaDates(prev => [...prev, { id: uid(), data: '', tipo_evento: templateName || 'Evento' }]);
+  const addAgendaDate = () => {
+    const defaultBase = `Evento de ${leadName}${templateName ? ` - ${templateName}` : ''}`;
+    setAgendaDates(prev => [...prev, { id: uid(), data: '', tipo_evento: defaultBase }]);
+  };
   const removeAgendaDate = (id: string) => setAgendaDates(prev => prev.filter(d => d.id !== id));
-  const updateAgendaDate = (id: string, field: keyof AgendaDate, val: string) => setAgendaDates(prev => prev.map(d => d.id === id ? { ...d, [field]: val } : d));
+  
+  const updateAgendaDate = (id: string, field: keyof AgendaDate, val: string) => {
+    setAgendaDates(prev => prev.map(d => {
+      if (d.id === id) {
+        let updated = { ...d, [field]: val };
+        if (field === 'data' && val) {
+          const defaultBase = `Evento de ${leadName}${templateName ? ` - ${templateName}` : ''}`;
+          if (!d.tipo_evento || d.tipo_evento === defaultBase || d.tipo_evento === 'Evento') {
+            try {
+              const formattedDate = new Date(val + 'T12:00:00').toLocaleDateString('pt-BR');
+              updated.tipo_evento = `${defaultBase} - ${formattedDate}`;
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        }
+        return updated;
+      }
+      return d;
+    }));
+  };
 
   const applyPaymentMethodFromQuote = () => {
     if (!paymentMethodData) return;
@@ -283,16 +327,41 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className={labelCls}><DollarSign className="inline w-3.5 h-3.5 mr-1" />Valor Total</label>
+                  <label className={labelCls}><DollarSign className="inline w-3.5 h-3.5 mr-1" />Valor Original</label>
+                  <input type="text" disabled value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorTotal)} className={`${inputCls} bg-gray-100 dark:bg-gray-800 cursor-not-allowed`} />
+                </div>
+                
+                <div>
+                  <label className={labelCls}>
+                    <Plus className="inline w-3.5 h-3.5 mr-1" />Acréscimo / Desconto
+                  </label>
+                  <input 
+                    type="text" 
+                    value={(ajuste > 0 ? '+' : '') + new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(ajuste)}
+                    onChange={e => {
+                      const text = e.target.value;
+                      const isNegative = text.includes('-');
+                      const num = Number(text.replace(/[^\d]/g, '')) / 100;
+                      const val = isNegative ? -num : num;
+                      handleAjusteChange(val);
+                    }} 
+                    className={`${inputCls} ${ajuste > 0 ? 'text-green-600 font-semibold' : ajuste < 0 ? 'text-red-600 font-semibold' : ''}`} 
+                    placeholder="+ R$ 0,00 ou - R$ 0,00"
+                  />
+                </div>
+
+                <div>
+                  <label className={labelCls}><DollarSign className="inline w-3.5 h-3.5 mr-1" />Valor de Fechamento</label>
                   <input type="text" value={new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(valorOverride)}
-                    onChange={e => setValorOverride(Number(e.target.value.replace(/\D/g, '')) / 100)} className={inputCls} />
+                    onChange={e => handleValorOverrideChange(Number(e.target.value.replace(/\D/g, '')) / 100)} className={`${inputCls} font-bold text-gray-900 dark:text-white`} />
                 </div>
-                <div>
-                  <label className={labelCls}><Calendar className="inline w-3.5 h-3.5 mr-1" />Data 1ª Parcela / Vencimento</label>
-                  <input type="date" value={dataInicial} onChange={e => setDataInicial(e.target.value)} className={inputCls} />
-                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}><Calendar className="inline w-3.5 h-3.5 mr-1" />Data 1ª Parcela / Vencimento</label>
+                <input type="date" value={dataInicial} onChange={e => setDataInicial(e.target.value)} className={inputCls} />
               </div>
 
               {mode === 'entrada_parcelas' && (

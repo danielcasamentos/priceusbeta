@@ -46,6 +46,7 @@ export interface LeadData {
   servicos?: any[];
   desconto_cupom?: number;
   forma_pagamento?: string;
+  forma_pagamento_detalhes?: any;
   acrescimo_pagamento?: number;
   ajuste_sazonal?: number;
   ajuste_geografico?: number;
@@ -97,6 +98,18 @@ export function replaceContractVariables(
     '{{BANCO_USUARIO}}': businessSettings.bank_name || '',
     '{{AGENCIA_USUARIO}}': businessSettings.bank_agency || '',
     '{{CONTA_USUARIO}}': businessSettings.bank_account || '',
+    '{{PIX}}': (() => {
+      const pixKey = businessSettings.pix_key || '';
+      if (!pixKey) return '';
+      
+      let text = `• Chave PIX: ${pixKey}\n`;
+      if (businessSettings.bank_name) text += `• Banco: ${businessSettings.bank_name}\n`;
+      if (businessSettings.bank_agency) text += `• Agência: ${businessSettings.bank_agency}\n`;
+      if (businessSettings.bank_account) text += `• Conta: ${businessSettings.bank_account}\n`;
+      if (businessSettings.bank_account_type) text += `• Tipo de Conta: ${businessSettings.bank_account_type}\n`;
+      
+      return text.trim();
+    })(),
 
     '{{NOME_CLIENTE}}': leadData.nome_cliente || '',
     '{{VALOR_BASE}}': leadData.valor_base !== undefined ? `R$ ${Number(leadData.valor_base).toFixed(2).replace('.', ',')}` : '',
@@ -151,8 +164,51 @@ export function replaceContractVariables(
       ? ''
       : `R$ ${leadData.ajuste_geografico.toFixed(2).replace('.', ',')}`,
     '{{FORMA_PAGAMENTO}}': (() => {
-      if (leadData.plano_pagamento) {
-        const p = leadData.plano_pagamento;
+      let p = leadData.plano_pagamento;
+      
+      // Fallback: Gerar plano de pagamento caso não exista, mas tenhamos os detalhes do método selecionado
+      if (!p && leadData.forma_pagamento_detalhes) {
+        const fp = leadData.forma_pagamento_detalhes;
+        const total = leadData.valor_total || 0;
+        const maxParc = fp.max_parcelas || 1;
+        const modo = maxParc > 1 
+          ? (fp.entrada_valor > 0 ? 'entrada_parcelas' : 'parcelado')
+          : 'avista';
+          
+        const valorEntrada = fp.entrada_valor > 0 
+          ? (fp.entrada_tipo === 'percentual' ? (total * fp.entrada_valor) / 100 : fp.entrada_valor)
+          : 0;
+          
+        const saldo = total - valorEntrada;
+        const valorParcela = maxParc > 0 ? (saldo / maxParc) : saldo;
+        
+        // Calcular datas das parcelas (mensal a partir de hoje)
+        const parcelas: any[] = [];
+        const hj = new Date();
+        
+        for (let i = 1; i <= maxParc; i++) {
+          const dt = new Date();
+          dt.setMonth(hj.getMonth() + i);
+          const dataStr = dt.toISOString().split('T')[0];
+          parcelas.push({
+            numero: i,
+            valor: valorParcela,
+            data: dataStr
+          });
+        }
+        
+        const dataEntradaStr = hj.toISOString().split('T')[0];
+        
+        p = {
+          modo,
+          forma_pagamento_nome: fp.nome,
+          valor_total: total,
+          entrada: fp.entrada_valor > 0 ? { valor: valorEntrada, data: dataEntradaStr } : null,
+          parcelas
+        };
+      }
+
+      if (p) {
         const formatCurrency = (val: number) => `R$ ${Number(val).toFixed(2).replace('.', ',')}`;
         const formatDate = (dtStr: string) => {
           if (!dtStr) return '';
@@ -181,7 +237,9 @@ export function replaceContractVariables(
           }
         } else if (p.modo === 'entrada_parcelas') {
           txt += ` (Entrada + Parcelas):\n`;
-          txt += `• Entrada: ${formatCurrency(p.entrada?.valor || 0)} - Vencimento: ${formatDate(p.entrada?.data || '')}\n`;
+          if (p.entrada) {
+            txt += `• Entrada: ${formatCurrency(p.entrada?.valor || 0)} - Vencimento: ${formatDate(p.entrada?.data || '')}\n`;
+          }
           if (p.parcelas && p.parcelas.length > 0) {
             p.parcelas.forEach((parc: any) => {
               txt += `• Parcela ${parc.numero}/${p.parcelas.length}: ${formatCurrency(parc.valor)} - Vencimento: ${formatDate(parc.data)}\n`;
@@ -197,19 +255,57 @@ export function replaceContractVariables(
   if (leadData.produtos && leadData.produtos.length > 0) {
     const produtosLista = leadData.produtos
       .map((p: any) => {
-        const cleanNome = removeEmojis(p.nome); // 🔥 REMOVE EMOJIS DO NOME DO PRODUTO
+        const cleanNome = removeEmojis(p.nome);
         const showQty = p.permite_multiplas_unidades !== false;
         const qtyText = showQty ? `${p.quantidade}x ` : '';
         
+        let line = '';
         if (ocultarValores) {
-          // Quando ocultar valores intermediários está ativo, mostrar apenas a quantidade e o nome do produto
-          return `• ${qtyText}${cleanNome}`;
+          line = `• ${qtyText}${cleanNome}`;
         } else {
-          // Quando ocultar valores está desativado, mostrar quantidade, nome e preço
-          return `• ${qtyText}${cleanNome} - R$ ${p.preco?.toFixed(2).replace('.', ',')}`;
+          line = `• ${qtyText}${cleanNome} - R$ ${p.preco?.toFixed(2).replace('.', ',')}`;
         }
+        
+        if (p.resumo) {
+          const formattedResumo = p.resumo
+            .split('\n')
+            .map((r: string) => {
+              let rLine = r.trim();
+              if (!rLine) return '';
+              
+              if (rLine.startsWith('#')) {
+                rLine = rLine.replace(/^#+\s*/, '').toUpperCase();
+              } else if (rLine === '---') {
+                return '  ────────────────────';
+              } else if (rLine.startsWith('-') || rLine.startsWith('*')) {
+                rLine = '  • ' + rLine.replace(/^[-*]\s*/, '');
+              } else {
+                rLine = '  ' + rLine;
+              }
+              
+              rLine = rLine.replace(/\*\*/g, '');
+              return rLine;
+            })
+            .filter((r: string) => r !== '')
+            .join('\n');
+            
+          if (formattedResumo) {
+            line += `\n${formattedResumo}`;
+          }
+        }
+        
+        if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados) && p.brindes_vinculados.length > 0) {
+          const upsellList = leadData.upsell_produtos || [];
+          p.brindes_vinculados.forEach((brindeId: string) => {
+            const brinde = upsellList.find((u: any) => (u.produto_id || u.id) === brindeId);
+            const brindeNome = brinde ? (brinde.nome || brinde.nome_produto) : 'Brinde';
+            line += `\n  🎁 Brinde Incluso: ${removeEmojis(brindeNome)}`;
+          });
+        }
+        
+        return line;
       })
-      .join('\n');
+      .join('\n\n');
     variables['{{PRODUTOS_LISTA}}'] = produtosLista;
   } else {
     variables['{{PRODUTOS_LISTA}}'] = '';
@@ -287,6 +383,7 @@ export function getAvailableVariables(): { key: string; description: string; cat
     { key: '{{BANCO_USUARIO}}', description: 'Nome do banco', category: 'Usuario' },
     { key: '{{AGENCIA_USUARIO}}', description: 'Agência bancária', category: 'Usuario' },
     { key: '{{CONTA_USUARIO}}', description: 'Conta bancária', category: 'Usuario' },
+    { key: '{{PIX}}', description: 'Chave PIX e dados bancários consolidados', category: 'Usuario' },
 
     { key: '{{NOME_COMPLETO_CLIENTE}}', description: 'Nome completo do cliente', category: 'Cliente' },
     { key: '{{CPF_CLIENTE}}', description: 'CPF do cliente', category: 'Cliente' },

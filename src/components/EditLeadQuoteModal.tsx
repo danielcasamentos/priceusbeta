@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, Lead } from '../lib/supabase';
 import { LeadOrcamentoDetalhe } from './LeadsManager';
-import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, DollarSign, Loader2, Check, AlertTriangle, ChevronDown } from 'lucide-react';
+import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, DollarSign, Loader2, Check, AlertTriangle, ChevronDown, Mail } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
@@ -23,6 +23,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
   // ── Dados básicos do lead ────────────────────────────────────────────────
   const [nomeCliente, setNomeCliente] = useState(lead.nome_cliente || '');
+  const [emailCliente, setEmailCliente] = useState(lead.email_cliente || '');
   const [telefoneCliente, setTelefoneCliente] = useState(lead.telefone_cliente || '');
   const [dataEvento, setDataEvento] = useState(
     lead.data_evento ? lead.data_evento.split('T')[0] : ''
@@ -478,6 +479,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
 
       const updatedLeadData: Partial<Lead> = {
         nome_cliente: nomeCliente || null,
+        email_cliente: emailCliente || null,
         telefone_cliente: telefoneCliente || null,
         data_evento: dataEvento || null,
         cidade_evento: finalCityName,
@@ -575,6 +577,23 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                     onChange={(e) => setTelefoneCliente(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="(11) 99999-9999"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  E-mail do Cliente
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    value={emailCliente}
+                    onChange={(e) => setEmailCliente(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="cliente@email.com"
                   />
                 </div>
               </div>

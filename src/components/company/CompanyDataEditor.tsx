@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Building2, Save, AlertCircle, CheckCircle, PenTool, CreditCard } from 'lucide-react';
+import { Building2, Save, AlertCircle, CheckCircle, PenTool, CreditCard, Tag, Plus, Edit2, Trash2, Loader2, Check, X } from 'lucide-react';
 import { MaskedInput } from '../MaskedInput';
 import { ContractCanvas } from '../ContractCanvas';
 
@@ -67,8 +67,101 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [userCategories, setUserCategories] = useState<any[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryType, setNewCategoryType] = useState<'receita' | 'despesa'>('receita');
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('company_categories')
+        .select('*')
+        .eq('user_id', userId)
+        .order('nome');
+      if (error) throw error;
+      setUserCategories(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar categorias:', err);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setCategoryLoading(true);
+    try {
+      const { error } = await supabase.from('company_categories').insert({
+        user_id: userId,
+        nome: newCategoryName.trim(),
+        tipo: newCategoryType,
+        cor: newCategoryType === 'receita' ? '#22c55e' : '#ef4444'
+      });
+      if (error) throw error;
+      setNewCategoryName('');
+      await loadCategories();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao adicionar categoria.');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Deseja excluir esta categoria? Transações associadas perderão a categoria.')) return;
+    setCategoryLoading(true);
+    try {
+      const { error } = await supabase
+        .from('company_categories')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+      if (error) throw error;
+      await loadCategories();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir categoria.');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const startEditCategory = (id: string, currentNome: string) => {
+    setEditingCategoryId(id);
+    setEditingCategoryName(currentNome);
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
+  };
+
+  const handleSaveEditCategory = async (id: string) => {
+    if (!editingCategoryName.trim()) return;
+    setCategoryLoading(true);
+    try {
+      const { error } = await supabase
+        .from('company_categories')
+        .update({ nome: editingCategoryName.trim() })
+        .eq('id', id)
+        .eq('user_id', userId);
+      if (error) throw error;
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+      await loadCategories();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar edição.');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadSettings();
+    loadCategories();
   }, [userId]);
 
   const loadSettings = async () => {
@@ -399,7 +492,127 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
         </div>
       </div>
 
-      <div className="border-t pt-6">
+       {/* Card de Categorias Financeiras */}
+        <div className="border-t pt-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Tag className="w-6 h-6 text-blue-600" />
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Categorias de Trabalhos e Despesas</h3>
+              <p className="text-sm text-gray-600">Personalize as categorias que utiliza para classificar seus trabalhos (receitas) e gastos (despesas) no sistema financeiro.</p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-[rgba(255,255,255,0.01)] rounded-xl border dark:border-[rgba(255,255,255,0.05)] p-5 space-y-6 mt-4">
+            {/* Formulário de Adicionar Categoria */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Ex: Ensaios, Casamentos, Equipamentos..."
+                className="flex-1 px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 text-sm outline-none"
+              />
+              <select
+                value={newCategoryType}
+                onChange={(e) => setNewCategoryType(e.target.value as any)}
+                className="px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 text-sm outline-none"
+              >
+                <option value="receita">Trabalhos (Receita)</option>
+                <option value="despesa">Despesas (Saída)</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleAddCategory}
+                disabled={categoryLoading}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1 shrink-0"
+              >
+                {categoryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Adicionar
+              </button>
+            </div>
+
+            {/* Listagem split de Receitas e Despesas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Receitas */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                  <h4 className="font-bold text-gray-800 dark:text-gray-300 text-xs uppercase tracking-wider">Trabalhos / Receitas</h4>
+                </div>
+                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                  {userCategories.filter(c => c.tipo === 'receita').map(c => (
+                    <div key={c.id} className="flex justify-between items-center p-2.5 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.05)] rounded-lg text-sm hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.1)] transition-colors">
+                      {editingCategoryId === c.id ? (
+                        <div className="flex items-center gap-2 w-full">
+                          <input
+                            type="text"
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                            className="flex-1 px-2 py-0.5 border dark:border-[rgba(255,255,255,0.1)] rounded text-xs dark:bg-[#0a1628] dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                            autoFocus
+                          />
+                          <button type="button" onClick={() => handleSaveEditCategory(c.id)} className="text-green-500 hover:text-green-600 transition-colors p-0.5"><Check className="w-3.5 h-3.5" /></button>
+                          <button type="button" onClick={cancelEditCategory} className="text-gray-400 hover:text-gray-500 transition-colors p-0.5"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-gray-700 dark:text-gray-300 truncate pr-2">{c.nome}</span>
+                          <div className="flex gap-1 shrink-0">
+                            <button type="button" onClick={() => startEditCategory(c.id, c.nome)} className="text-gray-400 hover:text-blue-500 transition-colors p-0.5"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => handleDeleteCategory(c.id)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {userCategories.filter(c => c.tipo === 'receita').length === 0 && (
+                    <p className="text-xs text-gray-400 italic">Nenhuma categoria de trabalho.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Despesas */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                  <h4 className="font-bold text-gray-800 dark:text-gray-300 text-xs uppercase tracking-wider">Despesas / Gastos</h4>
+                </div>
+                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                  {userCategories.filter(c => c.tipo === 'despesa').map(c => (
+                    <div key={c.id} className="flex justify-between items-center p-2.5 bg-white dark:bg-[#07101f] border dark:border-[rgba(255,255,255,0.05)] rounded-lg text-sm hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.1)] transition-colors">
+                      {editingCategoryId === c.id ? (
+                        <div className="flex items-center gap-2 w-full">
+                          <input
+                            type="text"
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                            className="flex-1 px-2 py-0.5 border dark:border-[rgba(255,255,255,0.1)] rounded text-xs dark:bg-[#0a1628] dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                            autoFocus
+                          />
+                          <button type="button" onClick={() => handleSaveEditCategory(c.id)} className="text-green-500 hover:text-green-600 transition-colors p-0.5"><Check className="w-3.5 h-3.5" /></button>
+                          <button type="button" onClick={cancelEditCategory} className="text-gray-400 hover:text-gray-500 transition-colors p-0.5"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-gray-700 dark:text-gray-300 truncate pr-2">{c.nome}</span>
+                          <div className="flex gap-1 shrink-0">
+                            <button type="button" onClick={() => startEditCategory(c.id, c.nome)} className="text-gray-400 hover:text-blue-500 transition-colors p-0.5"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => handleDeleteCategory(c.id)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {userCategories.filter(c => c.tipo === 'despesa').length === 0 && (
+                    <p className="text-xs text-gray-400 italic">Nenhuma categoria de despesa.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t pt-6">
         <div className="flex items-center gap-3 mb-4">
           <PenTool className="w-6 h-6 text-blue-600" />
           <div>
