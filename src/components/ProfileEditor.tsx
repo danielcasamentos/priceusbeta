@@ -239,7 +239,11 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       
       if (error) {
         if (error.code === 'PGRST501' || error.message?.includes('function') || error.message?.includes('does not exist')) {
-          setShowSqlFallback(true);
+          if (import.meta.env.DEV) {
+            setShowSqlFallback(true);
+          } else {
+            alert('Não foi possível excluir a conta automaticamente. Por favor, entre em contato com o suporte técnico.');
+          }
           setDeletingAccount(false);
           return;
         }
@@ -1036,7 +1040,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         </button>
       </div>
 
-      {showSqlFallback && (
+      {showSqlFallback && import.meta.env.DEV && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#0a1628] rounded-2xl shadow-2xl w-full max-w-lg p-6 border dark:border-[rgba(255,255,255,0.06)] flex flex-col gap-4">
             <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
