@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Profile } from '../lib/supabase';
-import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, CreditCard } from 'lucide-react';
+import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, CreditCard, Trash2 } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
 import { useSubscription } from '../hooks/useSubscription';
 
@@ -17,6 +17,10 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
   const { manageSubscription, loading: subLoading } = useSubscription();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showSqlFallback, setShowSqlFallback] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -220,6 +224,35 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       alert('Conta do Google desconectada com sucesso.');
     } catch (err: any) {
       alert(`Erro ao desconectar: ${err.message || err}`);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation.trim().toUpperCase() !== 'EXCLUIR') {
+      alert('Por favor, digite EXCLUIR para confirmar.');
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      const { error } = await supabase.rpc('delete_user');
+      
+      if (error) {
+        if (error.code === 'PGRST501' || error.message?.includes('function') || error.message?.includes('does not exist')) {
+          setShowSqlFallback(true);
+          setDeletingAccount(false);
+          return;
+        }
+        throw error;
+      }
+
+      await supabase.auth.signOut();
+      alert('Sua conta e todos os dados vinculados foram permanentemente excluídos.');
+      window.location.href = '/';
+    } catch (err: any) {
+      console.error('Erro ao excluir conta:', err);
+      alert(`Erro ao excluir conta: ${err.message || err}`);
+      setDeletingAccount(false);
     }
   };
 
@@ -940,6 +973,58 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
             </button>
           </div>
         </div>
+        <div className="border-t border-red-200/50 dark:border-red-900/30 pt-6">
+          <div className="p-4 rounded-xl border border-red-200 dark:border-red-950/30 bg-red-50/50 dark:bg-red-950/10">
+            <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-1 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              Zona de Perigo
+            </h3>
+            <p className="text-sm text-red-650/80 dark:text-red-400/70 mb-4">
+              Exclua permanentemente sua conta e todos os dados do sistema. Esta ação não poderá ser desfeita.
+            </p>
+            
+            {showDeleteModal ? (
+              <div className="flex flex-col gap-3 max-w-md">
+                <p className="text-xs font-semibold text-red-800 dark:text-red-300">
+                  Para confirmar a exclusão permanente, digite EXCLUIR no campo abaixo:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={deleteConfirmation}
+                    onChange={(e) => setDeleteConfirmation(e.target.value)}
+                    placeholder="Digite EXCLUIR"
+                    className="flex-1 px-3 py-1.5 bg-white dark:bg-[#07101f] border border-red-300 dark:border-red-900 text-gray-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deletingAccount || deleteConfirmation.trim().toUpperCase() !== 'EXCLUIR'}
+                    className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5"
+                  >
+                    {deletingAccount ? 'Excluindo...' : 'Confirmar Exclusão'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setDeleteConfirmation('');
+                    }}
+                    className="px-3 py-1.5 bg-gray-200 dark:bg-white/5 hover:bg-gray-300 dark:hover:bg-white/10 text-gray-700 dark:text-white rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="px-4 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-950/20 dark:hover:bg-red-950/30 text-red-750 dark:text-red-450 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Excluir Minha Conta
+              </button>
+            )}
+          </div>
+        </div>
 
         <button
           onClick={handleSaveProfile}
@@ -950,6 +1035,40 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           {saving ? 'Salvando...' : 'Salvar Perfil'}
         </button>
       </div>
+
+      {showSqlFallback && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0a1628] rounded-2xl shadow-2xl w-full max-w-lg p-6 border dark:border-[rgba(255,255,255,0.06)] flex flex-col gap-4">
+            <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+              Habilitar Função de Exclusão
+            </h4>
+            <p className="text-sm text-gray-650 dark:text-gray-400 leading-relaxed">
+              Como administrador deste projeto no Supabase, você precisa criar uma função SQL segura com privilégios de superusuário (SECURITY DEFINER) para permitir a exclusão do usuário a partir do cliente web:
+            </p>
+            <div className="relative bg-gray-900 text-green-400 p-3 rounded-lg text-xs font-mono select-all overflow-x-auto whitespace-pre border border-gray-800">
+{`CREATE OR REPLACE FUNCTION delete_user()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM auth.users WHERE id = auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`}
+            </div>
+            <p className="text-xs text-yellow-750 dark:text-yellow-450 bg-yellow-50 dark:bg-yellow-950/20 p-2.5 rounded-lg border border-yellow-250 dark:border-yellow-900/30 leading-relaxed">
+              💡 <strong>Como aplicar:</strong> Vá no seu painel da <strong>Supabase -&gt; SQL Editor -&gt; New Query</strong>, cole o código acima e clique em <strong>Run</strong>. Depois disso, clique novamente no botão de exclusão e tudo funcionará de imediato.
+            </p>
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowSqlFallback(false)}
+                className="px-4 py-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
