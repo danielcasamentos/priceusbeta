@@ -229,18 +229,33 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           {};
 
       if (isSnapshotFormat) {
-        // ✅ Formato A: snapshot completo — usa diretamente
+        // ✅ Formato A: snapshot completo — usa diretamente mas busca resumo/brindes mais recentes no banco se disponíveis
+        const productIds = produtosRaw.map((p: any) => p.id).filter(Boolean);
+        let dbProductsMap: Record<string, any> = {};
+        if (productIds.length > 0) {
+          const { data: dbProducts } = await supabase
+            .from('produtos')
+            .select('id, resumo, brindes_vinculados')
+            .in('id', productIds);
+          if (dbProducts) {
+            dbProductsMap = Object.fromEntries(dbProducts.map(p => [p.id, p]));
+          }
+        }
+
         produtos = produtosRaw
           .filter((p: any) => Object.keys(selectedMap).length === 0 || (selectedMap[p.id] && selectedMap[p.id] > 0))
-          .map((p: any) => ({
-            id: p.id,
-            nome: p.nome || 'Produto',
-            preco: parseFloat(p.valor || p.preco || 0),
-            quantidade: selectedMap[p.id] || p.quantidade || 1,
-            permite_multiplas_unidades: p.permite_multiplas_unidades,
-            resumo: p.resumo || '',
-            brindes_vinculados: p.brindes_vinculados || [],
-          }));
+          .map((p: any) => {
+            const dbProduct = dbProductsMap[p.id];
+            return {
+              id: p.id,
+              nome: p.nome || 'Produto',
+              preco: parseFloat(p.valor || p.preco || 0),
+              quantidade: selectedMap[p.id] || p.quantidade || 1,
+              permite_multiplas_unidades: p.permite_multiplas_unidades,
+              resumo: dbProduct?.resumo || p.resumo || '',
+              brindes_vinculados: dbProduct?.brindes_vinculados || p.brindes_vinculados || [],
+            };
+          });
 
       } else if (isProdutoIdFormat) {
         // ✅ Formato B: {produto_id, quantidade} — busca nomes no banco

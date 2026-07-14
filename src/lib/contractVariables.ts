@@ -307,8 +307,10 @@ export function replaceContractVariables(
       })
       .join('\n\n');
     variables['{{PRODUTOS_LISTA}}'] = produtosLista;
+    variables['{{PRODUTO_LISTA}}'] = produtosLista;
   } else {
     variables['{{PRODUTOS_LISTA}}'] = '';
+    variables['{{PRODUTO_LISTA}}'] = '';
   }
 
   if (leadData.upsell_produtos && leadData.upsell_produtos.length > 0) {
@@ -407,7 +409,8 @@ export function getAvailableVariables(): { key: string; description: string; cat
     { key: '{{AJUSTE_SAZONAL}}', description: 'Ajuste sazonal (por data)', category: 'Financeiro' },
     { key: '{{AJUSTE_GEOGRAFICO}}', description: 'Ajuste geográfico (por localização)', category: 'Financeiro' },
     { key: '{{FORMA_PAGAMENTO}}', description: 'Forma de pagamento', category: 'Financeiro' },
-    { key: '{{PRODUTOS_LISTA}}', description: 'Lista de produtos contratados', category: 'Financeiro' },
+    { key: '{{PRODUTOS_LISTA}}', description: 'Lista de produtos contratados (Plural)', category: 'Financeiro' },
+    { key: '{{PRODUTO_LISTA}}', description: 'Lista de produtos contratados (Singular)', category: 'Financeiro' },
     { key: '{{SERVICOS_LISTA}}', description: 'Lista de serviços contratados', category: 'Financeiro' },
     { key: '{{UPSELL_LISTA}}', description: 'Lista de adicionais (upsell) contratados', category: 'Financeiro' },
     { key: '{{VALOR_BASE}}', description: 'Valor base (sem adicionais)', category: 'Financeiro' },

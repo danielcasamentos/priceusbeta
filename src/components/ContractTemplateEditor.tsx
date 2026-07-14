@@ -41,7 +41,8 @@ const PLACEHOLDERS = {
     { key: '{{CIDADE_EVENTO}}', label: 'Cidade do Evento' },
   ],
   'DO PACOTE (calculado automaticamente)': [
-    { key: '{{PRODUTOS_LISTA}}', label: 'Lista de Produtos' },
+    { key: '{{PRODUTOS_LISTA}}', label: 'Lista de Produtos (Plural)' },
+    { key: '{{PRODUTO_LISTA}}', label: 'Lista de Produtos (Singular)' },
     { key: '{{SERVICOS_LISTA}}', label: 'Lista de Serviços' },
     { key: '{{SUBTOTAL}}', label: 'Subtotal' },
     { key: '{{DESCONTO_CUPOM}}', label: 'Desconto (Cupom)' },
