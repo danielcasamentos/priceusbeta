@@ -51,16 +51,33 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
 
       // 3. Inserir Datas na Agenda
       if (datasValidas && datasValidas.length > 0) {
+        let resolvedCityName = '';
+        try {
+          const { data: leadData } = await supabase.from('leads').select('cidade_evento').eq('id', lead.id).single();
+          resolvedCityName = leadData?.cidade_evento || '';
+          if (resolvedCityName && resolvedCityName.length === 36) {
+            const { data: cityData } = await supabase
+              .from('cidades_ajuste')
+              .select('nome')
+              .eq('id', resolvedCityName)
+              .maybeSingle();
+            if (cityData?.nome) {
+              resolvedCityName = cityData.nome;
+            }
+          }
+        } catch (cityLookupErr) {
+          console.error('Erro ao buscar cidade do lead:', cityLookupErr);
+        }
+
         for (const d of datasValidas) {
           try {
-            const { data: leadData } = await supabase.from('leads').select('cidade_evento').eq('id', lead.id).single();
             await supabase.from('eventos_agenda').insert({
               user_id: userId,
               lead_id: lead.id,
               data_evento: d.data,
               tipo_evento: d.tipo_evento || 'Evento',
               cliente_nome: lead.nome_cliente || 'Cliente',
-              cidade: leadData?.cidade_evento || '',
+              cidade: resolvedCityName,
               status: 'confirmado',
               origem: 'lead_convertido',
               observacoes: `Gerado via conversão e fechamento de contrato.`

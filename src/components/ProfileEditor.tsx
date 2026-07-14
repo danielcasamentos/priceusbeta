@@ -196,7 +196,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       });
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        window.location.href = data.url;
       }
     } catch (err: any) {
       alert(`Erro ao vincular conta do Google: ${err.message || err}`);
@@ -644,6 +644,18 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                 </button>
               </div>
             )}
+
+            <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-xs text-blue-800 dark:text-blue-200 border border-blue-100 dark:border-blue-900/30 flex flex-col gap-1.5">
+              <span className="font-bold flex items-center gap-1">
+                ⚠️ Dica para erros de vínculo:
+              </span>
+              <p className="leading-relaxed">
+                Se você receber um erro como <strong>"Identity is already linked"</strong>, significa que o seu Gmail já possui uma conta criada separadamente no sistema (provavelmente porque você clicou no botão "Entrar com Google" no passado).
+              </p>
+              <p className="leading-relaxed">
+                <strong>Como resolver:</strong> Saia da conta atual, faça login clicando em "Entrar com Google" com seu Gmail, vá até o final da página de Perfil e exclua essa conta vazia. Depois, faça login de volta na sua conta principal ({profile.email_recebimento || 'iCloud'}) e faça o vínculo novamente por aqui.
+              </p>
+            </div>
           </div>
         </div>
 
