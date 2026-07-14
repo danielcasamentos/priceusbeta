@@ -34,3 +34,5 @@ dist/
 *.tar.gz
 env_prod_backup.txt
 supabase/.temp/
+# Local Netlify folder
+.netlify
