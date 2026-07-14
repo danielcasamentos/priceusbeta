@@ -2,6 +2,7 @@ import { Send, Lock, MapPin, Sparkles, MessageCircle, Instagram, Mail, Star } fr
 import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
 interface QuoteRevellonProps {
@@ -11,13 +12,14 @@ interface QuoteRevellonProps {
   camposExtras: any[]; camposExtrasData: Record<string, string>; setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
   formasPagamento?: any[]; selectedFormaPagamento?: string; setSelectedFormaPagamento?: (id: string) => void;
-  firstProductRef?: React.RefObject<HTMLDivElement>; totalSectionRef?: React.RefObject<HTMLDivElement>;
+  firstProductRef?: any; totalSectionRef?: any;
   breakdown?: any; fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
+  upsellProdutos?: any[];
 }
 
 export function QuoteRevellon(props: QuoteRevellonProps) {
-  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, fieldErrors, formasPagamento = [], selectedFormaPagamento = '', setSelectedFormaPagamento, firstProductRef, totalSectionRef } = props;
+  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, fieldErrors, formasPagamento = [], selectedFormaPagamento = '', setSelectedFormaPagamento, firstProductRef, totalSectionRef, upsellProdutos = [] } = props;
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: '#03030f', color: '#fff', minHeight: '100vh' }}>
@@ -235,7 +237,59 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                             </span>
                           )}
                         </h4>
-                        {produto.resumo && <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>}
+                        {produto.resumo && (
+                          <FormattedDescription text={produto.resumo} className="mt-2 text-xs" />
+                        )}
+
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed rgba(255,255,255,.08)' }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
+                              🎁 Brinde Incluso:
+                            </span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                if (!brinde) return null;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 10px',
+                                      borderRadius: 8,
+                                      border: '1px solid rgba(251,191,36,.2)',
+                                      background: 'rgba(251,191,36,.04)'
+                                    }}
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
+                                      />
+                                    )}
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {brinde.nome}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', textDecoration: 'line-through' }}>
+                                          {formatCurrency(brinde.valor)}
+                                        </span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: '#fbbf24', background: 'rgba(251,191,36,.15)', padding: '1px 4px', borderRadius: 2 }}>
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         {!template?.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
                           const valorFinal = produto.valor * (1 - desconto / 100);
@@ -336,11 +390,33 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                 {formasPagamento.map((forma) => {
                   const total = calculateTotal();
                   const valorEntrada = forma.entrada_tipo === 'percentual' ? (total * forma.entrada_valor) / 100 : forma.entrada_valor;
+
+                  const isDefault = forma.is_default;
+                  const isSelected = selectedFormaPagamento === forma.id;
+                  
+                  let borderStyle = '1px solid rgba(255,255,255,.08)';
+                  let bgStyle = 'rgba(255,255,255,.02)';
+                  
+                  if (isSelected) {
+                    borderStyle = isDefault ? '2px solid #eab308' : '1px solid rgba(245,158,11,.5)';
+                    bgStyle = isDefault ? 'rgba(234,179,8,.08)' : 'rgba(245,158,11,.07)';
+                  } else if (isDefault) {
+                    borderStyle = '1px solid rgba(234,179,8,.35)';
+                    bgStyle = 'rgba(234,179,8,.03)';
+                  }
+
                   return (
-                    <label key={forma.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', borderRadius: 12, border: selectedFormaPagamento === forma.id ? '1px solid rgba(245,158,11,.5)' : '1px solid rgba(255,255,255,.08)', background: selectedFormaPagamento === forma.id ? 'rgba(245,158,11,.07)' : 'rgba(255,255,255,.02)', cursor: 'pointer', transition: 'all .2s' }}>
+                    <label key={forma.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', borderRadius: 12, border: borderStyle, background: bgStyle, cursor: 'pointer', transition: 'all .2s' }}>
                       <input type="radio" name="rv-forma-pagamento" value={forma.id} checked={selectedFormaPagamento === forma.id} onChange={() => setSelectedFormaPagamento?.(forma.id)} style={{ marginTop: 3, accentColor: '#fbbf24', width: 16, height: 16, flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 4 }}>{forma.nome}</div>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center' }}>
+                          {forma.nome}
+                          {isDefault && (
+                            <span style={{ display: 'inline-block', background: '#eab308', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, marginLeft: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              ⭐ Recomendado
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', lineHeight: 1.6 }}>
                           <div>{forma.entrada_tipo === 'percentual' ? `Entrada de ${forma.entrada_valor}% (${formatCurrency(valorEntrada)})` : `Entrada de ${formatCurrency(valorEntrada)}`}</div>
                           {forma.max_parcelas > 0 && <div>+ {forma.max_parcelas}x parcela{forma.max_parcelas > 1 ? 's' : ''}</div>}
@@ -356,7 +432,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
           )}
 
           <div id="rv-total" ref={totalSectionRef} style={{ background: 'linear-gradient(135deg, rgba(245,158,11,.1), rgba(226,232,240,.05))', border: '1px solid rgba(245,158,11,.3)', borderRadius: 16, padding: '24px', textAlign: 'center', animation: 'rvGlow 3s ease infinite' }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'rgba(251,191,36,.8)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 8 }}>🥂 Investimento Total para o Réveillon</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'rgba(251,191,36,.8)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 8 }}>{template?.usar_termo_investimento ? '🥂 Investimento Total para o Réveillon' : '🥂 Valor Total para o Réveillon'}</p>
             <p style={{ fontSize: 'clamp(32px,6vw,52px)', fontWeight: 900, background: 'linear-gradient(135deg,#f59e0b,#e2e8f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(calculateTotal())}</p>
             <p style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', marginTop: 8 }}>🎆 Reserve agora e comece o ano novo com memórias inesquecíveis!</p>
           </div>

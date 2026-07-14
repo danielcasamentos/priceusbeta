@@ -2,6 +2,7 @@ import { Send, Lock, Sparkles } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 
 interface QuoteVibranteProps {
   template: any;
@@ -171,7 +172,9 @@ export function QuoteVibrante(props: QuoteVibranteProps) {
                           </div>
                         )}
                         <h4 className="font-bold text-lg text-gray-900">{produto.nome}</h4>
-                        {produto.resumo && <p className="text-sm text-gray-600 mt-1">{produto.resumo}</p>}
+                        {produto.resumo && (
+                          <FormattedDescription text={produto.resumo} className="text-sm text-gray-600 mt-1" />
+                        )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
                           const valorFinal = produto.valor * (1 - desconto / 100);

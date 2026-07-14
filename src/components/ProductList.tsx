@@ -31,6 +31,7 @@ interface Product {
   imagens?: string[];
   carrossel_automatico?: boolean;
   duracao_minutos?: number | null;
+  brindes_vinculados?: string[] | null;
 }
 
 interface ProductListProps {
@@ -43,6 +44,7 @@ interface ProductListProps {
   userId: string;
   templateId?: string;
   onProductSaved?: (index: number, productId: string) => void;
+  upsellProdutosIds?: string[];
 }
 
 const MAX_PRODUTOS = 15; // 💡 Limite por orçamento para controlar custos de armazenamento
@@ -57,6 +59,7 @@ export function ProductList({
   userId,
   templateId,
   onProductSaved,
+  upsellProdutosIds = []
 }: ProductListProps) {
   const [localProducts, setLocalProducts] = useState<Product[]>(products);
   const [isSaving, setIsSaving] = useState(false);
@@ -208,6 +211,8 @@ export function ProductList({
                 userId={userId}
                 templateId={templateId}
                 onProductSaved={(productId) => onProductSaved?.(index, productId)}
+                allProducts={localProducts as any}
+                upsellProdutosIds={upsellProdutosIds}
               />
             ))}
           </div>

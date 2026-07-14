@@ -2,6 +2,7 @@ import { ShoppingCart, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
@@ -36,6 +37,7 @@ export function QuoteDocumento(props: any) {
     isSubmitting, // Adicionado para o estado do botão
     handleResetQuote,
     upsellSection,
+    upsellProdutos = [],
   } = props;
 
   const tema = {
@@ -257,7 +259,51 @@ export function QuoteDocumento(props: any) {
                             </span>
                           )}
                         </h4>
-                        {produto.resumo && <p className={`text-sm ${tema.cores.textoSecundario} mt-2`}>{produto.resumo}</p>}
+                        {produto.resumo && (
+                          <FormattedDescription text={produto.resumo} className="mt-2 text-xs" />
+                        )}
+
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div className="mt-3.5 space-y-2 border-t border-dashed border-gray-200 dark:border-white/10 pt-3">
+                            <span className="text-[10px] font-bold text-emerald-650 dark:text-emerald-450 flex items-center gap-1 uppercase tracking-wider">
+                              🎁 Brinde Incluso:
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                if (!brinde) return null;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    className="flex items-center gap-3 p-2 rounded-lg border border-emerald-100 bg-emerald-50/10 shadow-sm"
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        className="w-8 h-8 object-cover rounded flex-shrink-0"
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1 text-left">
+                                      <div className="text-[11px] font-bold text-gray-800 truncate">
+                                        {brinde.nome}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="text-[9px] text-gray-400 line-through">
+                                          {formatCurrency(brinde.valor)}
+                                        </span>
+                                        <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1 rounded">
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
                           const valorFinal = produto.valor * (1 - desconto / 100);
@@ -335,26 +381,48 @@ export function QuoteDocumento(props: any) {
               <div className="border-t border-gray-300 pt-8">
                 <h3 className={`text-xl font-semibold ${tema.cores.textoPrincipal} mb-4`}>Forma de Pagamento</h3>
                 <div className="space-y-3">
-                  {formasPagamento.map((forma: any) => (
-                    <label key={forma.id} className={`flex items-start gap-3 p-4 border cursor-pointer ${selectedFormaPagamento === forma.id ? 'border-black bg-gray-50' : tema.cores.borda}`}>
-                      <input
-                        type="radio"
-                        name="formaPagamento"
-                        value={forma.id}
-                        checked={selectedFormaPagamento === forma.id}
-                        onChange={(e) => setSelectedFormaPagamento(e.target.value)}
-                        className="w-5 h-5 mt-1 text-black focus:ring-black border-gray-400"
-                      />
-                      <div className="flex-1">
-                        <div className={`font-semibold ${tema.cores.textoPrincipal}`}>{forma.nome}</div>
-                        <div className={`text-sm ${tema.cores.textoSecundario}`}>
-                          Entrada de {forma.entrada_valor}{forma.entrada_tipo === 'percentual' ? '%' : ' (fixo)'}
-                          {forma.max_parcelas > 0 && ` + ${forma.max_parcelas}x`}
-                          {forma.acrescimo > 0 && ` (+${forma.acrescimo}%)`}
+                  {formasPagamento.map((forma: any) => {
+                    const isDefault = forma.is_default;
+                    const isSelected = selectedFormaPagamento === forma.id;
+                    
+                    let borderClass = tema.cores.borda + ' bg-white hover:bg-gray-50';
+                    if (isSelected) {
+                      borderClass = isDefault ? 'border-amber-500 bg-amber-50/10 ring-2 ring-amber-500' : 'border-black bg-gray-50 ring-1 ring-black';
+                    } else if (isDefault) {
+                      borderClass = 'border-amber-300 bg-amber-50/5 hover:bg-amber-50/10';
+                    }
+                    
+                    return (
+                      <label 
+                        key={forma.id} 
+                        className={`flex items-start gap-3 p-4 border cursor-pointer transition-all ${borderClass}`}
+                      >
+                        <input
+                          type="radio"
+                          name="formaPagamento"
+                          value={forma.id}
+                          checked={isSelected}
+                          onChange={(e) => setSelectedFormaPagamento(e.target.value)}
+                          className="w-5 h-5 mt-1 text-black focus:ring-black border-gray-400"
+                        />
+                        <div className="flex-1">
+                          <div className={`font-semibold ${tema.cores.textoPrincipal} flex items-center flex-wrap gap-2`}>
+                            <span>{forma.nome}</span>
+                            {isDefault && (
+                              <span className="inline-flex items-center gap-1 bg-amber-500 text-black text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+                                ⭐ Recomendado
+                              </span>
+                            )}
+                          </div>
+                          <div className={`text-sm ${tema.cores.textoSecundario} mt-1`}>
+                            Entrada de {forma.entrada_valor}{forma.entrada_tipo === 'percentual' ? '%' : ' (fixo)'}
+                            {forma.max_parcelas > 0 && ` + ${forma.max_parcelas}x`}
+                            {forma.acrescimo > 0 && ` (+${forma.acrescimo}%)`}
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -426,7 +494,7 @@ export function QuoteDocumento(props: any) {
                   )}
                   <div className="border-t pt-3 mt-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`${tema.cores.textoPrincipal} text-xl font-bold`}>Valor Total:</span>
+                      <span className={`${tema.cores.textoPrincipal} text-xl font-bold`}>{template?.usar_termo_investimento ? 'Investimento Total:' : 'Valor Total:'}</span>
                       <span className="text-black text-2xl font-bold">{formatCurrency(calculateTotal())}</span>
                     </div>
                   </div>

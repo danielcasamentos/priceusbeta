@@ -14,6 +14,7 @@ interface Template {
   sistema_geografico_ativo?: boolean;
   bloquear_campos_obrigatorios?: boolean;
   ocultar_valores_intermediarios?: boolean;
+  usar_termo_investimento?: boolean;
   ocultar_data_criacao?: boolean;
   created_at: string;
   ativo?: boolean;
@@ -322,6 +323,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         titulo_template: newTemplateTitulo || newTemplateName,
         bloquear_campos_obrigatorios: false,
         ocultar_valores_intermediarios: false,
+        usar_termo_investimento: false,
         ordem_exibicao: maxOrdem + 1,
       });
 
@@ -391,6 +393,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
           titulo_template: newTemplateTitulo,
           bloquear_campos_obrigatorios: templateToDuplicate.bloquear_campos_obrigatorios,
           ocultar_valores_intermediarios: templateToDuplicate.ocultar_valores_intermediarios,
+          usar_termo_investimento: templateToDuplicate.usar_termo_investimento || false,
           texto_whatsapp: templateToDuplicate.texto_whatsapp,
           sistema_geografico_ativo: templateToDuplicate.sistema_geografico_ativo,
           tema: (templateToDuplicate as any).tema,

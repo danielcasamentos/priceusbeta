@@ -2,6 +2,7 @@ import { ShoppingCart, Send, Lock } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 
 interface QuoteClassicoProps {
   template: any;
@@ -164,7 +165,9 @@ export function QuoteClassico(props: QuoteClassicoProps) {
                           </div>
                         )}
                         <h4 className="font-bold text-lg">{produto.nome}</h4>
-                        {produto.resumo && <p className="text-sm text-gray-600 mt-1">{produto.resumo}</p>}
+                        {produto.resumo && (
+                          <FormattedDescription text={produto.resumo} className="text-sm text-gray-600 mt-1" />
+                        )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
                           const valorFinal = produto.valor * (1 - desconto / 100);

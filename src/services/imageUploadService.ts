@@ -49,7 +49,7 @@ export interface UploadProgress {
 // ==========================================
 
 const DEFAULT_OPTIONS: Required<UploadOptions> = {
-  maxSizeMB: 1,           // 💡 Limite conservador: 1MB por imagem
+  maxSizeMB: 5,           // 💡 Limite: 5MB por imagem
   maxWidthPx: 1280,       // 💡 Resolução suficiente para web (antes era 1920)
   maxHeightPx: 1280,
   quality: 0.80,          // 💡 Boa qualidade visual com boa compressão

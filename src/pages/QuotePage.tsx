@@ -18,6 +18,7 @@ import { getThemeInlineStyles } from '../lib/themeStyles';
 import { PublicReviews } from '../components/PublicReviews';
 import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
 import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
+import { FormattedDescription } from '../components/ui/FormattedDescription';
 import { detectBrowser, getReferrer, logBrowserInfo } from '../lib/browserDetection';
 import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
 import { QuotePromocional } from '../components/quote-themes/QuotePromocional';
@@ -209,23 +210,31 @@ export function QuotePage() {
     const cartTextNormalized = normalizeText(
       produtos
         .filter(p => selectedProdutos[p.id] > 0)
-        .map(p => `${p.nome} ${p.descricao || ''}`)
+        .map(p => `${p.nome} ${p.resumo || p.descricao || ''}`)
         .join(' ')
     );
 
     return upsellProdutos.filter(produto => {
-      let activationTerms: string[] = [];
+      // 1. Se o produto de upsell estiver selecionado como brinde em algum pacote selecionado,
+      // ele é ocultado da vitrine de upsells.
+      const isIncludedAsBrinde = produtos
+        .filter(p => selectedProdutos[p.id] > 0)
+        .some(p => {
+          const brindes = p.brindes_vinculados;
+          return Array.isArray(brindes) && brindes.includes(produto.id);
+        });
 
-      if (produto.keywords_upsell) {
-        activationTerms = produto.keywords_upsell
-          .split(',')
-          .map((word: string) => normalizeText(word.trim()))
-          .filter((word: string) => word.length > 0);
-      } else {
-        activationTerms = getSignificantWords(produto.nome);
-      }
+      if (isIncludedAsBrinde) return false;
 
-      const isRedundant = activationTerms.some(term => cartTextNormalized.includes(term));
+      // 2. Correspondência automática e inteligente de palavras-chave
+      const activationTerms = getSignificantWords(produto.nome);
+      const isRedundant = activationTerms.some(term => {
+        // Ignorar termos muito genéricos para evitar falsos positivos
+        const genericTerms = new Set(['extra', 'combo', 'pacote', 'adicional', 'premium', 'simples', 'completo']);
+        if (genericTerms.has(term)) return false;
+        return cartTextNormalized.includes(term);
+      });
+
       return !isRedundant;
     });
   }, [upsellProdutos, produtos, selectedProdutos]);
@@ -2111,7 +2120,7 @@ export function QuotePage() {
                 ))}
               </ul>
               <div className="border-t mt-3 pt-3 flex justify-between font-bold text-lg text-blue-800">
-                <span>Valor Total:</span>
+                <span>{template?.usar_termo_investimento ? 'Investimento Total:' : 'Valor Total:'}</span>
                 <span>{formatCurrency(summaryData.quoteData.total)}</span>
               </div>
             </div>
@@ -2460,6 +2469,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2507,6 +2517,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2553,6 +2564,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2599,6 +2611,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2647,6 +2660,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2715,7 +2729,7 @@ export function QuotePage() {
                     ))}
                   </ul>
                   <div style={{ borderTop: '1px solid rgba(34,197,94,.2)', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 900, color: '#22c55e' }}>
-                    <span>Valor Total:</span>
+                    <span>{template?.usar_termo_investimento ? 'Investimento Total:' : 'Valor Total:'}</span>
                     <span>{formatCurrency(summaryData.quoteData.total)}</span>
                   </div>
                 </div>
@@ -2773,6 +2787,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2820,6 +2835,7 @@ export function QuotePage() {
       totalSectionRef,
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
+      upsellProdutos,
     };
     return wrapWithFonts(
       <>
@@ -3688,7 +3704,49 @@ export function QuotePage() {
                           )}
                         </h4>
                         {produto.resumo && (
-                          <p className={`text-sm ${tema.cores.textoSecundario} mt-2 leading-relaxed`} style={{ color: inlineStyles.textColorSecondary }}>{produto.resumo}</p>
+                          <FormattedDescription text={produto.resumo} className="mt-2" />
+                        )}
+
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div className="mt-3.5 space-y-2 border-t border-dashed border-gray-250 dark:border-white/10 pt-3">
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
+                              🎁 Brinde(s) Incluso(s):
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = upsellProdutos.find(u => u.id === brindeId);
+                                if (!brinde) return null;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    className="flex items-center gap-3 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/15 dark:bg-emerald-950/5 shadow-sm"
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        className="w-10 h-10 object-cover rounded-lg flex-shrink-0"
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">
+                                        {brinde.nome}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="text-[10px] text-gray-400 line-through">
+                                          {formatCurrency(brinde.valor)}
+                                        </span>
+                                        <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-350 px-1.5 py-0.5 rounded font-bold">
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
@@ -4124,7 +4182,7 @@ export function QuotePage() {
 
                       <div className="border-t pt-3 mt-3" ref={totalSectionRef} data-total-section style={{ borderTopColor: `${inlineStyles.textColorSecondary}30` }}>
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`${tema.cores.textoPrincipal} text-lg sm:text-xl md:text-2xl font-bold flex-1`} style={{ color: inlineStyles.textColor }}>Valor Total:</span>
+                          <span className={`${tema.cores.textoPrincipal} text-lg sm:text-xl md:text-2xl font-bold flex-1`} style={{ color: inlineStyles.textColor }}>{template?.usar_termo_investimento ? 'Investimento Total:' : 'Valor Total:'}</span>
                           <span className="text-blue-600 text-xl sm:text-2xl md:text-3xl font-bold text-right" style={{ color: inlineStyles.accentColor }}>{formatCurrency(calculateTotal())}</span>
                         </div>
                         {ocultarIntermediarios && (

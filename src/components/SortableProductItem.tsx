@@ -16,6 +16,7 @@ interface Product {
   imagens?: string[];
   carrossel_automatico?: boolean;
   duracao_minutos?: number | null;
+  brindes_vinculados?: string[] | null;
 }
 
 interface SortableProductItemProps {
@@ -27,6 +28,8 @@ interface SortableProductItemProps {
   userId: string;
   templateId?: string;
   onProductSaved?: (productId: string) => void;
+  allProducts?: Product[];
+  upsellProdutosIds?: string[];
 }
 
 export function SortableProductItem({
@@ -38,6 +41,8 @@ export function SortableProductItem({
   userId,
   templateId,
   onProductSaved,
+  allProducts = [],
+  upsellProdutosIds = []
 }: SortableProductItemProps) {
   const {
     attributes,
@@ -82,6 +87,8 @@ export function SortableProductItem({
               userId={userId}
               templateId={templateId}
               onProductSaved={onProductSaved}
+              allProducts={allProducts as any}
+              upsellProdutosIds={upsellProdutosIds}
             />
           </div>
         </div>

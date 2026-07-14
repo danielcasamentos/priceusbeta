@@ -2,6 +2,7 @@ import { Send, Lock, MapPin, Sparkles, MessageCircle, Instagram, Mail } from 'lu
 import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
 interface QuoteDarkStudioProps {
@@ -29,6 +30,7 @@ interface QuoteDarkStudioProps {
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
+  upsellProdutos?: any[];
 }
 
 export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
@@ -37,10 +39,13 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
     calculateTotal, handleSubmit, fieldsValidation,
     camposExtras, camposExtrasData, fieldErrors,
     formasPagamento = [],
-    selectedFormaPagamento = '',
+    selectedFormaPagamento,
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
+    breakdown,
+    upsellSection,
+    upsellProdutos = [],
   } = props;
 
 
@@ -415,7 +420,57 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                           )}
                         </h4>
                         {produto.resumo && (
-                          <p style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>{produto.resumo}</p>
+                          <FormattedDescription text={produto.resumo} className="mt-2 text-xs" />
+                        )}
+
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed rgba(255,255,255,.08)' }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#34d399', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
+                              🎁 Brinde Incluso:
+                            </span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                if (!brinde) return null;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 10px',
+                                      borderRadius: 8,
+                                      border: '1px solid rgba(52,211,153,.2)',
+                                      background: 'rgba(52,211,153,.04)'
+                                    }}
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
+                                      />
+                                    )}
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {brinde.nome}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', textDecoration: 'line-through' }}>
+                                          {formatCurrency(brinde.valor)}
+                                        </span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: '#34d399', background: 'rgba(52,211,153,.15)', padding: '1px 4px', borderRadius: 2 }}>
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                         {!template?.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
@@ -566,6 +621,20 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                     ? (total * forma.entrada_valor) / 100
                     : forma.entrada_valor;
 
+                  const isDefault = forma.is_default;
+                  const isSelected = selectedFormaPagamento === forma.id;
+                  
+                  let borderStyle = '1px solid rgba(255,255,255,.08)';
+                  let bgStyle = 'rgba(255,255,255,.02)';
+                  
+                  if (isSelected) {
+                    borderStyle = isDefault ? '2px solid #eab308' : '1px solid rgba(34,197,94,.5)';
+                    bgStyle = isDefault ? 'rgba(234,179,8,.08)' : 'rgba(34,197,94,.07)';
+                  } else if (isDefault) {
+                    borderStyle = '1px solid rgba(234,179,8,.35)';
+                    bgStyle = 'rgba(234,179,8,.03)';
+                  }
+
                   return (
                     <label
                       key={forma.id}
@@ -575,12 +644,8 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                         gap: 12,
                         padding: '14px 16px',
                         borderRadius: 12,
-                        border: selectedFormaPagamento === forma.id
-                          ? '1px solid rgba(34,197,94,.5)'
-                          : '1px solid rgba(255,255,255,.08)',
-                        background: selectedFormaPagamento === forma.id
-                          ? 'rgba(34,197,94,.07)'
-                          : 'rgba(255,255,255,.02)',
+                        border: borderStyle,
+                        background: bgStyle,
                         cursor: 'pointer',
                         transition: 'all .2s',
                       }}
@@ -594,7 +659,14 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
                         style={{ marginTop: 3, accentColor: '#22c55e', width: 16, height: 16, flexShrink: 0 }}
                       />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 4 }}>{forma.nome}</div>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center' }}>
+                          {forma.nome}
+                          {isDefault && (
+                            <span style={{ display: 'inline-block', background: '#eab308', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, marginLeft: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              ⭐ Recomendado
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', lineHeight: 1.6 }}>
                           <div>
                             {forma.entrada_tipo === 'percentual'
@@ -705,7 +777,7 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
             }}
           >
             <p style={{ fontSize: 12, fontWeight: 700, color: 'rgba(34,197,94,.7)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 8 }}>
-              Valor Total
+              {template?.usar_termo_investimento ? 'Investimento Total' : 'Valor Total'}
             </p>
             <p style={{ fontSize: 'clamp(32px,6vw,52px)', fontWeight: 900, color: '#22c55e', letterSpacing: '-1px', lineHeight: 1 }}>
               {formatCurrency(calculateTotal())}

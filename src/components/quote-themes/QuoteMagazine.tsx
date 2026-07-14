@@ -2,6 +2,7 @@ import { Send, Lock, Camera } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 
 interface QuoteMagazineProps {
   template: any;
@@ -178,7 +179,9 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                           </div>
                         )}
                         <h4 className="font-black text-lg text-amber-900 uppercase">{produto.nome}</h4>
-                        {produto.resumo && <p className="text-sm text-amber-700 mt-1 italic">{produto.resumo}</p>}
+                        {produto.resumo && (
+                          <FormattedDescription text={produto.resumo} className="text-sm text-amber-700 mt-1 italic font-serif" />
+                        )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
                           const valorFinal = produto.valor * (1 - desconto / 100);

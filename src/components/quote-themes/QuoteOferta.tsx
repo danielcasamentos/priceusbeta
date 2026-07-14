@@ -2,6 +2,7 @@ import { Send, Lock, Tag, Flame, MessageCircle, Instagram, Mail, Star, Clock, Za
 import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
 interface QuoteOfertaProps {
@@ -27,6 +28,7 @@ interface QuoteOfertaProps {
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
+  upsellProdutos?: any[];
 }
 
 export function QuoteOferta(props: QuoteOfertaProps) {
@@ -39,6 +41,9 @@ export function QuoteOferta(props: QuoteOfertaProps) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
+    breakdown,
+    upsellSection,
+    upsellProdutos = [],
   } = props;
 
   return (
@@ -529,7 +534,57 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                           )}
                         </div>
                         {produto.resumo && (
-                          <p style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.5 }}>{produto.resumo}</p>
+                          <FormattedDescription text={produto.resumo} className="mt-2 text-xs" />
+                        )}
+
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#ea580c', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
+                              🎁 Brinde Incluso:
+                            </span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                if (!brinde) return null;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 10px',
+                                      borderRadius: 8,
+                                      border: '1px solid #ffedd5',
+                                      background: '#fffaf5'
+                                    }}
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
+                                      />
+                                    )}
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {brinde.nome}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                        <span style={{ fontSize: 9, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                          {formatCurrency(brinde.valor)}
+                                        </span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: '#ea580c', background: '#ffedd5', padding: '1px 4px', borderRadius: 2 }}>
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                         {!template?.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
@@ -672,14 +727,29 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                   const valorEntrada = forma.entrada_tipo === 'percentual'
                     ? (total * forma.entrada_valor) / 100
                     : forma.entrada_valor;
+
+                  const isDefault = forma.is_default;
+                  const isSelected = selectedFormaPagamento === forma.id;
+                  
+                  let borderStyle = '2px solid #ffedd5';
+                  let bgStyle = '#fff';
+                  
+                  if (isSelected) {
+                    borderStyle = '2px solid #ea580c';
+                    bgStyle = '#fffaf0';
+                  } else if (isDefault) {
+                    borderStyle = '2px solid #fbd38d';
+                    bgStyle = '#fefaf0';
+                  }
+
                   return (
                     <label
                       key={forma.id}
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 12,
                         padding: '16px 18px', borderRadius: 14,
-                        border: selectedFormaPagamento === forma.id ? '2px solid #ea580c' : '2px solid #ffedd5',
-                        background: selectedFormaPagamento === forma.id ? '#fffaf0' : '#fff',
+                        border: borderStyle,
+                        background: bgStyle,
                         cursor: 'pointer', transition: 'all .2s',
                       }}
                     >
@@ -692,7 +762,14 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                         style={{ marginTop: 4, accentColor: '#ea580c', width: 16, height: 16, flexShrink: 0 }}
                       />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 800, fontSize: 16, color: '#1a1a1a', marginBottom: 4 }}>{forma.nome}</div>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: '#1a1a1a', marginBottom: 4, display: 'flex', alignItems: 'center' }}>
+                          {forma.nome}
+                          {isDefault && (
+                            <span style={{ display: 'inline-block', background: '#ea580c', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, marginLeft: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              ⭐ Recomendado
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.6 }}>
                           <div>
                             {forma.entrada_tipo === 'percentual'

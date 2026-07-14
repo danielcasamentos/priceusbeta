@@ -354,7 +354,7 @@ export function TemplateEditorWithThemeSelector({ templateId, onThemeChange }: T
       });
 
       const result = await uploadService.uploadImage(file, userId, {
-        maxSizeMB: 2,
+        maxSizeMB: 5,
         maxWidthPx: 1920,
         maxHeightPx: 1080,
         quality: 0.85,

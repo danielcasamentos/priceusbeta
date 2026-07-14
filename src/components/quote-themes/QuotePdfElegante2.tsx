@@ -2,6 +2,7 @@ import { Lock, MessageCircle, Instagram, Mail, Award } from 'lucide-react';
 import { formatCurrency, formatDuration } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
+import { FormattedDescription } from '../ui/FormattedDescription';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
 
 interface QuotePdfElegante2Props {
@@ -27,6 +28,7 @@ interface QuotePdfElegante2Props {
   breakdown?: any;
   fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
+  upsellProdutos?: any[];
 }
 
 export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
@@ -35,10 +37,13 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
     calculateTotal, handleSubmit, fieldsValidation,
     camposExtras, camposExtrasData, fieldErrors,
     formasPagamento = [],
-    selectedFormaPagamento = '',
+    selectedFormaPagamento,
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
+    breakdown,
+    upsellSection,
+    upsellProdutos = [],
   } = props;
 
   return (
@@ -464,9 +469,49 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
                           )}
                         </h4>
                         {produto.resumo && (
-                          <p className="pdf2-sans text-xs text-neutral-500 mt-1 leading-relaxed">
-                            {produto.resumo}
-                          </p>
+                          <FormattedDescription text={produto.resumo} className="mt-1 text-xs" />
+                        )}
+
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div className="mt-3.5 space-y-2 border-t border-dashed border-neutral-200 pt-2.5">
+                            <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
+                              🎁 Brinde Incluso:
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                if (!brinde) return null;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    className="flex items-center gap-3 p-2 rounded border border-emerald-150 bg-emerald-50/10 shadow-sm"
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        className="w-8 h-8 object-cover rounded flex-shrink-0"
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1 text-left">
+                                      <div className="text-[11px] font-bold text-neutral-800 truncate">
+                                        {brinde.nome}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="text-[9px] text-neutral-400 line-through">
+                                          {formatCurrency(brinde.valor)}
+                                        </span>
+                                        <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1 rounded">
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                         {!template?.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
@@ -589,17 +634,19 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
                     : forma.entrada_valor;
 
                   const isDefault = forma.is_default === true;
+                  const isSelected = selectedFormaPagamento === forma.id;
+                  
+                  let labelClass = 'border-neutral-200 bg-neutral-50/40 hover:bg-neutral-50';
+                  if (isSelected) {
+                    labelClass = isDefault ? 'border-amber-500 bg-amber-50/10 ring-2 ring-amber-500' : 'border-neutral-800 bg-neutral-50';
+                  } else if (isDefault) {
+                    labelClass = 'border-amber-300 bg-amber-50/5 hover:bg-amber-50/10 shadow-[0_4px_12px_rgba(245,158,11,0.06)]';
+                  }
 
                   return (
                     <label
                       key={forma.id}
-                      className={`flex gap-3 items-start p-3 border rounded cursor-pointer transition-all ${
-                        selectedFormaPagamento === forma.id
-                          ? 'border-neutral-800 bg-neutral-50'
-                          : isDefault
-                          ? 'border-amber-400 bg-amber-50/15 shadow-[0_4px_12px_rgba(245,158,11,0.06)]'
-                          : 'border-neutral-200 bg-neutral-50/40 hover:bg-neutral-50'
-                      }`}
+                      className={`flex gap-3 items-start p-3 border rounded cursor-pointer transition-all ${labelClass}`}
                     >
                       <input
                         type="radio"

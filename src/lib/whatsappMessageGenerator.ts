@@ -145,14 +145,26 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
   let productsText = buildProductsList(
     products,
     selectedProducts,
-    template.ocultar_valores_intermediarios || false
+    template.ocultar_valores_intermediarios || false,
+    options.upsellProducts
   );
   console.log('DEBUG_WA: Generated productsText:', productsText);
 
   // 2b. PREPARAR LISTA DE UPSELLS
   let upsellText = '';
   if (options.upsellProducts && options.upsellProducts.length > 0) {
+    // Filtrar apenas produtos que NÃO foram incluídos como brindes nos produtos selecionados
+    const selectedGiftsIds = new Set<string>();
+    products
+      .filter((p: any) => selectedProducts[p.id] && selectedProducts[p.id] > 0)
+      .forEach((p: any) => {
+        if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados)) {
+          p.brindes_vinculados.forEach((id: string) => selectedGiftsIds.add(id));
+        }
+      });
+
     upsellText = options.upsellProducts
+      .filter((p) => !selectedGiftsIds.has(p.id)) // Excluir brindes já inclusos da lista de upsell gerais
       .map((p) => {
         const valFinal = p.valor * (1 - (p.desconto_percentual ?? 0) / 100);
         if (template.ocultar_valores_intermediarios) {
@@ -314,12 +326,53 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
 // ==========================================
 
 /**
+ * Converte a formatação markdown da descrição para formatação do WhatsApp
+ */
+function formatDescriptionForWhatsApp(resumo: string): string {
+  if (!resumo) return '';
+  
+  return resumo
+    .split('\n')
+    .map(line => {
+      let l = line.trim();
+      if (!l) return '';
+      
+      // 1. Títulos (#) para Negrito Caixa Alta
+      if (l.startsWith('#')) {
+        const titleText = l.replace(/^#+\s*/, '').toUpperCase();
+        return `   *${titleText}*`;
+      }
+      
+      // 2. Divisores (---) para traço visual
+      if (l === '---') {
+        return '   ────────────────────';
+      }
+      
+      // 3. Marcador de tópicos (- ou *) para bolinha •
+      if (l.startsWith('-') || l.startsWith('*')) {
+        if (!l.startsWith('**')) {
+          const itemText = l.replace(/^[-*]\s*/, '');
+          return `   • ${itemText}`;
+        }
+      }
+      
+      // 4. Negritos (**texto**) para (*texto*) no WhatsApp
+      l = l.replace(/\*\*([^*]+)\*\*/g, '*$1*');
+      
+      return `   ${l}`;
+    })
+    .filter(line => line !== null)
+    .join('\n');
+}
+
+/**
  * Constrói lista de produtos formatada
  */
 function buildProductsList(
-  products: Product[],
+  products: any[],
   selectedProducts: Record<string, number>,
-  hideValues: boolean
+  hideValues: boolean,
+  upsellProducts?: Product[]
 ): string {
   return products
     .filter((p) => selectedProducts[p.id] && selectedProducts[p.id] > 0)
@@ -331,8 +384,19 @@ function buildProductsList(
         ? `• ${qtyText}${p.nome}`
         : `• ${qtyText}${p.nome} - ${formatCurrency(p.valor)}`;
       if (p.resumo) {
-        productLine += `\n   ${p.resumo.trim()}`;
+        productLine += `\n${formatDescriptionForWhatsApp(p.resumo)}`;
       }
+      
+      // Adicionar brindes vinculados na mensagem
+      if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados) && p.brindes_vinculados.length > 0) {
+        p.brindes_vinculados.forEach((brindeId: string) => {
+          const brinde = (upsellProducts || []).find((u) => u.id === brindeId);
+          if (brinde) {
+            productLine += `\n   🎁 *Brinde Incluso:* ${brinde.nome}`;
+          }
+        });
+      }
+      
       return productLine;
     })
     .join('\n');

@@ -31,6 +31,7 @@ interface Produto {
   destacar_produto?: boolean;
   destaque_texto?: string;
   duracao_minutos?: number | null;
+  brindes_vinculados?: string[] | null;
 }
 
 interface FormaPagamento {
@@ -65,6 +66,7 @@ interface Template {
   tamanho_imagem_grid: 'pequeno' | 'medio' | 'grande';
   texto_botao_envio: string;
   ocultar_valores_intermediarios: boolean;
+  usar_termo_investimento?: boolean;
   forma_pagamento_obrigatoria: boolean;
   exibir_no_perfil: boolean;
   ignorar_agenda_global?: boolean;
@@ -184,6 +186,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         destaque_texto: extProd.destaque_texto || null,
         duracao_minutos: extProd.duracao_minutos || null,
         keywords_upsell: extProd.keywords_upsell || null,
+        brindes_vinculados: extProd.brindes_vinculados || null,
         provedor_id: extProd.provedor_id || extTemplateOwner,
       };
 
@@ -453,6 +456,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       destacar_produto: false, // duplicates start without highlight
       destaque_texto: undefined,
       duracao_minutos: produtoOriginal.duracao_minutos ?? null,
+      brindes_vinculados: produtoOriginal.brindes_vinculados || [],
     };
 
     const novosProdutos = [...produtos];
@@ -486,6 +490,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           destacar_produto: produto.destacar_produto ?? false,
           destaque_texto: produto.destaque_texto ?? null,
           duracao_minutos: produto.duracao_minutos ?? null,
+          brindes_vinculados: produto.brindes_vinculados || [],
         };
 
         if (produto.id) {
@@ -845,6 +850,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
               userId={userId}
               templateId={templateId}
               onProductSaved={handleProductSaved}
+              upsellProdutosIds={template?.upsell_produtos_ids || []}
             />
           )}
 
@@ -1812,6 +1818,25 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       Mostra apenas o valor total final
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={template?.usar_termo_investimento || false}
+                    onChange={(e) =>
+                      handleUpdateTemplateConfig('usar_termo_investimento', e.target.checked)
+                    }
+                    className="w-5 h-5 text-blue-600 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      Usar termo "Investimento"
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Muda o termo "Valor" para "Investimento" nas telas do orçamento
                     </div>
                   </div>
                 </label>

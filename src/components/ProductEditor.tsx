@@ -4,6 +4,7 @@ import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2 } from 
 import { ImageUploadService } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
+import { FormattedDescription } from './ui/FormattedDescription';
 
 interface Product {
   id?: string;
@@ -27,6 +28,7 @@ interface Product {
   destaque_texto?: string;
   duracao_minutos?: number | null;
   keywords_upsell?: string | null;
+  brindes_vinculados?: string[] | null;
 }
 
 interface ProductEditorProps {
@@ -37,6 +39,8 @@ interface ProductEditorProps {
   userId: string;
   templateId?: string;
   onProductSaved?: (productId: string) => void;
+  allProducts?: Product[];
+  upsellProdutosIds?: string[];
 }
 
 /**
@@ -51,7 +55,17 @@ interface ProductEditorProps {
  * - Feedback visual detalhado
  * - Auto-save no banco de dados
  */
-export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId, templateId, onProductSaved }: ProductEditorProps) {
+export function ProductEditor({ 
+  product, 
+  onChange, 
+  onRemove, 
+  onDuplicate, 
+  userId, 
+  templateId, 
+  onProductSaved,
+  allProducts = [],
+  upsellProdutosIds = []
+}: ProductEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -62,6 +76,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
     if (!product.duracao_minutos) return 'hours';
     return product.duracao_minutos % 60 === 0 ? 'hours' : 'minutes';
   });
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
 
   const [uploadingSlots, setUploadingSlots] = useState<number[]>([]);
   const [slotProgress, setSlotProgress] = useState<Record<number, number>>({});
@@ -218,7 +233,7 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         });
 
         const result = await uploadService.uploadImage(file, userId, {
-          maxSizeMB: 1,
+          maxSizeMB: 5,
           maxWidthPx: 1280,
           maxHeightPx: 1280,
           quality: 0.80,
@@ -403,6 +418,26 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
     }
   };
 
+  const insertFormatting = (before: string, after: string) => {
+    const textarea = document.getElementById('product-resumo-textarea') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = product.resumo || '';
+    const selected = text.substring(start, end);
+    const replacement = before + selected + after;
+    
+    const newVal = text.substring(0, start) + replacement + text.substring(end);
+    onChange('resumo', newVal);
+
+    // Reposition cursor
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+    }, 0);
+  };
+
   return (
     <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-white shadow-sm">
       {/* Nome do Produto */}
@@ -421,16 +456,90 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
 
       {/* Descrição */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Descrição
-        </label>
-        <textarea
-          value={product.resumo}
-          onChange={(e) => onChange('resumo', e.target.value)}
-          placeholder="Breve descrição do produto/serviço"
-          rows={2}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-        />
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('edit')}
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'edit'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
+              }`}
+            >
+              Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('preview')}
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'preview'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
+              }`}
+            >
+              Visualizar
+            </button>
+          </div>
+          <span className="text-[10px] text-gray-400">Suporta formatação estilo Markdown</span>
+        </div>
+
+        {activeTab === 'edit' ? (
+          <div>
+            {/* Barra de Formatação */}
+            <div className="flex gap-1.5 p-1.5 bg-gray-50 border border-b-0 border-gray-300 rounded-t-lg">
+              <button
+                type="button"
+                onClick={() => insertFormatting('**', '**')}
+                className="p-1 px-2.5 text-xs font-bold text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
+                title="Negrito"
+              >
+                B
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting('- ', '')}
+                className="p-1 px-2 text-xs text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
+                title="Lista de Tópicos"
+              >
+                • Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting('# ', '')}
+                className="p-1 px-2 text-xs font-semibold text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
+                title="Título"
+              >
+                H1
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting('\n---\n', '')}
+                className="p-1 px-2 text-xs text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
+                title="Linha Divisória"
+              >
+                Divisor
+              </button>
+            </div>
+
+            <textarea
+              id="product-resumo-textarea"
+              value={product.resumo}
+              onChange={(e) => onChange('resumo', e.target.value)}
+              placeholder="Ex:&#10;# PRÉ-CASAMENTO&#10;- Ensaio de 2 horas&#10;---&#10;# O CASAMENTO&#10;- Cobertura completa"
+              rows={6}
+              className="w-full px-3 py-2 border border-gray-300 rounded-b-lg rounded-t-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[160px]"
+            />
+          </div>
+        ) : (
+          <div className="w-full p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-[202px] overflow-y-auto max-h-[300px]">
+            {product.resumo ? (
+              <FormattedDescription text={product.resumo} className="text-sm text-gray-800" />
+            ) : (
+              <p className="text-xs text-gray-400 italic">Nada para visualizar. Escreva uma descrição primeiro.</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Valor e Unidade */}
@@ -815,22 +924,65 @@ export function ProductEditor({ product, onChange, onRemove, onDuplicate, userId
         )}
       </div>
 
-      {/* Palavras-chave de Ativação (Upsell) */}
-      <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/30 space-y-2">
-        <label className="block text-sm font-semibold text-gray-800">
-          Palavras-chave de Ativação do Upsell
-        </label>
-        <input
-          type="text"
-          value={product.keywords_upsell || ''}
-          onChange={(e) => onChange('keywords_upsell', e.target.value)}
-          placeholder="Ex: album, encadernacao, revelacao (separadas por vírgula)"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
-        />
-        <p className="text-xs text-gray-500">
-          Se o cliente selecionar um pacote contendo alguma destas palavras-chave, este produto de upsell será automaticamente OMITIDO (para evitar redundância). Se deixado em branco, o sistema usará o nome do produto como termo de correspondência.
-        </p>
-      </div>
+      {/* Vincular Brindes (somente para pacotes normais, não para upsells) */}
+      {!upsellProdutosIds?.includes(product.id || '') && (
+        <div className="border border-emerald-250 dark:border-emerald-800/30 rounded-xl p-4 bg-emerald-50/20 dark:bg-emerald-950/5 space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
+              🎁 Vincular Brindes Gratuitos
+            </h4>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Selecione quais produtos de upsell do template serão oferecidos de graça (brinde) neste pacote.
+            </p>
+          </div>
+          {(() => {
+            const availableUpsells = allProducts.filter(p => p.id !== product.id && upsellProdutosIds.includes(p.id || ''));
+            if (availableUpsells.length === 0) {
+              return (
+                <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                  Nenhum produto de upsell configurado neste template para vincular como brinde. (Vá na aba "Upsell" para configurar).
+                </p>
+              );
+            }
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableUpsells.map(u => {
+                  const brindesArray = Array.isArray(product.brindes_vinculados) ? product.brindes_vinculados : [];
+                  const isChecked = brindesArray.includes(u.id || '');
+                  return (
+                    <label
+                      key={u.id}
+                      className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer text-xs transition-all hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 ${
+                        isChecked 
+                          ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/10 font-semibold text-emerald-900 dark:text-emerald-300' 
+                          : 'border-gray-250 dark:border-white/5 bg-white dark:bg-white/3'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          let nextBrindes = [...brindesArray];
+                          if (isChecked) {
+                            nextBrindes = nextBrindes.filter(id => id !== u.id);
+                          } else {
+                            nextBrindes.push(u.id || '');
+                          }
+                          onChange('brindes_vinculados', nextBrindes);
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span className="truncate">{u.nome}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+
 
       {/* Botões de Ação */}
       <div className="flex flex-col sm:flex-row gap-2">

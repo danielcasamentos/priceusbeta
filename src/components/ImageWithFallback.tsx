@@ -88,10 +88,10 @@ export function ImageWithFallback({
   }
 
   return (
-    <div className="relative">
+    <div className={`relative ${className}`}>
       {loading && (
-        <div className={`absolute inset-0 flex items-center justify-center bg-gray-100 ${className}`}>
-          <ImageIcon className="w-12 h-12 text-gray-300 animate-pulse" />
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+          <ImageIcon className="w-10 h-10 text-gray-300 animate-pulse" />
         </div>
       )}
       <img

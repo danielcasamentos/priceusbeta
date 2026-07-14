@@ -294,6 +294,7 @@ export function SeasonalPricingManager({
       const multiplicador = 1 + (ajuste / 100);
 
       const { error } = await supabase.from('temporadas').insert({
+        user_id: userId,
         template_id: templateId,
         nome,
         data_inicio: inicio,

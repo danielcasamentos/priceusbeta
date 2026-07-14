@@ -294,7 +294,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
         .from('leads')
         .select('orcamento_detalhe')
         .eq('user_id', userId)
-        .eq('status', 'finalizado')
+        .in('status', ['convertido', 'finalizado'])
         .gte('updated_at', startOfMonth.toISOString());
 
       let closedMinutes = 0;
@@ -302,7 +302,31 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
         leadsClosed.forEach(lead => {
           const detail = lead.orcamento_detalhe || {};
           const produtos = Array.isArray(detail.produtos) ? detail.produtos : [];
+          const selected = detail.selectedProdutos || {};
+          
+          let hasSelected = false;
+          
+          // Somar horas dos produtos selecionados do pacote
           produtos.forEach((p: any) => {
+            const qty = Number(selected[p.id] || 0);
+            if (qty > 0) {
+              const duration = Number(p.duracao_minutos || p.duracao || 0);
+              closedMinutes += duration * qty;
+              hasSelected = true;
+            }
+          });
+
+          // Se nenhuma seleção explícita foi definida via selectedProdutos, mas há produtos na lista
+          if (!hasSelected && produtos.length > 0) {
+            produtos.forEach((p: any) => {
+              const duration = Number(p.duracao_minutos || p.duracao || 0);
+              closedMinutes += duration;
+            });
+          }
+
+          // Somar horas dos produtos de upsell contratados
+          const upsells = Array.isArray(detail.upsell_produtos) ? detail.upsell_produtos : [];
+          upsells.forEach((p: any) => {
             const qty = Number(p.quantidade || p.qty || 1);
             const duration = Number(p.duracao_minutos || p.duracao || 0);
             closedMinutes += duration * qty;
