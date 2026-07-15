@@ -311,7 +311,11 @@ export async function addEvento(evento: Partial<EventoAgenda>): Promise<EventoAg
   }
 }
 
-export async function updateEvento(id: string, updates: Partial<EventoAgenda>): Promise<boolean> {
+export async function updateEvento(
+  id: string,
+  updates: Partial<EventoAgenda>,
+  bypassGoogleSync: boolean = false
+): Promise<boolean> {
   try {
     const { data: existingEvent } = await supabase
       .from('eventos_agenda')
@@ -326,7 +330,7 @@ export async function updateEvento(id: string, updates: Partial<EventoAgenda>): 
 
     if (error) throw error;
 
-    if (existingEvent && existingEvent.user_id && existingEvent.origem !== 'ics_sync') {
+    if (!bypassGoogleSync && existingEvent && existingEvent.user_id && existingEvent.origem !== 'ics_sync') {
       const gcalId = existingEvent.uid_externo?.startsWith('gcal_') 
         ? existingEvent.uid_externo.substring(5) 
         : undefined;
@@ -355,7 +359,10 @@ export async function updateEvento(id: string, updates: Partial<EventoAgenda>): 
   }
 }
 
-export async function deleteEvento(id: string): Promise<boolean> {
+export async function deleteEvento(
+  id: string,
+  bypassGoogleSync: boolean = false
+): Promise<boolean> {
   try {
     const { data: existingEvent } = await supabase
       .from('eventos_agenda')
@@ -370,7 +377,7 @@ export async function deleteEvento(id: string): Promise<boolean> {
 
     if (error) throw error;
 
-    if (existingEvent && existingEvent.user_id && existingEvent.origem !== 'ics_sync') {
+    if (!bypassGoogleSync && existingEvent && existingEvent.user_id && existingEvent.origem !== 'ics_sync') {
       const gcalId = existingEvent.uid_externo?.startsWith('gcal_') 
         ? existingEvent.uid_externo.substring(5) 
         : undefined;
@@ -641,7 +648,7 @@ export async function importarEventosInteligente(
               if (evento.uid_externo || (existente as any).uid_externo) {
                 (updatePayload as any).uid_externo = evento.uid_externo || (existente as any).uid_externo;
               }
-              await updateEvento(existente.id, updatePayload);
+              await updateEvento(existente.id, updatePayload, true);
               // Atualiza o cache local
               const cacheIdx = eventosLocaisCache.findIndex(e => e.id === existente.id);
               if (cacheIdx !== -1) {
