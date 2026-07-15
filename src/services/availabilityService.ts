@@ -644,6 +644,19 @@ export async function importarEventosInteligente(
       const chunk = eventos.slice(i, i + chunkSize);
       await Promise.all(chunk.map(async (evento) => {
         try {
+          const lowercaseName = (evento.nome || '').toLowerCase().trim();
+          if (
+            lowercaseName.startsWith('aniversário de') ||
+            lowercaseName.startsWith('aniversário:') ||
+            lowercaseName.includes('\'s birthday') ||
+            lowercaseName.includes('s\' birthday') ||
+            lowercaseName.startsWith('birthday:')
+          ) {
+            console.log(`[importarEventosInteligente] Ignorando aniversário de contato: ${evento.nome}`);
+            result.eventos_ignorados++;
+            return;
+          }
+
           if (
             (evento.nome && evento.nome.startsWith('[PriceU$]')) ||
             (evento.uid_externo && (evento.uid_externo.includes('workflow_') || evento.uid_externo.includes('priceus')))

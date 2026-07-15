@@ -339,6 +339,18 @@ serve(async (req) => {
           const dataHoraAtual = new Date().toISOString();
           
           for (const evento of parsedEventos) {
+             const lowercaseName = (evento.cliente_nome || '').toLowerCase().trim();
+             if (
+               lowercaseName.startsWith('aniversário de') ||
+               lowercaseName.startsWith('aniversário:') ||
+               lowercaseName.includes('\'s birthday') ||
+               lowercaseName.includes('s\' birthday') ||
+               lowercaseName.startsWith('birthday:')
+             ) {
+               console.log(`[sync-calendar] Ignorando aniversário de contato: ${evento.cliente_nome}`);
+               continue;
+             }
+
              const targetUidNormalized = evento.uid_externo ? normalizeUid(evento.uid_externo) : '';
              if (targetUidNormalized && setUidsExistentes.has(targetUidNormalized)) continue;
 
