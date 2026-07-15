@@ -559,23 +559,51 @@ export async function importarEventosInteligente(
     if (fetchLocaisError) throw fetchLocaisError;
     const eventosLocaisCache = todosEventosLocais || [];
 
+    // Helper: normaliza UIDs do Google e Priceus para comparação
+    const normalizeUid = (uid: string): string => {
+      let clean = uid.trim().toLowerCase();
+      if (clean.startsWith('gcal_')) {
+        clean = clean.substring(5);
+      }
+      if (clean.endsWith('@google.com')) {
+        clean = clean.substring(0, clean.length - 11);
+      }
+      return clean;
+    };
+
     // Helper: busca evento existente em memória
     const findExistente = (evento: { data: string; nome: string; uid_externo?: string }): EventoAgenda | null => {
       const targetName = evento.nome.trim().toLowerCase();
       
       if (evento.uid_externo) {
-        const found = eventosLocaisCache.find(e => e.uid_externo === evento.uid_externo);
+        const targetUidNormalized = normalizeUid(evento.uid_externo);
+        const found = eventosLocaisCache.find(e => {
+          if (!e.uid_externo) return false;
+          return normalizeUid(e.uid_externo) === targetUidNormalized;
+        });
         if (found) {
           console.log(`[findExistente] Encontrado evento por UID externo (cache): ${evento.nome} (${evento.uid_externo})`);
           return found;
         }
       }
 
-      // Fallback por data e nome
-      const foundFallback = eventosLocaisCache.find(e => 
-        e.data_evento === evento.data && 
-        e.cliente_nome.trim().toLowerCase() === targetName
-      );
+      // Limpeza de nome para fallback em eventos criados pelo Priceus
+      let cleanImportedName = targetName;
+      if (cleanImportedName.startsWith('[priceu$]')) {
+        let parts = cleanImportedName.substring(9).trim(); // Remove '[priceu$]'
+        const dashIdx = parts.indexOf(' - ');
+        if (dashIdx !== -1) {
+          parts = parts.substring(0, dashIdx).trim();
+        }
+        cleanImportedName = parts;
+      }
+
+      // Fallback por data e nome (comparando nomes limpos)
+      const foundFallback = eventosLocaisCache.find(e => {
+        const localName = e.cliente_nome.trim().toLowerCase();
+        return e.data_evento === evento.data && localName === cleanImportedName;
+      });
+
       if (foundFallback) {
         console.log(`[findExistente] Encontrado evento por data+nome (fallback cache): ${evento.nome} (${evento.data})`);
         return foundFallback;

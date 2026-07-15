@@ -226,123 +226,184 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Supabase environment details missing')
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, { 
-      global: { headers: { Authorization: authHeader } } 
-    })
-
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
-    if (userError || !user) {
-      console.error('Erro no getUser:', userError);
-      throw new Error('Usuário não autenticado')
-    }
+    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
 
-    const { data: config, error: configError } = await supabase
-      .from('configuracao_agenda')
-      .select('calendar_ics_url, auto_sync_enabled')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (configError) throw configError
-    if (!config || !config.calendar_ics_url) {
-       return new Response(JSON.stringify({ error: 'Nenhuma URL de calendário configurada' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 })
-    }
-
-    let url = config.calendar_ics_url;
-    if (url.startsWith('webcal://')) {
-      url = url.replace(/^webcal:\/\//i, 'https://');
-    }
-    
-    console.log(`Buscando calendário da URL para o usuário ${user.id}: ${url}`);
-    
-    // We use headers to avoid cached responses and simulate a standard browser agent
-    // to prevent some providers (like iCloud) from blocking our servers.
-    const response = await fetch(url, { 
-      headers: { 
-        'Cache-Control': 'no-cache',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/calendar, text/plain, */*'
-      } 
+    const supabaseAdmin = createClient(supabaseUrl, isServiceRole ? serviceRoleKey : supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
     });
-    if (!response.ok) {
-       throw new Error(`Falha ao buscar URL: ${response.statusText}`);
-    }
-    const icsText = await response.text();
-    
-    const parsedEventos = parseICS(icsText);
-    let adicionados = 0;
-    
-    if (parsedEventos.length > 0) {
-      const { data: existentes, error: queryError } = await supabase
-         .from('eventos_agenda')
-         .select('cliente_nome, data_evento, uid_externo')
-         .eq('user_id', user.id)
-         .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%')
 
-      if (queryError) throw queryError;
-      
-      // Build lookup sets: by UID (preferred) and by name+date (fallback)
-      const setUidsExistentes = new Set(existentes?.map((e: any) => e.uid_externo).filter(Boolean));
-      const setDataNomeExistentes = new Set(existentes?.map((e: any) => `${e.cliente_nome}-${e.data_evento}`));
-      const novosEventos: any[] = [];
-      const dataHoraAtual = new Date().toISOString();
-      
-      for (const evento of parsedEventos) {
-         // Skip if already exists by UID
-         if (evento.uid_externo && setUidsExistentes.has(evento.uid_externo)) continue;
-         // Skip if already exists by name+date (case-sensitive, best effort here)
-         const chave = `${evento.cliente_nome}-${evento.data_evento}`;
-         if (!evento.uid_externo && setDataNomeExistentes.has(chave)) continue;
+    let usersToSync: Array<{ userId: string; url: string }> = [];
 
-         const novoEvento: any = {
-            user_id: user.id,
-            data_evento: evento.data_evento,
-            cliente_nome: evento.cliente_nome,
-            tipo_evento: evento.tipo_evento || 'evento',
-            cidade: '', // required field
-            status: 'confirmado',
-            origem: 'ics_sync',
-            observacoes: 'Importado automaticamente do calendário externo',
-            created_at: dataHoraAtual,
-            horario_inicio: (evento as any).horario_inicio || null,
-            duracao_minutos: (evento as any).duracao_minutos || null
-         };
-         if (evento.uid_externo) {
-           novoEvento.uid_externo = evento.uid_externo;
-         }
-         novosEventos.push(novoEvento);
-         adicionados++;
+    if (isServiceRole) {
+      console.log('[SyncCron] Sincronização disparada via Cron do Sistema.');
+      const { data: configs, error: configsError } = await supabaseAdmin
+        .from('configuracao_agenda')
+        .select('user_id, calendar_ics_url')
+        .eq('auto_sync_enabled', true)
+        .neq('calendar_ics_url', '')
+        .not('calendar_ics_url', 'is', null);
+
+      if (configsError) throw configsError;
+      usersToSync = (configs || []).map(c => ({ userId: c.user_id, url: c.calendar_ics_url }));
+      console.log(`[SyncCron] Encontrados ${usersToSync.length} usuários para sincronizar.`);
+    } else {
+      const supabaseUserClient = createClient(supabaseUrl, supabaseAnonKey, { 
+        global: { headers: { Authorization: authHeader } } 
+      });
+      const { data: { user }, error: userError } = await supabaseUserClient.auth.getUser(token);
+      if (userError || !user) {
+        console.error('Erro no getUser:', userError);
+        throw new Error('Usuário não autenticado');
       }
-      
-      if (novosEventos.length > 0) {
-         const { error: insertError } = await supabase
-            .from('eventos_agenda')
-            .insert(novosEventos);
-            
-         if (insertError) {
-           // Fallback: retry without uid_externo in case column doesn't exist yet
-           console.warn('Falha ao inserir com uid_externo, reintentando sem o campo.', insertError.message);
-           const novosSemUid = novosEventos.map(({ uid_externo, ...resto }: any) => resto);
-           const { error: insertError2 } = await supabase
-              .from('eventos_agenda')
-              .insert(novosSemUid);
-           if (insertError2) throw insertError2;
-         }
+
+      const { data: config, error: configError } = await supabaseUserClient
+        .from('configuracao_agenda')
+        .select('calendar_ics_url')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (configError) throw configError;
+      if (!config || !config.calendar_ics_url) {
+        return new Response(JSON.stringify({ error: 'Nenhuma URL de calendário configurada' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
+      }
+      usersToSync = [{ userId: user.id, url: config.calendar_ics_url }];
+    }
+
+    let totalAdicionados = 0;
+    const syncResults: any[] = [];
+
+    for (const item of usersToSync) {
+      try {
+        let url = item.url;
+        if (url.startsWith('webcal://')) {
+          url = url.replace(/^webcal:\/\//i, 'https://');
+        }
+        
+        console.log(`Buscando calendário da URL para o usuário ${item.userId}: ${url}`);
+        const response = await fetch(url, { 
+          headers: { 
+            'Cache-Control': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/calendar, text/plain, */*'
+          } 
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Falha ao buscar URL: ${response.statusText}`);
+        }
+        
+        const icsText = await response.text();
+        const parsedEventos = parseICS(icsText);
+        let adicionados = 0;
+        
+        if (parsedEventos.length > 0) {
+          const { data: existentes, error: queryError } = await supabaseAdmin
+             .from('eventos_agenda')
+             .select('cliente_nome, data_evento, uid_externo')
+             .eq('user_id', item.userId)
+             .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%');
+
+          if (queryError) throw queryError;
+          
+          const normalizeUid = (uid: string): string => {
+            let clean = uid.trim().toLowerCase();
+            if (clean.startsWith('gcal_')) clean = clean.substring(5);
+            if (clean.endsWith('@google.com')) clean = clean.substring(0, clean.length - 11);
+            return clean;
+          };
+
+          const setUidsExistentes = new Set(existentes?.map((e: any) => e.uid_externo ? normalizeUid(e.uid_externo) : '').filter(Boolean));
+          
+          const setDataNomeExistentes = new Set(existentes?.map((e: any) => {
+            let name = e.cliente_nome.trim().toLowerCase();
+            if (name.startsWith('[priceu$]')) {
+              let parts = name.substring(9).trim();
+              const dashIdx = parts.indexOf(' - ');
+              if (dashIdx !== -1) parts = parts.substring(0, dashIdx).trim();
+              name = parts;
+            }
+            return `${name}-${e.data_evento}`;
+          }));
+
+          const novosEventos: any[] = [];
+          const dataHoraAtual = new Date().toISOString();
+          
+          for (const evento of parsedEventos) {
+             const targetUidNormalized = evento.uid_externo ? normalizeUid(evento.uid_externo) : '';
+             if (targetUidNormalized && setUidsExistentes.has(targetUidNormalized)) continue;
+
+             let cleanImportedName = evento.cliente_nome.trim().toLowerCase();
+             if (cleanImportedName.startsWith('[priceu$]')) {
+               let parts = cleanImportedName.substring(9).trim();
+               const dashIdx = parts.indexOf(' - ');
+               if (dashIdx !== -1) parts = parts.substring(0, dashIdx).trim();
+               cleanImportedName = parts;
+             }
+
+             const chave = `${cleanImportedName}-${evento.data_evento}`;
+             if (setDataNomeExistentes.has(chave)) continue;
+
+             const novoEvento: any = {
+                user_id: item.userId,
+                data_evento: evento.data_evento,
+                cliente_nome: evento.cliente_nome,
+                tipo_evento: evento.tipo_evento || 'evento',
+                cidade: '',
+                status: 'confirmado',
+                origem: 'ics_sync',
+                observacoes: 'Importado automaticamente do calendário externo',
+                created_at: dataHoraAtual,
+                horario_inicio: (evento as any).horario_inicio || null,
+                duracao_minutos: (evento as any).duracao_minutos || null
+             };
+             if (evento.uid_externo) {
+               novoEvento.uid_externo = evento.uid_externo;
+             }
+             novosEventos.push(novoEvento);
+             adicionados++;
+          }
+          
+          if (novosEventos.length > 0) {
+             const { error: insertError } = await supabaseAdmin
+                .from('eventos_agenda')
+                .insert(novosEventos);
+                
+             if (insertError) {
+               console.warn('Falha ao inserir com uid_externo, reintentando sem o campo.', insertError.message);
+               const novosSemUid = novosEventos.map(({ uid_externo, ...resto }: any) => resto);
+               const { error: insertError2 } = await supabaseAdmin
+                  .from('eventos_agenda')
+                  .insert(novosSemUid);
+               if (insertError2) throw insertError2;
+             }
+          }
+        }
+        
+        await supabaseAdmin
+           .from('configuracao_agenda')
+           .update({ last_calendar_sync: new Date().toISOString() })
+           .eq('user_id', item.userId);
+
+        totalAdicionados += adicionados;
+        syncResults.push({ userId: item.userId, success: true, adicionados });
+      } catch (err: any) {
+        console.error(`Erro ao sincronizar usuário ${item.userId}:`, err);
+        syncResults.push({ userId: item.userId, success: false, error: err.message });
       }
     }
-    
-    await supabase
-       .from('configuracao_agenda')
-       .update({ last_calendar_sync: new Date().toISOString() })
-       .eq('user_id', user.id);
 
     return new Response(
-      JSON.stringify({ success: true, adicionados, total_analisados: parsedEventos.length }),
+      JSON.stringify({ success: true, total_sincronizados: usersToSync.length, total_adicionados: totalAdicionados, detalhes: syncResults }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
