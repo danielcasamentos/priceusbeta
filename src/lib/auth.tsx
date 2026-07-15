@@ -33,6 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Salvar credenciais do Google OAuth no profile do usuário
       if (session?.user && (session.provider_token || session.provider_refresh_token)) {
+        console.log('🔑 [Auth] OAuth tokens detectados!');
+        console.log('🔑 [Auth] event:', event);
+        console.log('🔑 [Auth] provider_token presente:', !!session.provider_token);
+        console.log('🔑 [Auth] provider_refresh_token presente:', !!session.provider_refresh_token);
+        console.log('🔑 [Auth] provider_refresh_token inicio:', session.provider_refresh_token?.substring(0, 15));
+
         try {
           const { data: profileData } = await supabase
             .from('profiles')
@@ -41,10 +47,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .maybeSingle();
 
           const existingAuth = profileData?.google_auth_data || {};
+
+          // IMPORTANTE: só sobrescreve o refresh_token se tiver um novo —
+          // nunca mantém um refresh_token antigo (pode ser de client_id diferente)
+          const newRefreshToken = session.provider_refresh_token;
           const updatedAuth = {
             ...existingAuth,
             access_token: session.provider_token || existingAuth.access_token,
-            refresh_token: session.provider_refresh_token || existingAuth.refresh_token,
+            ...(newRefreshToken ? { refresh_token: newRefreshToken } : {}),
             updated_at: new Date().toISOString()
           };
 
@@ -53,12 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .update({ google_auth_data: updatedAuth })
             .eq('id', session.user.id);
 
-          console.log('✅ Google OAuth tokens saved successfully.');
+          console.log('✅ Google OAuth tokens saved. refresh_token atualizado:', !!newRefreshToken);
         } catch (err) {
           console.error('❌ Error saving Google OAuth tokens:', err);
         }
       }
     });
+
 
     return () => subscription.unsubscribe();
   }, []);

@@ -494,7 +494,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     lead: Lead,
     savedOrcamentoDetalhe: LeadOrcamentoDetalhe,
     updateState: boolean,
-    customFollowup?: { type: 'padrao' | 'desconto' | 'brinde', discountPercent?: number, couponCode?: string, bonusGift?: string }
+    customFollowup?: { type: 'padrao' | 'desconto' | 'brinde' | 'apresentacao' | 'lembrete' | 'urgencia', discountPercent?: number, couponCode?: string, bonusGift?: string }
   ): Promise<string> => {
     const template: TemplateFromDB = templates[lead.template_id];
     const { data: profile } = await supabase
@@ -1093,7 +1093,7 @@ export function LeadsManager({ userId }: { userId: string }) {
     lead: Lead,
     savedOrcamentoDetalhe: LeadOrcamentoDetalhe,
     ocultarExtras: boolean,
-    customFollowup?: { type: 'padrao' | 'desconto' | 'brinde', discountPercent?: number, couponCode?: string, bonusGift?: string }
+    customFollowup?: { type: 'padrao' | 'desconto' | 'brinde' | 'apresentacao' | 'lembrete' | 'urgencia', discountPercent?: number, couponCode?: string, bonusGift?: string }
   ) => {
     try {
       if (ocultarExtras) {

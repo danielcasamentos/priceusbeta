@@ -41,8 +41,6 @@ export function QuoteNatal(props: QuoteNatalProps) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
-    breakdown,
-    upsellSection,
     upsellProdutos = [],
   } = props;
 

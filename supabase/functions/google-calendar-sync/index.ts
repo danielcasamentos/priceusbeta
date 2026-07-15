@@ -49,7 +49,7 @@ serve(async (req) => {
     // 1. Obter credenciais do Google do perfil do usuário
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('google_auth_data, business_name')
+      .select('google_auth_data, nome_profissional')
       .eq('id', user.id)
       .single()
 
@@ -66,10 +66,15 @@ serve(async (req) => {
     }
 
     // 2. Renovar access_token usando o refresh_token
-    const clientId = Deno.env.get('SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID') || Deno.env.get('GOOGLE_CLIENT_ID');
-    const clientSecret = Deno.env.get('SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET') || Deno.env.get('GOOGLE_CLIENT_SECRET');
+    // Prioridade: GOOGLE_CLIENT_ID (secret manual) > SUPABASE_AUTH_EXTERNAL (auto-injetado)
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID') || Deno.env.get('SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID');
+    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') || Deno.env.get('SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET');
 
-    console.log(`[GoogleSync] Solicitando refresh de token para user_id: ${user.id}`);
+    console.log(`[GoogleSync] user_id: ${user.id}`);
+    console.log(`[GoogleSync] client_id usado: ${clientId ? clientId.substring(0, 20) + '...' : 'NAO ENCONTRADO'}`);
+    console.log(`[GoogleSync] refresh_token presente: ${!!googleAuthData.refresh_token}`);
+    console.log(`[GoogleSync] refresh_token inicio: ${googleAuthData.refresh_token?.substring(0, 10)}`);
+
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -84,6 +89,7 @@ serve(async (req) => {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error('[GoogleSync] Erro ao renovar token:', errorText);
+      console.error(`[GoogleSync] client_id completo: ${clientId}`);
       throw new Error(`Falha ao autorizar no Google: ${errorText}`);
     }
 

@@ -247,6 +247,8 @@ export function QuoteMinimalista(props: QuoteMinimalistaProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
             {upsellSection}
 
             <div className="bg-slate-100 rounded-xl p-6 text-center border-2 border-slate-400">

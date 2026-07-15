@@ -27,6 +27,7 @@ interface Lead {
   orcamento_total?: number;
   valor_total?: number | string;
   orcamento_detalhe?: any;
+  forma_pagamento?: string | null;
 }
 
 interface ContractGeneratorProps {
@@ -183,7 +184,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         if (transacoes && transacoes.length > 0) {
           const entradaTx = transacoes.find((t: any) => !t.is_installment && t.descricao.toLowerCase().includes('entrada'));
           const parcelasTxs = transacoes.filter((t: any) => t.is_installment);
-          const avistaTx = transacoes.find((t: any) => !t.is_installment && !t.descricao.toLowerCase().includes('entrada'));
+
 
           let modo: 'avista' | 'parcelado' | 'entrada_parcelas' = 'avista';
           if (entradaTx && parcelasTxs.length > 0) {

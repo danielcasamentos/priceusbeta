@@ -26,7 +26,6 @@ export function CobrancaModal({
 }: CobrancaModalProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('amigavel');
   const [mensagemEditada, setMensagemEditada] = useState<string>('');
-  const [prevPropsKey, setPrevPropsKey] = useState<string>('');
   const [businessSettings, setBusinessSettings] = useState<any>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [cobrarAtraso, setCobrarAtraso] = useState(false);

@@ -265,6 +265,7 @@ export function QuoteMagazine(props: QuoteMagazineProps) {
                   </div>
                 ))}
               </div>
+            </div>
             {upsellSection}
 
             <div className="bg-amber-50 rounded-xl p-6 text-center border-2 border-amber-600">

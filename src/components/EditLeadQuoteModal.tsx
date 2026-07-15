@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, Lead } from '../lib/supabase';
 import { LeadOrcamentoDetalhe } from './LeadsManager';
-import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, DollarSign, Loader2, Check, AlertTriangle, ChevronDown, Mail } from 'lucide-react';
+import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, Loader2, Check, AlertTriangle, ChevronDown, Mail } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';

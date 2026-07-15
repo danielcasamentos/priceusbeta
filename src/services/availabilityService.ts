@@ -60,6 +60,8 @@ export interface EventoAgenda {
   horario_inicio?: string | null;
   duracao_minutos?: number | null;
   horario_fim?: string | null;
+  last_synced_at?: string | null;
+  updated_at?: string;
 }
 
 export interface HistoricoImportacao {
@@ -230,26 +232,48 @@ export async function getEventosByMonth(userId: string, year: number, month: num
   }
 }
 
-async function triggerGoogleCalendarSync(
-  userId: string,
+export async function triggerGoogleCalendarSync(
+  _userId: string,
   action: 'insert' | 'update' | 'delete',
   event: any,
   eventId?: string
 ) {
   try {
-    const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
-      body: {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    if (!token) {
+      console.warn('[GoogleSync] Sincronização abortada: sessão ausente ou token indisponível');
+      return null;
+    }
+
+    const response = await fetch('https://vkwpcyahwzzeyesyytpa.supabase.co/functions/v1/google-calendar-sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify({
         action,
         event,
         eventId
-      }
+      })
     });
 
-    if (error) {
-      console.warn('[GoogleSync] Erro no invoke:', error);
+    const responseText = await response.text();
+    console.log('[GoogleSync] Resposta da Edge Function:', response.status, responseText);
+
+    if (!response.ok) {
+      console.warn(`[GoogleSync] Erro HTTP ${response.status} no invoke:`, responseText);
       return null;
     }
-    return data;
+
+    try {
+      return JSON.parse(responseText);
+    } catch {
+      return { success: true, message: responseText };
+    }
   } catch (err) {
     console.error('[GoogleSync] Erro ao disparar sincronização:', err);
     return null;
@@ -271,7 +295,10 @@ export async function addEvento(evento: Partial<EventoAgenda>): Promise<EventoAg
         if (res?.success && res.googleEventId) {
           await supabase
             .from('eventos_agenda')
-            .update({ uid_externo: `gcal_${res.googleEventId}` })
+            .update({ 
+              uid_externo: `gcal_${res.googleEventId}`,
+              last_synced_at: new Date().toISOString()
+            })
             .eq('id', data.id);
         }
       });
@@ -309,7 +336,16 @@ export async function updateEvento(id: string, updates: Partial<EventoAgenda>): 
         'update',
         { ...existingEvent, ...updates },
         gcalId
-      );
+      ).then(async (res) => {
+        if (res?.success) {
+          await supabase
+            .from('eventos_agenda')
+            .update({ 
+              last_synced_at: new Date().toISOString()
+            })
+            .eq('id', id);
+        }
+      });
     }
 
     return true;
@@ -507,39 +543,35 @@ export async function importarEventosInteligente(
 
     const historicoId = historico.id;
 
-    // Helper: busca evento existente por uid_externo (com fallback para data+nome caso a coluna não exista ou não encontre por UID)
-    const findExistente = async (evento: { data: string; nome: string; uid_externo?: string }): Promise<EventoAgenda | null> => {
-      if (evento.uid_externo) {
-        const { data, error } = await supabase
-          .from('eventos_agenda')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('uid_externo', evento.uid_externo)
-          .maybeSingle();
-        // Se encontrou o evento com o UID externo, retorna ele
-        if (!error && data) {
-          console.log(`[findExistente] Encontrado evento por UID externo: ${evento.nome} (${evento.uid_externo})`);
-          return data;
-        }
-        // Se deu erro de coluna inexistente (400) ou outro erro, registramos
-        if (error) {
-          console.warn('[findExistente] Erro ao buscar por uid_externo, tentando fallback data+nome.', error.message);
-        }
-      }
-      // Fallback: busca todos os eventos na data para este usuário, e compara o nome localmente (case-insensitive & trimmed)
-      const { data: eventsOnDate, error: dateError } = await supabase
-        .from('eventos_agenda')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('data_evento', evento.data);
+    // Busca todos os eventos locais do usuário uma única vez para evitar consultas N+1
+    const { data: todosEventosLocais, error: fetchLocaisError } = await supabase
+      .from('eventos_agenda')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (fetchLocaisError) throw fetchLocaisError;
+    const eventosLocaisCache = todosEventosLocais || [];
+
+    // Helper: busca evento existente em memória
+    const findExistente = (evento: { data: string; nome: string; uid_externo?: string }): EventoAgenda | null => {
+      const targetName = evento.nome.trim().toLowerCase();
       
-      if (!dateError && eventsOnDate && eventsOnDate.length > 0) {
-        const targetName = evento.nome.trim().toLowerCase();
-        const found = eventsOnDate.find(e => e.cliente_nome.trim().toLowerCase() === targetName);
+      if (evento.uid_externo) {
+        const found = eventosLocaisCache.find(e => e.uid_externo === evento.uid_externo);
         if (found) {
-          console.log(`[findExistente] Encontrado evento por data+nome (fallback local): ${evento.nome} (${evento.data})`);
+          console.log(`[findExistente] Encontrado evento por UID externo (cache): ${evento.nome} (${evento.uid_externo})`);
           return found;
         }
+      }
+
+      // Fallback por data e nome
+      const foundFallback = eventosLocaisCache.find(e => 
+        e.data_evento === evento.data && 
+        e.cliente_nome.trim().toLowerCase() === targetName
+      );
+      if (foundFallback) {
+        console.log(`[findExistente] Encontrado evento por data+nome (fallback cache): ${evento.nome} (${evento.data})`);
+        return foundFallback;
       }
       return null;
     };
@@ -587,7 +619,7 @@ export async function importarEventosInteligente(
           }
 
           if (estrategia === 'adicionar_novos') {
-            const existente = await findExistente(evento);
+            const existente = findExistente(evento);
             if (existente) {
               result.eventos_ignorados++;
               return;
@@ -595,7 +627,7 @@ export async function importarEventosInteligente(
           }
 
           if (estrategia === 'mesclar_atualizar') {
-            const existente = await findExistente(evento);
+            const existente = findExistente(evento);
             if (existente) {
               const updatePayload: Partial<EventoAgenda> = {
                 data_evento: evento.data,
@@ -610,6 +642,14 @@ export async function importarEventosInteligente(
                 (updatePayload as any).uid_externo = evento.uid_externo || (existente as any).uid_externo;
               }
               await updateEvento(existente.id, updatePayload);
+              // Atualiza o cache local
+              const cacheIdx = eventosLocaisCache.findIndex(e => e.id === existente.id);
+              if (cacheIdx !== -1) {
+                eventosLocaisCache[cacheIdx] = {
+                  ...eventosLocaisCache[cacheIdx],
+                  ...updatePayload
+                };
+              }
               result.eventos_atualizados++;
               return;
             }
@@ -637,6 +677,7 @@ export async function importarEventosInteligente(
           const novoEvento = await addEventoComFallback(novoPayload);
 
           if (novoEvento) {
+            eventosLocaisCache.push(novoEvento);
             result.eventos_adicionados++;
           } else {
             result.errors.push(`${evento.nome} (${evento.data})`);
@@ -1145,5 +1186,63 @@ export async function syncWorkflowToCalendar(
     }
   } catch (err) {
     console.error('Erro ao sincronizar workflow com calendário:', err);
+  }
+}
+
+export async function syncLocalEventsToGoogle(userId: string): Promise<{ success: boolean; syncedCount: number; message: string }> {
+  try {
+    const { data: eventos, error } = await supabase
+      .from('eventos_agenda')
+      .select('*')
+      .eq('user_id', userId)
+      .neq('origem', 'ics_sync')
+      .not('status', 'eq', 'cancelado');
+
+    if (error) throw error;
+
+    if (!eventos || eventos.length === 0) {
+      return { success: true, syncedCount: 0, message: 'Nenhum evento local encontrado para sincronizar.' };
+    }
+
+    let syncedCount = 0;
+    for (const evt of eventos) {
+      if (evt.uid_externo && evt.uid_externo.startsWith('gcal_')) {
+        continue;
+      }
+
+      const payload = {
+        id: evt.id,
+        user_id: evt.user_id,
+        data_evento: evt.data_evento,
+        tipo_evento: evt.tipo_evento,
+        cliente_nome: evt.cliente_nome,
+        cidade: evt.cidade,
+        status: evt.status,
+        origem: evt.origem,
+        observacoes: evt.observacoes
+      };
+
+      const res = await triggerGoogleCalendarSync(userId, 'insert', payload);
+      if (res?.success && res.googleEventId) {
+        await supabase
+          .from('eventos_agenda')
+          .update({ uid_externo: `gcal_${res.googleEventId}` })
+          .eq('id', evt.id);
+        syncedCount++;
+      }
+    }
+
+    return {
+      success: true,
+      syncedCount,
+      message: `${syncedCount} evento(s) local(is) sincronizado(s) com o Google Calendar.`
+    };
+  } catch (err: any) {
+    console.error('Erro na sincronização manual reversa:', err);
+    return {
+      success: false,
+      syncedCount: 0,
+      message: err.message || 'Erro ao sincronizar eventos locais.'
+    };
   }
 }

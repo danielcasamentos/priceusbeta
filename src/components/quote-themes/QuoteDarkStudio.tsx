@@ -43,8 +43,6 @@ export function QuoteDarkStudio(props: QuoteDarkStudioProps) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
-    breakdown,
-    upsellSection,
     upsellProdutos = [],
   } = props;
 

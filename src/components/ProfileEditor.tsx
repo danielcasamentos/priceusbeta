@@ -23,6 +23,31 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
   const [showSqlFallback, setShowSqlFallback] = useState(false);
 
   useEffect(() => {
+    // Verificar se há erros de redirecionamento de OAuth na URL
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get('error');
+    const errorCode = params.get('error_code');
+    const errorDescription = params.get('error_description');
+
+    if (error || errorCode) {
+      console.warn('Erro de autenticação recebido na URL:', { error, errorCode, errorDescription });
+      if (errorCode === 'identity_already_exists' || errorDescription?.includes('already linked')) {
+        alert(
+          'Erro de Vínculo: Esta conta do Google (Gmail) já está vinculada a outro usuário no sistema.\n\n' +
+          'Para resolver:\n' +
+          '1. Acesse o painel do seu Supabase -> Authentication -> Users.\n' +
+          '2. Procure pela conta com o seu Gmail e clique em "Delete User" para excluí-la.\n' +
+          '3. Volte aqui e tente vincular a conta do Google novamente.'
+        );
+      } else {
+        alert(`Erro ao vincular: ${errorDescription || errorCode || error}`);
+      }
+      
+      // Limpa os parâmetros da URL para evitar alertas duplicados
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+
     loadProfile();
 
     const handleFocus = () => {
@@ -186,10 +211,27 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
 
   const handleLinkGoogle = async () => {
     try {
+      // 1. Procurar se já existe identidade Google vinculada a este usuário no Auth.
+      // Se existir, tentamos desvincular primeiro para garantir um vínculo limpo.
+      const { data: identitiesData, error: identitiesError } = await supabase.auth.getUserIdentities();
+      if (!identitiesError && identitiesData?.identities) {
+        const googleIdentity = identitiesData.identities.find(
+          (identity: any) => identity.provider === 'google'
+        );
+        if (googleIdentity) {
+          console.log('🔄 Removendo identidade Google existente para este usuário...');
+          const { error: unlinkError } = await supabase.auth.unlinkIdentity(googleIdentity);
+          if (unlinkError) {
+            console.warn('⚠️ Não foi possível desvincular identidade Google existente:', unlinkError);
+          }
+        }
+      }
+
+      // 2. Chamar o linkIdentity novamente para gerar novos tokens
       const { data, error } = await supabase.auth.linkIdentity({
         provider: 'google',
         options: {
-          redirectTo: window.location.href,
+          redirectTo: `${window.location.origin}/dashboard`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -198,7 +240,28 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           skipBrowserRedirect: true
         }
       });
-      if (error) throw error;
+
+      if (error) {
+        // Se ainda der erro de já vinculada (provavelmente a outro usuário), tentamos fallback ou alertamos
+        if (error.message?.includes('identity_already_exists') || error.code === 'identity_already_exists') {
+          console.log('⚠️ Identidade Google já existe. Tentando login direto para capturar tokens...');
+          const { error: signInError } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/dashboard`,
+              queryParams: {
+                access_type: 'offline',
+                prompt: 'consent',
+              },
+              scopes: 'https://www.googleapis.com/auth/calendar',
+            }
+          });
+          if (signInError) throw signInError;
+          return;
+        }
+        throw error;
+      }
+
       if (data?.url) {
         window.location.href = data.url;
       }
@@ -213,6 +276,23 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
     }
     
     try {
+      // 1. Procurar e desvincular do Supabase Auth
+      const { data: identitiesData, error: identitiesError } = await supabase.auth.getUserIdentities();
+      if (!identitiesError && identitiesData?.identities) {
+        const googleIdentity = identitiesData.identities.find(
+          (identity: any) => identity.provider === 'google'
+        );
+        if (googleIdentity) {
+          const { error: unlinkError } = await supabase.auth.unlinkIdentity(googleIdentity);
+          if (unlinkError) {
+            console.warn('⚠️ Não foi possível remover a identidade do Supabase Auth:', unlinkError);
+          } else {
+            console.log('✅ Identidade Google removida do Supabase Auth.');
+          }
+        }
+      }
+
+      // 2. Limpar google_auth_data da tabela profiles
       const { error } = await supabase
         .from('profiles')
         .update({ google_auth_data: null })

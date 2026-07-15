@@ -41,8 +41,6 @@ export function QuoteOferta(props: QuoteOfertaProps) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
-    breakdown,
-    upsellSection,
     upsellProdutos = [],
   } = props;
 

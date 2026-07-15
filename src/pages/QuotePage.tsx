@@ -50,6 +50,7 @@ interface Produto {
   destacar_produto?: boolean;
   destaque_texto?: string | null;
   keywords_upsell?: string | null;
+  brindes_vinculados?: string[] | null;
 }
 
 interface FormaPagamento {

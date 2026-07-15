@@ -41,8 +41,6 @@ export function QuotePdfElegante2(props: QuotePdfElegante2Props) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
-    breakdown,
-    upsellSection,
     upsellProdutos = [],
   } = props;
 

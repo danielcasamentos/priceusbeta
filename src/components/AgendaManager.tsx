@@ -19,6 +19,7 @@ import {
   getHistoricoImportacoes,
   rollbackImportacao,
   contarEventosAtivos,
+  triggerGoogleCalendarSync,
   type EventoAgenda,
   type ConfiguracaoAgenda,
   type HistoricoImportacao,
@@ -41,6 +42,10 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
 
+  const [syncingGoogle, setSyncingGoogle] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [integrationTab, setIntegrationTab] = useState<'google' | 'ics-link' | 'upload'>('google');
+  const [profile, setProfile] = useState<any | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEvento, setEditingEvento] = useState<EventoAgenda | null>(null);
   const [novoEvento, setNovoEvento] = useState({
@@ -99,6 +104,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   const loadData = async (silent: boolean = false) => {
     if (!silent) setLoading(true);
     try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('google_auth_data')
+        .eq('id', userId)
+        .maybeSingle();
+      setProfile(profileData);
+
       const configData = await getOrCreateAgendaConfig(userId);
       setConfig(configData);
       if (configData) {
@@ -178,6 +190,112 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   useEffect(() => {
     loadDataRef.current = loadData;
   });
+
+  const handleForceGoogleSync = async () => {
+    if (syncingGoogle) return;
+    setSyncingGoogle(true);
+    setSyncProgress({ current: 0, total: 0 });
+    try {
+      // 1. Buscar todos os eventos locais que precisam ser sincronizados
+      const { data: eventos, error } = await supabase
+        .from('eventos_agenda')
+        .select('*')
+        .eq('user_id', userId)
+        .neq('origem', 'ics_sync')
+        .not('status', 'eq', 'cancelado');
+
+      if (error) throw error;
+
+      // Filtrar eventos que precisam de sincronização:
+      // 1. Nunca sincronizados (sem uid_externo ou que não começa com gcal_)
+      // 2. Modificados desde a última sincronização (updated_at > last_synced_at + 1 segundo)
+      const eventosParaSincronizar = (eventos || []).filter((evt) => {
+        if (!evt.uid_externo || !evt.uid_externo.startsWith('gcal_')) {
+          return true;
+        }
+        if (!evt.last_synced_at) {
+          return true;
+        }
+        const updatedAt = new Date(evt.updated_at).getTime();
+        const lastSyncedAt = new Date(evt.last_synced_at).getTime();
+        return updatedAt > lastSyncedAt + 1000;
+      });
+
+      if (eventosParaSincronizar.length === 0) {
+        setImportStatus({
+          show: true,
+          type: 'success',
+          message: 'Todos os eventos locais já estão em perfeita sincronia com o Google Calendar.',
+        });
+        setSyncingGoogle(false);
+        setSyncProgress(null);
+        return;
+      }
+
+      setSyncProgress({ current: 0, total: eventosParaSincronizar.length });
+
+      let syncedCount = 0;
+      for (let i = 0; i < eventosParaSincronizar.length; i++) {
+        const evt = eventosParaSincronizar[i];
+        
+        // 2. Determinar ação e id externo
+        const isUpdate = evt.uid_externo && evt.uid_externo.startsWith('gcal_');
+        const gcalId = isUpdate ? evt.uid_externo.substring(5) : undefined;
+        const action = isUpdate ? 'update' : 'insert';
+
+        const payload = {
+          id: evt.id,
+          user_id: evt.user_id,
+          data_evento: evt.data_evento,
+          tipo_evento: evt.tipo_evento,
+          cliente_nome: evt.cliente_nome,
+          cidade: evt.cidade,
+          status: evt.status,
+          origem: evt.origem,
+          observacoes: evt.observacoes
+        };
+
+        const res = await triggerGoogleCalendarSync(userId, action, payload, gcalId);
+        if (res?.success) {
+          const updateFields: any = {
+            last_synced_at: new Date().toISOString()
+          };
+          if (!isUpdate && res.googleEventId) {
+            updateFields.uid_externo = `gcal_${res.googleEventId}`;
+          }
+          await supabase
+            .from('eventos_agenda')
+            .update(updateFields)
+            .eq('id', evt.id);
+          syncedCount++;
+        }
+
+        // Atualizar progresso
+        setSyncProgress({ current: i + 1, total: eventosParaSincronizar.length });
+
+        // Cooldown de 300ms para evitar rate-limits
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+      await loadData(true);
+      setImportStatus({
+        show: true,
+        type: 'success',
+        message: `Sincronização concluída! ${syncedCount} evento(s) processado(s) com o Google Calendar.`,
+      });
+    } catch (err: any) {
+      console.error('Erro ao sincronizar manualmente:', err);
+      setImportStatus({
+        show: true,
+        type: 'error',
+        message: 'Falha ao sincronizar com o Google Calendar',
+        details: [err.message || 'Erro desconhecido'],
+      });
+    } finally {
+      setSyncingGoogle(false);
+      setSyncProgress(null);
+    }
+  };
 
   const handleAddEvento = async () => {
     if (!novoEvento.data_evento || !novoEvento.cliente_nome) {
@@ -1367,71 +1485,306 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </div>
               )}
 
-              <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)]">
-                <div className="flex items-start gap-3 mb-3">
-                  <FileUp className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900 dark:text-white">Importar Calendário</h3>
-                      {!planLimits.canImportCalendar && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-green-600 to-green-700 text-white rounded-full">
-                          Premium
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mb-3">
-                      Importe eventos de arquivos CSV ou ICS com sistema inteligente anti-duplicatas
-                    </p>
-                  </div>
+              {/* Card de Integrações Unificado */}
+              <div className="bg-white dark:bg-[rgba(255,255,255,0.02)] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] rounded-2xl overflow-hidden mb-4 shadow-sm">
+                {/* Selector de Abas */}
+                <div className="flex border-b border-gray-200 dark:border-[rgba(255,255,255,0.06)] bg-gray-50/50 dark:bg-[rgba(255,255,255,0.01)]">
+                  <button
+                    type="button"
+                    onClick={() => setIntegrationTab('google')}
+                    className={`flex-1 py-3 px-4 text-xs font-semibold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                      integrationTab === 'google'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-[rgba(255,255,255,0.01)]'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-[rgba(255,255,255,0.5)] dark:hover:text-white'
+                    }`}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Google Calendar (Envio)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIntegrationTab('ics-link')}
+                    className={`flex-1 py-3 px-4 text-xs font-semibold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                      integrationTab === 'ics-link'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-[rgba(255,255,255,0.01)]'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-[rgba(255,255,255,0.5)] dark:hover:text-white'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    Link iCal (Entrada)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIntegrationTab('upload')}
+                    className={`flex-1 py-3 px-4 text-xs font-semibold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                      integrationTab === 'upload'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-[rgba(255,255,255,0.01)]'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-[rgba(255,255,255,0.5)] dark:hover:text-white'
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Importar Arquivo
+                  </button>
                 </div>
 
-                <button
-                  onClick={handleImportClick}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]"
-                >
-                  <Upload className="w-5 h-5" />
-                  {planLimits.canImportCalendar ? 'Importar Arquivo de Calendário' : 'Upgrade para Importar Calendários'}
-                </button>
+                {/* Conteudo das Abas */}
+                <div className="p-5">
+                  {/* Aba 1: Google Calendar (Sincronizacao Direta) */}
+                  {integrationTab === 'google' && (
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center shrink-0">
+                          <RefreshCw className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm font-sans">Sincronizacao de Envio (Direta)</p>
+                            {profile?.google_auth_data ? (
+                              <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 font-sans">Ativa</span>
+                            ) : (
+                              <span className="bg-gray-400 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 font-sans">Inativa</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.45)] mt-0.5 leading-relaxed font-sans">
+                            Envia eventos do Priceus (contratos, orcamentos fechados) para o seu Google Calendar via OAuth em tempo real.
+                          </p>
+                        </div>
+                      </div>
 
-                <details className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)] mt-3">
-                  <summary className="cursor-pointer font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] hover:text-gray-900 dark:hover:text-white mb-2">
-                    Formato CSV esperado
-                  </summary>
-                  <div className="pl-4 space-y-1 text-xs bg-white dark:bg-[#07101f] p-3 rounded border border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
-                    <p className="font-mono">data,nome,tipo,cidade</p>
-                    <p className="font-mono">01/12/2025,João Silva,Casamento,São Paulo</p>
-                    <p className="font-mono">15/12/2025,Maria Santos,Ensaio,Rio de Janeiro</p>
-                    <p className="text-gray-500 dark:text-[rgba(255,255,255,0.4)] mt-2">Data pode ser DD/MM/AAAA ou AAAA-MM-DD</p>
-                  </div>
-                </details>
+                      {profile?.google_auth_data ? (
+                        <div className="space-y-3 pt-2">
+                          <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/30 rounded-lg px-3 py-2 font-sans">
+                            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                            Conta Google vinculada e sincronizando ativamente
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={handleForceGoogleSync}
+                              disabled={syncingGoogle}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white rounded-xl font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${syncingGoogle ? 'animate-spin' : ''}`} />
+                              {syncingGoogle ? 'Sincronizando...' : 'Sincronizar Agora (Priceus para Google)'}
+                            </button>
+
+                            {syncingGoogle && syncProgress && syncProgress.total > 0 && (
+                              <div className="space-y-1.5 px-1 pt-1">
+                                <div className="flex justify-between text-[11px] text-gray-500 dark:text-[rgba(255,255,255,0.4)]">
+                                  <span>Sincronizando eventos com o Google...</span>
+                                  <span className="font-semibold">{Math.round((syncProgress.current / syncProgress.total) * 100)}% ({syncProgress.current}/{syncProgress.total})</span>
+                                </div>
+                                <div className="w-full h-2 bg-gray-100 dark:bg-[rgba(255,255,255,0.06)] rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-300"
+                                    style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-lg px-4 py-3 mt-2">
+                          <span className="text-amber-500 mt-0.5 shrink-0">&#9888;</span>
+                          <div>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 font-medium">Conta Google nao conectada</p>
+                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Vincule sua conta Google nas configuracoes de perfil para ativar esta integracao.</p>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('calendar')}
+                              className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline inline-flex items-center gap-1"
+                            >
+                              Ir para Configuracoes de Perfil &rarr;
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Aba 2: Link ICS (Entrada) */}
+                  {integrationTab === 'ics-link' && (
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shrink-0">
+                          <Calendar className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm">Sincronizacao de Entrada (Link ICS)</p>
+                            <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">Beta</span>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.45)] mt-0.5 leading-relaxed font-sans">
+                            Importe eventos de agendas externas (Google, Apple, etc.) para o Priceus usando um link publico do calendario (.ics).
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <details className="bg-gray-50 dark:bg-[#07101f] rounded-xl border border-gray-200 dark:border-[rgba(255,255,255,0.07)]">
+                          <summary className="cursor-pointer px-4 py-2.5 text-xs font-semibold text-blue-700 dark:text-blue-400 hover:opacity-80 select-none">
+                            Como obter o link do Google Calendar
+                          </summary>
+                          <div className="px-4 pb-4 pt-1 space-y-1 text-xs text-gray-600 dark:text-[rgba(255,255,255,0.6)]">
+                            <ol className="list-decimal pl-4 space-y-1">
+                              <li>Abra o <strong className="dark:text-white">Google Calendar</strong> no computador</li>
+                              <li>No menu lateral, encontre a agenda desejada</li>
+                              <li>Clique nos <strong className="dark:text-white">3 pontos</strong> ao lado do nome da agenda</li>
+                              <li>Selecione <strong className="dark:text-white">"Configuracoes e compartilhamento"</strong></li>
+                              <li>Role ate <strong className="dark:text-white">"Endereco de calendario em formato iCal"</strong></li>
+                              <li>Copie o link <strong className="dark:text-white">(.ics)</strong> e cole abaixo</li>
+                            </ol>
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded px-2 py-1.5 mt-2">
+                              O link funciona apenas se a agenda for publica ou se usar o "Endereco secreto em iCal".
+                            </p>
+                          </div>
+                        </details>
+
+                        <input
+                          type="url"
+                          value={configEdit.calendar_ics_url}
+                          onChange={(e) => setConfigEdit({ ...configEdit, calendar_ics_url: e.target.value })}
+                          placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                          className="w-full px-3 py-2.5 border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-gray-50 dark:bg-[#07101f] dark:text-white placeholder:text-gray-400"
+                        />
+
+                        <div className="flex items-center justify-between py-1">
+                          <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)]">Sincronizacao automatica</p>
+                            <p className="text-[11px] text-gray-500 dark:text-[rgba(255,255,255,0.4)]">Sincroniza ao abrir a agenda</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" checked={configEdit.auto_sync_enabled} onChange={(e) => setConfigEdit({ ...configEdit, auto_sync_enabled: e.target.checked })} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500" />
+                          </label>
+                        </div>
+
+                        {configEdit.calendar_ics_url && (
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              if (!configEdit.calendar_ics_url) return;
+                              setImportStatus({ show: true, type: 'info', message: 'Buscando eventos do calendario...' });
+                              try {
+                                const { data, error } = await supabase.functions.invoke('fetch-calendar', { body: { url: configEdit.calendar_ics_url } });
+                                if (error) throw error;
+                                if (!data || !data.text) throw new Error('Nao foi possivel obter o calendario');
+                                const text = data.text;
+                                if (!text.includes('BEGIN:VCALENDAR')) throw new Error('O link nao parece ser um calendario ICS valido');
+                                const parsedEventos = parseICS(text);
+                                if (parsedEventos.length === 0) {
+                                  setImportStatus({ show: true, type: 'info', message: 'Nenhum evento encontrado no calendario', details: ['O calendario pode estar vazio ou em formato nao reconhecido.'] });
+                                  return;
+                                }
+                                setImportStatus({ show: true, type: 'info', message: `Sincronizando ${parsedEventos.length} eventos encontrados...` });
+                                const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
+                                await loadData();
+                                setActiveTab('list');
+                                setImportStatus({
+                                  show: true,
+                                  type: result.success ? 'success' : 'error',
+                                  message: result.success ? `Sincronizacao concluida! ${parsedEventos.length} eventos processados.` : 'Falha na sincronizacao',
+                                  details: result.success ? [
+                                    `Adicionados: ${result.eventos_adicionados}`,
+                                    result.eventos_atualizados > 0 ? `Atualizados: ${result.eventos_atualizados}` : '',
+                                    result.eventos_ignorados > 0 ? `Ignorados (duplicatas): ${result.eventos_ignorados}` : '',
+                                  ].filter(Boolean) : result.errors.slice(0, 3)
+                                });
+                              } catch (error) {
+                                const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+                                setImportStatus({ show: true, type: 'error', message: 'Erro ao sincronizar', details: [msg, 'Verifique se o link esta correto e se o calendario e publico.'] });
+                              }
+                            }}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-sm"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                            Sincronizar Agora (Google/Apple para Priceus)
+                          </button>
+                        )}
+
+                        {configEdit.last_calendar_sync && (
+                          <p className="text-[11px] text-gray-400 text-center pt-1">
+                            Ultima sincronizacao: {new Date(configEdit.last_calendar_sync).toLocaleString('pt-BR')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aba 3: Importacao Manual por Arquivo */}
+                  {integrationTab === 'upload' && (
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center shrink-0">
+                          <FileUp className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm font-sans">Upload Manual de Arquivo</p>
+                            {!planLimits.canImportCalendar && (
+                              <span className="bg-gradient-to-r from-green-600 to-teal-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 font-sans">Premium</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.45)] mt-0.5 leading-relaxed font-sans">
+                            Selecione um arquivo CSV ou ICS do seu computador para importar eventos em lote.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleImportClick}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-xl hover:bg-gray-100 dark:hover:bg-[rgba(255,255,255,0.04)] transition-colors font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] text-sm font-sans"
+                        >
+                          <Upload className="w-4 h-4" />
+                          {planLimits.canImportCalendar ? 'Selecionar arquivo para importar' : 'Upgrade para Importar Calendarios'}
+                        </button>
+
+                        <details className="text-xs text-gray-500">
+                          <summary className="cursor-pointer font-semibold text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:text-gray-800 dark:hover:text-white select-none">
+                            Ver formato CSV esperado
+                          </summary>
+                          <div className="mt-2 p-3 bg-gray-50 dark:bg-[#07101f] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.07)] font-mono space-y-0.5 text-[11px]">
+                            <p>data,nome,tipo,cidade</p>
+                            <p>01/12/2025,Joao Silva,Casamento,Sao Paulo</p>
+                            <p>15/12/2025,Maria Santos,Ensaio,Rio de Janeiro</p>
+                            <p className="text-gray-400 font-sans mt-1">Data pode ser DD/MM/AAAA ou AAAA-MM-DD</p>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
+              {/* Historico de Importacoes (condicional) */}
               {planLimits.canImportCalendar && historicoImportacoes.length > 0 && (
-                <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-white dark:bg-transparent">
+                <div className="bg-white dark:bg-[rgba(255,255,255,0.02)] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] rounded-2xl p-5 mb-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <History className="w-5 h-5 text-gray-600 dark:text-[rgba(255,255,255,0.6)]" />
-                    <h3 className="font-medium text-gray-900 dark:text-white">Histórico de Importações</h3>
+                    <h3 className="font-medium text-gray-900 dark:text-white">Historico de Importacoes</h3>
                   </div>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {historicoImportacoes.map((hist) => (
                       <div key={hist.id} className="flex items-start justify-between p-3 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)] rounded-lg border border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
                         <div className="flex-1">
                           <p className="font-medium text-gray-900 dark:text-white text-sm">{hist.nome_arquivo}</p>
-                          <p className="text-xs text-gray-600 dark:text-[rgba(255,255,255,0.5)] mt-1">
-                            {new Date(hist.created_at).toLocaleString('pt-BR')}
-                          </p>
-                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
-                            <span>✓ {hist.eventos_adicionados} adicionados</span>
-                            {hist.eventos_atualizados > 0 && <span>↻ {hist.eventos_atualizados} atualizados</span>}
-                            {hist.eventos_ignorados > 0 && <span>- {hist.eventos_ignorados} ignorados</span>}
-                            {hist.eventos_removidos > 0 && <span>✗ {hist.eventos_removidos} removidos</span>}
+                          <p className="text-xs text-gray-500 mt-1">{new Date(hist.created_at).toLocaleString('pt-BR')}</p>
+                          <div className="flex gap-4 mt-2 text-xs">
+                            <span className="text-green-600 font-medium">Adicionados: {hist.eventos_adicionados}</span>
+                            <span className="text-blue-600 font-medium">Atualizados: {hist.eventos_atualizados}</span>
+                            <span className="text-gray-500 font-medium">Ignorados: {hist.eventos_ignorados}</span>
                           </div>
                         </div>
                         <button
-                          onClick={() => handleRollback(hist.id)}
-                          className="ml-3 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Desfazer importação"
+                          onClick={() => handleRollbackImport(hist.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold transition-colors"
                         >
+                          <Trash2 className="w-3.5 h-3.5" />
                           Desfazer
                         </button>
                       </div>
@@ -1440,149 +1793,25 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 </div>
               )}
 
-              <div className="border border-red-200 dark:border-[rgba(239,68,68,0.2)] rounded-lg p-4 bg-red-50 dark:bg-[rgba(239,68,68,0.05)]">
+              {/* Limpar Eventos */}
+              <div className="border border-red-200 dark:border-[rgba(239,68,68,0.2)] rounded-2xl p-5 bg-red-50/30 dark:bg-[rgba(239,68,68,0.02)] mb-4">
                 <div className="flex items-start gap-3 mb-3">
                   <Trash className="w-5 h-5 text-red-600 mt-0.5" />
                   <div className="flex-1">
                     <h3 className="font-medium text-red-900 dark:text-red-400 mb-1">Limpar Eventos</h3>
                     <p className="text-sm text-red-700 dark:text-red-300 opacity-80 mb-3">
-                      Remove eventos do calendário. Esta ação é irreversível!
+                      Remove eventos do calendario. Esta acao e irreversivel!
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowClearConfirm(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium text-sm transition-colors shadow-sm"
                 >
-                  <Trash className="w-5 h-5" />
+                  <Trash className="w-4 h-4" />
+                  Excluir Todos os Eventos
                 </button>
               </div>
-
-              {/* Sincronizacao via Link ICS (Google Calendar / Apple Calendar) */}
-              <div className="border border-blue-200 dark:border-[rgba(59,130,246,0.2)] rounded-lg p-4 bg-blue-50 dark:bg-[rgba(59,130,246,0.05)]">
-                <div className="flex items-start gap-3 mb-4">
-                  <RefreshCw className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-blue-900 dark:text-blue-300">Sincronizacao via Link de Calendario</h3>
-                      <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Beta</span>
-                    </div>
-                    <p className="text-sm text-blue-700 dark:text-blue-200 opacity-80">
-                      Importe eventos do Google Calendar ou Apple Calendar usando um link ICS publico.
-                    </p>
-                  </div>
-                </div>
-
-                <details className="mb-4 bg-white dark:bg-[#07101f] rounded-lg border border-blue-200 dark:border-[rgba(59,130,246,0.2)]">
-                  <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.1)] rounded-lg">
-                    Como obter o link do Google Calendar
-                  </summary>
-                  <div className="px-4 pb-4 space-y-2 text-sm text-gray-700 dark:text-[rgba(255,255,255,0.7)]">
-                    <p className="font-medium text-gray-900 dark:text-white mt-3">Passo a passo:</p>
-                    <ol className="list-decimal pl-5 space-y-1 text-sm">
-                      <li>Abra o <strong className="dark:text-white">Google Calendar</strong> no computador</li>
-                      <li>No menu lateral, encontre a agenda desejada</li>
-                      <li>Clique nos <strong className="dark:text-white">3 pontos</strong> ao lado do nome da agenda</li>
-                      <li>Selecione <strong className="dark:text-white">"Configuracoes e compartilhamento"</strong></li>
-                      <li>Role ate <strong className="dark:text-white">"Endereco de calendario em formato iCal"</strong></li>
-                      <li>Copie o link <strong className="dark:text-white">(.ics)</strong></li>
-                      <li>Cole no campo abaixo e clique em Sincronizar</li>
-                    </ol>
-                    <p className="text-xs text-gray-500 dark:text-yellow-200 mt-2 bg-yellow-50 dark:bg-[rgba(234,179,8,0.1)] p-2 rounded border border-yellow-200 dark:border-[rgba(234,179,8,0.2)]">
-                      O link funciona somente se a agenda for publica ou se usar o "Endereco secreto em iCal".
-                    </p>
-                  </div>
-                </details>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
-                      URL do Calendario ICS
-                    </label>
-                    <input
-                      type="url"
-                      value={configEdit.calendar_ics_url}
-                      onChange={(e) => setConfigEdit({ ...configEdit, calendar_ics_url: e.target.value })}
-                      placeholder="https://calendar.google.com/calendar/ical/seu-calendario/basic.ics"
-                      className="w-full px-3 py-2 border border-blue-300 dark:border-[rgba(59,130,246,0.3)] rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white dark:bg-[#07101f] dark:text-white"
-                    />
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                      Cole aqui o link .ics do Google Calendar, Apple Calendar ou outro servico compativel.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">Sincronizacao automatica</p>
-                      <p className="text-xs text-blue-600">Sincroniza ao abrir a agenda</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={configEdit.auto_sync_enabled}
-                        onChange={(e) => setConfigEdit({ ...configEdit, auto_sync_enabled: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  {configEdit.calendar_ics_url && (
-                    <button
-                      type="button"
-                      onClick={async (e) => {
-                        e.preventDefault();
-                        if (!configEdit.calendar_ics_url) return;
-                        setImportStatus({ show: true, type: 'info', message: 'Buscando eventos do calendario...' });
-                        try {
-                          const { data, error } = await supabase.functions.invoke('fetch-calendar', {
-                            body: { url: configEdit.calendar_ics_url }
-                          });
-                          if (error) throw error;
-                          if (!data || !data.text) throw new Error('Não foi possível obter o calendário');
-                          const text = data.text;
-                          if (!text.includes('BEGIN:VCALENDAR')) {
-                            throw new Error('O link nao parece ser um calendario ICS valido');
-                          }
-                          const parsedEventos = parseICS(text);
-                          if (parsedEventos.length === 0) {
-                            setImportStatus({ show: true, type: 'info', message: 'Nenhum evento encontrado no calendario', details: ['O calendario pode estar vazio ou em formato nao reconhecido.'] });
-                            return;
-                          }
-                          setImportStatus({ show: true, type: 'info', message: `Sincronizando ${parsedEventos.length} eventos encontrados...` });
-                          const result = await importarEventosInteligente(userId, 'google-calendar-sync', parsedEventos, 'mesclar_atualizar');
-                          await loadData();
-                          setActiveTab('list');
-                          setImportStatus({
-                            show: true,
-                            type: result.success ? 'success' : 'error',
-                            message: result.success ? `Sincronizacao concluida! ${parsedEventos.length} eventos processados.` : 'Falha na sincronizacao',
-                            details: result.success ? [
-                              `Adicionados: ${result.eventos_adicionados}`,
-                              result.eventos_atualizados > 0 ? `Atualizados: ${result.eventos_atualizados}` : '',
-                              result.eventos_ignorados > 0 ? `Ignorados (duplicatas): ${result.eventos_ignorados}` : '',
-                            ].filter(Boolean) : result.errors.slice(0, 3)
-                          });
-                        } catch (error) {
-                          const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-                          setImportStatus({ show: true, type: 'error', message: 'Erro ao sincronizar', details: [msg, 'Verifique se o link esta correto e se o calendario e publico.'] });
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Sincronizar Agora
-                    </button>
-                  )}
-
-                  {configEdit.last_calendar_sync && (
-                    <p className="text-xs text-blue-600 text-center">
-                      Ultima sincronizacao: {new Date(configEdit.last_calendar_sync).toLocaleString('pt-BR')}
-                    </p>
-                  )}
-                </div>
-              </div>
-
 
               {/* Bloqueio de Feriados */}
               <div className="border border-gray-200 dark:border-[rgba(255,255,255,0.05)] rounded-lg p-4 bg-gray-50 dark:bg-[rgba(255,255,255,0.02)]">

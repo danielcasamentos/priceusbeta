@@ -257,6 +257,8 @@ export function QuoteModerno(props: QuoteModernoProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
             {upsellSection}
 
             <div className="bg-gradient-to-r from-cyan-50 to-purple-50 rounded-xl p-6 text-center border-2 border-cyan-200">

@@ -43,8 +43,6 @@ export function QuotePromocional(props: QuotePromocionalProps) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
-    breakdown,
-    upsellSection,
     upsellProdutos = [],
   } = props;
 
