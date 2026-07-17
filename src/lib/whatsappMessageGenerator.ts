@@ -84,6 +84,9 @@ export interface WhatsAppMessageOptions {
   // Adicionais de upsell
   upsellProducts?: Product[];
 
+  // Produtos de Brindes (template separado)
+  brindesProducts?: Product[];
+
   // Forma de pagamento
   paymentMethod?: PaymentMethod;
   lastInstallmentDate?: string; // YYYY-MM-DD
@@ -146,7 +149,8 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     products,
     selectedProducts,
     template.ocultar_valores_intermediarios || false,
-    options.upsellProducts
+    options.upsellProducts,
+    options.brindesProducts
   );
   console.log('DEBUG_WA: Generated productsText:', productsText);
 
@@ -372,7 +376,8 @@ function buildProductsList(
   products: any[],
   selectedProducts: Record<string, number>,
   hideValues: boolean,
-  upsellProducts?: Product[]
+  upsellProducts?: Product[],
+  brindesProducts?: Product[]
 ): string {
   return products
     .filter((p) => selectedProducts[p.id] && selectedProducts[p.id] > 0)
@@ -390,9 +395,10 @@ function buildProductsList(
       // Adicionar brindes vinculados na mensagem
       if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados) && p.brindes_vinculados.length > 0) {
         p.brindes_vinculados.forEach((brindeId: string) => {
-          const brinde = (upsellProducts || []).find((u) => u.id === brindeId);
+          const brinde = (brindesProducts || []).find((u) => u.id === brindeId);
           if (brinde) {
-            productLine += `\n   🎁 *Brinde Incluso:* ${brinde.nome}`;
+            const titulo = (p as any).brindes_titulo_personalizado || 'Brinde Incluso';
+            productLine += `\n   🎁 *${titulo}:* ${brinde.nome}`;
           }
         });
       }

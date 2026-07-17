@@ -29,6 +29,7 @@ interface QuoteOfertaProps {
   fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
   upsellProdutos?: any[];
+  brindesProdutos?: any[];
 }
 
 export function QuoteOferta(props: QuoteOfertaProps) {
@@ -42,6 +43,7 @@ export function QuoteOferta(props: QuoteOfertaProps) {
     firstProductRef,
     totalSectionRef,
     upsellProdutos = [],
+    brindesProdutos = [],
   } = props;
 
   return (
@@ -539,12 +541,13 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
                             <span style={{ fontSize: 10, fontWeight: 800, color: '#ea580c', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
-                              🎁 Brinde Incluso:
+                              🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
                             </span>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                               {produto.brindes_vinculados.map((brindeId: string) => {
-                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                const brinde = (brindesProdutos || []).find((u: any) => u.id === brindeId);
                                 if (!brinde) return null;
+                                const mostrarValores = produto.brindes_mostrar_valores ?? true;
                                 return (
                                   <div
                                     key={brindeId}
@@ -570,9 +573,11 @@ export function QuoteOferta(props: QuoteOfertaProps) {
                                         {brinde.nome}
                                       </div>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                        <span style={{ fontSize: 9, color: '#9ca3af', textDecoration: 'line-through' }}>
-                                          {formatCurrency(brinde.valor)}
-                                        </span>
+                                        {mostrarValores && brinde.valor > 0 && (
+                                          <span style={{ fontSize: 9, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                            {formatCurrency(brinde.valor)}
+                                          </span>
+                                        )}
                                         <span style={{ fontSize: 9, fontWeight: 700, color: '#ea580c', background: '#ffedd5', padding: '1px 4px', borderRadius: 2 }}>
                                           Grátis
                                         </span>

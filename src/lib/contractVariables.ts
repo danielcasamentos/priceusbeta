@@ -295,11 +295,13 @@ export function replaceContractVariables(
         }
         
         if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados) && p.brindes_vinculados.length > 0) {
-          const upsellList = leadData.upsell_produtos || [];
+          // Look in brindes_produtos first, then fall back to upsell_produtos
+          const brindesList = leadData.brindes_produtos || leadData.upsell_produtos || [];
+          const tituloSecao = p.brindes_titulo_personalizado || 'Brinde Incluso';
           p.brindes_vinculados.forEach((brindeId: string) => {
-            const brinde = upsellList.find((u: any) => (u.produto_id || u.id) === brindeId);
+            const brinde = brindesList.find((u: any) => (u.produto_id || u.id) === brindeId);
             const brindeNome = brinde ? (brinde.nome || brinde.nome_produto) : 'Brinde';
-            line += `\n  🎁 Brinde Incluso: ${removeEmojis(brindeNome)}`;
+            line += `\n  🎁 ${tituloSecao}: ${removeEmojis(brindeNome)}`;
           });
         }
         

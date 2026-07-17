@@ -187,6 +187,7 @@ export function QuotePage() {
 
   // 🎁 Upselling
   const [upsellProdutos, setUpsellProdutos] = useState<Produto[]>([]);
+  const [brindesProdutos, setBrindesProdutos] = useState<Produto[]>([]);
   const [selectedUpsellIds, setSelectedUpsellIds] = useState<Set<string>>(new Set());
   const upsellScrollRef = useRef<HTMLDivElement>(null);
   const [upsellCanScrollRight, setUpsellCanScrollRight] = useState(false);
@@ -982,11 +983,32 @@ export function QuotePage() {
         }
       }
 
+      // Buscar produtos de brindes
+      let brindesData: any[] = [];
+      if (
+        templateData.brindes_ativo &&
+        templateData.brindes_template_id &&
+        Array.isArray(templateData.brindes_produtos_ids) &&
+        templateData.brindes_produtos_ids.length > 0
+      ) {
+        try {
+          const { data: fetchedBrindes } = await supabase
+            .from('produtos')
+            .select('*')
+            .in('id', templateData.brindes_produtos_ids)
+            .order('ordem');
+          brindesData = fetchedBrindes || [];
+        } catch (e) {
+          console.warn('[QuotePage] ⚠️ Erro ao carregar produtos brindes:', e);
+        }
+      }
+
       const uniqueProviderIds = Array.from(
         new Set(
           [
             ...allProductList.map(p => p.provedor_id),
-            ...upsellData.map(p => p.provedor_id)
+            ...upsellData.map(p => p.provedor_id),
+            ...brindesData.map(p => p.provedor_id)
           ].filter(id => id && id !== templateData.user_id)
         )
       );
@@ -1029,6 +1051,17 @@ export function QuotePage() {
         return p;
       });
 
+      const processedBrindes = brindesData.map((p: any) => {
+        if (templateData.collab_ativo && templateData.exibir_nome_parceiro && p.provedor_id && p.provedor_id !== templateData.user_id) {
+          const partner = profileMap[p.provedor_id];
+          const name = partner ? (partner.nome_profissional || partner.nome_admin || partner.nome) : '';
+          if (name) {
+            return { ...p, nome: `${p.nome} (🤝 Parceria: ${name})` };
+          }
+        }
+        return p;
+      });
+
       // Deduplicação do upsell
       const mainNames = processedProdutos.map((p: any) => p.nome.toLowerCase().trim());
       const filteredUpsell = processedUpsell.filter((p: any) => !mainNames.includes(p.nome.toLowerCase().trim()));
@@ -1039,6 +1072,7 @@ export function QuotePage() {
       setFormasPagamento(pagamentosData || []);
       setCamposExtras(camposData || []);
       setUpsellProdutos(filteredUpsell);
+      setBrindesProdutos(processedBrindes);
       setRetryCount(0);
 
       // Carregar configuração da agenda para verificação de disponibilidade
@@ -2471,6 +2505,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2519,6 +2554,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2566,6 +2602,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2613,6 +2650,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2662,6 +2700,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2789,6 +2828,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -2837,6 +2877,7 @@ export function QuotePage() {
       breakdown: priceBreakdown,
       upsellSection: renderUpsellSection(),
       upsellProdutos,
+      brindesProdutos,
     };
     return wrapWithFonts(
       <>
@@ -3712,12 +3753,13 @@ export function QuotePage() {
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div className="mt-3.5 space-y-2 border-t border-dashed border-gray-250 dark:border-white/10 pt-3">
                             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
-                              🎁 Brinde(s) Incluso(s):
+                              🎁 {produto.brindes_titulo_personalizado || 'Brinde(s) Incluso(s)'}:
                             </span>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
                               {produto.brindes_vinculados.map((brindeId: string) => {
-                                const brinde = upsellProdutos.find(u => u.id === brindeId);
+                                const brinde = brindesProdutos.find(u => u.id === brindeId);
                                 if (!brinde) return null;
+                                const mostrarValores = produto.brindes_mostrar_valores ?? true;
                                 return (
                                   <div
                                     key={brindeId}
@@ -3735,9 +3777,11 @@ export function QuotePage() {
                                         {brinde.nome}
                                       </div>
                                       <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-[10px] text-gray-400 line-through">
-                                          {formatCurrency(brinde.valor)}
-                                        </span>
+                                        {mostrarValores && brinde.valor > 0 && (
+                                          <span className="text-[10px] text-gray-400 line-through">
+                                            {formatCurrency(brinde.valor)}
+                                          </span>
+                                        )}
                                         <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-350 px-1.5 py-0.5 rounded font-bold">
                                           Grátis
                                         </span>

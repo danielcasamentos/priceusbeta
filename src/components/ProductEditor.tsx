@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2 } from 'lucide-react';
+import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2, Gift } from 'lucide-react';
 import { ImageUploadService } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
@@ -29,6 +29,8 @@ interface Product {
   duracao_minutos?: number | null;
   keywords_upsell?: string | null;
   brindes_vinculados?: string[] | null;
+  brindes_titulo_personalizado?: string;
+  brindes_mostrar_valores?: boolean;
 }
 
 interface ProductEditorProps {
@@ -41,6 +43,7 @@ interface ProductEditorProps {
   onProductSaved?: (productId: string) => void;
   allProducts?: Product[];
   upsellProdutosIds?: string[];
+  brindesProducts?: any[];
 }
 
 /**
@@ -64,7 +67,8 @@ export function ProductEditor({
   templateId, 
   onProductSaved,
   allProducts = [],
-  upsellProdutosIds = []
+  upsellProdutosIds = [],
+  brindesProducts = []
 }: ProductEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -210,16 +214,25 @@ export function ProductEditor({
 
     let successCount = 0;
     try {
-      let currentUrls = [
-        product.imagem_url,
-        ...(product.imagens || [])
-      ].filter(Boolean) as string[];
+      const currentUrls = [
+        product.imagem_url || null,
+        ...(product.imagens && Array.isArray(product.imagens)
+          ? [
+              product.imagens[0] || null,
+              product.imagens[1] || null,
+              product.imagens[2] || null,
+              product.imagens[3] || null,
+            ]
+          : [null, null, null, null])
+      ];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const targetIndex = currentUrls.length;
+        
+        // Encontra o primeiro slot livre
+        const targetIndex = currentUrls.findIndex(url => !url);
 
-        if (targetIndex >= 5) {
+        if (targetIndex === -1 || targetIndex >= 5) {
           setError('Limite máximo de 5 imagens atingido');
           break;
         }
@@ -250,11 +263,16 @@ export function ProductEditor({
         });
 
         if (result.success && result.url) {
-          currentUrls.push(result.url);
+          currentUrls[targetIndex] = result.url;
           successCount++;
 
           const finalImagemUrl = currentUrls[0] || '';
-          const finalImagensArray = currentUrls.slice(1);
+          const finalImagensArray = [
+            currentUrls[1] || '',
+            currentUrls[2] || '',
+            currentUrls[3] || '',
+            currentUrls[4] || ''
+          ];
 
           onChange('imagem_url', finalImagemUrl);
           onChange('imagens', finalImagensArray);
@@ -345,25 +363,90 @@ export function ProductEditor({
     }
   };
 
+  // ── Drag & Drop Swap para Slots de Fotos ──────────────────────────────────
+  const [draggedSlotIndex, setDraggedSlotIndex] = useState<number | null>(null);
+
+  const handleSlotDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedSlotIndex(index);
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleSlotDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleSlotDropSwap = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const sourceIndexStr = e.dataTransfer.getData('text/plain');
+    const sourceIndex = parseInt(sourceIndexStr, 10);
+    
+    if (isNaN(sourceIndex) || sourceIndex === targetIndex) return;
+
+    const currentUrls = [
+      product.imagem_url || null,
+      ...(product.imagens && Array.isArray(product.imagens)
+        ? [
+            product.imagens[0] || null,
+            product.imagens[1] || null,
+            product.imagens[2] || null,
+            product.imagens[3] || null,
+          ]
+        : [null, null, null, null])
+    ];
+
+    const temp = currentUrls[sourceIndex];
+    currentUrls[sourceIndex] = currentUrls[targetIndex];
+    currentUrls[targetIndex] = temp;
+
+    const finalImagemUrl = currentUrls[0] || '';
+    const finalImagensArray = [
+      currentUrls[1] || '',
+      currentUrls[2] || '',
+      currentUrls[3] || '',
+      currentUrls[4] || ''
+    ];
+
+    onChange('imagem_url', finalImagemUrl);
+    onChange('imagens', finalImagensArray);
+
+    if (product.id) {
+      await saveImageToDatabase(finalImagemUrl, finalImagensArray, product.id);
+    }
+    setImageKey(Date.now());
+    setDraggedSlotIndex(null);
+  };
+
   /**
-   * Reorganizar/reordenar as imagens
+   * Reorganizar/reordenar as imagens via swap
    */
   const handleMoveImage = async (index: number, direction: 'left' | 'right') => {
-    const imagensAtualizadas = [
-      product.imagem_url,
-      ...(product.imagens || [])
-    ].filter(Boolean) as string[];
+    const currentUrls = [
+      product.imagem_url || null,
+      ...(product.imagens && Array.isArray(product.imagens)
+        ? [
+            product.imagens[0] || null,
+            product.imagens[1] || null,
+            product.imagens[2] || null,
+            product.imagens[3] || null,
+          ]
+        : [null, null, null, null])
+    ];
 
     const targetIndex = direction === 'left' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= imagensAtualizadas.length) return;
+    if (targetIndex < 0 || targetIndex >= 5) return;
 
     // Swap
-    const temp = imagensAtualizadas[index];
-    imagensAtualizadas[index] = imagensAtualizadas[targetIndex];
-    imagensAtualizadas[targetIndex] = temp;
+    const temp = currentUrls[index];
+    currentUrls[index] = currentUrls[targetIndex];
+    currentUrls[targetIndex] = temp;
 
-    const finalImagemUrl = imagensAtualizadas[0] || '';
-    const finalImagensArray = imagensAtualizadas.slice(1);
+    const finalImagemUrl = currentUrls[0] || '';
+    const finalImagensArray = [
+      currentUrls[1] || '',
+      currentUrls[2] || '',
+      currentUrls[3] || '',
+      currentUrls[4] || ''
+    ];
 
     onChange('imagem_url', finalImagemUrl);
     onChange('imagens', finalImagensArray);
@@ -375,33 +458,49 @@ export function ProductEditor({
   };
 
   /**
-   * Remove uma imagem por índice (principal ou da galeria)
+   * Remove uma imagem por índice (sem deslocar as outras)
    */
   const handleRemoveImageAtIndex = async (index: number) => {
     if (!confirm('⚠️ Deseja remover esta imagem?')) return;
 
     setError(null);
     try {
-      const imagensAtualizadas = [
-        product.imagem_url,
-        ...(product.imagens || [])
-      ].filter(Boolean) as string[];
+      const currentUrls = [
+        product.imagem_url || null,
+        ...(product.imagens && Array.isArray(product.imagens)
+          ? [
+              product.imagens[0] || null,
+              product.imagens[1] || null,
+              product.imagens[2] || null,
+              product.imagens[3] || null,
+            ]
+          : [null, null, null, null])
+      ];
 
-      const imageUrlToRemove = imagensAtualizadas[index];
+      const imageUrlToRemove = currentUrls[index];
+      if (!imageUrlToRemove) return;
 
       // Deletar do Storage
       const uploadService = new ImageUploadService();
       await uploadService.deleteImage(imageUrlToRemove);
 
-      // Remover do array
-      imagensAtualizadas.splice(index, 1);
+      // Limpar o slot apenas
+      currentUrls[index] = null;
 
-      const finalImagemUrl = imagensAtualizadas[0] || '';
-      const finalImagensArray = imagensAtualizadas.slice(1);
+      const finalImagemUrl = currentUrls[0] || '';
+      const finalImagensArray = [
+        currentUrls[1] || '',
+        currentUrls[2] || '',
+        currentUrls[3] || '',
+        currentUrls[4] || ''
+      ];
 
-      onChange('imagem_url', finalImagemUrl || undefined);
+      onChange('imagem_url', finalImagemUrl);
       onChange('imagens', finalImagensArray);
-      if (imagensAtualizadas.length === 0) {
+
+      // Ocultar se não sobrar nenhuma
+      const hasAny = currentUrls.some(u => !!u);
+      if (!hasAny) {
         onChange('mostrar_imagem', false);
       }
 
@@ -661,21 +760,39 @@ export function ProductEditor({
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               {Array.from({ length: 5 }).map((_, idx) => {
                 const currentImages = [
-                  product.imagem_url,
-                  ...(product.imagens || [])
-                ].filter(Boolean) as string[];
+                  product.imagem_url || null,
+                  ...(product.imagens && Array.isArray(product.imagens)
+                    ? [
+                        product.imagens[0] || null,
+                        product.imagens[1] || null,
+                        product.imagens[2] || null,
+                        product.imagens[3] || null,
+                      ]
+                    : [null, null, null, null])
+                ];
                 const imgUrl = currentImages[idx];
                 const isUploading = uploadingSlots.includes(idx);
                 const progressPercent = slotProgress[idx] || 0;
 
                 return (
-                  <div key={idx} className="relative aspect-square rounded-xl bg-white dark:bg-slate-900 border border-gray-200 overflow-hidden group shadow-sm flex flex-col items-center justify-center">
+                  <div 
+                    key={idx} 
+                    draggable={!!imgUrl && !uploading && !saving}
+                    onDragStart={(e) => handleSlotDragStart(e, idx)}
+                    onDragOver={handleSlotDragOver}
+                    onDrop={(e) => handleSlotDropSwap(e, idx)}
+                    className={`relative aspect-square rounded-xl bg-white dark:bg-slate-900 border overflow-hidden group shadow-sm flex flex-col items-center justify-center transition-all ${
+                      draggedSlotIndex === idx
+                        ? 'opacity-40 scale-95 border-blue-500 border-2 bg-blue-50/10'
+                        : 'border-gray-200 hover:border-gray-300'
+                    } ${imgUrl && !(uploading || saving) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  >
                     {imgUrl ? (
                       <>
                         <ImageWithFallback
                           src={imgUrl.includes('?') ? `${imgUrl}&v=${imageKey}` : `${imgUrl}?v=${imageKey}`}
                           alt={`${product.nome} - Foto ${idx + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover select-none"
                           fallbackClassName="w-full h-full"
                         />
                         
@@ -708,7 +825,7 @@ export function ProductEditor({
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleMoveImage(idx, 'right'); }}
-                            disabled={idx === currentImages.length - 1}
+                            disabled={idx === 4}
                             className="p-1 text-gray-300 hover:text-white disabled:opacity-30 disabled:hover:text-gray-300 transition-colors"
                             title="Mover para direita"
                           >
@@ -932,50 +1049,82 @@ export function ProductEditor({
               🎁 Vincular Brindes Gratuitos
             </h4>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Selecione quais produtos de upsell do template serão oferecidos de graça (brinde) neste pacote.
+              Selecione quais brindes cadastrados na aba &ldquo;Brindes&rdquo; serão oferecidos de graça neste pacote.
             </p>
           </div>
           {(() => {
-            const availableUpsells = allProducts.filter(p => p.id !== product.id && upsellProdutosIds.includes(p.id || ''));
-            if (availableUpsells.length === 0) {
+            if (brindesProducts.length === 0) {
               return (
                 <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-                  Nenhum produto de upsell configurado neste template para vincular como brinde. (Vá na aba "Upsell" para configurar).
+                  Nenhum brinde configurado neste template para vincular. (Vá na aba "Brindes" para configurar).
                 </p>
               );
             }
             return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableUpsells.map(u => {
-                  const brindesArray = Array.isArray(product.brindes_vinculados) ? product.brindes_vinculados : [];
-                  const isChecked = brindesArray.includes(u.id || '');
-                  return (
-                    <label
-                      key={u.id}
-                      className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer text-xs transition-all hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 ${
-                        isChecked 
-                          ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/10 font-semibold text-emerald-900 dark:text-emerald-300' 
-                          : 'border-gray-250 dark:border-white/5 bg-white dark:bg-white/3'
-                      }`}
-                    >
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {brindesProducts.map(u => {
+                    const brindesArray = Array.isArray(product.brindes_vinculados) ? product.brindes_vinculados : [];
+                    const isChecked = brindesArray.includes(u.id || '');
+                    return (
+                      <label
+                        key={u.id}
+                        className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer text-xs transition-all hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 ${
+                          isChecked 
+                            ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/10 font-semibold text-emerald-900 dark:text-emerald-300' 
+                            : 'border-gray-250 dark:border-white/5 bg-white dark:bg-white/3'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            let nextBrindes = [...brindesArray];
+                            if (isChecked) {
+                              nextBrindes = nextBrindes.filter(id => id !== u.id);
+                            } else {
+                              nextBrindes.push(u.id || '');
+                            }
+                            onChange('brindes_vinculados', nextBrindes);
+                          }}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        />
+                        <span className="truncate">{u.nome}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {/* Opções extras quando há brindes selecionados */}
+                {Array.isArray(product.brindes_vinculados) && product.brindes_vinculados.length > 0 && (
+                  <div className="border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-emerald-800 dark:text-emerald-400 mb-1">
+                        Título Personalizado da Seção
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          let nextBrindes = [...brindesArray];
-                          if (isChecked) {
-                            nextBrindes = nextBrindes.filter(id => id !== u.id);
-                          } else {
-                            nextBrindes.push(u.id || '');
-                          }
-                          onChange('brindes_vinculados', nextBrindes);
-                        }}
-                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        type="text"
+                        value={product.brindes_titulo_personalizado || 'Brindes Gratuitos'}
+                        onChange={(e) => onChange('brindes_titulo_personalizado', e.target.value)}
+                        className="w-full px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Ex: Mimos Inclusos, Bônus..."
                       />
-                      <span className="truncate">{u.nome}</span>
-                    </label>
-                  );
-                })}
+                    </div>
+                    <div className="flex items-center">
+                      <label className="flex items-center gap-2 cursor-pointer mt-4">
+                        <input
+                          type="checkbox"
+                          checked={product.brindes_mostrar_valores ?? true}
+                          onChange={(e) => onChange('brindes_mostrar_valores', e.target.checked)}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                        />
+                        <span className="text-xs text-gray-700 dark:text-gray-300">
+                          Exibir valor original riscado (~~R$ 150~~ Grátis)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}

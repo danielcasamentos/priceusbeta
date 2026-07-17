@@ -36,3 +36,6 @@ env_prod_backup.txt
 supabase/.temp/
 # Local Netlify folder
 .netlify
+
+# Graphify artifacts
+.graphify/

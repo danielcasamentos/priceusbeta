@@ -29,6 +29,17 @@ interface AgendaManagerProps {
   userId: string;
 }
 
+const getDuracaoMinutos = (inicio?: string | null, fim?: string | null): number | null => {
+  if (!inicio || !fim) return null;
+  const [h1, m1] = inicio.split(':').map(Number);
+  const [h2, m2] = fim.split(':').map(Number);
+  if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return null;
+  const min1 = h1 * 60 + m1;
+  const min2 = h2 * 60 + m2;
+  const diff = min2 - min1;
+  return diff >= 0 ? diff : diff + 1440;
+};
+
 export function AgendaManager({ userId }: AgendaManagerProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [eventos, setEventos] = useState<EventoAgenda[]>([]);
@@ -55,6 +66,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
     cidade: '',
     status: 'pendente' as 'confirmado' | 'pendente' | 'concluido' | 'cancelado',
     observacoes: '',
+    horario_inicio: '',
+    horario_fim: '',
   });
 
   const [configEdit, setConfigEdit] = useState({
@@ -308,9 +321,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       return;
     }
 
+    const duracao = getDuracaoMinutos(novoEvento.horario_inicio, novoEvento.horario_fim);
     const result = await addEvento({
       user_id: userId,
       ...novoEvento,
+      duracao_minutos: duracao,
+      horario_inicio: novoEvento.horario_inicio || null,
+      horario_fim: novoEvento.horario_fim || null,
     });
 
     if (result) {
@@ -323,6 +340,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
         cidade: '',
         status: 'pendente',
         observacoes: '',
+        horario_inicio: '',
+        horario_fim: '',
       });
     } else {
       alert('Erro ao adicionar evento');
@@ -332,7 +351,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   const handleUpdateEvento = async () => {
     if (!editingEvento) return;
 
-    const result = await updateEvento(editingEvento.id, editingEvento);
+    const duracao = getDuracaoMinutos(editingEvento.horario_inicio, editingEvento.horario_fim);
+    const result = await updateEvento(editingEvento.id, {
+      ...editingEvento,
+      duracao_minutos: duracao,
+      horario_inicio: editingEvento.horario_inicio || null,
+      horario_fim: editingEvento.horario_fim || null,
+    });
 
     if (result) {
       await loadData();
@@ -889,7 +914,13 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   };
 
   const getEventosPorData = (data: string) => {
-    return eventos.filter((e) => e.data_evento === data && e.status !== 'cancelado');
+    return eventos
+      .filter((e) => e.data_evento === data && e.status !== 'cancelado')
+      .sort((a, b) => {
+        if (!a.horario_inicio) return 1;
+        if (!b.horario_inicio) return -1;
+        return a.horario_inicio.localeCompare(b.horario_inicio);
+      });
   };
 
   const getStatusColor = (status: string) => {
@@ -1186,6 +1217,10 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                     const eventosDoDia = eventos.filter(e => {
                       const dataLocal = new Date(e.data_evento + 'T00:00:00');
                       return dataLocal.toDateString() === date.toDateString();
+                    }).sort((a, b) => {
+                      if (!a.horario_inicio) return 1;
+                      if (!b.horario_inicio) return -1;
+                      return a.horario_inicio.localeCompare(b.horario_inicio);
                     });
 
                     return (
@@ -1221,7 +1256,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                                   'bg-gray-100 border-gray-200 text-gray-800'
                                }`}
                              >
-                               {evento.cliente_nome || 'Evento'}
+                               {evento.horario_inicio ? `⏰${evento.horario_inicio.substring(0, 5)} ` : ''}{evento.cliente_nome || 'Evento'}
                              </div>
                            ))}
                            {eventosDoDia.length > 3 && (
@@ -1316,6 +1351,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                           </span>
                         </div>
                         <p className="text-gray-900 dark:text-white font-medium">{evento.cliente_nome}</p>
+                        {(evento.horario_inicio || evento.horario_fim) && (
+                          <p className="text-sm font-semibold text-green-600 dark:text-green-400 mt-1">
+                            ⏰ {evento.horario_inicio ? evento.horario_inicio.substring(0, 5) : '--:--'} às {evento.horario_fim ? evento.horario_fim.substring(0, 5) : '--:--'}
+                          </p>
+                        )}
                         {evento.tipo_evento && (
                           <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Tipo: {evento.tipo_evento}</p>
                         )}
@@ -2261,6 +2301,11 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                                   {statusLabels[evento.status]}
                                 </span>
                               </div>
+                              {(evento.horario_inicio || evento.horario_fim) && (
+                                <p className="text-sm font-semibold text-green-600 dark:text-green-400 mb-1">
+                                  ⏰ {evento.horario_inicio ? evento.horario_inicio.substring(0, 5) : '--:--'} às {evento.horario_fim ? evento.horario_fim.substring(0, 5) : '--:--'}
+                                </p>
+                              )}
                               {evento.tipo_evento && (
                                 <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.6)]">Tipo: {evento.tipo_evento}</p>
                               )}
@@ -2370,6 +2415,31 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   min={new Date().toISOString().split('T')[0]}
                   className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
+                    Horário de Início
+                  </label>
+                  <input
+                    type="time"
+                    value={novoEvento.horario_inicio || ''}
+                    onChange={(e) => setNovoEvento({ ...novoEvento, horario_inicio: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
+                    Horário de Término
+                  </label>
+                  <input
+                    type="time"
+                    value={novoEvento.horario_fim || ''}
+                    onChange={(e) => setNovoEvento({ ...novoEvento, horario_fim: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                  />
+                </div>
               </div>
 
               <div>
@@ -2485,6 +2555,35 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                   }
                   className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
+                    Horário de Início
+                  </label>
+                  <input
+                    type="time"
+                    value={editingEvento.horario_inicio ? editingEvento.horario_inicio.substring(0, 5) : ''}
+                    onChange={(e) =>
+                      setEditingEvento({ ...editingEvento, horario_inicio: e.target.value || null })
+                    }
+                    className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
+                    Horário de Término
+                  </label>
+                  <input
+                    type="time"
+                    value={editingEvento.horario_fim ? editingEvento.horario_fim.substring(0, 5) : ''}
+                    onChange={(e) =>
+                      setEditingEvento({ ...editingEvento, horario_fim: e.target.value || null })
+                    }
+                    className="w-full px-3 py-2 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white border border-gray-300 dark:border-[rgba(255,255,255,0.1)] rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                  />
+                </div>
               </div>
 
               <div>

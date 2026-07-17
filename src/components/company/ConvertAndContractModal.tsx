@@ -69,8 +69,23 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
           console.error('Erro ao buscar cidade do lead:', cityLookupErr);
         }
 
+        const getDuracaoMinutos = (inicio?: string | null, fim?: string | null): number | null => {
+          if (!inicio || !fim) return null;
+          const [h1, m1] = inicio.split(':').map(Number);
+          const [h2, m2] = fim.split(':').map(Number);
+          if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return null;
+          const min1 = h1 * 60 + m1;
+          const min2 = h2 * 60 + m2;
+          const diff = min2 - min1;
+          return diff >= 0 ? diff : diff + 1440;
+        };
+
+        // Delete existing eventos_agenda entries for this lead to prevent duplicates
+        await supabase.from('eventos_agenda').delete().eq('lead_id', lead.id);
+
         for (const d of datasValidas) {
           try {
+            const duracao = getDuracaoMinutos(d.horario_inicio, d.horario_fim);
             await supabase.from('eventos_agenda').insert({
               user_id: userId,
               lead_id: lead.id,
@@ -80,7 +95,10 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
               cidade: resolvedCityName,
               status: 'confirmado',
               origem: 'lead_convertido',
-              observacoes: `Gerado via conversão e fechamento de contrato.`
+              observacoes: `Gerado via conversão e fechamento de contrato.`,
+              horario_inicio: d.horario_inicio || null,
+              horario_fim: d.horario_fim || null,
+              duracao_minutos: duracao
             });
           } catch (agErr) {
             console.error('Erro ao inserir data na agenda:', agErr);

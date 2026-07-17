@@ -31,6 +31,7 @@ interface QuotePromocionalProps {
   fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
   upsellProdutos?: any[];
+  brindesProdutos?: any[];
 }
 
 export function QuotePromocional(props: QuotePromocionalProps) {
@@ -44,6 +45,7 @@ export function QuotePromocional(props: QuotePromocionalProps) {
     firstProductRef,
     totalSectionRef,
     upsellProdutos = [],
+    brindesProdutos = [],
   } = props;
 
   const [timeLeft, setTimeLeft] = useState(900); // 15 minutos em segundos
@@ -548,12 +550,13 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #fee2e2' }}>
                             <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
-                              🎁 Brinde Incluso:
+                              🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
                             </span>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                               {produto.brindes_vinculados.map((brindeId: string) => {
-                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                const brinde = (brindesProdutos || []).find((u: any) => u.id === brindeId);
                                 if (!brinde) return null;
+                                const mostrarValores = produto.brindes_mostrar_valores ?? true;
                                 return (
                                   <div
                                     key={brindeId}
@@ -579,9 +582,11 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                                         {brinde.nome}
                                       </div>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                        <span style={{ fontSize: 9, color: '#9ca3af', textDecoration: 'line-through' }}>
-                                          {formatCurrency(brinde.valor)}
-                                        </span>
+                                        {mostrarValores && brinde.valor > 0 && (
+                                          <span style={{ fontSize: 9, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                            {formatCurrency(brinde.valor)}
+                                          </span>
+                                        )}
                                         <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '1px 4px', borderRadius: 2 }}>
                                           Grátis
                                         </span>

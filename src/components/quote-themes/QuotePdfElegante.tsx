@@ -29,6 +29,7 @@ interface QuotePdfEleganteProps {
   fieldErrors?: { email?: string; telefone?: string };
   upsellSection?: React.ReactNode;
   upsellProdutos?: any[];
+  brindesProdutos?: any[];
 }
 
 export function QuotePdfElegante(props: QuotePdfEleganteProps) {
@@ -42,6 +43,7 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
     firstProductRef,
     totalSectionRef,
     upsellProdutos = [],
+    brindesProdutos = [],
   } = props;
 
   const isPremium = profile?.status_assinatura === 'active';
@@ -406,12 +408,13 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div className="mt-3.5 space-y-2 border-t border-dashed border-neutral-200 pt-2.5">
                             <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
-                              🎁 Brinde Incluso:
+                              🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
                             </span>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
                               {produto.brindes_vinculados.map((brindeId: string) => {
-                                const brinde = (upsellProdutos || []).find((u: any) => u.id === brindeId);
+                                const brinde = (brindesProdutos || []).find((u: any) => u.id === brindeId);
                                 if (!brinde) return null;
+                                const mostrarValores = produto.brindes_mostrar_valores ?? true;
                                 return (
                                   <div
                                     key={brindeId}
@@ -429,9 +432,11 @@ export function QuotePdfElegante(props: QuotePdfEleganteProps) {
                                         {brinde.nome}
                                       </div>
                                       <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-[9px] text-neutral-400 line-through">
-                                          {formatCurrency(brinde.valor)}
-                                        </span>
+                                        {mostrarValores && brinde.valor > 0 && (
+                                          <span className="text-[9px] text-neutral-400 line-through">
+                                            {formatCurrency(brinde.valor)}
+                                          </span>
+                                        )}
                                         <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1 rounded">
                                           Grátis
                                         </span>

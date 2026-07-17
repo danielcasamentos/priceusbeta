@@ -45,6 +45,7 @@ interface ProductListProps {
   templateId?: string;
   onProductSaved?: (index: number, productId: string) => void;
   upsellProdutosIds?: string[];
+  brindesProducts?: any[];
 }
 
 const MAX_PRODUTOS = 15; // 💡 Limite por orçamento para controlar custos de armazenamento
@@ -59,7 +60,8 @@ export function ProductList({
   userId,
   templateId,
   onProductSaved,
-  upsellProdutosIds = []
+  upsellProdutosIds = [],
+  brindesProducts = []
 }: ProductListProps) {
   const [localProducts, setLocalProducts] = useState<Product[]>(products);
   const [isSaving, setIsSaving] = useState(false);

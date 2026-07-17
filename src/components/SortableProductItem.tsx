@@ -30,6 +30,7 @@ interface SortableProductItemProps {
   onProductSaved?: (productId: string) => void;
   allProducts?: Product[];
   upsellProdutosIds?: string[];
+  brindesProducts?: any[];
 }
 
 export function SortableProductItem({
@@ -42,7 +43,8 @@ export function SortableProductItem({
   templateId,
   onProductSaved,
   allProducts = [],
-  upsellProdutosIds = []
+  upsellProdutosIds = [],
+  brindesProducts = []
 }: SortableProductItemProps) {
   const {
     attributes,
@@ -89,6 +91,7 @@ export function SortableProductItem({
               onProductSaved={onProductSaved}
               allProducts={allProducts as any}
               upsellProdutosIds={upsellProdutosIds}
+              brindesProducts={brindesProducts}
             />
           </div>
         </div>

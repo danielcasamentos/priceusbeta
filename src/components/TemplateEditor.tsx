@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp, Users, Share2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp, Users, Share2, Gift } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkTemplateSlugAvailability } from '../lib/slugUtils';
 import { ProductList } from './ProductList';
 import { PaymentMethodEditor } from './PaymentMethodEditor';
@@ -86,6 +86,12 @@ interface Template {
   ativo?: boolean;
   mensagem_pausada?: string | null;
   estilo_mensagem_pausada?: string | null;
+  // Brindes
+  brindes_ativo?: boolean;
+  brindes_template_id?: string | null;
+  brindes_produtos_ids?: string[];
+  brindes_titulo?: string;
+  brindes_subtitulo?: string;
   // Deslocamento
   ocultar_taxa_deslocamento?: boolean;
   exibir_duracao_produto?: boolean;
@@ -112,7 +118,7 @@ const DIAS_SEMANA = [
 ];
 
 export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
-  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'upsell' | 'config' | 'collab'>('produtos');
+  const [activeTab, setActiveTab] = useState<'produtos' | 'pagamentos' | 'cupons' | 'campos' | 'whatsapp' | 'precos' | 'aparencia' | 'upsell' | 'brindes' | 'config' | 'collab'>('produtos');
   const [collabProfiles, setCollabProfiles] = useState<Record<string, { nome_profissional?: string; nome_admin?: string; nome?: string }>>({});
 
   const [template, setTemplate] = useState<Template | null>(null);
@@ -255,6 +261,11 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   const [loadingUpsellProducts, setLoadingUpsellProducts] = useState(false);
   const [upsellSaveStatus, setUpsellSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
+  // ── Brindes states ──────────────────────────────────────────────────────────
+  const [brindesSourceProducts, setBrindesSourceProducts] = useState<Produto[]>([]);
+  const [loadingBrindesProducts, setLoadingBrindesProducts] = useState(false);
+  const [brindesSaveStatus, setBrindesSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   // ── Estados locais para campos de texto livre (sem salvar a cada tecla) ──
   const [localTextoBtn, setLocalTextoBtn] = useState('');
   const [localDescricao, setLocalDescricao] = useState('');
@@ -336,6 +347,11 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       if (templateData?.upsell_template_id) {
         loadUpsellSourceProducts(templateData.upsell_template_id);
       }
+
+      // Se já há um template de brindes configurado, carregar seus produtos
+      if (templateData?.brindes_template_id) {
+        loadBrindesSourceProducts(templateData.brindes_template_id);
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -389,6 +405,53 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       setUpsellSaveStatus('error');
     }
     setTimeout(() => setUpsellSaveStatus('idle'), 2500);
+  };
+
+  // ── Brindes helpers ───────────────────────────────────────────────────────
+  const loadBrindesSourceProducts = async (sourceTemplateId: string) => {
+    setLoadingBrindesProducts(true);
+    try {
+      const { data } = await supabase
+        .from('produtos')
+        .select('id, nome, resumo, valor, imagem_url')
+        .eq('template_id', sourceTemplateId)
+        .order('ordem');
+      setBrindesSourceProducts((data || []) as Produto[]);
+    } catch (err) {
+      console.error('Erro ao carregar produtos do template de brindes:', err);
+    } finally {
+      setLoadingBrindesProducts(false);
+    }
+  };
+
+  const handleBrindesTemplateChange = async (newTemplateId: string) => {
+    const value = newTemplateId || null;
+    await handleUpdateTemplateConfig('brindes_template_id', value);
+    await handleUpdateTemplateConfig('brindes_produtos_ids', []);
+    setBrindesSourceProducts([]);
+    if (value) loadBrindesSourceProducts(value);
+  };
+
+  const handleToggleBrindesProduct = async (produtoId: string) => {
+    const current = template?.brindes_produtos_ids || [];
+    const updated = current.includes(produtoId)
+      ? current.filter(id => id !== produtoId)
+      : [...current, produtoId];
+    await handleUpdateTemplateConfig('brindes_produtos_ids', updated);
+  };
+
+  const handleSaveBrindesTexts = async () => {
+    setBrindesSaveStatus('saving');
+    try {
+      await supabase.from('templates').update({
+        brindes_titulo: template?.brindes_titulo || '',
+        brindes_subtitulo: template?.brindes_subtitulo || '',
+      }).eq('id', templateId);
+      setBrindesSaveStatus('saved');
+    } catch {
+      setBrindesSaveStatus('error');
+    }
+    setTimeout(() => setBrindesSaveStatus('idle'), 2500);
   };
 
   const calculateTotalValue = () => {
@@ -776,6 +839,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     { id: 'precos', label: 'Preços', icon: MapPin },
     { id: 'aparencia', label: 'Aparência', icon: Palette },
     { id: 'upsell', label: 'Upsell', icon: TrendingUp },
+    { id: 'brindes', label: 'Brindes', icon: Gift },
     { id: 'collab', label: 'Colaboração', icon: Users },
     { id: 'config', label: 'Configurações', icon: null },
   ];
@@ -851,6 +915,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
               templateId={templateId}
               onProductSaved={handleProductSaved}
               upsellProdutosIds={template?.upsell_produtos_ids || []}
+              brindesProducts={brindesSourceProducts.filter(p => (template?.brindes_produtos_ids || []).includes(p.id || ''))}
             />
           )}
 
@@ -1220,6 +1285,165 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </p>
                     </div>
                   )}
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'brindes' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold dark:text-white flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-purple-600" />
+                    Sistema de Brindes Gratuitos
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Vincule brindes aos seus pacotes de produtos/serviços. Os brindes aparecem no orçamento com valor original riscado e custo zerado.
+                  </p>
+                </div>
+                {/* Toggle ativar brindes */}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={template?.brindes_ativo || false}
+                    onChange={(e) => handleUpdateTemplateConfig('brindes_ativo', e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {template?.brindes_ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </label>
+              </div>
+
+              {!template?.brindes_ativo && (
+                <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-lg p-4 text-sm text-amber-700 dark:text-amber-400">
+                  ⚡ Ative o Sistema de Brindes acima para configurar os mimos do seu orçamento.
+                </div>
+              )}
+
+              {template?.brindes_ativo && (
+                <>
+                  {/* Template fonte */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                      1. Template fonte dos brindes
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Escolha um template secundário (ex: &ldquo;Brindes&rdquo;, &ldquo;Produtos Extra&rdquo;) cujos produtos serão oferecidos como bônus.
+                    </p>
+                    {allUserTemplates.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">
+                        Você não tem outros templates. Crie um template separado para seus brindes.
+                      </p>
+                    ) : (
+                      <select
+                        value={template?.brindes_template_id || ''}
+                        onChange={(e) => handleBrindesTemplateChange(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="">— Selecione um template —</option>
+                        {allUserTemplates.map(t => (
+                          <option key={t.id} value={t.id}>{t.nome_template}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Seleção de brindes ativos */}
+                  {template?.brindes_template_id && (
+                    <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                        2. Brindes ativos para vinculação
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        Marque quais produtos deste template estarão disponíveis para serem vinculados nos pacotes.
+                      </p>
+                      {loadingBrindesProducts ? (
+                        <div className="flex items-center gap-2 text-gray-500 py-4">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Carregando produtos...
+                        </div>
+                      ) : brindesSourceProducts.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">
+                          Nenhum produto encontrado neste template.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {brindesSourceProducts.map(p => {
+                            const isSelected = (template?.brindes_produtos_ids || []).includes(p.id || '');
+                            return (
+                              <label
+                                key={p.id}
+                                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/10'
+                                    : 'border-gray-200 dark:border-[rgba(255,255,255,.08)] hover:border-gray-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleBrindesProduct(p.id || '')}
+                                  className="w-4 h-4 text-purple-600 rounded"
+                                />
+                                {p.imagem_url && (
+                                  <img src={p.imagem_url} alt={p.nome} className="w-10 h-10 object-cover rounded flex-shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900 dark:text-white text-sm">{p.nome}</div>
+                                  {p.resumo && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.resumo}</div>}
+                                </div>
+                                <div className="text-sm font-semibold text-purple-700 dark:text-purple-400 flex-shrink-0">
+                                  R$ {p.valor.toFixed(2).replace('.', ',')}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Textos da seção */}
+                  <div className="border border-gray-200 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#07101f] rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
+                      3. Textos padrões da seção de Brindes
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título</label>
+                        <input
+                          type="text"
+                          value={template?.brindes_titulo || ''}
+                          onChange={(e) => setTemplate(prev => prev ? { ...prev, brindes_titulo: e.target.value } : null)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500"
+                          placeholder="Brindes Gratuitos 🎁"
+                          maxLength={80}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subtítulo</label>
+                        <input
+                          type="text"
+                          value={template?.brindes_subtitulo || ''}
+                          onChange={(e) => setTemplate(prev => prev ? { ...prev, brindes_subtitulo: e.target.value } : null)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500"
+                          placeholder="Você ganhou estes presentes incríveis ao fechar este orçamento!"
+                          maxLength={120}
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveBrindesTexts}
+                        disabled={brindesSaveStatus === 'saving'}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 text-sm font-medium"
+                      >
+                        {brindesSaveStatus === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        {brindesSaveStatus === 'saving' ? 'Salvando...' : brindesSaveStatus === 'saved' ? '✓ Salvo!' : 'Salvar Textos'}
+                      </button>
+                    </div>
+                  </div>
                 </>
               )}
             </div>

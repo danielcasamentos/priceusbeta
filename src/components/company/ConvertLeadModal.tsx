@@ -8,7 +8,24 @@ interface PaymentMethodData {
   entrada_valor?: number; max_parcelas?: number; acrescimo?: number;
 }
 interface Installment { numero: number; valor: number; data: string; status: 'pago' | 'pendente'; }
-interface AgendaDate { id: string; data: string; tipo_evento: string; }
+interface AgendaDate { 
+  id: string; 
+  data: string; 
+  tipo_evento: string; 
+  horario_inicio?: string; 
+  horario_fim?: string; 
+}
+
+const getDuracaoMinutos = (inicio?: string | null, fim?: string | null): number | null => {
+  if (!inicio || !fim) return null;
+  const [h1, m1] = inicio.split(':').map(Number);
+  const [h2, m2] = fim.split(':').map(Number);
+  if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return null;
+  const min1 = h1 * 60 + m1;
+  const min2 = h2 * 60 + m2;
+  const diff = min2 - min1;
+  return diff >= 0 ? diff : diff + 1440;
+};
 
 interface ConvertLeadModalProps {
   userId: string; leadId: string; leadName: string; templateName: string;
@@ -81,8 +98,28 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
     const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
     const defaultBase = `Evento de ${leadName}${templateName ? ` - ${templateName}` : ''}`;
     const initName = `${defaultBase}${dateSuffix}`;
-    return eventoDate ? [{ id: uid(), data: eventoDate, tipo_evento: initName }] : [];
+    return eventoDate ? [{ id: uid(), data: eventoDate, tipo_evento: initName, horario_inicio: '', horario_fim: '' }] : [];
   });
+
+  useEffect(() => {
+    if (leadId) {
+      supabase.from('eventos_agenda')
+        .select('id, data_evento, tipo_evento, horario_inicio, horario_fim')
+        .eq('lead_id', leadId)
+        .order('data_evento')
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            setAgendaDates(data.map(d => ({
+              id: d.id || uid(),
+              data: d.data_evento || '',
+              tipo_evento: d.tipo_evento || '',
+              horario_inicio: d.horario_inicio ? d.horario_inicio.substring(0, 5) : '',
+              horario_fim: d.horario_fim ? d.horario_fim.substring(0, 5) : '',
+            })));
+          }
+        });
+    }
+  }, [leadId]);
 
   const valorRestante = mode === 'entrada_parcelas' ? valorOverride - entradaValor : valorOverride;
 
@@ -229,13 +266,25 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
         console.error('Erro ao buscar cidade do lead:', cityLookupErr);
       }
 
+      // Delete existing eventos_agenda entries for this lead to prevent duplicates
+      await supabase.from('eventos_agenda').delete().eq('lead_id', leadId);
+
       for (const d of datasValidas) {
         try {
+          const duracao = getDuracaoMinutos(d.horario_inicio, d.horario_fim);
           await supabase.from('eventos_agenda').insert({
-            user_id: userId, data_evento: d.data, tipo_evento: d.tipo_evento || templateName || 'Evento',
-            cliente_nome: leadName || 'Cliente', cidade: resolvedCityName,
-            status: 'confirmado', origem: 'lead_convertido',
+            user_id: userId, 
+            lead_id: leadId,
+            data_evento: d.data, 
+            tipo_evento: d.tipo_evento || templateName || 'Evento',
+            cliente_nome: leadName || 'Cliente', 
+            cidade: resolvedCityName,
+            status: 'confirmado', 
+            origem: 'lead_convertido',
             observacoes: 'Gerado via conversão de lead',
+            horario_inicio: d.horario_inicio || null,
+            horario_fim: d.horario_fim || null,
+            duracao_minutos: duracao,
           });
         } catch (agErr) { console.error('Erro ao inserir data na agenda:', agErr); }
       }
@@ -288,13 +337,29 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
             ) : (
               <div className="space-y-2">
                 {agendaDates.map((d, i) => (
-                  <div key={d.id} className="flex items-center gap-2 bg-white dark:bg-[rgba(255,255,255,0.04)] rounded-lg p-2 border border-blue-200 dark:border-[rgba(59,130,246,0.15)]">
-                    <span className="text-xs font-bold text-blue-500 w-5 text-center shrink-0">{i + 1}</span>
-                    <input type="date" value={d.data} onChange={e => updateAgendaDate(d.id, 'data', e.target.value)}
-                      className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" value={d.tipo_evento} onChange={e => updateAgendaDate(d.id, 'tipo_evento', e.target.value)}
-                      placeholder="Tipo (ex: Casamento)" className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
-                    <button onClick={() => removeAgendaDate(d.id)} className="shrink-0 text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                  <div key={d.id} className="bg-white dark:bg-[rgba(255,255,255,0.04)] rounded-lg p-3 border border-blue-200 dark:border-[rgba(59,130,246,0.15)] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-500">Data #{i + 1}</span>
+                      <button onClick={() => removeAgendaDate(d.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input type="date" value={d.data} onChange={e => updateAgendaDate(d.id, 'data', e.target.value)}
+                        className="w-full px-2 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
+                      <input type="text" value={d.tipo_evento} onChange={e => updateAgendaDate(d.id, 'tipo_evento', e.target.value)}
+                        placeholder="Tipo (ex: Casamento)" className="w-full px-2 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold shrink-0">Início:</span>
+                        <input type="time" value={d.horario_inicio || ''} onChange={e => updateAgendaDate(d.id, 'horario_inicio', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-md text-xs focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold shrink-0">Término:</span>
+                        <input type="time" value={d.horario_fim || ''} onChange={e => updateAgendaDate(d.id, 'horario_fim', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 dark:border-[rgba(255,255,255,0.1)] dark:bg-[#07101f] dark:text-white rounded-md text-xs focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
