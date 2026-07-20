@@ -51,8 +51,8 @@ serve(async (req) => {
     console.log('📥 Payload recebido:', JSON.stringify(payload, null, 2))
 
     // ✅ Detectar se é auto-save ou save final
-    // Auto-save tem status 'abandonado' ou não tem produtos preenchidos
-    const isAutoSave = payload.status === 'abandonado' || !payload.orcamentoDetalhe?.produtos || payload.orcamentoDetalhe.produtos.length === 0
+    // PRIORIDADE: se o status for explicitamente 'novo', NUNCA é auto-save (mesmo sem produtos)
+    const isAutoSave = payload.status !== 'novo' && (payload.status === 'abandonado' || !payload.orcamentoDetalhe?.produtos || payload.orcamentoDetalhe.produtos.length === 0);
     
     // ✅ PASSO 2: Validar o payload recebido usando o schema apropriado
     let validationResult
@@ -193,39 +193,66 @@ serve(async (req) => {
       tipo_evento: tipoEvento,
     }
 
-    console.log('📥 Inserindo lead final único na conta do dono do template...')
-    const { data: insertedLead, error: insertErr } = await supabaseAdmin
-      .from('leads')
-      .insert(leadDataFinal)
-      .select()
-      .single()
+    let existingLead = null;
+    if (sessionId) {
+      const { data } = await supabaseAdmin
+        .from('leads')
+        .select('id')
+        .eq('session_id', sessionId)
+        .maybeSingle();
+      existingLead = data;
+    }
 
-    if (insertErr) {
-      console.error('Erro ao inserir lead final:', insertErr)
-      throw insertErr
+    let insertedLead = null;
+    if (existingLead) {
+      console.log('🔄 Atualizando lead existente com status FINAL para a sessão:', sessionId);
+      const { data, error: updateErr } = await supabaseAdmin
+        .from('leads')
+        .update(leadDataFinal)
+        .eq('id', existingLead.id)
+        .select()
+        .single();
+      if (updateErr) {
+        console.error('Erro ao atualizar lead final:', updateErr);
+        throw updateErr;
+      }
+      insertedLead = data;
+    } else {
+      console.log('📥 Inserindo novo lead final na conta do dono do template...');
+      const { data, error: insertErr } = await supabaseAdmin
+        .from('leads')
+        .insert(leadDataFinal)
+        .select()
+        .single();
+      if (insertErr) {
+        console.error('Erro ao inserir lead final:', insertErr);
+        throw insertErr;
+      }
+      insertedLead = data;
     }
 
     // Notificação para o profissional (dono do template)
-    const msg = `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`
+    const msg = `Você recebeu um novo lead de ${nomeCliente || 'um cliente'}!`;
     const notificationPayload = {
       user_id: userId,
-      type: 'new_lead',
+      title: 'Novo Lead Recebido',
       message: msg,
+      type: 'info',
       related_id: insertedLead.id,
       link: '/dashboard/leads',
-    }
+    };
     
     const { error: notificationError } = await supabaseAdmin
       .from('notifications')
-      .insert(notificationPayload)
+      .insert(notificationPayload);
     if (notificationError) {
-      console.error('Erro ao criar notificação de lead:', notificationError)
+      console.error('Erro ao criar notificação de lead:', notificationError);
     }
 
     return new Response(JSON.stringify(insertedLead), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 201,
-    })
+    });
   } catch (err) {
     console.error('Erro na Edge Function:', err)
     return new Response(

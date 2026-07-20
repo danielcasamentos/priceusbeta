@@ -6,6 +6,7 @@ import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { FormattedDescription } from '../ui/FormattedDescription';
 import { RatePhotographerButton } from '../RatePhotographerButton';
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
+import { BrindesCountdown } from '../BrindesCountdown';
 
 interface QuotePromocionalProps {
   template: any;
@@ -32,6 +33,7 @@ interface QuotePromocionalProps {
   upsellSection?: React.ReactNode;
   upsellProdutos?: any[];
   brindesProdutos?: any[];
+  leadCreatedAt?: string | null;
 }
 
 export function QuotePromocional(props: QuotePromocionalProps) {
@@ -44,8 +46,8 @@ export function QuotePromocional(props: QuotePromocionalProps) {
     setSelectedFormaPagamento,
     firstProductRef,
     totalSectionRef,
-    upsellProdutos = [],
     brindesProdutos = [],
+    leadCreatedAt
   } = props;
 
   const [timeLeft, setTimeLeft] = useState(900); // 15 minutos em segundos
@@ -549,14 +551,24 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                         {/* Brindes Vinculados em Sub-Cards */}
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #fee2e2' }}>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
-                              🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
-                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 6 }}>
+                              <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
+                              </span>
+                              <BrindesCountdown
+                                brindesExpira={produto.brindes_expira}
+                                brindesExpiraTipo={produto.brindes_expira_tipo}
+                                brindesExpiraDias={produto.brindes_expira_dias}
+                                brindesExpiraData={produto.brindes_expira_data}
+                                leadCreatedAt={leadCreatedAt}
+                              />
+                            </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                               {produto.brindes_vinculados.map((brindeId: string) => {
                                 const brinde = (brindesProdutos || []).find((u: any) => u.id === brindeId);
                                 if (!brinde) return null;
                                 const mostrarValores = produto.brindes_mostrar_valores ?? true;
+                                const quantidade = (produto.brindes_quantidades as Record<string, number> | undefined)?.[brindeId] ?? 1;
                                 return (
                                   <div
                                     key={brindeId}
@@ -579,12 +591,12 @@ export function QuotePromocional(props: QuotePromocionalProps) {
                                     )}
                                     <div style={{ minWidth: 0, flex: 1 }}>
                                       <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {brinde.nome}
+                                        {brinde.nome}{quantidade > 1 && <span className="ml-1 text-emerald-600 font-bold">(x{quantidade})</span>}
                                       </div>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                         {mostrarValores && brinde.valor > 0 && (
                                           <span style={{ fontSize: 9, color: '#9ca3af', textDecoration: 'line-through' }}>
-                                            {formatCurrency(brinde.valor)}
+                                            {formatCurrency(brinde.valor * quantidade)}
                                           </span>
                                         )}
                                         <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '1px 4px', borderRadius: 2 }}>

@@ -36,6 +36,8 @@ interface QuotePageRendererProps {
   setCupomMensagem: (msg: string) => void;
   renderLocationDateFields?: () => React.ReactNode;
   upsellSection?: React.ReactNode;
+  brindesProdutos?: any[];
+  leadCreatedAt?: string | null;
 }
 
 export function QuotePageRenderer(props: QuotePageRendererProps) {

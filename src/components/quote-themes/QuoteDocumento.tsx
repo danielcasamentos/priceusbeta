@@ -5,6 +5,7 @@ import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { FormattedDescription } from '../ui/FormattedDescription';
 
 import { QuoteHeaderRating } from '../QuoteHeaderRating';
+import { BrindesCountdown } from '../BrindesCountdown';
 
 export function QuoteDocumento(props: any) {
   const {
@@ -37,8 +38,8 @@ export function QuoteDocumento(props: any) {
     isSubmitting, // Adicionado para o estado do botão
     handleResetQuote,
     upsellSection,
-    upsellProdutos = [],
     brindesProdutos = [],
+    leadCreatedAt,
   } = props;
 
   const tema = {
@@ -267,14 +268,24 @@ export function QuoteDocumento(props: any) {
                         {/* Brindes Vinculados em Sub-Cards */}
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div className="mt-3.5 space-y-2 border-t border-dashed border-gray-200 dark:border-white/10 pt-3">
-                            <span className="text-[10px] font-bold text-emerald-650 dark:text-emerald-450 flex items-center gap-1 uppercase tracking-wider">
-                              🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
-                            </span>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[10px] font-bold text-emerald-655 dark:text-emerald-455 flex items-center gap-1 uppercase tracking-wider">
+                                🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
+                              </span>
+                              <BrindesCountdown
+                                brindesExpira={produto.brindes_expira}
+                                brindesExpiraTipo={produto.brindes_expira_tipo}
+                                brindesExpiraDias={produto.brindes_expira_dias}
+                                brindesExpiraData={produto.brindes_expira_data}
+                                leadCreatedAt={leadCreatedAt}
+                              />
+                            </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
                               {produto.brindes_vinculados.map((brindeId: string) => {
                                 const brinde = (brindesProdutos || []).find((u: any) => u.id === brindeId);
                                 if (!brinde) return null;
                                 const mostrarValores = produto.brindes_mostrar_valores ?? true;
+                                const quantidade = (produto.brindes_quantidades as Record<string, number> | undefined)?.[brindeId] ?? 1;
                                 return (
                                   <div
                                     key={brindeId}
@@ -289,12 +300,12 @@ export function QuoteDocumento(props: any) {
                                     )}
                                     <div className="min-w-0 flex-1 text-left">
                                       <div className="text-[11px] font-bold text-gray-800 truncate">
-                                        {brinde.nome}
+                                        {brinde.nome}{quantidade > 1 && <span className="ml-1 text-emerald-600 font-bold">(x{quantidade})</span>}
                                       </div>
                                       <div className="flex items-center gap-1.5 mt-0.5">
                                         {mostrarValores && brinde.valor > 0 && (
                                           <span className="text-[9px] text-gray-400 line-through">
-                                            {formatCurrency(brinde.valor)}
+                                            {formatCurrency(brinde.valor * quantidade)}
                                           </span>
                                         )}
                                         <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1 rounded">

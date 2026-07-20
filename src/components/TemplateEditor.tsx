@@ -32,6 +32,14 @@ interface Produto {
   destaque_texto?: string;
   duracao_minutos?: number | null;
   brindes_vinculados?: string[] | null;
+  brindes_titulo_personalizado?: string;
+  brindes_mostrar_valores?: boolean;
+  brindes_expira?: boolean;
+  brindes_expira_tipo?: string;
+  brindes_expira_dias?: number;
+  brindes_expira_data?: string | null;
+  brindes_quantidades?: Record<string, number>;
+  quantidade_maxima?: number | null;
 }
 
 interface FormaPagamento {
@@ -292,6 +300,8 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
 
   const loadTemplateData = async () => {
     setLoading(true);
+    setBrindesSourceProducts([]);
+    setUpsellSourceProducts([]);
     try {
       const { data: templateData } = await supabase
         .from('templates')
@@ -338,7 +348,6 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           .from('templates')
           .select('id, nome_template')
           .eq('user_id', templateData.user_id)
-          .neq('id', templateId)
           .order('nome_template');
         setAllUserTemplates(templatesData || []);
       }
@@ -482,9 +491,11 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   };
 
   const handleUpdateProduto = (index: number, field: keyof Produto, value: any) => {
-    const newProdutos = [...produtos];
-    newProdutos[index] = { ...newProdutos[index], [field]: value };
-    setProdutos(newProdutos);
+    setProdutos(prev => {
+      const newProdutos = [...prev];
+      newProdutos[index] = { ...newProdutos[index], [field]: value };
+      return newProdutos;
+    });
   };
 
   const handleProductSaved = (index: number, productId: string) => {
@@ -554,6 +565,14 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           destaque_texto: produto.destaque_texto ?? null,
           duracao_minutos: produto.duracao_minutos ?? null,
           brindes_vinculados: produto.brindes_vinculados || [],
+          brindes_titulo_personalizado: produto.brindes_titulo_personalizado || 'Brindes Gratuitos',
+          brindes_mostrar_valores: produto.brindes_mostrar_valores ?? true,
+          brindes_expira: produto.brindes_expira ?? false,
+          brindes_expira_tipo: produto.brindes_expira_tipo || 'dias',
+          brindes_expira_dias: produto.brindes_expira_dias ?? 7,
+          brindes_expira_data: produto.brindes_expira_data || null,
+          brindes_quantidades: produto.brindes_quantidades || {},
+          quantidade_maxima: produto.quantidade_maxima ?? null,
         };
 
         if (produto.id) {
@@ -903,21 +922,31 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         </div>
 
         <div className="p-6">
-          {activeTab === 'produtos' && (
-            <ProductList
-              products={produtos}
-              onUpdate={handleUpdateProduto}
-              onRemove={handleRemoveProduto}
-              onDuplicate={handleDuplicateProduto}
-              onAdd={handleAddProduto}
-              onSave={handleSaveProdutos}
-              userId={userId}
-              templateId={templateId}
-              onProductSaved={handleProductSaved}
-              upsellProdutosIds={template?.upsell_produtos_ids || []}
-              brindesProducts={brindesSourceProducts.filter(p => (template?.brindes_produtos_ids || []).includes(p.id || ''))}
-            />
-          )}
+          {activeTab === 'produtos' && (() => {
+            const activeIds = template?.brindes_produtos_ids;
+            const hasCustomSource = Boolean(template?.brindes_template_id);
+            const sourceList = hasCustomSource ? brindesSourceProducts : produtos;
+            let effectiveBrindes = sourceList;
+            if (Array.isArray(activeIds) && activeIds.length > 0) {
+              const filtered = sourceList.filter(p => p.id && activeIds.includes(p.id));
+              if (filtered.length > 0) effectiveBrindes = filtered;
+            }
+            return (
+              <ProductList
+                products={produtos}
+                onUpdate={handleUpdateProduto}
+                onRemove={handleRemoveProduto}
+                onDuplicate={handleDuplicateProduto}
+                onAdd={handleAddProduto}
+                onSave={handleSaveProdutos}
+                userId={userId}
+                templateId={templateId}
+                onProductSaved={handleProductSaved}
+                upsellProdutosIds={template?.upsell_produtos_ids || []}
+                brindesProducts={effectiveBrindes}
+              />
+            );
+          })()}
 
           {activeTab === 'pagamentos' && (
             <div className="space-y-4">

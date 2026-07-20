@@ -1821,7 +1821,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                           </div>
                         </div>
                         <button
-                          onClick={() => handleRollbackImport(hist.id)}
+                          onClick={() => handleRollback(hist.id)}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

@@ -18,6 +18,7 @@ import { getThemeInlineStyles } from '../lib/themeStyles';
 import { PublicReviews } from '../components/PublicReviews';
 import { FloatingTotalPanel } from '../components/FloatingTotalPanel';
 import { QuoteHeaderRating } from '../components/QuoteHeaderRating';
+import { BrindesCountdown } from '../components/BrindesCountdown';
 import { FormattedDescription } from '../components/ui/FormattedDescription';
 import { detectBrowser, getReferrer, logBrowserInfo } from '../lib/browserDetection';
 import { QuoteDarkStudio } from '../components/quote-themes/QuoteDarkStudio';
@@ -47,10 +48,17 @@ interface Produto {
   /** 0–100. Desconto aplicado ao valor unitário */
   desconto_percentual?: number;
   duracao_minutos?: number | null;
+  quantidade_maxima?: number | null;
   destacar_produto?: boolean;
   destaque_texto?: string | null;
   keywords_upsell?: string | null;
   brindes_vinculados?: string[] | null;
+  brindes_titulo_personalizado?: string | null;
+  brindes_expira?: boolean;
+  brindes_expira_tipo?: 'dias' | 'data';
+  brindes_expira_dias?: number | null;
+  brindes_expira_data?: string | null;
+  brindes_mostrar_valores?: boolean;
 }
 
 interface FormaPagamento {
@@ -100,6 +108,7 @@ export function QuotePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [leadCreatedAt, setLeadCreatedAt] = useState<string | null>(null);
 
   // Black Friday countdown timer state
   const [blackFridayTime, setBlackFridayTime] = useState(10800); // 3 horas em segundos
@@ -329,6 +338,8 @@ export function QuotePage() {
           console.error("Erro ao carregar o lead para edição", error);
           return;
         }
+
+        setLeadCreatedAt(leadData.data_orcamento || leadData.created_at || null);
 
         // Populando dados do formulário principal
         setFormData(prev => ({
@@ -983,19 +994,25 @@ export function QuotePage() {
         }
       }
 
-      // Buscar produtos de brindes
+      // Buscar produtos de brindes (tanto os selecionados no template quanto os vinculados diretamente nos produtos)
       let brindesData: any[] = [];
-      if (
-        templateData.brindes_ativo &&
-        templateData.brindes_template_id &&
-        Array.isArray(templateData.brindes_produtos_ids) &&
-        templateData.brindes_produtos_ids.length > 0
-      ) {
+      const brindesVinculadosIds = (produtosData || [])
+        .flatMap((p: any) => p.brindes_vinculados || [])
+        .filter((id: string) => id);
+      
+      const allBrindesIdsToFetch = Array.from(
+        new Set([
+          ...(templateData.brindes_produtos_ids || []),
+          ...brindesVinculadosIds
+        ])
+      );
+
+      if (allBrindesIdsToFetch.length > 0) {
         try {
           const { data: fetchedBrindes } = await supabase
             .from('produtos')
             .select('*')
-            .in('id', templateData.brindes_produtos_ids)
+            .in('id', allBrindesIdsToFetch)
             .order('ordem');
           brindesData = fetchedBrindes || [];
         } catch (e) {
@@ -1190,8 +1207,8 @@ export function QuotePage() {
   };
 
   const handleProdutoQuantityChange = (produtoId: string, quantity: number) => {
+    const produto = produtos.find((p) => p.id === produtoId);
     if (quantity <= 0) {
-      const produto = produtos.find((p) => p.id === produtoId);
       if (produto?.obrigatorio) {
         alert('⚠️ Este produto é obrigatório');
         return;
@@ -1200,6 +1217,9 @@ export function QuotePage() {
       delete newSelected[produtoId];
       setSelectedProdutos(newSelected);
     } else {
+      if (produto?.quantidade_maxima && quantity > produto.quantidade_maxima) {
+        quantity = produto.quantidade_maxima;
+      }
       setSelectedProdutos({ ...selectedProdutos, [produtoId]: quantity });
     }
   };
@@ -2506,6 +2526,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -2555,6 +2576,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -2603,6 +2625,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -2651,6 +2674,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -2701,6 +2725,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -2829,6 +2854,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -2878,6 +2904,7 @@ export function QuotePage() {
       upsellSection: renderUpsellSection(),
       upsellProdutos,
       brindesProdutos,
+      leadCreatedAt,
     };
     return wrapWithFonts(
       <>
@@ -3752,9 +3779,18 @@ export function QuotePage() {
                         {/* Brindes Vinculados em Sub-Cards */}
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
                           <div className="mt-3.5 space-y-2 border-t border-dashed border-gray-250 dark:border-white/10 pt-3">
-                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
-                              🎁 {produto.brindes_titulo_personalizado || 'Brinde(s) Incluso(s)'}:
-                            </span>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                🎁 {produto.brindes_titulo_personalizado || 'Brinde(s) Incluso(s)'}:
+                              </span>
+                              <BrindesCountdown
+                                brindesExpira={produto.brindes_expira}
+                                brindesExpiraTipo={produto.brindes_expira_tipo}
+                                brindesExpiraDias={produto.brindes_expira_dias}
+                                brindesExpiraData={produto.brindes_expira_data}
+                                leadCreatedAt={leadCreatedAt}
+                              />
+                            </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
                               {produto.brindes_vinculados.map((brindeId: string) => {
                                 const brinde = brindesProdutos.find(u => u.id === brindeId);

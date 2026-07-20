@@ -3,6 +3,7 @@ import { formatCurrency } from '../../lib/utils';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { ProductGalleryCarousel } from '../ui/ProductGalleryCarousel';
 import { FormattedDescription } from '../ui/FormattedDescription';
+import { BrindesCountdown } from '../BrindesCountdown';
 
 interface QuoteModernoProps {
   template: any;
@@ -20,10 +21,26 @@ interface QuoteModernoProps {
   setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
   upsellSection?: React.ReactNode;
+  brindesProdutos?: any[];
+  leadCreatedAt?: string | null;
 }
 
 export function QuoteModerno(props: QuoteModernoProps) {
-  const { template, profile, produtos, selectedProdutos, formData, calculateTotal, handleSubmit, fieldsValidation, camposExtras, camposExtrasData, upsellSection } = props;
+  const {
+    template,
+    profile,
+    produtos,
+    selectedProdutos,
+    formData,
+    calculateTotal,
+    handleSubmit,
+    fieldsValidation,
+    camposExtras,
+    camposExtrasData,
+    upsellSection,
+    brindesProdutos = [],
+    leadCreatedAt,
+  } = props;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-cyan-50 via-blue-50 to-purple-100">
@@ -197,6 +214,60 @@ export function QuoteModerno(props: QuoteModernoProps) {
                             </div>
                           );
                         })()}
+                        {/* Brindes Vinculados em Sub-Cards */}
+                        {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
+                          <div className="mt-3.5 space-y-2 border-t border-dashed border-cyan-100 pt-3 text-left">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-bold bg-gradient-to-r from-cyan-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 uppercase tracking-wider">
+                                🎁 {produto.brindes_titulo_personalizado || 'Brinde Incluso'}:
+                              </span>
+                              <BrindesCountdown
+                                brindesExpira={produto.brindes_expira}
+                                brindesExpiraTipo={produto.brindes_expira_tipo}
+                                brindesExpiraDias={produto.brindes_expira_dias}
+                                brindesExpiraData={produto.brindes_expira_data}
+                                leadCreatedAt={leadCreatedAt}
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                              {produto.brindes_vinculados.map((brindeId: string) => {
+                                const brinde = (brindesProdutos || []).find((u: any) => u.id === brindeId);
+                                if (!brinde) return null;
+                                const mostrarValores = produto.brindes_mostrar_valores ?? true;
+                                const quantidade = (produto.brindes_quantidades as Record<string, number> | undefined)?.[brindeId] ?? 1;
+                                return (
+                                  <div
+                                    key={brindeId}
+                                    className="flex items-center gap-3 p-2.5 rounded-xl border border-cyan-105 bg-gradient-to-r from-cyan-50/20 to-purple-50/20 shadow-sm"
+                                  >
+                                    {brinde.imagem_url && (
+                                      <img
+                                        src={brinde.imagem_url}
+                                        alt={brinde.nome}
+                                        className="w-10 h-10 object-cover rounded-lg flex-shrink-0"
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-bold text-gray-800 truncate">
+                                        {brinde.nome}{quantidade > 1 && <span className="ml-1 text-emerald-600 font-bold">(x{quantidade})</span>}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        {mostrarValores && brinde.valor > 0 && (
+                                          <span className="text-[10px] text-gray-400 line-through">
+                                            {formatCurrency(brinde.valor * quantidade)}
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] bg-gradient-to-r from-cyan-100 to-purple-100 text-cyan-800 px-1.5 py-0.5 rounded font-bold">
+                                          Grátis
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       {(produto.permite_multiplas_unidades ?? true) ? (
                         <div className="flex items-center gap-3">

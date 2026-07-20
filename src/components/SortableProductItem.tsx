@@ -17,6 +17,7 @@ interface Product {
   carrossel_automatico?: boolean;
   duracao_minutos?: number | null;
   brindes_vinculados?: string[] | null;
+  quantidade_maxima?: number | null;
 }
 
 interface SortableProductItemProps {

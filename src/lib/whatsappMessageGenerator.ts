@@ -247,12 +247,12 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
         ? formatCurrency(Math.abs(priceBreakdown.ajusteSazonal))
         : '',
     '{{GEOGRAPHIC_ADJUSTMENT}}':
-      priceBreakdown.ajusteGeografico.percentual !== 0
-        ? formatCurrency(Math.abs(priceBreakdown.ajusteGeografico.percentual))
+      (priceBreakdown.ajusteGeografico?.percentual ?? 0) !== 0
+        ? formatCurrency(Math.abs(priceBreakdown.ajusteGeografico?.percentual ?? 0))
         : '',
     '{{TRAVEL_FEE}}':
-      priceBreakdown.ajusteGeografico.taxa !== 0 && !template.ocultar_taxa_deslocamento
-        ? formatCurrency(priceBreakdown.ajusteGeografico.taxa)
+      (priceBreakdown.ajusteGeografico?.taxa ?? 0) !== 0 && !template.ocultar_taxa_deslocamento
+        ? formatCurrency(priceBreakdown.ajusteGeografico?.taxa ?? 0)
         : '',
     '{{PAYMENT_ADJUSTMENT}}':
       priceBreakdown.acrescimoFormaPagamento !== 0
@@ -376,7 +376,7 @@ function buildProductsList(
   products: any[],
   selectedProducts: Record<string, number>,
   hideValues: boolean,
-  upsellProducts?: Product[],
+  _upsellProducts?: Product[],
   brindesProducts?: Product[]
 ): string {
   return products

@@ -54,6 +54,7 @@ export interface LeadData {
   ocultar_valores_intermediarios?: boolean;
   plano_pagamento?: any;
   upsell_produtos?: any[];
+  brindes_produtos?: any[];
   valor_base?: number;
   valor_upsell?: number;
 }

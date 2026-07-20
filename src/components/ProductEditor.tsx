@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2, Gift } from 'lucide-react';
+import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2 } from 'lucide-react';
 import { ImageUploadService } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
@@ -31,6 +31,12 @@ interface Product {
   brindes_vinculados?: string[] | null;
   brindes_titulo_personalizado?: string;
   brindes_mostrar_valores?: boolean;
+  brindes_expira?: boolean;
+  brindes_expira_tipo?: 'dias' | 'data';
+  brindes_expira_dias?: number;
+  brindes_expira_data?: string | null;
+  brindes_quantidades?: Record<string, number>;
+  quantidade_maxima?: number | null;
 }
 
 interface ProductEditorProps {
@@ -44,6 +50,7 @@ interface ProductEditorProps {
   allProducts?: Product[];
   upsellProdutosIds?: string[];
   brindesProducts?: any[];
+  brindesQuantidades?: Record<string, number>;
 }
 
 /**
@@ -66,10 +73,11 @@ export function ProductEditor({
   userId, 
   templateId, 
   onProductSaved,
-  allProducts = [],
   upsellProdutosIds = [],
   brindesProducts = []
 }: ProductEditorProps) {
+  // brindes_quantidades from the product itself (already stored on the product object)
+  const brindesQuantidades: Record<string, number> = (product as any).brindes_quantidades || {};
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -932,23 +940,47 @@ export function ProductEditor({
       </div>
 
       {/* Modo de seleção */}
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id={`multi-${product.ordem}`}
-          checked={product.permite_multiplas_unidades ?? true}
-          onChange={(e) => onChange('permite_multiplas_unidades', e.target.checked)}
-          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <label
-          htmlFor={`multi-${product.ordem}`}
-          className="text-sm text-gray-700"
-        >
-          Permite selecionar múltiplas unidades (ex: 2 álbuns)
-          <span className="text-xs text-gray-400 block">
-            Desmarcado = botão simples de selecionar/desselecionar (ideal para serviços)
-          </span>
-        </label>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id={`multi-${product.ordem}`}
+            checked={product.permite_multiplas_unidades ?? true}
+            onChange={(e) => onChange('permite_multiplas_unidades', e.target.checked)}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <label
+            htmlFor={`multi-${product.ordem}`}
+            className="text-sm text-gray-700 dark:text-gray-300"
+          >
+            Permite selecionar múltiplas unidades (ex: 2 álbuns)
+            <span className="text-xs text-gray-400 block">
+              Desmarcado = botão simples de selecionar/desselecionar (ideal para serviços)
+            </span>
+          </label>
+        </div>
+
+        {(product.permite_multiplas_unidades ?? true) && (
+          <div className="ml-6 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/40 dark:bg-blue-950/20 max-w-sm">
+            <label className="block text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">
+              🔢 Quantidade Máxima Permitida
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={product.quantidade_maxima || ''}
+              onChange={(e) => {
+                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                onChange('quantidade_maxima', val && val > 0 ? val : null);
+              }}
+              placeholder="Ilimitado (ou ex: 2)"
+              className="w-full px-3 py-1.5 border border-gray-300 dark:border-white/10 rounded-md text-xs bg-white dark:bg-[#07101f] text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+              Ex: se preenchido com 2, o cliente não poderá selecionar mais que 2 horas/unidades.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Desconto por produto */}
@@ -1053,7 +1085,8 @@ export function ProductEditor({
             </p>
           </div>
           {(() => {
-            if (brindesProducts.length === 0) {
+            const availableBrindes = brindesProducts.filter(u => u.id && u.id !== product.id);
+            if (availableBrindes.length === 0) {
               return (
                 <p className="text-xs text-gray-400 dark:text-gray-500 italic">
                   Nenhum brinde configurado neste template para vincular. (Vá na aba "Brindes" para configurar).
@@ -1063,65 +1096,160 @@ export function ProductEditor({
             return (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {brindesProducts.map(u => {
+                  {availableBrindes.map(u => {
                     const brindesArray = Array.isArray(product.brindes_vinculados) ? product.brindes_vinculados : [];
                     const isChecked = brindesArray.includes(u.id || '');
                     return (
-                      <label
+                      <div
                         key={u.id}
-                        className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer text-xs transition-all hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 ${
+                        className={`flex items-center justify-between gap-2 p-2.5 border rounded-lg text-xs transition-all ${
                           isChecked 
-                            ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/10 font-semibold text-emerald-900 dark:text-emerald-300' 
+                            ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 font-semibold text-emerald-900 dark:text-emerald-300' 
                             : 'border-gray-250 dark:border-white/5 bg-white dark:bg-white/3'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            let nextBrindes = [...brindesArray];
-                            if (isChecked) {
-                              nextBrindes = nextBrindes.filter(id => id !== u.id);
-                            } else {
-                              nextBrindes.push(u.id || '');
-                            }
-                            onChange('brindes_vinculados', nextBrindes);
-                          }}
-                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                        />
-                        <span className="truncate">{u.nome}</span>
-                      </label>
+                        <label className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              let nextBrindes = [...brindesArray];
+                              const nextQtd = { ...brindesQuantidades };
+                              if (isChecked) {
+                                nextBrindes = nextBrindes.filter(id => id !== u.id);
+                                delete nextQtd[u.id || ''];
+                              } else {
+                                nextBrindes.push(u.id || '');
+                                nextQtd[u.id || ''] = 1;
+                              }
+                              onChange('brindes_vinculados', nextBrindes);
+                              onChange('brindes_quantidades', nextQtd);
+                            }}
+                            className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                          />
+                          <span className="truncate">{u.nome}</span>
+                        </label>
+                        {isChecked && (
+                          <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const cur = brindesQuantidades[u.id || ''] ?? 1;
+                                if (cur <= 1) return;
+                                onChange('brindes_quantidades', { ...brindesQuantidades, [u.id || '']: cur - 1 });
+                              }}
+                              className="w-6 h-6 rounded bg-emerald-200/70 dark:bg-emerald-800/60 text-emerald-900 dark:text-emerald-100 text-xs font-bold flex items-center justify-center hover:bg-emerald-300 dark:hover:bg-emerald-700 transition-colors shadow-sm"
+                            >−</button>
+                            <span className="text-xs font-bold text-emerald-900 dark:text-emerald-100 min-w-[1.25rem] text-center">
+                              {brindesQuantidades[u.id || ''] ?? 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const cur = brindesQuantidades[u.id || ''] ?? 1;
+                                onChange('brindes_quantidades', { ...brindesQuantidades, [u.id || '']: cur + 1 });
+                              }}
+                              className="w-6 h-6 rounded bg-emerald-200/70 dark:bg-emerald-800/60 text-emerald-900 dark:text-emerald-100 text-xs font-bold flex items-center justify-center hover:bg-emerald-300 dark:hover:bg-emerald-700 transition-colors shadow-sm"
+                            >+</button>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
 
                 {/* Opções extras quando há brindes selecionados */}
                 {Array.isArray(product.brindes_vinculados) && product.brindes_vinculados.length > 0 && (
-                  <div className="border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-emerald-800 dark:text-emerald-400 mb-1">
-                        Título Personalizado da Seção
-                      </label>
-                      <input
-                        type="text"
-                        value={product.brindes_titulo_personalizado || 'Brindes Gratuitos'}
-                        onChange={(e) => onChange('brindes_titulo_personalizado', e.target.value)}
-                        className="w-full px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
-                        placeholder="Ex: Mimos Inclusos, Bônus..."
-                      />
+                  <div className="border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-emerald-800 dark:text-emerald-400 mb-1">
+                          Título Personalizado da Seção
+                        </label>
+                        <input
+                          type="text"
+                          value={product.brindes_titulo_personalizado || 'Brindes Gratuitos'}
+                          onChange={(e) => onChange('brindes_titulo_personalizado', e.target.value)}
+                          className="w-full px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Ex: Mimos Inclusos, Bônus..."
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <label className="flex items-center gap-2 cursor-pointer mt-4">
+                          <input
+                            type="checkbox"
+                            checked={product.brindes_mostrar_valores ?? true}
+                            onChange={(e) => onChange('brindes_mostrar_valores', e.target.checked)}
+                            className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                          />
+                          <span className="text-xs text-gray-700 dark:text-gray-300">
+                            Exibir valor original riscado (~~R$ 150~~ Grátis)
+                          </span>
+                        </label>
+                      </div>
                     </div>
-                    <div className="flex items-center">
-                      <label className="flex items-center gap-2 cursor-pointer mt-4">
+
+                    {/* Configurações de Prazo de Validade / Gatilho de Urgência */}
+                    <div className="bg-emerald-50/40 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 rounded-lg p-3 space-y-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={product.brindes_mostrar_valores ?? true}
-                          onChange={(e) => onChange('brindes_mostrar_valores', e.target.checked)}
+                          checked={product.brindes_expira ?? false}
+                          onChange={(e) => onChange('brindes_expira', e.target.checked)}
                           className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                         />
-                        <span className="text-xs text-gray-700 dark:text-gray-300">
-                          Exibir valor original riscado (~~R$ 150~~ Grátis)
+                        <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-400">
+                          Exibir prazo de validade visual (Gatilho de Urgência)
                         </span>
                       </label>
+
+                      {product.brindes_expira && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                              Tipo de Prazo
+                            </label>
+                            <select
+                              value={product.brindes_expira_tipo || 'dias'}
+                              onChange={(e) => onChange('brindes_expira_tipo', e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="dias">Prazo em dias (após a realização do orçamento)</option>
+                              <option value="data">Data específica limite</option>
+                            </select>
+                          </div>
+
+                          {product.brindes_expira_tipo === 'data' ? (
+                            <div>
+                              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                Data Limite da Oferta
+                              </label>
+                              <input
+                                type="date"
+                                value={product.brindes_expira_data ? product.brindes_expira_data.split('T')[0] : ''}
+                                onChange={(e) => onChange('brindes_expira_data', e.target.value ? `${e.target.value}T23:59:59` : null)}
+                                className="w-full px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                Quantidade de Dias Ativo
+                              </label>
+                              <NumberInput
+                                value={product.brindes_expira_dias ?? 7}
+                                onChange={(val) => onChange('brindes_expira_dias', val)}
+                                className="w-full px-3 py-1.5 border border-gray-300 dark:border-[rgba(255,255,255,.08)] bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
+                                min={1}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

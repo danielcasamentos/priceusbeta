@@ -32,6 +32,7 @@ interface Product {
   carrossel_automatico?: boolean;
   duracao_minutos?: number | null;
   brindes_vinculados?: string[] | null;
+  quantidade_maxima?: number | null;
 }
 
 interface ProductListProps {
@@ -131,15 +132,7 @@ export function ProductList({
   };
 
   useEffect(() => {
-    const productsChanged = products.length !== localProducts.length ||
-      products.some((p, i) => {
-        const local = localProducts[i];
-        return !local || p.imagem_url !== local.imagem_url || p.id !== local.id;
-      });
-
-    if (productsChanged) {
-      setLocalProducts(products);
-    }
+    setLocalProducts(products);
   }, [products]);
 
   const handleSaveAll = async () => {
@@ -204,9 +197,11 @@ export function ProductList({
                 index={index}
                 onChange={(field, value) => {
                   onUpdate(index, field as keyof Product, value);
-                  const updated = [...localProducts];
-                  updated[index] = { ...updated[index], [field]: value };
-                  setLocalProducts(updated);
+                  setLocalProducts(prev => {
+                    const updated = [...prev];
+                    updated[index] = { ...updated[index], [field]: value };
+                    return updated;
+                  });
                 }}
                 onRemove={() => onRemove(index)}
                 onDuplicate={() => onDuplicate(index)}
@@ -215,6 +210,7 @@ export function ProductList({
                 onProductSaved={(productId) => onProductSaved?.(index, productId)}
                 allProducts={localProducts as any}
                 upsellProdutosIds={upsellProdutosIds}
+                brindesProducts={brindesProducts}
               />
             ))}
           </div>

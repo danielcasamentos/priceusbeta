@@ -101,6 +101,11 @@ export function LeadsManager({ userId }: { userId: string }) {
   const [jsonImportText, setJsonImportText] = useState('');
   const [isImportingJson, setIsImportingJson] = useState(false);
 
+  // Estado para Trocar Template do Lead
+  const [changingTemplate, setChangingTemplate] = useState(false);
+  const [newTemplateIdForLead, setNewTemplateIdForLead] = useState('');
+  const [isSavingNewTemplate, setIsSavingNewTemplate] = useState(false);
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingIds, setDeletingIds] = useState(new Set<string>());
@@ -983,6 +988,73 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   };
 
+  /** Troca o template do lead, substituindo o orcamento_detalhe com dados do novo template */
+  const handleChangeLeadTemplate = async () => {
+    if (!selectedLead || !newTemplateIdForLead) return;
+    setIsSavingNewTemplate(true);
+    try {
+      // 1. Busca dados do novo template em paralelo
+      const [{ data: newTemplate }, { data: newProdutos }, { data: newCampos }] = await Promise.all([
+        supabase.from('templates').select('*').eq('id', newTemplateIdForLead).single(),
+        supabase.from('produtos').select('*').eq('template_id', newTemplateIdForLead).order('ordem'),
+        supabase.from('campos_extras').select('*').eq('template_id', newTemplateIdForLead).eq('ativo', true).order('ordem'),
+      ]);
+
+      if (!newTemplate) throw new Error('Template não encontrado');
+
+      // 2. selectedProdutos: pré-seleciona apenas os obrigatórios
+      const selectedProdutos: Record<string, number> = {};
+      (newProdutos || []).forEach((p: any) => {
+        if (p.obrigatorio) selectedProdutos[p.id] = 1;
+      });
+
+      // 3. Monta o novo orcamento_detalhe zerado com dados do novo template
+      const novoOrcamento = {
+        selectedProdutos,
+        selectedFormaPagamento: null,
+        forma_pagamento_id: null,
+        produtos: newProdutos || [],
+        paymentMethod: null,
+        customFields: newCampos || [],
+        customFieldsData: {},
+        priceBreakdown: { subtotal: 0, desconto: 0, deslocamento: 0, total: 0, parcelas: [] },
+        upsell_produtos: [],
+        sistema_sazonal_ativo: newTemplate.sistema_sazonal_ativo,
+        sistema_geografico_ativo: newTemplate.sistema_geografico_ativo,
+        ocultar_valores_intermediarios: newTemplate.ocultar_valores_intermediarios,
+      };
+
+      // 4. Valor total = soma dos produtos obrigatórios
+      const valorTotal = (newProdutos || [])
+        .filter((p: any) => p.obrigatorio)
+        .reduce((sum: number, p: any) => sum + (Number(p.valor) || 0), 0);
+
+      // 5. Persiste no banco
+      const { error } = await supabase
+        .from('leads')
+        .update({ template_id: newTemplateIdForLead, orcamento_detalhe: novoOrcamento, valor_total: valorTotal })
+        .eq('id', selectedLead.id);
+
+      if (error) throw error;
+
+      // 6. Atualiza estado local
+      const updatedLead = { ...selectedLead, template_id: newTemplateIdForLead, orcamento_detalhe: novoOrcamento as any, valor_total: valorTotal };
+      setSelectedLead(updatedLead as LeadWithReview);
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? updatedLead as LeadWithReview : l));
+      setDetalhesOrcamento(null);
+      setChangingTemplate(false);
+      setNewTemplateIdForLead('');
+
+      // 7. Recarrega detalhes com pequeno delay para garantir estado atualizado
+      setTimeout(() => loadDetalhesOrcamento(updatedLead as LeadWithReview, true), 400);
+    } catch (err) {
+      console.error('Erro ao trocar template:', err);
+      alert('❌ Erro ao trocar o template do lead');
+    } finally {
+      setIsSavingNewTemplate(false);
+    }
+  };
+
   /** Chamado pelo WorkflowStepper quando o workflow de um lead muda */
   const handleWorkflowChange = useCallback((leadId: string, updatedWorkflow: WorkflowStep[]) => {
     setLeads(prev => prev.map(l =>
@@ -1793,7 +1865,7 @@ export function LeadsManager({ userId }: { userId: string }) {
               <div className="flex justify-between items-start mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Detalhes do Lead</h2>
                 <button
-                  onClick={() => setSelectedLead(null)}
+                  onClick={() => { setSelectedLead(null); setChangingTemplate(false); setNewTemplateIdForLead(''); }}
                   className="text-gray-400 hover:text-gray-600 dark:hover:text-[rgba(255,255,255,0.6)]"
                 >
                   ✕
@@ -1815,8 +1887,59 @@ export function LeadsManager({ userId }: { userId: string }) {
 
                 <div>
                   <h3 className="font-semibold text-gray-700 dark:text-white">Origem do Lead</h3>
-                  <div className="mt-2 space-y-1">
-                    <p><strong>Orçamento:</strong> {templates[selectedLead.template_id]?.nome_template || 'Template não encontrado'}</p>
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-sm">
+                        <strong>Orçamento:</strong>{' '}
+                        <span className="font-medium text-blue-700 dark:text-blue-400">
+                          {templates[selectedLead.template_id]?.nome_template || 'Template não encontrado'}
+                        </span>
+                      </p>
+                      <button
+                        onClick={() => {
+                          setChangingTemplate(!changingTemplate);
+                          setNewTemplateIdForLead('');
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-orange-300 dark:border-orange-500/40 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors font-medium flex items-center gap-1"
+                      >
+                        🔄 Trocar Template
+                      </button>
+                    </div>
+
+                    {changingTemplate && (
+                      <div className="rounded-xl border border-orange-200 dark:border-orange-500/30 bg-orange-50/50 dark:bg-orange-900/10 p-3 space-y-3">
+                        <p className="text-xs text-orange-700 dark:text-orange-400 font-medium">
+                          ⚠️ Isso substituirá os produtos, formas de pagamento e campos do lead. Os dados do cliente serão mantidos.
+                        </p>
+                        <select
+                          value={newTemplateIdForLead}
+                          onChange={(e) => setNewTemplateIdForLead(e.target.value)}
+                          className="w-full text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-[rgba(255,255,255,0.1)] bg-white dark:bg-[#07101f] text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-400"
+                        >
+                          <option value="">— Selecione o novo template —</option>
+                          {Object.values(templates)
+                            .filter(t => t.id !== selectedLead.template_id)
+                            .map(t => (
+                              <option key={t.id} value={t.id}>{t.nome_template}</option>
+                            ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleChangeLeadTemplate}
+                            disabled={!newTemplateIdForLead || isSavingNewTemplate}
+                            className="flex-1 text-sm px-3 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {isSavingNewTemplate ? '⏳ Salvando...' : '✅ Confirmar Troca'}
+                          </button>
+                          <button
+                            onClick={() => { setChangingTemplate(false); setNewTemplateIdForLead(''); }}
+                            className="text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-[rgba(255,255,255,0.1)] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
