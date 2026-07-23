@@ -247,7 +247,6 @@ export async function callGeminiSalesAgent(
     savedKey2,
     savedKey3,
     import.meta.env.VITE_GEMINI_API_KEY,
-    'AIzaSyCkFnZsO2RVnge9A-6vomNhBbvgDzsUGX0'
   ].filter((k): k is string => !!k && k.trim().length > 5 && !k.includes('SUA_CHAVE'));
 
   // 2. Coletar dados reais do Supabase

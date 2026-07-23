@@ -29,7 +29,7 @@ export function WhatsAppSettings() {
 
   // 🔑 Estados do Pool de Chaves de API (Prioritária, Secundária e Terciária)
   const [primaryKey, setPrimaryKey] = useState(() => {
-    return localStorage.getItem('priceus_ai_api_key_primary') || localStorage.getItem('priceus_ai_api_key') || 'AIzaSyCkFnZsO2RVnge9A-6vomNhBbvgDzsUGX0';
+    return localStorage.getItem('priceus_ai_api_key_primary') || localStorage.getItem('priceus_ai_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
   });
 
   const [secondaryKey, setSecondaryKey] = useState(() => {
