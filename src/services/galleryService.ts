@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Gallery, GalleryPhoto, GalleryFormData, FileUploadProgress } from '../types/gallery';
-import { processImageForGallery } from './galleryImageProcessor';
+import { processImageForGallery, convertWebpToLowResJpeg } from './galleryImageProcessor';
 import { getStorageAdapter } from './storage/storageAdapterFactory';
 import JSZip from 'jszip';
 
@@ -388,6 +388,8 @@ export class GalleryService {
 
   /**
    * Gera um arquivo ZIP contendo todas ou as fotos selecionadas para download em lote
+   * Para baixa resolução, converte on-the-fly para JPEG (.jpg) com no máximo 1920px (96 DPI)
+   * Para alta resolução, inclui o arquivo original intacto do upload
    */
   static async generateGalleryZip(
     _galleryTitle: string,
@@ -402,19 +404,29 @@ export class GalleryService {
     const total = photos.length;
     for (let i = 0; i < total; i++) {
       const photo = photos[i];
-      const fileName = photo.file_name || `foto_${i + 1}.webp`;
+      const rawName = photo.file_name || `foto_${i + 1}`;
+      const baseName = rawName.replace(/\.(webp|png|jpeg|jpg)$/i, '');
 
       try {
-        let downloadUrl = photo.supabase_web_path;
+        let blob: Blob;
+        let finalFileName: string;
+
         if (useHighRes && photo.google_drive_file_id) {
-          downloadUrl = await adapter.getDownloadUrl(photo.google_drive_file_id);
+          // Alta Resolução: Usar arquivo original sem modificações
+          const downloadUrl = await adapter.getDownloadUrl(photo.google_drive_file_id);
+          const response = await fetch(downloadUrl);
+          blob = await response.blob();
+          finalFileName = photo.file_name || `${baseName}.jpg`;
+        } else {
+          // Baixa Resolução: Converter WebP para JPEG de 1920px (96 DPI)
+          const downloadUrl = photo.supabase_web_path || photo.supabase_thumb_path;
+          blob = await convertWebpToLowResJpeg(downloadUrl, 1920, 0.88);
+          finalFileName = `${baseName}.jpg`;
         }
 
-        const response = await fetch(downloadUrl);
-        const blob = await response.blob();
-        zip.file(fileName, blob);
+        zip.file(finalFileName, blob);
       } catch (err) {
-        console.warn(`Aviso: Falha ao baixar foto ${fileName} para o ZIP:`, err);
+        console.warn(`Aviso: Falha ao processar foto ${photo.file_name} para o ZIP:`, err);
       }
 
       if (onProgress) {

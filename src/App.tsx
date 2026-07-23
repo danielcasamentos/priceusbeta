@@ -21,6 +21,8 @@ import { InteractiveTutorialsPage } from './pages/InteractiveTutorialsPage'
 import { PublicBookingPage } from './pages/PublicBookingPage'
 import { PublicGalleryPage } from './pages/PublicGalleryPage';
 import { PublicPortfolioPage } from './pages/PublicPortfolioPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
+import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
@@ -79,7 +81,9 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* Rotas públicas de tutoriais, galerias e portfólio */}
+              {/* Rotas públicas de tutoriais, galerias, políticas e portfólio */}
+              <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
+              <Route path="/termos-de-servico" element={<TermsOfServicePage />} />
               <Route path="/tutoriais" element={<InteractiveTutorialsPage />} />
               <Route path="/agendar/:leadId" element={<PublicBookingPage />} />
               <Route path="/g/:slug" element={<PublicGalleryPage />} />

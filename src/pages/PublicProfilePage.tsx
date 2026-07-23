@@ -58,11 +58,20 @@ interface Review {
   created_at: string;
 }
 
+interface PublicGallery {
+  id: string;
+  title: string;
+  slug: string;
+  cover_photo_url?: string | null;
+  event_date?: string | null;
+}
+
 export function PublicProfilePage() {
   const { slugUsuario } = useParams<{ slugUsuario: string }>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [galleries, setGalleries] = useState<PublicGallery[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -101,6 +110,17 @@ export function PublicProfilePage() {
       setProfile(profileData);
 
       await supabase.rpc('increment_profile_views', { profile_slug: slugUsuario });
+
+      // Buscar galerias marcadas para exibição no portfólio público
+      const { data: galleriesData } = await supabase
+        .from('galleries')
+        .select('id, title, slug, cover_photo_url, event_date')
+        .eq('user_id', profileData.id)
+        .eq('is_public_portfolio', true)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      setGalleries(galleriesData || []);
 
       const { data: templatesData } = await supabase
         .from('templates')
@@ -170,7 +190,7 @@ export function PublicProfilePage() {
 
   const renderProfileTheme = () => {
     const tema = profile?.tema_perfil || 'original';
-    const commonProps = { profile, templates, reviews, averageRating };
+    const commonProps = { profile, templates, reviews, averageRating, galleries };
 
     console.log('========================================');
     console.log('🎨 [RENDER] Iniciando renderização do tema');

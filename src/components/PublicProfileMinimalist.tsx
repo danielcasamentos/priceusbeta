@@ -44,9 +44,10 @@ interface PublicProfileMinimalistProps {
   templates: Template[];
   reviews: Review[];
   averageRating: number;
+  galleries?: any[];
 }
 
-export function PublicProfileMinimalist({ profile, templates, reviews, averageRating }: PublicProfileMinimalistProps) {
+export function PublicProfileMinimalist({ profile, templates, reviews, averageRating, galleries = [] }: PublicProfileMinimalistProps) {
   const [showAllReviews, setShowAllReviews] = useState(false);
 
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
@@ -162,6 +163,8 @@ export function PublicProfileMinimalist({ profile, templates, reviews, averageRa
                 <PortfolioSection
                   portfolioLink={profile.portfolio_link || null}
                   portfolioFotos={profile.portfolio_fotos || null}
+                  galleries={galleries}
+                  photographerSlug={profile.slug_usuario}
                 />
               </div>
             </div>

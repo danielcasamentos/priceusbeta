@@ -45,9 +45,10 @@ interface PublicProfilePdfEleganteProps {
   templates: Template[];
   reviews: Review[];
   averageRating: number;
+  galleries?: any[];
 }
 
-export function PublicProfilePdfElegante({ profile, templates, reviews, averageRating }: PublicProfilePdfEleganteProps) {
+export function PublicProfilePdfElegante({ profile, templates, reviews, averageRating, galleries = [] }: PublicProfilePdfEleganteProps) {
   const [showAllReviews, setShowAllReviews] = useState(false);
 
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
@@ -195,6 +196,8 @@ export function PublicProfilePdfElegante({ profile, templates, reviews, averageR
           <PortfolioSection
             portfolioLink={profile.portfolio_link || null}
             portfolioFotos={profile.portfolio_fotos || null}
+            galleries={galleries}
+            photographerSlug={profile.slug_usuario}
           />
         </div>
 

@@ -120,3 +120,68 @@ function resizeCanvas(
     );
   });
 }
+
+/**
+ * Converte qualquer URL de imagem (ex: WebP do storage) em memória para JPEG (.jpg) em baixa resolução (máx 1920px na aresta maior, 96 DPI, qualidade 88%)
+ */
+export async function convertWebpToLowResJpeg(
+  imageUrl: string,
+  maxDimension: number = 1920,
+  quality: number = 0.88
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = imageUrl;
+
+    img.onload = () => {
+      let width = img.naturalWidth || img.width;
+      let height = img.naturalHeight || img.height;
+
+      // Redimensionar mantendo proporção para no máximo 1920px na aresta maior
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return reject(new Error('Não foi possível obter o contexto 2D do Canvas'));
+      }
+
+      // Suavização em alta definição (96 DPI)
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Fundo branco caso haja transparência
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Erro ao converter imagem para JPEG'));
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => reject(new Error('Falha ao carregar imagem para conversão em JPEG'));
+  });
+}
+

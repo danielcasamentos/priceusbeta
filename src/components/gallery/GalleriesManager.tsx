@@ -14,6 +14,7 @@ import {
   Calendar,
   Layers,
   ArrowLeft,
+  QrCode,
 } from 'lucide-react';
 import { Gallery, GalleryPhoto, FileUploadProgress, GalleryFormData } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
@@ -21,6 +22,7 @@ import { GalleryEditor } from './GalleryEditor';
 import { GalleryUploader } from './GalleryUploader';
 import { GalleryPhotoGrid } from './GalleryPhotoGrid';
 import { GoogleDriveSettingsModal } from './GoogleDriveSettingsModal';
+import { GalleryQrCodeModal } from './GalleryQrCodeModal';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 
@@ -44,8 +46,21 @@ export function GalleriesManager() {
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [uploadProgressMap, setUploadProgressMap] = useState<Record<string, FileUploadProgress>>({});
 
-  // Token do Google Drive
-  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
+  // Token do Google Drive com persistência no localStorage
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(() => {
+    return localStorage.getItem('priceus_google_drive_token') || null;
+  });
+
+  const handleSaveGoogleToken = (token: string) => {
+    const trimmed = token.trim();
+    if (trimmed) {
+      localStorage.setItem('priceus_google_drive_token', trimmed);
+      setGoogleAccessToken(trimmed);
+    } else {
+      localStorage.removeItem('priceus_google_drive_token');
+      setGoogleAccessToken(null);
+    }
+  };
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   const [isTableMissing, setIsTableMissing] = useState(false);
@@ -169,6 +184,8 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
     setTimeout(() => setCopiedSql(false), 3000);
   };
 
+  const [qrCodeModalGallery, setQrCodeModalGallery] = useState<Gallery | null>(null);
+
   const handleCreateOrUpdateGallery = async (formData: GalleryFormData) => {
     if (!user?.id) return;
     if (selectedGallery) {
@@ -287,6 +304,14 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
             </div>
 
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setQrCodeModalGallery(managingGallery)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors flex items-center space-x-2 border border-slate-700"
+              >
+                <QrCode className="w-4 h-4 text-blue-400" />
+                <span>QR Code</span>
+              </button>
+
               <button
                 onClick={() => copyGalleryLink(managingGallery)}
                 className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors flex items-center space-x-2"
@@ -647,8 +672,18 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
         isOpen={isDriveModalOpen}
         onClose={() => setIsDriveModalOpen(false)}
         currentToken={googleAccessToken}
-        onSaveToken={(token) => setGoogleAccessToken(token)}
+        onSaveToken={handleSaveGoogleToken}
       />
+
+      {qrCodeModalGallery && (
+        <GalleryQrCodeModal
+          isOpen={!!qrCodeModalGallery}
+          onClose={() => setQrCodeModalGallery(null)}
+          galleryTitle={qrCodeModalGallery.title}
+          galleryUrl={`${window.location.origin}/${photographerSlug}/g/${qrCodeModalGallery.slug}`}
+          photographerName={photographerSlug}
+        />
+      )}
     </div>
   );
 }

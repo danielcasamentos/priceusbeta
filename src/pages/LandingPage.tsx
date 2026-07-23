@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Check, ArrowRight, Menu, X, Sparkles, Shield, Globe, Smartphone, Play, Pause } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AppInstallBanner } from '../components/AppInstallBanner';
 
 /* ─── tiny hook: count up number ─── */
@@ -203,6 +204,11 @@ export default function LandingPage() {
         )}
       </nav>
 
+      <Helmet>
+        <title>PriceU$ - CRM e Plataforma para Fotógrafos</title>
+        <meta name="description" content="PriceU$ é o CRM e sistema de gestão completo para fotógrafos profissionais com integração ao Google Calendar e Google Drive." />
+      </Helmet>
+
       {/* HERO */}
       <section style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'120px 24px 80px', position:'relative', overflow:'hidden', background:'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(22,163,74,.15),transparent 60%),radial-gradient(ellipse 60% 40% at 90% 80%,rgba(99,102,241,.08),transparent 55%),#07101f', textAlign:'center' }}>
         <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px)', backgroundSize:'64px 64px', zIndex:0 }} />
@@ -210,12 +216,12 @@ export default function LandingPage() {
           <div className="a1" style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(34,197,94,.12)', border:'1px solid rgba(34,197,94,.3)', borderRadius:999, padding:'6px 18px', marginBottom:24, fontSize:12, fontWeight:700, color:'#22c55e', letterSpacing:'1px', textTransform:'uppercase' }}>
             <Sparkles size={14}/> Plataforma All-in-One para Fotógrafos
           </div>
-          <h1 className="a2" style={{ fontSize:'clamp(36px,6vw,72px)', fontWeight:900, lineHeight:1.08, letterSpacing:'-2px', marginBottom:20 }}>
-            Do orçamento ao contrato.<br/>
-            <span style={{ color:'#22c55e' }}>Tudo automatizado.</span>
+          <h1 className="a2" style={{ fontSize:'clamp(34px,5.5vw,68px)', fontWeight:900, lineHeight:1.08, letterSpacing:'-2px', marginBottom:20 }}>
+            PriceU$ — CRM & Gestão para Fotógrafos.<br/>
+            <span style={{ color:'#22c55e' }}>Do orçamento ao contrato, tudo automatizado.</span>
           </h1>
-          <p className="a3" style={{ fontSize:'clamp(16px,2vw,22px)', color:'rgba(255,255,255,.6)', maxWidth:600, margin:'0 auto 40px', lineHeight:1.6 }}>
-            Orçamentos interativos que substituem o PDF, leads capturados, contratos digitais, agenda inteligente e financeiro completo — em um só lugar.
+          <p className="a3" style={{ fontSize:'clamp(16px,2vw,22px)', color:'rgba(255,255,255,.6)', maxWidth:680, margin:'0 auto 40px', lineHeight:1.6 }}>
+            O PriceU$ é a plataforma de gestão para fotógrafos com propostas digitais, sincronização com a Google Agenda (Calendar) e entrega de galerias integradas ao Google Drive.
           </p>
           <div className="a4" style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
             <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'16px 40px', borderRadius:14, fontSize:16, fontWeight:800, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
@@ -635,11 +641,10 @@ export default function LandingPage() {
             </div>
           </div>
           <div style={{ borderTop:'1px solid rgba(255,255,255,.06)', paddingTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
-            <p style={{ fontSize:12, color:'rgba(255,255,255,.25)' }}>© 2025 PriceUs. Todos os direitos reservados.</p>
+            <p style={{ fontSize:12, color:'rgba(255,255,255,.35)' }}>© {new Date().getFullYear()} PriceU$. Todos os direitos reservados. CRM e Gestão Inteligente para Fotógrafos.</p>
             <div style={{ display:'flex', gap:20 }}>
-              {['Privacidade','Termos','Cookies','LGPD'].map(l=>(
-                <a key={l} href="#" style={{ fontSize:12, color:'rgba(255,255,255,.25)', textDecoration:'none' }}>{l}</a>
-              ))}
+              <Link to="/politica-de-privacidade" style={{ fontSize:12, color:'rgba(255,255,255,.5)', textDecoration:'none' }}>Política de Privacidade</Link>
+              <Link to="/termos-de-servico" style={{ fontSize:12, color:'rgba(255,255,255,.5)', textDecoration:'none' }}>Termos de Serviço</Link>
             </div>
           </div>
         </div>

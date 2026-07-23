@@ -385,51 +385,6 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
     }
   };
 
-  const [uploadingPortfolioIdx, setUploadingPortfolioIdx] = useState<number | null>(null);
-
-  const handleUploadPortfolioImage = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('❌ Arquivo muito grande! Máximo: 5MB');
-      return;
-    }
-
-    setUploadingPortfolioIdx(index);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `profile/${userId}/portfolio-${index}-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage
-        .from('images')
-        .getPublicUrl(fileName);
-
-      const currentFotos = [...(profile?.portfolio_fotos || [])];
-      currentFotos[index] = publicUrlData.publicUrl;
-      handleUpdateField('portfolio_fotos', currentFotos);
-      alert('✅ Foto de portfólio carregada! Clique em "Salvar Perfil" para confirmar.');
-    } catch (error) {
-      console.error('Erro ao fazer upload da foto de portfólio:', error);
-      alert('❌ Erro ao fazer upload da imagem');
-    } finally {
-      setUploadingPortfolioIdx(null);
-    }
-  };
-
-  const handleRemovePortfolioImage = (index: number) => {
-    if (!profile?.portfolio_fotos) return;
-    const currentFotos = [...profile.portfolio_fotos];
-    currentFotos.splice(index, 1);
-    handleUpdateField('portfolio_fotos', currentFotos.filter(Boolean));
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -949,78 +904,23 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
         </div>
 
         <div className="border-t dark:border-[rgba(255,255,255,0.08)] pt-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            Portfólio no Orçamento
+            Portfólio no Orçamento e Perfil Público
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Adicione um link para seu portfólio completo e até 3 fotos de destaque para serem exibidas no cabeçalho do seu orçamento.
-          </p>
-
-          <div className="space-y-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
-                Link do Portfólio Completo (Site, Behance, etc.)
-              </label>
-              <input
-                type="url"
-                value={profile.portfolio_link || ''}
-                onChange={(e) => handleUpdateField('portfolio_link', e.target.value)}
-                className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="https://seuportfoliomassa.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-2">
-                Fotos de Destaque (Máx. 3 fotos)
-              </label>
-              <div className="grid grid-cols-3 gap-4">
-                {[0, 1, 2].map((idx) => {
-                  const fotoUrl = profile.portfolio_fotos?.[idx];
-                  const isUploading = uploadingPortfolioIdx === idx;
-
-                  return (
-                    <div key={idx} className="relative aspect-video rounded-lg border-2 border-dashed border-gray-300 dark:border-[rgba(255,255,255,0.12)] flex items-center justify-center overflow-hidden bg-gray-50 dark:bg-white/5">
-                      {fotoUrl ? (
-                        <>
-                          <img src={fotoUrl} alt={`Portfólio ${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePortfolioImage(idx)}
-                            className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded shadow"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      ) : (
-                        <div className="w-full h-full">
-                          <input
-                            type="file"
-                            id={`portfolio-upload-${idx}`}
-                            accept="image/*"
-                            onChange={(e) => handleUploadPortfolioImage(e, idx)}
-                            className="hidden"
-                            disabled={isUploading}
-                          />
-                          <label
-                            htmlFor={`portfolio-upload-${idx}`}
-                            className="flex flex-col items-center justify-center w-full h-full p-2 text-center cursor-pointer hover:text-blue-500 transition-colors"
-                          >
-                            {isUploading ? (
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                            ) : (
-                              <>
-                                <Upload className="w-5 h-5 text-gray-400 mb-1" />
-                                <span className="text-[10px] text-gray-500">Foto {idx + 1}</span>
-                              </>
-                            )}
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+          
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-200 dark:border-blue-800/40 space-y-3">
+            <div className="flex items-start space-x-3">
+              <div className="p-2 rounded-xl bg-blue-600 text-white flex-shrink-0 mt-0.5 shadow-md">
+                <Globe className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  Portfólio Automático com Galerias de Entregas Reais
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                  As fotos de portfólio no seu perfil público agora são integradas diretamente ao seu <strong>Módulo de Entregas</strong>! Basta marcar a chave <em>"Exibir no Portfólio Público"</em> em qualquer galeria para ela aparecer automaticamente no seu perfil com foto de capa e link completo.
+                </p>
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Download, Calendar, Camera, Loader2, Sparkles } from 'lucide-react';
 import { Gallery, GalleryPhoto } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
+import { convertWebpToLowResJpeg } from '../../services/galleryImageProcessor';
 import { GalleryPasswordModal } from './GalleryPasswordModal';
 import { GalleryLightbox } from './GalleryLightbox';
 
@@ -41,14 +42,40 @@ export function PublicGalleryView({
     return false;
   };
 
-  const handleDownloadSinglePhoto = (photo: GalleryPhoto, _highRes: boolean) => {
-    const a = document.createElement('a');
-    a.href = photo.supabase_web_path;
-    a.download = photo.file_name || 'foto.webp';
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownloadSinglePhoto = async (photo: GalleryPhoto, highRes: boolean) => {
+    try {
+      const rawName = photo.file_name || 'foto';
+      const baseName = rawName.replace(/\.(webp|png|jpeg|jpg)$/i, '');
+
+      if (highRes) {
+        // Se for Alta Resolução, abrir/baixar a URL original sem modificação
+        const a = document.createElement('a');
+        a.href = photo.supabase_web_path;
+        a.download = `${baseName}.jpg`;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        // Baixa Resolução: Converter WebP para JPEG de 1920px (96 DPI) em memória
+        const jpegBlob = await convertWebpToLowResJpeg(
+          photo.supabase_web_path || photo.supabase_thumb_path,
+          1920,
+          0.88
+        );
+        const blobUrl = URL.createObjectURL(jpegBlob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${baseName}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (err) {
+      console.error('Erro ao baixar foto:', err);
+      window.open(photo.supabase_web_path, '_blank');
+    }
   };
 
   const handleDownloadZip = async () => {
@@ -79,7 +106,7 @@ export function PublicGalleryView({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500 selection:text-white">
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-900 selection:text-white">
       {/* Modal de Senha */}
       {!isAuthorized && (
         <GalleryPasswordModal
@@ -93,18 +120,18 @@ export function PublicGalleryView({
       {isAuthorized && (
         <>
           {/* Header de Capa & Branding do Fotógrafo */}
-          <div className="relative w-full h-[40vh] sm:h-[50vh] overflow-hidden bg-slate-900">
+          <div className="relative w-full h-[45vh] sm:h-[55vh] overflow-hidden bg-slate-900">
             {gallery.cover_photo_url ? (
               <img
                 src={gallery.cover_photo_url}
                 alt={gallery.title}
-                className="w-full h-full object-cover brightness-[0.6] filter contrast-105 transition-transform duration-700 hover:scale-105"
+                className="w-full h-full object-cover brightness-[0.7] filter contrast-105 transition-transform duration-700 hover:scale-105"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/40 opacity-90" />
+              <div className="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
             )}
 
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
             <div className="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto p-6 sm:p-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div className="space-y-3">
@@ -114,31 +141,31 @@ export function PublicGalleryView({
                     <img
                       src={photographer.profile_image_url}
                       alt={photographer.nome_profissional || 'Fotógrafo'}
-                      className="w-10 h-10 rounded-full border-2 border-white/20 object-cover shadow-lg"
+                      className="w-11 h-11 rounded-full border-2 border-white/40 object-cover shadow-lg"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-lg">
-                      <Camera className="w-5 h-5" />
+                    <div className="w-11 h-11 rounded-full bg-white text-slate-900 flex items-center justify-center font-bold text-sm shadow-lg">
+                      <Camera className="w-5 h-5 text-slate-900" />
                     </div>
                   )}
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-slate-300 font-semibold">Fotografia por</p>
+                    <p className="text-xs uppercase tracking-widest text-slate-300 font-semibold">Fotografia por</p>
                     <a
                       href={`/${photographer.slug || ''}`}
-                      className="text-sm font-bold text-white hover:text-blue-400 transition-colors"
+                      className="text-sm font-bold text-white hover:text-emerald-400 transition-colors"
                     >
                       {photographer.nome_profissional || 'Fotógrafo PriceU$'}
                     </a>
                   </div>
                 </div>
 
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md">
                   {gallery.title}
                 </h1>
 
                 {gallery.event_date && (
-                  <p className="text-xs sm:text-sm text-slate-300 flex items-center space-x-2">
-                    <Calendar className="w-4 h-4 text-blue-400" />
+                  <p className="text-xs sm:text-sm text-slate-200 flex items-center space-x-2 font-medium">
+                    <Calendar className="w-4 h-4 text-emerald-400" />
                     <span>{new Date(gallery.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                   </p>
                 )}
@@ -149,16 +176,16 @@ export function PublicGalleryView({
                 <button
                   onClick={handleDownloadZip}
                   disabled={downloadingZip || photos.length === 0}
-                  className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-xl shadow-blue-500/25 transition-all flex items-center space-x-2 disabled:opacity-50"
+                  className="px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-sm shadow-2xl transition-all flex items-center space-x-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {downloadingZip ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
                       <span>Gerando ZIP ({zipProgress}%)...</span>
                     </>
                   ) : (
                     <>
-                      <Download className="w-4 h-4" />
+                      <Download className="w-4 h-4 text-slate-950" />
                       <span>Baixar Galeria Completa (ZIP)</span>
                     </>
                   )}
@@ -167,20 +194,20 @@ export function PublicGalleryView({
             </div>
           </div>
 
-          {/* Grid Masonry de Fotos */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          {/* Grid Masonry de Fotos com Fundo Branco Limpo */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-white">
             {photos.length === 0 ? (
-              <div className="text-center py-20 border border-slate-900 rounded-3xl bg-slate-900/30">
-                <Sparkles className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400 text-base font-semibold">Galeria sem fotos disponíveis no momento.</p>
+              <div className="text-center py-20 border border-slate-200 rounded-3xl bg-slate-50/50">
+                <Sparkles className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                <p className="text-slate-600 text-base font-semibold">Galeria sem fotos disponíveis no momento.</p>
               </div>
             ) : (
-              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5">
                 {photos.map((photo, index) => (
                   <div
                     key={photo.id}
                     onClick={() => setLightboxIndex(index)}
-                    className="break-inside-avoid relative group rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-900 hover:border-slate-700 transition-all duration-300 shadow-md"
+                    className="break-inside-avoid relative group rounded-2xl overflow-hidden cursor-pointer bg-slate-100 border border-slate-200/70 hover:border-slate-400 transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-0.5"
                   >
                     <img
                       src={photo.supabase_web_path || photo.supabase_thumb_path}
@@ -189,8 +216,8 @@ export function PublicGalleryView({
                       loading="lazy"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-4 flex items-end justify-between">
-                      <span className="text-xs text-white font-medium truncate">{photo.file_name}</span>
-                      <span className="p-2 rounded-xl bg-white/10 backdrop-blur-md text-white">
+                      <span className="text-xs text-white font-semibold truncate">{photo.file_name}</span>
+                      <span className="p-2 rounded-xl bg-white/20 backdrop-blur-md text-white hover:bg-white/40 transition-colors">
                         <Download className="w-4 h-4" />
                       </span>
                     </div>
@@ -199,6 +226,11 @@ export function PublicGalleryView({
               </div>
             )}
           </main>
+
+          {/* Rodapé Clean */}
+          <footer className="border-t border-slate-100 py-8 bg-slate-50/60 text-center text-xs text-slate-400">
+            <p>Galeria entregue via <span className="font-bold text-slate-700">PriceU$</span></p>
+          </footer>
 
           {/* Lightbox */}
           <GalleryLightbox

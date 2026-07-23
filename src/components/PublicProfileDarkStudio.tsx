@@ -45,9 +45,10 @@ interface PublicProfileDarkStudioProps {
   templates: Template[];
   reviews: Review[];
   averageRating: number;
+  galleries?: any[];
 }
 
-export function PublicProfileDarkStudio({ profile, templates, reviews, averageRating }: PublicProfileDarkStudioProps) {
+export function PublicProfileDarkStudio({ profile, templates, reviews, averageRating, galleries = [] }: PublicProfileDarkStudioProps) {
   const [showAllReviews, setShowAllReviews] = useState(false);
 
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
@@ -187,6 +188,8 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
           <PortfolioSection
             portfolioLink={profile.portfolio_link || null}
             portfolioFotos={profile.portfolio_fotos || null}
+            galleries={galleries}
+            photographerSlug={profile.slug_usuario}
             isDark={true}
           />
         </div>

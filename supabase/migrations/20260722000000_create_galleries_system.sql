@@ -133,3 +133,8 @@ DROP POLICY IF EXISTS "Fotógrafos autenticados podem deletar suas imagens" ON s
 CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens"
     ON storage.objects FOR DELETE
     USING (bucket_id = 'gallery-assets' AND auth.role() = 'authenticated');
+
+-- 4. Conceder permissões para os papéis de acesso do Supabase
+GRANT ALL ON TABLE galleries TO authenticated, anon, service_role;
+GRANT ALL ON TABLE gallery_photos TO authenticated, anon, service_role;
+

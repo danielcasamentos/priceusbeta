@@ -44,9 +44,10 @@ interface PublicProfileOriginalProps {
   templates: Template[];
   reviews: Review[];
   averageRating: number;
+  galleries?: any[];
 }
 
-export function PublicProfileOriginal({ profile, templates, reviews, averageRating }: PublicProfileOriginalProps) {
+export function PublicProfileOriginal({ profile, templates, reviews, averageRating, galleries = [] }: PublicProfileOriginalProps) {
   const [showAllReviews, setShowAllReviews] = useState(false);
 
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
@@ -161,6 +162,8 @@ export function PublicProfileOriginal({ profile, templates, reviews, averageRati
                 <PortfolioSection
                   portfolioLink={profile.portfolio_link || null}
                   portfolioFotos={profile.portfolio_fotos || null}
+                  galleries={galleries}
+                  photographerSlug={profile.slug_usuario}
                 />
               </div>
             </div>
