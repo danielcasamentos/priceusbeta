@@ -17,6 +17,8 @@ import {
   Moon,
   Crown,
   ClipboardList,
+  Bot,
+  Images,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -61,7 +63,9 @@ export function Sidebar({
         { id: 'meu-dia', label: 'Meu Dia', icon: Sun, section: 'vendas' },
         { id: 'templates', label: 'Meus Templates', icon: FileText, section: 'vendas' },
         { id: 'leads', label: 'Leads', icon: LayoutDashboard, section: 'vendas' },
+        { id: 'whatsapp-ia', label: 'IA de Vendas (WhatsApp)', icon: Bot, section: 'vendas' },
         { id: 'workflow', label: 'Workflow', icon: ClipboardList, section: 'vendas' },
+        { id: 'entregas', label: 'Entregas', icon: Images, section: 'vendas' },
         { id: 'contratos', label: 'Contratos', icon: FileSignature, section: 'vendas' },
         { id: 'avaliacoes', label: 'Avaliações', icon: Star, section: 'vendas' },
       ]

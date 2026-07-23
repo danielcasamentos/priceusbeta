@@ -28,6 +28,9 @@ import { useDeviceType } from '../hooks/useDeviceType';
 import { MeuDia } from '../components/MeuDia';
 import { useMeuDiaNotification } from '../hooks/useMeuDiaNotification';
 import { ChangelogModal } from '../components/ChangelogModal';
+import { WhatsAppStudio } from '../components/whatsapp/WhatsAppStudio';
+import { PriceusAssistantDrawer } from '../components/PriceusAssistantDrawer';
+import { GalleriesManager } from '../components/gallery/GalleriesManager';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -100,6 +103,9 @@ export function DashboardPage() {
         return 'Meus Templates';
       case 'leads':
         return 'Gestão de Leads';
+      case 'entregas':
+      case 'galerias':
+        return 'Entregas & Galerias';
       case 'contratos':
         return 'Contratos';
       case 'agenda':
@@ -216,6 +222,7 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <PriceusAssistantDrawer />
             {user?.id && (
               <NotificationCenter userId={user.id} onNavigate={handlePageChange} />
             )}
@@ -286,6 +293,10 @@ export function DashboardPage() {
                 </div>
                 <LeadsManager userId={user.id} />
               </>
+            ) : currentPage === 'whatsapp-ia' ? (
+              <WhatsAppStudio userEmail={user.email} />
+            ) : currentPage === 'entregas' || currentPage === 'galerias' ? (
+              <GalleriesManager />
             ) : currentPage === 'videos' ? (
               <VideoGallery />
             ) : currentPage === 'ajuda' ? (

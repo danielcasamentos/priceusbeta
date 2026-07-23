@@ -2,6 +2,14 @@
 
 ## 📋 CHECKLIST DE IMPLEMENTAÇÃO
 
+### 0️⃣ SISTEMA WHATSAPP + IA GEMINI (DESENVOLVIMENTO LOCAL & DOCKER) 🆕
+- [ ] Aplicar migration `supabase/migrations/20260720000000_whatsapp_gemini_system.sql`
+- [ ] Configurar variáveis de ambiente em `.env.development.local` (`VITE_SPECIAL_ACCESS_EMAILS`, `VITE_GEMINI_API_KEY`)
+- [ ] Iniciar microserviço Node local em `server/whatsapp-service`
+- [ ] Documentação completa disponível em: [MELHORIAS_WHATSAPP_GEMINI_SUITE.md](file:///Users/danielazevedo/Desktop/PROJETOS%20PRICEUS/Priceus20%20-%20dev/MELHORIAS_WHATSAPP_GEMINI_SUITE.md)
+
+---
+
 ### 1️⃣ APLICAR AS MIGRATIONS DO BANCO ✅
 
 Execute os 3 arquivos SQL no Supabase Dashboard:

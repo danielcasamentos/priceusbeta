@@ -19,6 +19,8 @@ import { ContractPreviewPage } from './pages/ContractPreviewPage' // Adicionado
 import { ReviewPage } from './pages/ReviewPage'
 import { InteractiveTutorialsPage } from './pages/InteractiveTutorialsPage'
 import { PublicBookingPage } from './pages/PublicBookingPage'
+import { PublicGalleryPage } from './pages/PublicGalleryPage';
+import { PublicPortfolioPage } from './pages/PublicPortfolioPage';
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
@@ -77,9 +79,12 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* Rotas públicas de tutoriais e com slug */}
+              {/* Rotas públicas de tutoriais, galerias e portfólio */}
               <Route path="/tutoriais" element={<InteractiveTutorialsPage />} />
               <Route path="/agendar/:leadId" element={<PublicBookingPage />} />
+              <Route path="/g/:slug" element={<PublicGalleryPage />} />
+              <Route path="/:slugUsuario/g/:slugGaleria" element={<PublicGalleryPage />} />
+              <Route path="/:slugUsuario/portfolio" element={<PublicPortfolioPage />} />
               <Route path="/:slugUsuario" element={<PublicProfilePage />} />
               <Route path="/:slugUsuario/:slugTemplate" element={<QuotePage />} />
               <Route path="/avaliar/:token" element={<ReviewPage />} />
@@ -87,14 +92,6 @@ function App() {
               <Route path="/contrato/:token/preview" element={<ContractPreviewPage />} />
               <Route path="/verificar/:token" element={<ContractVerificationPage />} />
               <Route path="/contrato/:token/completo" element={<ContractCompletePage />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                }
-              />
             </Routes>
           </div>
         </Router>
