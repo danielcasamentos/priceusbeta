@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Smartphone,
   Cpu,
@@ -6,7 +6,8 @@ import {
   CheckCircle2,
   Clock,
   QrCode,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 export function WhatsAppSettings() {
@@ -14,10 +15,13 @@ export function WhatsAppSettings() {
   const [startHour, setStartHour] = useState('08:00');
   const [endHour, setEndHour] = useState('20:00');
   
-  // Estado inicial do QR Code real
   const [qrState, setQrState] = useState<'connected' | 'qr' | 'disconnected'>(() => {
     return localStorage.getItem('priceus_wa_connected') === 'true' ? 'connected' : 'qr';
   });
+
+  const [realQrBase64, setRealQrBase64] = useState<string | null>(null);
+  const [connectedPhone, setConnectedPhone] = useState<string | null>(null);
+  const [isGatewayOnline, setIsGatewayOnline] = useState(false);
 
   // 👩‍💼 Nome da Persona de IA de Atendimento
   const [aiPersonaName, setAiPersonaName] = useState(() => {
@@ -25,6 +29,33 @@ export function WhatsAppSettings() {
   });
 
   const [saveToast, setSaveToast] = useState(false);
+
+  // 🔄 Fetch em tempo real do Servidor Baileys oficial
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/whatsapp/qr');
+        if (res.ok) {
+          const data = await res.json();
+          setIsGatewayOnline(true);
+          if (data.status === 'connected') {
+            setQrState('connected');
+            setConnectedPhone(data.connectedUser || 'Conectado');
+            localStorage.setItem('priceus_wa_connected', 'true');
+          } else if (data.qrBase64) {
+            setRealQrBase64(data.qrBase64);
+            setQrState('qr');
+          }
+        }
+      } catch {
+        setIsGatewayOnline(false);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSaveSettings = () => {
     localStorage.setItem('priceus_ai_persona_name', aiPersonaName.trim());
@@ -37,14 +68,20 @@ export function WhatsAppSettings() {
     setQrState('connected');
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    try {
+      await fetch('http://localhost:3001/api/whatsapp/disconnect', { method: 'POST' });
+    } catch {
+      // Fallback
+    }
     localStorage.removeItem('priceus_wa_connected');
     localStorage.removeItem('priceus_wa_qr_base64');
+    setRealQrBase64(null);
     setQrState('qr');
   };
 
-  // QR Code Real Base64 do WhatsApp da Instância
-  const storedQr = typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_qr_base64') : null;
+  // QR Code Real Base64 do Baileys
+  const activeQrImage = realQrBase64 || (typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_qr_base64') : null);
 
   return (
     <div className="space-y-6">
@@ -150,21 +187,25 @@ export function WhatsAppSettings() {
                   </p>
                 </div>
 
-                {storedQr ? (
+                {activeQrImage ? (
                   <div className="p-3.5 bg-white rounded-2xl shadow-xl border border-slate-700 hover:scale-105 transition-transform duration-200">
                     <img
-                      src={storedQr}
-                      alt="QR Code WhatsApp Real"
+                      src={activeQrImage}
+                      alt="QR Code WhatsApp Real Baileys"
                       className="w-48 h-48 object-contain rounded-lg"
                     />
                   </div>
                 ) : (
                   <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl max-w-xs space-y-2">
-                    <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto">
-                      <Smartphone className="w-6 h-6" />
+                    <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
+                      <QrCode className="w-6 h-6 animate-pulse text-emerald-400" />
                     </div>
-                    <p className="text-xs font-semibold text-slate-200">Sessão Pronta para Ativação</p>
-                    <p className="text-[11px] text-slate-400">Ative o WhatsApp em 1-clique para autorizar a IA na Central de Comando.</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      {isGatewayOnline ? 'Aguardando Leitura pelo Celular...' : 'Servidor Pronto para Conexão'}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {isGatewayOnline ? 'Escaneie no seu WhatsApp em Aparelhos Conectados' : 'Ative a sessão para vincular seu celular no sistema'}
+                    </p>
                   </div>
                 )}
 
