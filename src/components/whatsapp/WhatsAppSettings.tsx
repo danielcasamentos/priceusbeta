@@ -43,9 +43,8 @@ export function WhatsAppSettings() {
     setQrState('qr');
   };
 
-  // QR Code Dinâmico do WhatsApp da Instância
+  // QR Code Real Base64 do WhatsApp da Instância
   const storedQr = typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_qr_base64') : null;
-  const qrCodeUrl = storedQr || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PRICEUS_WA_PAIRING_${Date.now()}`;
 
   return (
     <div className="space-y-6">
@@ -118,7 +117,7 @@ export function WhatsAppSettings() {
               Conexão com Seu Celular WhatsApp
             </h3>
             <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium">
-              {qrState === 'connected' ? '● Conectado' : 'Aguardando Pareamento'}
+              {qrState === 'connected' ? '● Conectado' : 'Aguardando Ativação'}
             </span>
           </div>
 
@@ -136,7 +135,7 @@ export function WhatsAppSettings() {
                   onClick={handleDisconnect}
                   className="text-xs text-rose-400 hover:text-rose-300 hover:underline pt-2 font-medium cursor-pointer"
                 >
-                  Desconectar / Escanear Novo QR Code
+                  Desconectar Sessão do WhatsApp
                 </button>
               </>
             ) : (
@@ -144,21 +143,30 @@ export function WhatsAppSettings() {
                 <div className="space-y-1">
                   <h4 className="font-bold text-slate-200 text-sm flex items-center justify-center gap-2">
                     <QrCode className="w-4 h-4 text-emerald-400" />
-                    <span>Escaneie o QR Code no Seu Celular</span>
+                    <span>Conexão de Atendimento do WhatsApp</span>
                   </h4>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    Abra o WhatsApp ➔ Menu (3 pontos ou Configurações) ➔ <strong>Aparelhos Conectados ➔ Conectar um Aparelho</strong>:
+                    Clique em ativar para parear e liberar a resposta automática da IA no seu WhatsApp comercial:
                   </p>
                 </div>
 
-                {/* QR Code de Conexão Real Imersivo */}
-                <div className="p-3.5 bg-white rounded-2xl shadow-xl border border-slate-700 hover:scale-105 transition-transform duration-200">
-                  <img
-                    src={qrCodeUrl}
-                    alt="QR Code WhatsApp Real"
-                    className="w-48 h-48 object-contain rounded-lg"
-                  />
-                </div>
+                {storedQr ? (
+                  <div className="p-3.5 bg-white rounded-2xl shadow-xl border border-slate-700 hover:scale-105 transition-transform duration-200">
+                    <img
+                      src={storedQr}
+                      alt="QR Code WhatsApp Real"
+                      className="w-48 h-48 object-contain rounded-lg"
+                    />
+                  </div>
+                ) : (
+                  <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl max-w-xs space-y-2">
+                    <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto">
+                      <Smartphone className="w-6 h-6" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-200">Sessão Pronta para Ativação</p>
+                    <p className="text-[11px] text-slate-400">Ative o WhatsApp em 1-clique para autorizar a IA na Central de Comando.</p>
+                  </div>
+                )}
 
                 <div className="pt-2">
                   <button
@@ -166,7 +174,7 @@ export function WhatsAppSettings() {
                     className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center gap-2"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirmar Pareamento do Aparelho</span>
+                    <span>Ativar Conexão do WhatsApp</span>
                   </button>
                 </div>
               </>
