@@ -20,6 +20,7 @@ const AUTH_FOLDER = path.join(__dirname, 'baileys_auth');
 
 let sock = null;
 let currentQrBase64 = null;
+let currentRawQr = null;
 let connectionStatus = 'disconnected';
 let connectedUser = null;
 
@@ -48,10 +49,11 @@ async function startWhatsAppServer() {
 
       if (qr) {
         connectionStatus = 'qr';
-        console.log('[WhatsApp Gateway] Novo QR Code gerado pelo Baileys!');
+        currentRawQr = qr;
+        console.log('[WhatsApp Gateway] ⚡ Novo QR Code gerado pelo Baileys!');
         try {
           currentQrBase64 = await QRCode.toDataURL(qr, {
-            errorCorrectionLevel: 'H',
+            errorCorrectionLevel: 'M',
             margin: 2,
             scale: 8
           });
@@ -63,28 +65,30 @@ async function startWhatsAppServer() {
       if (connection === 'open') {
         connectionStatus = 'connected';
         currentQrBase64 = null;
+        currentRawQr = null;
         connectedUser = sock.user ? sock.user.id.split(':')[0] : 'Desconhecido';
         console.log(`[WhatsApp Gateway] ✅ Conectado com sucesso! Número: ${connectedUser}`);
       }
 
       if (connection === 'close') {
-        const shouldReconnect =
-          (lastDisconnect?.error?.output?.statusCode || 0) !== DisconnectReason.loggedOut;
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         console.log(
-          `[WhatsApp Gateway] Conexão fechada. Reconectar: ${shouldReconnect}`
+          `[WhatsApp Gateway] Conexão fechada. Status: ${statusCode}, Reconectar: ${shouldReconnect}`
         );
 
         connectionStatus = 'disconnected';
         currentQrBase64 = null;
+        currentRawQr = null;
 
-        if (shouldReconnect) {
+        if (shouldReconnect && statusCode !== 401 && statusCode !== 403) {
           setTimeout(startWhatsAppServer, 3000);
         } else {
-          console.log('[WhatsApp Gateway] Sessão encerrada. Limpando credenciais...');
+          console.log('[WhatsApp Gateway] Sessão encerrada ou não autorizada. Limpando credenciais...');
           if (fs.existsSync(AUTH_FOLDER)) {
             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
           }
-          setTimeout(startWhatsAppServer, 2000);
+          setTimeout(startWhatsAppServer, 1500);
         }
       }
     });
@@ -117,6 +121,7 @@ app.get('/api/whatsapp/qr', (req, res) => {
   res.json({
     status: connectionStatus,
     qrBase64: currentQrBase64,
+    rawQr: currentRawQr,
     connectedUser
   });
 });

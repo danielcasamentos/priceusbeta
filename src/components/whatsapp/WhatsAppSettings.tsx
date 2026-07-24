@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Smartphone,
   Cpu,
@@ -6,8 +7,7 @@ import {
   CheckCircle2,
   Clock,
   QrCode,
-  Sparkles,
-  RefreshCw
+  Sparkles
 } from 'lucide-react';
 
 export function WhatsAppSettings() {
@@ -20,6 +20,7 @@ export function WhatsAppSettings() {
   });
 
   const [realQrBase64, setRealQrBase64] = useState<string | null>(null);
+  const [rawQrString, setRawQrString] = useState<string | null>(null);
   const [connectedPhone, setConnectedPhone] = useState<string | null>(null);
   const [isGatewayOnline, setIsGatewayOnline] = useState(false);
 
@@ -42,9 +43,10 @@ export function WhatsAppSettings() {
             setQrState('connected');
             setConnectedPhone(data.connectedUser || 'Conectado');
             localStorage.setItem('priceus_wa_connected', 'true');
-          } else if (data.qrBase64) {
-            setRealQrBase64(data.qrBase64);
-            setQrState('qr');
+          } else {
+            if (data.rawQr) setRawQrString(data.rawQr);
+            if (data.qrBase64) setRealQrBase64(data.qrBase64);
+            if (data.status === 'qr') setQrState('qr');
           }
         }
       } catch {
@@ -53,7 +55,7 @@ export function WhatsAppSettings() {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000);
+    const interval = setInterval(fetchStatus, 2500);
     return () => clearInterval(interval);
   }, []);
 
@@ -166,7 +168,9 @@ export function WhatsAppSettings() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-slate-100 text-sm">WhatsApp Conectado & Operacional</h4>
-                  <p className="text-xs text-slate-400 mt-1">Sua conta está ativa. A IA responderá aos seus clientes no WhatsApp.</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Sua conta {connectedPhone ? `(${connectedPhone})` : 'ativa'} está operacional. A IA responderá aos seus clientes no WhatsApp.
+                  </p>
                 </div>
                 <button
                   onClick={handleDisconnect}
@@ -187,7 +191,11 @@ export function WhatsAppSettings() {
                   </p>
                 </div>
 
-                {activeQrImage ? (
+                {rawQrString ? (
+                  <div className="p-4 bg-white rounded-2xl shadow-2xl border border-slate-700 hover:scale-105 transition-transform duration-200">
+                    <QRCodeSVG value={rawQrString} size={210} level="M" />
+                  </div>
+                ) : activeQrImage ? (
                   <div className="p-3.5 bg-white rounded-2xl shadow-xl border border-slate-700 hover:scale-105 transition-transform duration-200">
                     <img
                       src={activeQrImage}
@@ -201,10 +209,10 @@ export function WhatsAppSettings() {
                       <QrCode className="w-6 h-6 animate-pulse text-emerald-400" />
                     </div>
                     <p className="text-xs font-semibold text-slate-200">
-                      {isGatewayOnline ? 'Aguardando Leitura pelo Celular...' : 'Servidor Pronto para Conexão'}
+                      {isGatewayOnline ? 'Aguardando Geração do QR Code...' : 'Servidor Pronto para Conexão'}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      {isGatewayOnline ? 'Escaneie no seu WhatsApp em Aparelhos Conectados' : 'Ative a sessão para vincular seu celular no sistema'}
+                      {isGatewayOnline ? 'Conectando ao canal Baileys em tempo real...' : 'Ative a sessão para vincular seu celular no sistema'}
                     </p>
                   </div>
                 )}
