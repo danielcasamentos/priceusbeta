@@ -49,5 +49,12 @@ export default defineConfig({
   },
   server: {
     host: true,
+    proxy: {
+      '/api/whatsapp': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });
