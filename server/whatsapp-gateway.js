@@ -1,11 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import QRCode from 'qrcode';
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion
-} from '@whiskeysockets/baileys';
+import baileys from '@whiskeysockets/baileys';
+const makeWASocket = baileys.default || baileys;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileys;
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
