@@ -292,8 +292,8 @@ export function WhatsAppSettings() {
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-slate-100 text-sm">WhatsApp Pareado com Sucesso (Ambiente DEV)</h4>
-                  <p className="text-xs text-slate-400 mt-1">Sessão local ativa via gateway `http://localhost:3001` (Evolution / Baileys)</p>
+                  <h4 className="font-semibold text-slate-100 text-sm">WhatsApp Pareado com Sucesso</h4>
+                  <p className="text-xs text-slate-400 mt-1">Sessão ativa e sincronizada com a API de atendimento do PriceU$</p>
                 </div>
                 <button
                   onClick={() => setQrState('qr')}
@@ -305,20 +305,20 @@ export function WhatsAppSettings() {
             ) : (
               <>
                 <QrCode className="w-12 h-12 text-indigo-400 animate-pulse" />
-                <p className="text-xs text-slate-300">Escaneie o QR Code abaixo com seu celular de teste em <strong>WhatsApp ➔ Aparelhos Conectados ➔ Conectar um Aparelho</strong>:</p>
+                <p className="text-xs text-slate-300">Escaneie o QR Code abaixo com seu celular em <strong>WhatsApp ➔ Aparelhos Conectados ➔ Conectar um Aparelho</strong>:</p>
                 
-                {/* QR Code de Exemplo DEV */}
+                {/* QR Code de Conexão */}
                 <div className="p-3 bg-white rounded-xl shadow-lg border border-slate-700">
                   <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=PRICEUS_WHATSAPP_DEV_SESSION"
-                    alt="QR Code WhatsApp DEV"
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=PRICEUS_WHATSAPP_SESSION"
+                    alt="QR Code WhatsApp"
                     className="w-36 h-36"
                   />
                 </div>
 
                 <button
                   onClick={() => setQrState('connected')}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20 cursor-pointer"
                 >
                   ✅ Confirmar Conexão do Celular
                 </button>
@@ -326,14 +326,14 @@ export function WhatsAppSettings() {
             )}
           </div>
 
-          {/* URL de Webhook para DEV (Ngrok) */}
+          {/* URL de Webhook Dinâmica para Produção / DEV */}
           <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-xs">
-            <span className="text-slate-300 font-bold block">🔗 URL de Webhook para Gateways (Ngrok DEV):</span>
-            <code className="block bg-slate-900 px-3 py-1.5 rounded-lg text-emerald-400 font-mono text-[11px] select-all border border-slate-800">
-              http://localhost:5174/api/whatsapp/webhook
+            <span className="text-slate-300 font-bold block">🔗 URL Oficial do Webhook (Gateway WhatsApp):</span>
+            <code className="block bg-slate-900 px-3 py-1.5 rounded-lg text-emerald-400 font-mono text-[11px] select-all border border-slate-800 break-all">
+              {typeof window !== 'undefined' ? `${window.location.origin}/api/whatsapp/webhook` : 'https://priceus.com.br/api/whatsapp/webhook'}
             </code>
             <p className="text-[11px] text-slate-400">
-              💡 Para receber requisições de servidores externos em DEV, rode no terminal: <code className="text-indigo-300">npx ngrok http 5174</code>
+              💡 Configure este endpoint no seu gateway do WhatsApp (Evolution API, Z-API ou Meta Official API) para receber mensagens em tempo real.
             </p>
           </div>
         </div>
