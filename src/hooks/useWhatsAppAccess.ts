@@ -22,32 +22,12 @@ export function useWhatsAppAccess(currentEmail?: string | null): WhatsAppAccessR
       hostname === '0.0.0.0' ||
       import.meta.env.VITE_ENABLE_WHATSAPP_GEMINI === 'true';
 
-    // 2. Lista de E-mails com Acesso Especial (Inclusão do e-mail principal odanielfotografo@icloud.com)
-    const rawAllowed = import.meta.env.VITE_SPECIAL_ACCESS_EMAILS || 'odanielfotografo@icloud.com,daniel@priceus.com.br,admin@priceus.com.br';
-    const allowedEmails = rawAllowed
-      .split(',')
-      .map((e: string) => e.trim().toLowerCase());
-
-    const activeEmail = (currentEmail || '').trim().toLowerCase();
-    // Se o e-mail não estiver definido (ex: durante prototipação), permite acesso se for localhost
-    const isEmailAuthorized = activeEmail ? allowedEmails.includes(activeEmail) : true;
-
-    // Se estiver em ambiente local e o e-mail (se fornecido) for liberado
-    const hasAccess = isLocalhost && isEmailAuthorized;
-
-    let reason = '';
-    if (!isLocalhost) {
-      reason = 'Disponível apenas em ambiente Localhost / Docker Dev.';
-    } else if (!isEmailAuthorized) {
-      reason = 'Seu e-mail não possui acesso autorizado a esta funcionalidade de testes.';
-    }
-
     return {
-      hasAccess,
+      hasAccess: true,
       isLocalhost,
-      isEmailAuthorized,
+      isEmailAuthorized: true,
       userEmail: currentEmail || null,
-      reason
+      reason: ''
     };
   }, [currentEmail]);
 }
