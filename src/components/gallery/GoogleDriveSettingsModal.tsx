@@ -19,7 +19,8 @@ export function GoogleDriveSettingsModal({
 
   if (!isOpen) return null;
 
-  const isConnected = Boolean(currentToken && currentToken.trim().length > 0);
+  const activeToken = currentToken || (typeof window !== 'undefined' ? localStorage.getItem('priceus_google_drive_token') : null);
+  const isConnected = Boolean(activeToken && activeToken.trim().length > 0);
 
   const handleSave = () => {
     onSaveToken(tokenInput.trim());
@@ -102,7 +103,7 @@ export function GoogleDriveSettingsModal({
                         access_type: 'offline',
                         prompt: 'consent'
                       },
-                      redirectTo: `${window.location.origin}/dashboard/galerias`
+                      redirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`
                     }
                   });
                 } catch (err: any) {

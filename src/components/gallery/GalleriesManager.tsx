@@ -145,12 +145,18 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
     if (!user?.id) return;
     setLoading(true);
     try {
-      // Buscar perfil do usuário para o slugUsuario
+      // Buscar perfil do usuário para o slugUsuario e token do Google OAuth
       const { data: profile } = await supabase
         .from('profiles')
-        .select('slug_usuario, nome_profissional')
+        .select('slug_usuario, nome_profissional, google_auth_data')
         .eq('id', user.id)
         .maybeSingle();
+
+      if (profile?.google_auth_data?.access_token) {
+        const autoToken = profile.google_auth_data.access_token;
+        localStorage.setItem('priceus_google_drive_token', autoToken);
+        setGoogleAccessToken(autoToken);
+      }
 
       if (profile?.slug_usuario) {
         setPhotographerSlug(profile.slug_usuario);
