@@ -168,6 +168,19 @@ export function WhatsAppLiveCommandCenter() {
     setInputText('');
   };
 
+  const handleBulkSetAI = (mode: 'all_auto' | 'all_paused' | 'new_leads_only') => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (mode === 'all_auto') return { ...c, aiStatus: 'auto' };
+        if (mode === 'all_paused') return { ...c, aiStatus: 'paused' };
+        if (mode === 'new_leads_only') {
+          return { ...c, aiStatus: c.stage === 'Novo Lead' ? 'auto' : 'paused' };
+        }
+        return c;
+      })
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header com resumo visual e Alternador de Modo de Visualização */}
@@ -175,14 +188,44 @@ export function WhatsAppLiveCommandCenter() {
         <div>
           <h3 className="font-bold text-slate-100 text-lg flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-emerald-400" />
-            Central de Comando ao Vivo
+            Central de Comando WhatsApp ao Vivo
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Escolha como prefere visualizar suas conversas ativas no WhatsApp.
+            Gerencie o atendimento com IA desativada por padrão ou ativa por regra de primeiro contato.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Controles Globais da IA */}
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => handleBulkSetAI('new_leads_only')}
+              title="Ativar IA somente em clientes de primeiro contato / novos leads"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 transition"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Só Primeiros Contatos</span>
+            </button>
+
+            <button
+              onClick={() => handleBulkSetAI('all_auto')}
+              title="Ativar IA em todas as janelas ativas de uma vez"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Ativar em Todas</span>
+            </button>
+
+            <button
+              onClick={() => handleBulkSetAI('all_paused')}
+              title="Desativar IA em todas as janelas ativas de uma vez"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 transition"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Desativar em Todas</span>
+            </button>
+          </div>
+
           {/* Alternador Grid vs Chat Split */}
           <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button
@@ -194,7 +237,7 @@ export function WhatsAppLiveCommandCenter() {
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Modo Cards (Grid)</span>
+              <span>Cards</span>
             </button>
             <button
               onClick={() => setViewMode('split')}
@@ -205,7 +248,7 @@ export function WhatsAppLiveCommandCenter() {
               }`}
             >
               <Columns className="w-3.5 h-3.5" />
-              <span>Modo Chat (Split)</span>
+              <span>Split</span>
             </button>
           </div>
 
