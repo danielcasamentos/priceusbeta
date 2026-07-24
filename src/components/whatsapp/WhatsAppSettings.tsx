@@ -7,14 +7,14 @@ import {
   Save,
   Lock,
   ExternalLink,
-  ShieldCheck,
   Zap,
   HelpCircle,
   CheckCircle2,
   Clock,
   QrCode,
   Settings,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 
 export function WhatsAppSettings() {
@@ -28,23 +28,13 @@ export function WhatsAppSettings() {
     return localStorage.getItem('priceus_ai_persona_name') || 'Sofia';
   });
 
-  // 🔑 Estados do Pool de Chaves de API (Prioritária, Secundária e Terciária)
+  // 🔑 Chave de API Prioritária
   const [primaryKey, setPrimaryKey] = useState(() => {
     return localStorage.getItem('priceus_ai_api_key_primary') || localStorage.getItem('priceus_ai_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
   });
 
-  const [secondaryKey, setSecondaryKey] = useState(() => {
-    return localStorage.getItem('priceus_ai_api_key_secondary') || '';
-  });
-
-  const [tertiaryKey, setTertiaryKey] = useState(() => {
-    return localStorage.getItem('priceus_ai_api_key_tertiary') || '';
-  });
-
-  // Toggles de Visibilidade das Chaves
+  // Toggle de Visibilidade da Chave
   const [showPrimary, setShowPrimary] = useState(false);
-  const [showSecondary, setShowSecondary] = useState(false);
-  const [showTertiary, setShowTertiary] = useState(false);
 
   const [saveToast, setSaveToast] = useState(false);
 
@@ -52,8 +42,6 @@ export function WhatsAppSettings() {
     localStorage.setItem('priceus_ai_persona_name', aiPersonaName.trim());
     localStorage.setItem('priceus_ai_api_key_primary', primaryKey.trim());
     localStorage.setItem('priceus_ai_api_key', primaryKey.trim()); // retrocompatibilidade
-    localStorage.setItem('priceus_ai_api_key_secondary', secondaryKey.trim());
-    localStorage.setItem('priceus_ai_api_key_tertiary', tertiaryKey.trim());
 
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 3500);
@@ -117,92 +105,71 @@ export function WhatsAppSettings() {
           </p>
         </div>
 
-        {/* 🔑 Três Níveis de Chaves de API (Prioritária, Secundária e Terciária) */}
-        <div className="space-y-4">
-          {/* 1. API Key Prioritária */}
-          <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5" />
-                1. API Key Prioritária (Primeira Linha de Atendimento):
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">Google Gemini / Groq / OpenAI</span>
-            </div>
-
-            <div className="relative">
-              <input
-                type={showPrimary ? 'text' : 'password'}
-                value={primaryKey}
-                onChange={(e) => setPrimaryKey(e.target.value)}
-                placeholder="Cole sua chave principal (AIzaSy..., gsk_..., etc)..."
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPrimary(!showPrimary)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition p-1"
-              >
-                {showPrimary ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+        {/* ⚡ Motor Nativo PriceU$ (Ativo por Padrão para Todos os Usuários) */}
+        <div className="p-5 bg-gradient-to-r from-emerald-950/40 via-slate-900 to-indigo-950/40 border border-emerald-500/30 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2">
+                  <span>Motor de IA Nativo PriceU$</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                    ATIVO & INCLUSO NO PLANO
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Groq LLaMA 3.3 70B (Respostas Ultra-Rápidas) + Google Gemini (Raciocínio Avançado)
+                </p>
+              </div>
             </div>
           </div>
-
-          {/* 2. API Key Secundária */}
-          <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-amber-400 font-bold flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                2. API Key Secundária (Backup Automático se a 1ª limitar):
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">Recomendado: Groq Llama 3.3 (Grátis)</span>
-            </div>
-
-            <div className="relative">
-              <input
-                type={showSecondary ? 'text' : 'password'}
-                value={secondaryKey}
-                onChange={(e) => setSecondaryKey(e.target.value)}
-                placeholder="Cole sua 2ª chave de reserva (gsk_..., sk-..., etc)..."
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowSecondary(!showSecondary)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition p-1"
-              >
-                {showSecondary ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* 3. API Key Terciária */}
-          <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-indigo-400 font-bold flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5" />
-                3. API Key Terciária (Terceira Linha de Segurança):
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">DeepSeek / OpenAI / Kimi</span>
-            </div>
-
-            <div className="relative">
-              <input
-                type={showTertiary ? 'text' : 'password'}
-                value={tertiaryKey}
-                onChange={(e) => setTertiaryKey(e.target.value)}
-                placeholder="Cole sua 3ª chave de segurança (sk-..., etc)..."
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowTertiary(!showTertiary)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition p-1"
-              >
-                {showTertiary ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+          <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+            ✅ A IA de Atendimento Comercial e a Assistente Pri funcionam de forma 100% nativa para todos os usuários sem necessidade de colar chaves ou fazer configurações técnicas.
+          </p>
         </div>
+
+        {/* 🔑 Sanfona Opcional para Chaves Pessoais (BYOK - Bring Your Own Key) */}
+        <details className="group border border-slate-800 rounded-2xl bg-slate-950/40 overflow-hidden">
+          <summary className="p-4 cursor-pointer font-bold text-xs text-slate-400 hover:text-slate-200 flex items-center justify-between select-none">
+            <span className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-indigo-400" />
+              <span>Configurações Avançadas de Chaves Pessoais (Opcional - Chaves Próprias BYOK)</span>
+            </span>
+            <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
+          </summary>
+
+          <div className="p-4 border-t border-slate-800 space-y-4 pt-4">
+            {/* 1. API Key Prioritária */}
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" />
+                  Chave Pessoal Customizada (Opcional):
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Groq / Google Gemini</span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showPrimary ? 'text' : 'password'}
+                  value={primaryKey}
+                  onChange={(e) => setPrimaryKey(e.target.value)}
+                  placeholder="Cole sua chave pessoal (gsk_..., AIzaSy..., etc)..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPrimary(!showPrimary)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition p-1"
+                >
+                  {showPrimary ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </details>
 
         {/* 📚 Mini-Tutorial Educativo Acolhedor com Links Clicáveis */}
         <div className="p-5 bg-indigo-950/30 border border-indigo-500/30 rounded-2xl space-y-3 text-xs">
