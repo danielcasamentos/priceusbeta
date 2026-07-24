@@ -102,7 +102,7 @@ export function GoogleDriveSettingsModal({
                         access_type: 'offline',
                         prompt: 'consent'
                       },
-                      redirectTo: `${window.location.origin}/admin?tab=galerias`
+                      redirectTo: `${window.location.origin}/dashboard/galerias`
                     }
                   });
                 } catch (err: any) {
