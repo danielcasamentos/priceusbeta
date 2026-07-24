@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock,
   QrCode,
+  Settings,
   Sparkles
 } from 'lucide-react';
 
@@ -285,6 +286,38 @@ export function WhatsAppSettings() {
             </span>
           </div>
 
+          {/* Configurações do Gateway WhatsApp */}
+          <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs">
+            <h4 className="font-bold text-slate-200 flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Dados do Server/Gateway WhatsApp (Evolution / Z-API)</span>
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-400 block mb-1">URL da Instância / Server:</label>
+                <input
+                  type="text"
+                  placeholder="https://seu-server-evolution.com"
+                  defaultValue={typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_server_url') || '' : ''}
+                  onChange={(e) => typeof window !== 'undefined' && localStorage.setItem('priceus_wa_server_url', e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Nome da Instância:</label>
+                <input
+                  type="text"
+                  placeholder="priceus_whatsapp"
+                  defaultValue={typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_instance_name') || 'priceus_wa' : 'priceus_wa'}
+                  onChange={(e) => typeof window !== 'undefined' && localStorage.setItem('priceus_wa_instance_name', e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col items-center justify-center p-6 bg-slate-950 rounded-2xl border border-slate-800 text-center space-y-3">
             {qrState === 'connected' ? (
               <>
@@ -293,35 +326,44 @@ export function WhatsAppSettings() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-slate-100 text-sm">WhatsApp Pareado com Sucesso</h4>
-                  <p className="text-xs text-slate-400 mt-1">Sessão ativa e sincronizada com a API de atendimento do PriceU$</p>
+                  <p className="text-xs text-slate-400 mt-1">Sessão ativa e pronta para envio e recebimento em tempo real.</p>
                 </div>
                 <button
                   onClick={() => setQrState('qr')}
-                  className="text-xs text-rose-400 hover:underline pt-2 font-medium"
+                  className="text-xs text-rose-400 hover:underline pt-2 font-medium cursor-pointer"
                 >
-                  Desconectar Celular
+                  Desconectar / Gerar Novo QR Code
                 </button>
               </>
             ) : (
               <>
                 <QrCode className="w-12 h-12 text-indigo-400 animate-pulse" />
-                <p className="text-xs text-slate-300">Escaneie o QR Code abaixo com seu celular em <strong>WhatsApp ➔ Aparelhos Conectados ➔ Conectar um Aparelho</strong>:</p>
+                <p className="text-xs text-slate-300">Escaneie o QR Code abaixo no seu celular em <strong>WhatsApp ➔ Aparelhos Conectados ➔ Conectar um Aparelho</strong>:</p>
                 
                 {/* QR Code de Conexão */}
                 <div className="p-3 bg-white rounded-xl shadow-lg border border-slate-700">
-                  <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=PRICEUS_WHATSAPP_SESSION"
-                    alt="QR Code WhatsApp"
-                    className="w-36 h-36"
-                  />
+                  {typeof window !== 'undefined' && localStorage.getItem('priceus_wa_qr_base64') ? (
+                    <img
+                      src={localStorage.getItem('priceus_wa_qr_base64') || ''}
+                      alt="QR Code WhatsApp Real"
+                      className="w-44 h-44 object-contain"
+                    />
+                  ) : (
+                    <div className="w-44 h-44 flex flex-col items-center justify-center bg-slate-100 rounded-lg p-2 text-center">
+                      <QrCode className="w-12 h-12 text-slate-400 mb-2" />
+                      <p className="text-[10px] text-slate-600 font-medium">Aguardando geração do QR Code real do servidor...</p>
+                    </div>
+                  )}
                 </div>
 
-                <button
-                  onClick={() => setQrState('connected')}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20 cursor-pointer"
-                >
-                  ✅ Confirmar Conexão do Celular
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setQrState('connected')}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20 cursor-pointer"
+                  >
+                    ✅ Confirmar Conexão
+                  </button>
+                </div>
               </>
             )}
           </div>
