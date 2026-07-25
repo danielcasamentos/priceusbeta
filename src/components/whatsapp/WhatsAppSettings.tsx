@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import {
   Smartphone,
   Cpu,
@@ -20,7 +19,6 @@ export function WhatsAppSettings() {
   });
 
   const [realQrBase64, setRealQrBase64] = useState<string | null>(null);
-  const [rawQrString, setRawQrString] = useState<string | null>(null);
   const [connectedPhone, setConnectedPhone] = useState<string | null>(null);
   const [isGatewayOnline, setIsGatewayOnline] = useState(false);
 
@@ -35,8 +33,11 @@ export function WhatsAppSettings() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/whatsapp/qr');
-        if (res.ok) {
+        let res = await fetch('/api/whatsapp/qr').catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch('http://localhost:3001/api/whatsapp/qr').catch(() => null);
+        }
+        if (res && res.ok) {
           const data = await res.json();
           setIsGatewayOnline(true);
           if (data.status === 'connected') {
@@ -44,10 +45,13 @@ export function WhatsAppSettings() {
             setConnectedPhone(data.connectedUser || 'Conectado');
             localStorage.setItem('priceus_wa_connected', 'true');
           } else {
-            if (data.rawQr) setRawQrString(data.rawQr);
-            if (data.qrBase64) setRealQrBase64(data.qrBase64);
-            if (data.status === 'qr') setQrState('qr');
+            if (data.qrBase64) {
+              setRealQrBase64(data.qrBase64);
+              setQrState('qr');
+            }
           }
+        } else {
+          setIsGatewayOnline(false);
         }
       } catch {
         setIsGatewayOnline(false);
@@ -55,7 +59,7 @@ export function WhatsAppSettings() {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 2500);
+    const interval = setInterval(fetchStatus, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -72,7 +76,7 @@ export function WhatsAppSettings() {
 
   const handleDisconnect = async () => {
     try {
-      await fetch('http://localhost:3001/api/whatsapp/disconnect', { method: 'POST' });
+      await fetch('/api/whatsapp/disconnect', { method: 'POST' }).catch(() => null);
     } catch {
       // Fallback
     }
@@ -82,7 +86,6 @@ export function WhatsAppSettings() {
     setQrState('qr');
   };
 
-  // QR Code Real Base64 do Baileys
   const activeQrImage = realQrBase64 || (typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_qr_base64') : null);
 
   return (
@@ -187,20 +190,16 @@ export function WhatsAppSettings() {
                     <span>Conexão de Atendimento do WhatsApp</span>
                   </h4>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    Clique em ativar para parear e liberar a resposta automática da IA no seu WhatsApp comercial:
+                    Escaneie o QR Code no seu WhatsApp em Aparelhos Conectados:
                   </p>
                 </div>
 
-                {rawQrString ? (
-                  <div className="p-4 bg-white rounded-2xl shadow-2xl border border-slate-700 hover:scale-105 transition-transform duration-200">
-                    <QRCodeSVG value={rawQrString} size={210} level="M" />
-                  </div>
-                ) : activeQrImage ? (
+                {activeQrImage ? (
                   <div className="p-3.5 bg-white rounded-2xl shadow-xl border border-slate-700 hover:scale-105 transition-transform duration-200">
                     <img
                       src={activeQrImage}
                       alt="QR Code WhatsApp Real Baileys"
-                      className="w-48 h-48 object-contain rounded-lg"
+                      className="w-52 h-52 object-contain rounded-lg"
                     />
                   </div>
                 ) : (
@@ -209,10 +208,10 @@ export function WhatsAppSettings() {
                       <QrCode className="w-6 h-6 animate-pulse text-emerald-400" />
                     </div>
                     <p className="text-xs font-semibold text-slate-200">
-                      {isGatewayOnline ? 'Aguardando Geração do QR Code...' : 'Servidor Pronto para Conexão'}
+                      {isGatewayOnline ? 'Aguardando QR Code...' : 'Servidor Pronto para Conexão'}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      {isGatewayOnline ? 'Conectando ao canal Baileys em tempo real...' : 'Ative a sessão para vincular seu celular no sistema'}
+                      {isGatewayOnline ? 'Carregando código do canal Baileys...' : 'Ative a sessão para vincular seu celular no sistema'}
                     </p>
                   </div>
                 )}
