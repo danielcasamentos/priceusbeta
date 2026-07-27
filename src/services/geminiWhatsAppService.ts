@@ -243,10 +243,11 @@ export async function callGeminiSalesAgent(
 
   const keyPool = [
     customApiKey,
+    import.meta.env.VITE_GROQ_API_KEY,
+    import.meta.env.VITE_GEMINI_API_KEY,
     savedKey1,
     savedKey2,
     savedKey3,
-    import.meta.env.VITE_GEMINI_API_KEY,
   ].filter((k): k is string => !!k && k.trim().length > 5 && !k.includes('SUA_CHAVE'));
 
   // 2. Coletar dados reais do Supabase

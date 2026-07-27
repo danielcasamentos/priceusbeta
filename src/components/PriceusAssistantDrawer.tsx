@@ -78,7 +78,7 @@ export function PriceusAssistantDrawer() {
           {
             id: `ai_${Date.now()}`,
             sender: 'ai',
-            text: 'Ocorreu um pequeno erro ao consultar o suporte da Pri. Verifique se suas chaves de API estão ativas.',
+            text: 'Ocorreu um pequeno erro ao consultar o suporte da Pri. Tente novamente em instantes.',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);

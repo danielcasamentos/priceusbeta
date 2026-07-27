@@ -45,9 +45,12 @@ export function WhatsAppSettings() {
             setConnectedPhone(data.connectedUser || 'Conectado');
             localStorage.setItem('priceus_wa_connected', 'true');
           } else {
+            localStorage.removeItem('priceus_wa_connected');
             if (data.qrBase64) {
               setRealQrBase64(data.qrBase64);
               setQrState('qr');
+            } else {
+              setQrState('disconnected');
             }
           }
         } else {
@@ -69,9 +72,14 @@ export function WhatsAppSettings() {
     setTimeout(() => setSaveToast(false), 3500);
   };
 
-  const handleConnect = () => {
-    localStorage.setItem('priceus_wa_connected', 'true');
-    setQrState('connected');
+  const handleConnect = async () => {
+    try {
+      await fetch('/api/whatsapp/disconnect', { method: 'POST' }).catch(() => null);
+    } catch (e) {
+      console.warn('Erro ao reiniciar sessão:', e);
+    }
+    setQrState('disconnected');
+    setRealQrBase64(null);
   };
 
   const handleDisconnect = async () => {
@@ -83,7 +91,7 @@ export function WhatsAppSettings() {
     localStorage.removeItem('priceus_wa_connected');
     localStorage.removeItem('priceus_wa_qr_base64');
     setRealQrBase64(null);
-    setQrState('qr');
+    setQrState('disconnected');
   };
 
   const activeQrImage = realQrBase64 || (typeof window !== 'undefined' ? localStorage.getItem('priceus_wa_qr_base64') : null);

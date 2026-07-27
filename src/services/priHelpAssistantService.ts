@@ -21,7 +21,7 @@ MANUAL DE CONFIGURAÇÃO E AJUDA INTEGRAL DO PRICEUS:
 2. SECRETÁRIA VIRTUAL DO WHATSAPP & IA DE ATENDIMENTO:
 - A IA de WhatsApp é a secretária virtual dos leads do fotógrafo.
 - Nome da Secretária: Pode ser personalizado na aba WhatsApp (ex: Sofia, Bia, Clara).
-- Chaves de API Gratuitas (Custo R$ 0 para o Priceus): Você cadastra suas próprias chaves gratuitas do Google AI Studio (Gemini), Groq Cloud (Llama 3.3 70B) ou DeepSeek nas Configurações do WhatsApp.
+- Motor de IA Nativo (Groq LLaMA 3.3 70B): Totalmente incluso e nativo no Priceus, pronto para uso automático sem necessidade de inserir chaves de API.
 - Transbordo Humano com Alerta Laranja: Quando o lead digita 'Quero fechar', a IA comemora, avisa que a equipe foi notificada, e a janela do bate-papo acende em LARANJA VIBRANTE no painel para o fotógrafo enviar o contrato!
 
 3. MAPEAMENTOS DE TRABALHO & PRODUTOS:
@@ -61,10 +61,11 @@ export async function callPriHelpAssistant(
   const savedKey3 = typeof window !== 'undefined' ? localStorage.getItem('priceus_ai_api_key_tertiary') : null;
 
   const keyPool = [
+    import.meta.env.VITE_GROQ_API_KEY,
+    import.meta.env.VITE_GEMINI_API_KEY,
     savedKey1,
     savedKey2,
     savedKey3,
-    import.meta.env.VITE_GEMINI_API_KEY,
   ].filter((k): k is string => !!k && k.trim().length > 5 && !k.includes('SUA_CHAVE'));
 
   // 2. Coletar dados reais das tabelas exatas do Supabase

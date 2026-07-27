@@ -158,7 +158,7 @@ export function WhatsAppTrainingStudio() {
     ];
   });
 
-  const [expandedId, setExpandedId] = useState<string | null>('1');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(['1']));
   const [newWorkType, setNewWorkType] = useState('');
 
   // Persistir no localStorage
@@ -287,8 +287,9 @@ export function WhatsAppTrainingStudio() {
       followupDays: 2
     };
     setWorkMappings((prev) => [...prev, newMapping]);
+    // Expande automaticamente o novo card
+    setExpandedIds((prev) => { const next = new Set(prev); next.add(newId); return next; });
     setNewWorkType('');
-    setExpandedId(newId);
   };
 
   // Estados do Sandbox Simulator
@@ -355,7 +356,7 @@ export function WhatsAppTrainingStudio() {
           ...prev,
           {
             sender: 'ai',
-            text: 'Erro ao conectar com a API de IA. Verifique suas chaves de API nas configurações.',
+            text: 'Instabilidade temporária na resposta da IA. Tente enviar a mensagem novamente.',
             tools: ['Fallback local']
           }
         ]);
@@ -429,10 +430,10 @@ export function WhatsAppTrainingStudio() {
               </div>
             </div>
 
-            {/* Lista de Mapeamentos */}
-            <div className="space-y-3.5">
+            {/* Lista de Mapeamentos — com scroll independente para suportar N templates */}
+            <div className="space-y-3.5 overflow-y-auto max-h-[520px] pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
               {workMappings.map((map) => {
-                const isExpanded = expandedId === map.id;
+                const isExpanded = expandedIds.has(map.id);
 
                 return (
                   <div
@@ -464,7 +465,13 @@ export function WhatsAppTrainingStudio() {
                         </button>
 
                         <button
-                          onClick={() => setExpandedId(isExpanded ? null : map.id)}
+                          onClick={() => setExpandedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(map.id)) next.delete(map.id);
+                            else next.add(map.id);
+                            return next;
+                          })
+                        }
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition"
                           title="Expandir Mapeamento & Brindes"
                         >
@@ -684,22 +691,32 @@ export function WhatsAppTrainingStudio() {
             </div>
 
             {/* Adicionar Novo Mapeamento */}
-            <div className="pt-3 border-t border-slate-800 flex items-center gap-2">
-              <input
-                type="text"
-                value={newWorkType}
-                onChange={(e) => setNewWorkType(e.target.value)}
-                placeholder="Novo tipo de trabalho (ex: Aniversários, Corporativo)..."
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
-              />
-              <button
-                onClick={handleAddMapping}
-                className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Mapear</span>
-              </button>
+            <div className="pt-3 border-t border-slate-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newWorkType}
+                  onChange={(e) => setNewWorkType(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddMapping()}
+                  placeholder="Digite o tipo de trabalho e clique em Mapear (ex: Aniversários)..."
+                  className={`flex-1 bg-slate-950 border rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition ${
+                    newWorkType.trim() ? 'border-amber-500/60 focus:border-amber-400' : 'border-slate-700 focus:border-amber-500'
+                  }`}
+                />
+                <button
+                  onClick={handleAddMapping}
+                  disabled={!newWorkType.trim()}
+                  className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>+ Mapear</span>
+                </button>
+              </div>
+              {!newWorkType.trim() && (
+                <p className="text-[10px] text-slate-500 pl-1">👆 Digite o nome do tipo de trabalho acima antes de clicar em "+ Mapear"</p>
+              )}
             </div>
+
           </div>
         </div>
 
