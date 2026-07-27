@@ -31,6 +31,7 @@ import { ChangelogModal } from '../components/ChangelogModal';
 import { WhatsAppStudio } from '../components/whatsapp/WhatsAppStudio';
 import { PriceusAssistantDrawer } from '../components/PriceusAssistantDrawer';
 import { GalleriesManager } from '../components/gallery/GalleriesManager';
+import { AICullingManager } from '../components/gallery/AICullingManager';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -297,6 +298,8 @@ export function DashboardPage() {
               <WhatsAppStudio userEmail={user.email} />
             ) : currentPage === 'entregas' || currentPage === 'galerias' ? (
               <GalleriesManager />
+            ) : currentPage === 'ai-culling' ? (
+              <AICullingManager userId={user.id} />
             ) : currentPage === 'videos' ? (
               <VideoGallery />
             ) : currentPage === 'ajuda' ? (

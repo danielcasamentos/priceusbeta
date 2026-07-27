@@ -23,6 +23,11 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [watermarkEnabled, setWatermarkEnabled] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
   const [pricePerExtraPhoto, setPricePerExtraPhoto] = useState<number>(0);
+  const [packagePhotoLimit, setPackagePhotoLimit] = useState<number>(0);
+  const [requireLeadCapture, setRequireLeadCapture] = useState(true);
+  const [enableSocialPromo, setEnableSocialPromo] = useState(false);
+  const [photographerInstagram, setPhotographerInstagram] = useState('');
+  const [progressiveDiscounts, setProgressiveDiscounts] = useState<{ min_photos: number; max_photos: number; price_per_photo: number }[]>([]);
   const [status, setStatus] = useState<'draft' | 'active' | 'archived'>('active');
 
   const [leadsList, setLeadsList] = useState<{ id: string; nome_cliente?: string; client_name?: string; email_cliente?: string; tipo_evento?: string; status?: string }[]>([]);
@@ -41,6 +46,11 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setWatermarkEnabled(gallery.watermark_enabled);
       setWatermarkText(gallery.watermark_text || '');
       setPricePerExtraPhoto(gallery.price_per_extra_photo || 0);
+      setPackagePhotoLimit(gallery.package_photo_limit || 0);
+      setRequireLeadCapture(gallery.require_lead_capture ?? true);
+      setEnableSocialPromo(gallery.enable_social_promo ?? false);
+      setPhotographerInstagram(gallery.photographer_instagram || '');
+      setProgressiveDiscounts(gallery.progressive_discounts || []);
       setStatus(gallery.status);
       setPassword('');
       setRemovePassword(false);
@@ -57,6 +67,15 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setWatermarkEnabled(false);
       setWatermarkText('');
       setPricePerExtraPhoto(0);
+      setPackagePhotoLimit(20);
+      setRequireLeadCapture(true);
+      setEnableSocialPromo(true);
+      setPhotographerInstagram('');
+      setProgressiveDiscounts([
+        { min_photos: 1, max_photos: 5, price_per_photo: 15 },
+        { min_photos: 6, max_photos: 15, price_per_photo: 12 },
+        { min_photos: 16, max_photos: 999, price_per_photo: 10 }
+      ]);
       setStatus('active');
     }
   }, [gallery, isOpen]);
@@ -112,6 +131,11 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
         watermark_enabled: watermarkEnabled,
         watermark_text: watermarkText.trim() || undefined,
         price_per_extra_photo: pricePerExtraPhoto,
+        package_photo_limit: packagePhotoLimit,
+        progressive_discounts: progressiveDiscounts,
+        require_lead_capture: requireLeadCapture,
+        enable_social_promo: enableSocialPromo,
+        photographer_instagram: photographerInstagram.trim() || undefined,
         status,
       });
       onClose();
@@ -170,6 +194,167 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
             </div>
           </div>
 
+          {/* Configuração de Pacote & Venda de Fotos Extras (Proofing) */}
+          <div className="p-4 rounded-xl bg-slate-800/60 border border-blue-500/30 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-700/80 pb-2">
+              <span className="text-sm font-bold text-blue-400 flex items-center space-x-2">
+                <span>📸 Pacote de Fotos & Venda de Extras (Proofing)</span>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Fotos Inclusas no Pacote (0 = ilimitado)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={packagePhotoLimit}
+                  onChange={(e) => setPackagePhotoLimit(Number(e.target.value))}
+                  placeholder="Ex: 20"
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-[11px] text-slate-400">Quantidade contratada pelos noivos/cliente</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Preço Base por Foto Extra (R$)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={pricePerExtraPhoto}
+                  onChange={(e) => setPricePerExtraPhoto(Number(e.target.value))}
+                  placeholder="Ex: 15.00"
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-emerald-400 font-bold text-sm focus:outline-none focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-400">Valor cobrado quando ultrapassar a cota</p>
+              </div>
+            </div>
+
+            {/* Descontos Progressivos */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-200">
+                  Tabela de Descontos Progressivos em Lote (Fotos Extras)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setProgressiveDiscounts([...progressiveDiscounts, { min_photos: 1, max_photos: 10, price_per_photo: 10 }])}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                >
+                  + Adicionar Faixa
+                </button>
+              </div>
+
+              {progressiveDiscounts.map((tier, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-700 text-xs">
+                  <span className="text-slate-400 shrink-0">De:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={tier.min_photos}
+                    onChange={(e) => {
+                      const updated = [...progressiveDiscounts];
+                      updated[idx].min_photos = Number(e.target.value);
+                      setProgressiveDiscounts(updated);
+                    }}
+                    className="w-16 bg-slate-800 px-2 py-1 rounded text-white text-center"
+                  />
+                  <span className="text-slate-400 shrink-0">até:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={tier.max_photos}
+                    onChange={(e) => {
+                      const updated = [...progressiveDiscounts];
+                      updated[idx].max_photos = Number(e.target.value);
+                      setProgressiveDiscounts(updated);
+                    }}
+                    className="w-16 bg-slate-800 px-2 py-1 rounded text-white text-center"
+                  />
+                  <span className="text-slate-400 shrink-0">extras: R$</span>
+                  <input
+                    type="number"
+                    step={0.5}
+                    value={tier.price_per_photo}
+                    onChange={(e) => {
+                      const updated = [...progressiveDiscounts];
+                      updated[idx].price_per_photo = Number(e.target.value);
+                      setProgressiveDiscounts(updated);
+                    }}
+                    className="w-20 bg-slate-800 px-2 py-1 rounded text-emerald-400 font-bold text-center"
+                  />
+                  <span className="text-slate-400 shrink-0">/cada</span>
+                  <button
+                    type="button"
+                    onClick={() => setProgressiveDiscounts(progressiveDiscounts.filter((_, i) => i !== idx))}
+                    className="text-rose-400 hover:text-rose-300 ml-auto font-bold px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Divulgação Social no Instagram & Captura de Leads */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800 space-y-3">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold text-amber-300 flex items-center space-x-2">
+                    <span>📣 Ativar Divulgação Instagram</span>
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Insere marca d'água discreta com seu @ e convida convidados a marcar seu estúdio ao postar
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={enableSocialPromo}
+                  onChange={(e) => setEnableSocialPromo(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0"
+                />
+              </label>
+
+              {enableSocialPromo && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-slate-300">Seu perfil do Instagram:</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: @danielazevedo.foto"
+                    value={photographerInstagram}
+                    onChange={(e) => setPhotographerInstagram(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-amber-300 text-xs focus:outline-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800 space-y-3">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold text-emerald-400 flex items-center space-x-2">
+                    <span>👥 Capturar Cadastro de Visitantes</span>
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Solicita Nome, E-mail e WhatsApp do visitante antes do acesso à galeria
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={requireLeadCapture}
+                  onChange={(e) => setRequireLeadCapture(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-0"
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center space-x-1">
@@ -191,53 +376,24 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                   <User className="w-4 h-4 text-blue-400" />
                   <span>Vincular Cliente (Workflow)</span>
                 </label>
-                {leadsList.length > 0 && (
-                  <span className="text-[10px] text-slate-400">
-                    {filteredLeadsList.length}/{leadsList.length}
-                  </span>
-                )}
               </div>
 
-              <div className="space-y-1.5">
-                {/* Campo de Busca Rápida de Lead */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Filtrar por nome, evento..."
-                    value={leadSearch}
-                    onChange={(e) => setLeadSearch(e.target.value)}
-                    className="w-full pl-9 pr-7 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                  {leadSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setLeadSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                {/* Dropdown de Seleção de Lead */}
-                <select
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                >
-                  <option value="">Sem cliente vinculado</option>
-                  {filteredLeadsList.map((lead) => {
-                    const name = lead.nome_cliente || lead.client_name || `Cliente #${lead.id.substring(0, 6)}`;
-                    const detail = lead.tipo_evento ? ` (${lead.tipo_evento})` : lead.status ? ` [${lead.status}]` : '';
-                    return (
-                      <option key={lead.id} value={lead.id}>
-                        {name}{detail}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+              <select
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="">Sem cliente vinculado</option>
+                {filteredLeadsList.map((lead) => {
+                  const name = lead.nome_cliente || lead.client_name || `Cliente #${lead.id.substring(0, 6)}`;
+                  const detail = lead.tipo_evento ? ` (${lead.tipo_evento})` : '';
+                  return (
+                    <option key={lead.id} value={lead.id}>
+                      {name}{detail}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
           </div>
 
@@ -294,7 +450,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
               <div className="space-y-0.5">
                 <span className="text-sm font-medium text-white flex items-center space-x-2">
                   <Shield className="w-4 h-4 text-purple-400" />
-                  <span>Ativar Marca d'Água</span>
+                  <span>Ativar Marca d'Água de Proteção</span>
                 </span>
                 <p className="text-xs text-slate-400">Desenha texto sobre as imagens web</p>
               </div>
@@ -305,47 +461,6 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                 className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0"
               />
             </label>
-          </div>
-
-          {watermarkEnabled && (
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Texto da Marca d'Água
-              </label>
-              <input
-                type="text"
-                placeholder="Ex: © Meu Estúdio Fotográfico"
-                value={watermarkText}
-                onChange={(e) => setWatermarkText(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-          )}
-
-          {/* Permissões de Download */}
-          <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800 space-y-3">
-            <span className="text-sm font-semibold text-white">Permissões de Download</span>
-            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-6">
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allowLowResDownload}
-                  onChange={(e) => setAllowLowResDownload(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0"
-                />
-                <span>Permitir Baixa Resolução (WebP)</span>
-              </label>
-
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allowHighResDownload}
-                  onChange={(e) => setAllowHighResDownload(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0"
-                />
-                <span>Permitir Alta Resolução (Original)</span>
-              </label>
-            </div>
           </div>
 
           {/* Status */}

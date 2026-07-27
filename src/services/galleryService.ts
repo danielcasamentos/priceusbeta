@@ -95,6 +95,11 @@ export class GalleryService {
         watermark_enabled: formData.watermark_enabled,
         watermark_text: formData.watermark_text || null,
         price_per_extra_photo: formData.price_per_extra_photo || 0,
+        package_photo_limit: formData.package_photo_limit || 0,
+        progressive_discounts: formData.progressive_discounts || [],
+        require_lead_capture: formData.require_lead_capture ?? true,
+        enable_social_promo: formData.enable_social_promo ?? false,
+        photographer_instagram: formData.photographer_instagram || null,
         status: formData.status || 'active',
       })
       .select()
@@ -118,6 +123,11 @@ export class GalleryService {
       watermark_enabled: formData.watermark_enabled,
       watermark_text: formData.watermark_text || null,
       price_per_extra_photo: formData.price_per_extra_photo || 0,
+      package_photo_limit: formData.package_photo_limit || 0,
+      progressive_discounts: formData.progressive_discounts || [],
+      require_lead_capture: formData.require_lead_capture,
+      enable_social_promo: formData.enable_social_promo,
+      photographer_instagram: formData.photographer_instagram || null,
       status: formData.status,
       updated_at: new Date().toISOString(),
     };
@@ -142,6 +152,61 @@ export class GalleryService {
     if (error) throw error;
     return data;
   }
+
+  /**
+   * Calcula o preço exato das fotos extras com descontos progressivos
+   */
+  static calculateExtraPhotosPrice(gallery: Gallery, totalSelected: number): {
+    extraCount: number;
+    unitPrice: number;
+    totalPrice: number;
+    discountApplied: boolean;
+  } {
+    const limit = gallery.package_photo_limit || 0;
+    if (limit <= 0 || totalSelected <= limit) {
+      return { extraCount: 0, unitPrice: 0, totalPrice: 0, discountApplied: false };
+    }
+
+    const extraCount = totalSelected - limit;
+    let unitPrice = gallery.price_per_extra_photo || 0;
+    let discountApplied = false;
+
+    // Verificar faixas de desconto progressivo
+    if (gallery.progressive_discounts && gallery.progressive_discounts.length > 0) {
+      const matchingTier = gallery.progressive_discounts.find(
+        (t) => extraCount >= t.min_photos && extraCount <= t.max_photos
+      );
+      if (matchingTier) {
+        unitPrice = matchingTier.price_per_photo;
+        discountApplied = true;
+      }
+    }
+
+    return {
+      extraCount,
+      unitPrice,
+      totalPrice: extraCount * unitPrice,
+      discountApplied,
+    };
+  }
+
+  /**
+   * Salva dados do visitante da galeria (Lead capture / Log de Acesso)
+   */
+  static async registerVisitor(galleryId: string, visitor: { name: string; email?: string; whatsapp?: string }): Promise<void> {
+    try {
+      await supabase.from('gallery_visitors').insert({
+        gallery_id: galleryId,
+        name: visitor.name.trim(),
+        email: visitor.email?.trim() || null,
+        whatsapp: visitor.whatsapp?.trim() || null,
+        accessed_at: new Date().toISOString()
+      }).catch(() => null);
+    } catch {
+      // Graceful fallback se a tabela ainda não tiver sido criada no Supabase
+    }
+  }
+
 
   /**
    * Define a Foto de Capa da galeria

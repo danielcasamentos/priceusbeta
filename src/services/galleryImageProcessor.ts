@@ -11,7 +11,8 @@ export interface ProcessedImages {
  */
 export async function processImageForGallery(
   file: File,
-  watermarkText?: string | null
+  watermarkText?: string | null,
+  socialInstagramHandle?: string | null
 ): Promise<ProcessedImages> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -27,10 +28,10 @@ export async function processImageForGallery(
 
         try {
           // 1. Gerar Thumbnail (máx 400px, WebP, qualidade 75%, sem marca d'água)
-          const thumbBlob = await resizeCanvas(img, 400, 0.75, null);
+          const thumbBlob = await resizeCanvas(img, 400, 0.75, null, null);
 
-          // 2. Gerar Web Display (máx 2048px, WebP, qualidade 80%, com marca d'água opcional)
-          const webBlob = await resizeCanvas(img, 2048, 0.80, watermarkText);
+          // 2. Gerar Web Display (máx 2048px, WebP, qualidade 80%, com marca d'água e promo social)
+          const webBlob = await resizeCanvas(img, 2048, 0.80, watermarkText, socialInstagramHandle);
 
           resolve({
             thumbBlob,
@@ -55,7 +56,8 @@ function resizeCanvas(
   img: HTMLImageElement,
   maxDimension: number,
   quality: number,
-  watermarkText?: string | null
+  watermarkText?: string | null,
+  socialInstagramHandle?: string | null
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     let width = img.naturalWidth || img.width;
@@ -103,6 +105,34 @@ function resizeCanvas(
 
       ctx.strokeText(watermarkText, 0, 0);
       ctx.fillText(watermarkText, 0, 0);
+      ctx.restore();
+    }
+
+    // Marca d'água de Divulgação Social no Instagram (canto inferior direito)
+    if (socialInstagramHandle && socialInstagramHandle.trim().length > 0) {
+      ctx.save();
+      const handle = socialInstagramHandle.trim().startsWith('@') ? socialInstagramHandle.trim() : `@${socialInstagramHandle.trim()}`;
+      const promoText = `📸 Foto por ${handle}`;
+      const fontSize = Math.max(14, Math.round(width / 48));
+      ctx.font = `500 ${fontSize}px sans-serif`;
+      const padding = fontSize * 0.8;
+      const textMetrics = ctx.measureText(promoText);
+      const bgWidth = textMetrics.width + padding * 2;
+      const bgHeight = fontSize * 1.8;
+      const x = width - bgWidth - padding;
+      const y = height - bgHeight - padding;
+
+      // Fundo escuro semi-transparente arredondado
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x, y, bgWidth, bgHeight, fontSize * 0.4) : ctx.rect(x, y, bgWidth, bgHeight);
+      ctx.fill();
+
+      // Texto branco com destaque para o Instagram
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(promoText, x + padding, y + bgHeight / 2);
       ctx.restore();
     }
 

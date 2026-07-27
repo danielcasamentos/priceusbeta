@@ -65,7 +65,8 @@ export function Sidebar({
         { id: 'leads', label: 'Leads', icon: LayoutDashboard, section: 'vendas' },
         { id: 'whatsapp-ia', label: 'IA de Vendas (WhatsApp)', icon: Bot, section: 'vendas' },
         { id: 'workflow', label: 'Workflow', icon: ClipboardList, section: 'vendas' },
-        { id: 'entregas', label: 'Entregas', icon: Images, section: 'vendas' },
+        { id: 'entregas', label: 'Galerias Online', icon: Images, section: 'vendas' },
+        { id: 'ai-culling', label: 'AI Culling & Seleção', icon: Sparkles, section: 'vendas' },
         { id: 'contratos', label: 'Contratos', icon: FileSignature, section: 'vendas' },
         { id: 'avaliacoes', label: 'Avaliações', icon: Star, section: 'vendas' },
       ]
