@@ -31,6 +31,18 @@ if (!fs.existsSync(MEDIA_FOLDER)) {
 
 app.use('/media', express.static(MEDIA_FOLDER));
 
+// Endpoint de Checagem e Atualizações Automáticas do Plugin do Lightroom Classic
+app.get('/api/plugin/version', (req, res) => {
+  res.json({
+    name: 'PriceU$ Lightroom Plugin',
+    version: '2.1.0',
+    build: 105,
+    downloadUrl: 'http://localhost:5173/downloads/PriceUS.lrplugin.zip',
+    autoUpdate: true,
+    releaseNotes: 'Adicionado suporte a Serviços de Publicação (Publishing Services panel) e auto-update sem reinstalação.',
+  });
+});
+
 let sock = null;
 let currentQrBase64 = null;
 let currentRawQr = null;

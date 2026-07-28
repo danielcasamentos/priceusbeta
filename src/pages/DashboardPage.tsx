@@ -42,8 +42,6 @@ export function DashboardPage() {
   const { isMobile } = useDeviceType();
   useMeuDiaNotification(user?.id || '');
   
-  console.log('[DashboardPage] Tipo de dispositivo:', { isMobile });
-  
   // Captura a página da URL ou usa 'templates' como padrão
   // Sanitiza: remove query params colados no path (ex: leads&id → leads)
   const rawUrlPage = params.page;

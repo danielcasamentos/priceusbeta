@@ -4,22 +4,30 @@ local LrView = import 'LrView'
 local LrHttp = import 'LrHttp'
 local LrFileUtils = import 'LrFileUtils'
 local LrPathUtils = import 'LrPathUtils'
-local LrErrors = import 'LrErrors'
 
-local exportServiceProvider = {}
+local publishServiceProvider = {}
 
--- Configurações oficiais de Serviço de Publicação no Lightroom Classic
-exportServiceProvider.supportsPublish = true
-exportServiceProvider.supportsTargetOrders = false
-exportServiceProvider.canExportVideo = false
-exportServiceProvider.hideSections = { 'exportLocation', 'fileNaming' }
+publishServiceProvider.supportsPublish = true
+publishServiceProvider.supportsTargetOrders = false
+publishServiceProvider.canExportVideo = false
+publishServiceProvider.small_icon = 'icon.png'
+publishServiceProvider.hideSections = { 'exportLocation', 'fileNaming' }
 
-exportServiceProvider.titleForPublishedCollection = "Galeria PriceU$"
-exportServiceProvider.titleForPublishedCollectionSet = "Conjunto de Galerias PriceU$"
-exportServiceProvider.titleForPublishSettings = "Conexão com o PriceU$"
+publishServiceProvider.titleForPublishedCollection = "Galeria PriceU$"
+publishServiceProvider.titleForPublishedCollectionSet = "Conjunto de Galerias PriceU$"
+publishServiceProvider.titleForPublishSettings = "PriceU$"
 
--- Seções de Configuração no Gerenciador de Serviços de Publicação do Lightroom
-function exportServiceProvider.sectionsForTopOfDialog( f, propertyTable )
+function publishServiceProvider.exportPresetAttributes( exportPreset )
+  return {
+    export_bitDepth = 8,
+    export_colorSpace = "sRGB",
+    export_destinationType = "temp",
+    export_format = "JPEG",
+    export_jpegQuality = 0.85,
+  }
+end
+
+function publishServiceProvider.sectionsForTopOfDialog( f, propertyTable )
   return {
     {
       title = "Autenticação Segura no PriceU$",
@@ -42,17 +50,17 @@ function exportServiceProvider.sectionsForTopOfDialog( f, propertyTable )
           width = LrView.share "label_width",
         },
         f:static_text {
-          title = "✓ Autenticado & Criptografado (SSL 256-bits)",
+          title = "✓ Conectado à Nuvem PriceU$",
           textColor = import 'LrColor'( 0.1, 0.7, 0.2 ),
         },
       },
     },
     {
-      title = "Configurações Padrão de Galeria de Fotos",
+      title = "Configurações Padrão de Galeria",
 
       f:row {
         f:static_text {
-          title = "Título Padrão:",
+          title = "Título Padrão da Galeria:",
           alignment = 'right',
           width = LrView.share "label_width",
         },
@@ -61,23 +69,11 @@ function exportServiceProvider.sectionsForTopOfDialog( f, propertyTable )
           width_in_chars = 35,
         },
       },
-      f:row {
-        f:static_text {
-          title = "Limite de Fotos no Pacote:",
-          alignment = 'right',
-          width = LrView.share "label_width",
-        },
-        f:edit_field {
-          value = LrView.bind "priceus_package_limit",
-          width_in_chars = 10,
-        },
-      },
     }
   }
 end
 
--- Diálogo para Nova Coleção Publicada
-function exportServiceProvider.dialogForCollectionSettings( f, propertyTable )
+function publishServiceProvider.dialogForCollectionSettings( f, propertyTable )
   return f:column {
     f:row {
       f:static_text {
@@ -91,10 +87,8 @@ function exportServiceProvider.dialogForCollectionSettings( f, propertyTable )
   }
 end
 
--- Processamento e Envio Automático das Fotos Selecionadas
-function exportServiceProvider.processRenderedPhotos( functionContext, exportContext )
+function publishServiceProvider.processRenderedPhotos( functionContext, exportContext )
   local exportSession = exportContext.exportSession
-  local propertyTable = exportContext.propertyTable
   local nPhotos = exportSession:countRenderedPhotos()
 
   local progressScope = exportContext:configureProgress{
@@ -108,20 +102,18 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
     if success then
       local filename = LrPathUtils.leafName( pathOrMessage )
       progressScope:setCaption( "Publicando " .. filename .. " (" .. i .. "/" .. nPhotos .. ")" )
-      
-      -- Deletar arquivo temporário renderizado
       LrFileUtils.delete( pathOrMessage )
     end
   end
 
   progressScope:done()
-  LrDialogs.message( "PriceU$ Galerias Online", "Publicação concluída com sucesso! Suas fotos foram enviadas e sincronizadas com a sua Galeria no PriceU$.", "info" )
+  LrDialogs.message( "PriceU$ Galerias Online", "Publicação concluída com sucesso! Fotos enviadas para a sua Galeria no PriceU$.", "info" )
 end
 
-function exportServiceProvider.deletePhotosFromPublishedCollection( publishSettings, arrayOfPhotoIds, deletedCallback )
+function publishServiceProvider.deletePhotosFromPublishedCollection( publishSettings, arrayOfPhotoIds, deletedCallback )
   for _, photoId in ipairs( arrayOfPhotoIds ) do
     deletedCallback( photoId )
   end
 end
 
-return exportServiceProvider
+return publishServiceProvider

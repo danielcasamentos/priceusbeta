@@ -15,6 +15,7 @@ import {
   Layers,
   ArrowLeft,
   QrCode,
+  Download,
 } from 'lucide-react';
 import { Gallery, GalleryPhoto, FileUploadProgress, GalleryFormData } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
@@ -23,6 +24,7 @@ import { GalleryUploader } from './GalleryUploader';
 import { GalleryPhotoGrid } from './GalleryPhotoGrid';
 import { GoogleDriveSettingsModal } from './GoogleDriveSettingsModal';
 import { GalleryQrCodeModal } from './GalleryQrCodeModal';
+import { LightroomPluginModal } from './LightroomPluginModal';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 
@@ -39,6 +41,7 @@ export function GalleriesManager() {
   // Modais e edição
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [isLightroomModalOpen, setIsLightroomModalOpen] = useState(false);
   const [selectedGallery, setSelectedGallery] = useState<Gallery | null>(null);
 
   // Gerenciamento de Fotos dentro da Galeria Selecionada
@@ -392,6 +395,14 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               </button>
 
               <button
+                onClick={() => setIsLightroomModalOpen(true)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-300 transition-all flex items-center space-x-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-purple-400" />
+                <span>Plugin Lightroom</span>
+              </button>
+
+              <button
                 onClick={() => {
                   setSelectedGallery(null);
                   setIsEditorOpen(true);
@@ -679,6 +690,12 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
         onClose={() => setIsDriveModalOpen(false)}
         currentToken={googleAccessToken}
         onSaveToken={handleSaveGoogleToken}
+      />
+
+      <LightroomPluginModal
+        isOpen={isLightroomModalOpen}
+        onClose={() => setIsLightroomModalOpen(false)}
+        userId={user?.id}
       />
 
       {qrCodeModalGallery && (

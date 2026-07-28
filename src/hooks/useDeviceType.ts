@@ -5,62 +5,64 @@ import { useState, useEffect } from 'react';
  * Considera tanto o userAgent quanto a largura da tela.
  */
 export function useDeviceType() {
-  const [deviceType, setDeviceType] = useState({
-    isMobile: false,
-    isTablet: false,
-    isDesktop: true,
-    screenWidth: typeof window !== 'undefined' ? window.innerWidth : 1200,
+  const [deviceType, setDeviceType] = useState(() => {
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    const isMobile = width < 768;
+    const isTablet = width >= 768 && width < 1024;
+    return {
+      isMobile,
+      isTablet,
+      isDesktop: !isMobile && !isTablet,
+      screenWidth: width,
+    };
   });
 
   useEffect(() => {
-    // Função para detectar tipo de dispositivo
+    let timeoutId: any = null;
+
     const detectDevice = () => {
       const width = window.innerWidth;
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
 
-      // Detectar mobile pelo userAgent
       const isMobileByUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-      
-      // Detectar tablet pelo userAgent
       const isTabletByUA = /iPad|Android/i.test(userAgent) && !/Mobile/i.test(userAgent);
 
-      // Usar largura da tela como fallback
       const isMobileByWidth = width < 768;
       const isTabletByWidth = width >= 768 && width < 1024;
 
-      // Considera mobile se for por UA ou por largura
       const isMobile = isMobileByUA || isMobileByWidth;
       const isTablet = isTabletByUA || isTabletByWidth;
       const isDesktop = !isMobile && !isTablet;
 
-      const newDeviceType = {
-        isMobile,
-        isTablet,
-        isDesktop,
-        screenWidth: width,
-      };
-
-      console.log('[useDeviceType] Dispositivo detectado:', {
-        ...newDeviceType,
-        userAgent: userAgent.substring(0, 50) + '...',
+      setDeviceType((prev) => {
+        if (
+          prev.isMobile === isMobile &&
+          prev.isTablet === isTablet &&
+          prev.isDesktop === isDesktop &&
+          Math.abs(prev.screenWidth - width) < 20
+        ) {
+          return prev; // Evita re-render se o breakpoint não mudou
+        }
+        return {
+          isMobile,
+          isTablet,
+          isDesktop,
+          screenWidth: width,
+        };
       });
-
-      setDeviceType(newDeviceType);
     };
 
-    // Detectar imediatamente
-    detectDevice();
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(detectDevice, 150);
+    };
 
-    // Adicionar listener para redimensionamento
-    window.addEventListener('resize', detectDevice);
-
-    // Cleanup
+    window.addEventListener('resize', handleResize);
     return () => {
-      window.removeEventListener('resize', detectDevice);
-      console.log('[useDeviceType] Cleanup: listener removido');
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
   return deviceType;
 }
-

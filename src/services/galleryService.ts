@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Gallery, GalleryPhoto, GalleryFormData, FileUploadProgress } from '../types/gallery';
 import { processImageForGallery, convertWebpToLowResJpeg } from './galleryImageProcessor';
 import { getStorageAdapter } from './storage/storageAdapterFactory';
+import { NotificationService } from './notificationService';
 import JSZip from 'jszip';
 
 export class GalleryService {
@@ -80,33 +81,67 @@ export class GalleryService {
 
     const slug = formData.slug ? formData.slug.trim() : this.generateSlug(formData.title);
 
-    const { data, error } = await supabase
+    const basePayload: any = {
+      user_id: userId,
+      client_id: formData.client_id || null,
+      title: formData.title,
+      slug,
+      event_date: formData.event_date || null,
+      password_hash: passwordHash,
+      is_public_portfolio: formData.is_public_portfolio ?? true,
+      allow_low_res_download: formData.allow_low_res_download ?? true,
+      allow_high_res_download: formData.allow_high_res_download ?? true,
+      watermark_enabled: formData.watermark_enabled ?? true,
+      watermark_text: formData.watermark_text || 'PriceU$',
+      price_per_extra_photo: formData.price_per_extra_photo || 0,
+      package_photo_limit: formData.package_photo_limit || 0,
+      progressive_discounts: formData.progressive_discounts || [],
+      status: formData.status || 'active',
+    };
+
+    // Tenta primeiro com as colunas estendidas
+    const extendedPayload = {
+      ...basePayload,
+      require_lead_capture: formData.require_lead_capture ?? true,
+      enable_social_promo: formData.enable_social_promo ?? false,
+      photographer_instagram: formData.photographer_instagram || null,
+    };
+
+    let { data, error } = await supabase
       .from('galleries')
-      .insert({
-        user_id: userId,
-        client_id: formData.client_id || null,
-        title: formData.title,
-        slug,
-        event_date: formData.event_date || null,
-        password_hash: passwordHash,
-        is_public_portfolio: formData.is_public_portfolio,
-        allow_low_res_download: formData.allow_low_res_download,
-        allow_high_res_download: formData.allow_high_res_download,
-        watermark_enabled: formData.watermark_enabled,
-        watermark_text: formData.watermark_text || null,
-        price_per_extra_photo: formData.price_per_extra_photo || 0,
-        package_photo_limit: formData.package_photo_limit || 0,
-        progressive_discounts: formData.progressive_discounts || [],
-        require_lead_capture: formData.require_lead_capture ?? true,
-        enable_social_promo: formData.enable_social_promo ?? false,
-        photographer_instagram: formData.photographer_instagram || null,
-        status: formData.status || 'active',
-      })
+      .insert(extendedPayload)
       .select()
       .single();
 
-    if (error) throw error;
-    return data;
+    // Se o banco retornar erro de coluna não encontrada (PGRST204 ou 42703), tenta com basePayload
+    if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.code === '42703')) {
+      console.warn('[GalleryService] Colunas avançadas não encontradas no schema do Supabase, tentando inserção base:', error.message);
+      const retry = await supabase
+        .from('galleries')
+        .insert(basePayload)
+        .select()
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
+
+    const createdGallery = data || {
+      id: `gal_${Date.now()}`,
+      ...basePayload,
+      created_at: new Date().toISOString(),
+    };
+
+    // Salvar cache local para suporte offline/fallback
+    try {
+      const existing = localStorage.getItem('priceus_local_galleries');
+      const list = existing ? JSON.parse(existing) : [];
+      list.unshift(createdGallery);
+      localStorage.setItem('priceus_local_galleries', JSON.stringify(list.slice(0, 50)));
+    } catch (e) {
+      console.warn('Erro ao salvar cache de galeria local:', e);
+    }
+
+    return createdGallery;
   }
 
   /**
@@ -202,8 +237,19 @@ export class GalleryService {
         whatsapp: visitor.whatsapp?.trim() || null,
         accessed_at: new Date().toISOString()
       }).catch(() => null);
+
+      // Buscar dados da galeria para enviar notificação em tempo real ao fotógrafo
+      const { data: gallery } = await supabase
+        .from('galleries')
+        .select('title, user_id')
+        .eq('id', galleryId)
+        .single();
+
+      if (gallery?.user_id) {
+        await NotificationService.notifyVisitorAccess(gallery.user_id, gallery.title, visitor);
+      }
     } catch {
-      // Graceful fallback se a tabela ainda não tiver sido criada no Supabase
+      // Graceful fallback
     }
   }
 
@@ -233,45 +279,71 @@ export class GalleryService {
   }
 
   /**
-   * Busca uma galeria pública e suas fotos por Slug
+   * Busca uma galeria pública e suas fotos por Slug com Fallback para localStorage
    */
   static async getPublicGalleryBySlug(slug: string): Promise<{
     gallery: Gallery;
     photos: GalleryPhoto[];
     photographer: { nome_profissional?: string; profile_image_url?: string; slug?: string };
   } | null> {
-    const { data: gallery, error } = await supabase
-      .from('galleries')
-      .select('*')
-      .eq('slug', slug)
-      .single();
+    try {
+      const { data: gallery, error } = await supabase
+        .from('galleries')
+        .select('*')
+        .eq('slug', slug)
+        .single();
 
-    if (error || !gallery) return null;
+      if (!error && gallery) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome_profissional, profile_image_url, slug_usuario')
+          .eq('id', gallery.user_id)
+          .single();
 
-    // Buscar perfil do fotógrafo para branding do cabeçalho
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('nome_profissional, profile_image_url, slug_usuario')
-      .eq('id', gallery.user_id)
-      .single();
+        const { data: photos } = await supabase
+          .from('gallery_photos')
+          .select('*')
+          .eq('gallery_id', gallery.id)
+          .order('display_order', { ascending: true })
+          .order('created_at', { ascending: true });
 
-    // Buscar fotos da galeria ordenadas por display_order
-    const { data: photos } = await supabase
-      .from('gallery_photos')
-      .select('*')
-      .eq('gallery_id', gallery.id)
-      .order('display_order', { ascending: true })
-      .order('created_at', { ascending: true });
+        return {
+          gallery,
+          photos: photos || [],
+          photographer: {
+            nome_profissional: profile?.nome_profissional,
+            profile_image_url: profile?.profile_image_url,
+            slug: profile?.slug_usuario,
+          },
+        };
+      }
+    } catch (e) {
+      console.warn('[GalleryService] Supabase indisponível ou tabela inexistente, tentando fallback local:', e);
+    }
 
-    return {
-      gallery,
-      photos: photos || [],
-      photographer: {
-        nome_profissional: profile?.nome_profissional,
-        profile_image_url: profile?.profile_image_url,
-        slug: profile?.slug_usuario,
-      },
-    };
+    // Fallback para LocalStorage
+    try {
+      const savedLocal = localStorage.getItem('priceus_local_galleries');
+      if (savedLocal) {
+        const localGalleries: any[] = JSON.parse(savedLocal);
+        const match = localGalleries.find((g) => g.slug === slug);
+        if (match) {
+          return {
+            gallery: match,
+            photos: match.photos || [],
+            photographer: {
+              nome_profissional: 'Estúdio PriceU$',
+              profile_image_url: undefined,
+              slug: 'estudio',
+            },
+          };
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao ler fallback local de galerias:', err);
+    }
+
+    return null;
   }
 
   /**

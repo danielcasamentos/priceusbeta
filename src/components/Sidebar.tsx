@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Bot,
   Images,
+  Sparkles,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePlanLimits } from '../hooks/usePlanLimits';
