@@ -680,3 +680,168 @@ export function CullingPublishModal({
     </div>
   );
 }
+
+// ─────────────────────────────────────────────
+// Modal de Cópia e Exportação de Seleção para Lightroom Classic
+// ─────────────────────────────────────────────
+interface CullingLightroomExportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  approvedPhotos: CullingPhoto[];
+}
+
+export function CullingLightroomExportModal({
+  isOpen,
+  onClose,
+  approvedPhotos,
+}: CullingLightroomExportModalProps) {
+  const [copied, setCopied] = useState(false);
+  const [formatMode, setFormatMode] = useState<'comma' | 'space'>('comma');
+
+  if (!isOpen) return null;
+
+  // Formatação solicitada pelo usuário:
+  // comma -> "XXX_00000.yxw, XXX_00001.yxz..."
+  // space -> "XXX_00000 XXX_00001"
+  const formattedText = formatMode === 'comma'
+    ? approvedPhotos.map((p) => p.fileName).join(', ')
+    : approvedPhotos.map((p) => p.fileName.split('.')[0]).join(' ');
+
+  const handleCopyText = () => {
+    navigator.clipboard.writeText(formattedText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  const handleDownloadCsv = () => {
+    const csvHeader = 'Nome do Arquivo,Cena,Rating,ISO,Abertura,Obturador\n';
+    const csvRows = approvedPhotos
+      .map((p) => `"${p.fileName}","${p.sceneGroup}",${p.starRating},${p.iso},${p.aperture},${p.shutterSpeed}`)
+      .join('\n');
+    const blob = new Blob([csvHeader + csvRows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `selecao_culling_${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+              <Copy className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Copiar Seleção para o Lightroom Classic</h3>
+              <p className="text-[11px] text-slate-400">
+                {approvedPhotos.length} {approvedPhotos.length === 1 ? 'foto selecionada' : 'fotos selecionadas'} para filtrar no Lightroom
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Corpo do Modal */}
+        <div className="p-6 space-y-4">
+          {/* Seletor de Formato */}
+          <div className="flex items-center justify-between bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+            <span className="text-xs font-bold text-slate-400 ml-2">Formato da Lista:</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setFormatMode('comma')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  formatMode === 'comma' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Com Extensão & Vírgula (Nome.RAW, ...)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormatMode('space')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  formatMode === 'space' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Apenas Nomes (Sem Extensão)
+              </button>
+            </div>
+          </div>
+
+          {/* Caixa de Texto do Código */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <label className="font-bold text-purple-300">Códigos das Fotos Aprovadas:</label>
+              <span className="text-[10px] text-slate-400">{approvedPhotos.length} itens</span>
+            </div>
+            <textarea
+              readOnly
+              rows={4}
+              value={formattedText}
+              className="w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-purple-500 selection:bg-purple-600/40 resize-none"
+            />
+          </div>
+
+          {/* Botão Principal de Cópia em 1-Clique */}
+          <button
+            type="button"
+            onClick={handleCopyText}
+            className="w-full py-3.5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-xl shadow-purple-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-300" />
+                <span>✓ Códigos Copiados para a Área de Transferência!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>📋 Copiar Lista de Fotos (1-Clique)</span>
+              </>
+            )}
+          </button>
+
+          {/* Passo a Passo Rápido para Usar no Lightroom */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs text-slate-300">
+            <h4 className="font-bold text-white flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Como filtrar no Adobe Lightroom Classic:</span>
+            </h4>
+            <ol className="list-decimal list-inside space-y-1 text-slate-400 text-[11px]">
+              <li>No Lightroom Classic, acesse o módulo <strong className="text-slate-200">Biblioteca (Library)</strong>.</li>
+              <li>Pressione o atalho <strong className="text-slate-200">\ </strong> para abrir o <strong className="text-slate-200">Filtro da Biblioteca</strong>.</li>
+              <li>Selecione a opção <strong className="text-purple-300">Texto (Text)</strong> e marque o operador <strong className="text-purple-300">Contém (Contains)</strong>.</li>
+              <li>Cole (<strong className="text-slate-200">Cmd + V</strong> no Mac ou <strong className="text-slate-200">Ctrl + V</strong> no Windows). Pronto! As fotos aprovadas aparecerão filtradas na hora.</li>
+            </ol>
+          </div>
+
+          {/* Opções Secundárias (Download CSV opcional) */}
+          <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              className="text-slate-400 hover:text-slate-200 font-bold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5 text-blue-400" />
+              <span>Baixar Relatório em .CSV (Opcional)</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

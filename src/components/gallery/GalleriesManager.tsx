@@ -25,6 +25,8 @@ import { GalleryPhotoGrid } from './GalleryPhotoGrid';
 import { GoogleDriveSettingsModal } from './GoogleDriveSettingsModal';
 import { GalleryQrCodeModal } from './GalleryQrCodeModal';
 import { LightroomPluginModal } from './LightroomPluginModal';
+import { SocialPostStudio } from './SocialPostStudio';
+import type { CullingPhoto } from './AICullingManager';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 
@@ -365,6 +367,36 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               onDeletePhoto={handleDeletePhoto}
             />
           </div>
+
+          {/* Gerador Inteligente de Posts Virais & Legendas Anexado à Galeria Entregue */}
+          {galleryPhotos.length > 0 && (
+            <div className="pt-6 border-t border-slate-800">
+              <SocialPostStudio
+                photos={galleryPhotos.map((gp, i) => ({
+                  id: gp.id,
+                  fileName: gp.file_name || `foto_${i + 1}.jpg`,
+                  previewUrl: gp.low_res_url || gp.original_url,
+                  format: 'JPG',
+                  isRaw: false,
+                  rotation: 0,
+                  sharpnessScore: 92,
+                  isBlurry: false,
+                  eyesClosed: false,
+                  isBestTake: true,
+                  sceneGroup: 'Galeria Entregue',
+                  selected: true,
+                  isDiscarded: false,
+                  starRating: 5,
+                  colorLabel: 'none',
+                  editSettings: {
+                    exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0,
+                    temp: 5500, tint: 0, vibrance: 10, saturation: 0, sharpness: 25, presetIntensity: 100
+                  }
+                }))}
+                projectTitle={managingGallery.title}
+              />
+            </div>
+          )}
         </div>
       ) : (
         /* Listagem de Galerias Principal */

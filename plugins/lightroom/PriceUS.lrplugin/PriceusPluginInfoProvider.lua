@@ -1,9 +1,10 @@
-local LrHttp = import 'LrHttp'
-local LrDialogs = import 'LrDialogs'
-local LrView = import 'LrView'
-local LrTasks = import 'LrTasks'
+local LrHttp      = import 'LrHttp'
+local LrDialogs   = import 'LrDialogs'
+local LrView      = import 'LrView'
+local LrTasks     = import 'LrTasks'
 local LrPathUtils = import 'LrPathUtils'
 local LrFileUtils = import 'LrFileUtils'
+local LrColor     = import 'LrColor'
 
 local pluginInfoProvider = {}
 
@@ -32,7 +33,7 @@ function pluginInfoProvider.sectionsForTopOfDialog( f, propertyTable )
         },
         f:static_text {
           title = "✓ Auto-Update Habilitado • Conectado à Nuvem PriceU$",
-          textColor = import 'LrColor'( 0.1, 0.7, 0.2 ),
+          textColor = LrColor( 0.1, 0.7, 0.2 ),
         },
       },
       f:row {

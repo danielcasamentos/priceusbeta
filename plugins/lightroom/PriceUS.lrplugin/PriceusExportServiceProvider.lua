@@ -1,22 +1,32 @@
 local LrApplication = import 'LrApplication'
-local LrDialogs = import 'LrDialogs'
-local LrView = import 'LrView'
-local LrHttp = import 'LrHttp'
-local LrFileUtils = import 'LrFileUtils'
-local LrPathUtils = import 'LrPathUtils'
-local LrErrors = import 'LrErrors'
+local LrDialogs    = import 'LrDialogs'
+local LrView       = import 'LrView'
+local LrHttp       = import 'LrHttp'
+local LrFileUtils  = import 'LrFileUtils'
+local LrPathUtils  = import 'LrPathUtils'
+local LrErrors     = import 'LrErrors'
+local LrColor      = import 'LrColor'
 
 local exportServiceProvider = {}
 
--- Configurações oficiais de Serviço de Publicação no Lightroom Classic
+-- Configurações oficiais de Serviço de Publicação no Lightroom Classic (Estrutura Completa Pixieset)
 exportServiceProvider.supportsPublish = true
 exportServiceProvider.supportsTargetOrders = false
 exportServiceProvider.canExportVideo = false
+exportServiceProvider.small_icon = 'icon.png'
 exportServiceProvider.hideSections = { 'exportLocation', 'fileNaming' }
 
 exportServiceProvider.titleForPublishedCollection = "Galeria PriceU$"
+exportServiceProvider.titleForPublishedCollection_standalone = "Galeria PriceU$"
 exportServiceProvider.titleForPublishedCollectionSet = "Conjunto de Galerias PriceU$"
+exportServiceProvider.titleForPublishedSmartCollection = "Coleção Inteligente PriceU$"
 exportServiceProvider.titleForPublishSettings = "Conexão com o PriceU$"
+
+exportServiceProvider.titleForGoToPublishedCollection = "Ver no Painel do PriceU$"
+exportServiceProvider.titleForGoToPublishedPhoto = "Ver no Painel do PriceU$"
+exportServiceProvider.supportsCustomSortOrder = true
+exportServiceProvider.disableRenamePublishedCollection = false
+exportServiceProvider.disableRenamePublishedCollectionSet = false
 
 -- Seções de Configuração no Gerenciador de Serviços de Publicação do Lightroom
 function exportServiceProvider.sectionsForTopOfDialog( f, propertyTable )
@@ -43,7 +53,7 @@ function exportServiceProvider.sectionsForTopOfDialog( f, propertyTable )
         },
         f:static_text {
           title = "✓ Autenticado & Criptografado (SSL 256-bits)",
-          textColor = import 'LrColor'( 0.1, 0.7, 0.2 ),
+          textColor = LrColor( 0.1, 0.7, 0.2 ),
         },
       },
     },

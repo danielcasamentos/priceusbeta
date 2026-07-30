@@ -33,7 +33,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { parseRawImage, quickScanFile, isRawFile, createRawPlaceholderDataUrl } from '../../services/rawParser';
 import { LightroomPluginModal } from './LightroomPluginModal';
-import { CullingImportAndProgressModal, CullingPublishModal, CullingAiTuningModal } from './CullingModals';
+import { CullingImportAndProgressModal, CullingPublishModal, CullingAiTuningModal, CullingLightroomExportModal } from './CullingModals';
 import { GoogleDriveSettingsModal } from './GoogleDriveSettingsModal';
 import { saveThumbnailToSSD, getThumbnailFromSSD, purgeProjectStorage, getStorageEstimate, autoPurgeOldestProjects, purgeProjectThumbnailsOnly } from '../../services/indexedDBStorage';
 import { renderProcessedImage, drawCropAndRuleOfThirdsOverlay } from '../../services/lightroomEngine';
@@ -208,6 +208,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   const [starFilter, setStarFilter] = useState<0 | 1 | 2 | 3 | 4 | 5>(0); // 0 = sem filtro de estrela
   const [isLightroomModalOpen, setIsLightroomModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
   const [googleDriveToken, setGoogleDriveToken] = useState<string | null>(
@@ -1035,15 +1036,6 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               <HardDrive className="w-4 h-4 text-emerald-400" />
               <span>💾 Cache SSD: {storageStats.usedMB} MB</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setIsLightroomModalOpen(true)}
-              className="px-5 py-3.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-purple-500/30 text-purple-300 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <Download className="w-4 h-4 text-purple-400" />
-              <span>Plugin Lightroom Classic (.lrplugin)</span>
-            </button>
           </div>
         </div>
       </div>
@@ -1263,46 +1255,19 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
             {/* Linha 2: Ações */}
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Export para Lightroom - 1-Clique Filtro */}
+              {/* Modal Interativo de Exportação / Cópia para o Lightroom */}
               <button
                 type="button"
                 onClick={() => {
                   const approved = photos.filter((p) => p.selected && !p.isDiscarded);
                   if (approved.length === 0) { alert('Nenhuma foto aprovada para exportar.'); return; }
-                  // Nomes sem extensão separados por espaço (formato ideal para Filtro de Texto do Lightroom)
-                  const searchTerms = approved.map((p) => p.fileName.split('.')[0]).join(' ');
-                  navigator.clipboard.writeText(searchTerms);
-                  setCopiedNotice(true);
-                  setTimeout(() => setCopiedNotice(false), 4000);
+                  setIsExportModalOpen(true);
                 }}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2 cursor-pointer"
-                title="Copiar lista de nomes para colar no Filtro de Texto do Lightroom (Library -> Text Filter)"
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2 cursor-pointer"
+                title="Abrir modal para copiar lista de fotos aprovadas e filtrar no Lightroom Classic"
               >
                 <Copy className="w-4 h-4" />
-                <span>{copiedNotice ? '✓ Copiado p/ Filtro Lightroom!' : `📋 Copiar Nomes p/ Filtro Lightroom (${approvedCount})`}</span>
-              </button>
-
-              <button type="button"
-                onClick={() => {
-                  const approved = photos.filter((p) => p.selected && !p.isDiscarded);
-                  if (approved.length === 0) { alert('Nenhuma foto aprovada para exportar.'); return; }
-                  const lines = approved.map((p) => p.fileName).join('\n');
-                  const csv = 'Nome do Arquivo,Cena,Rating,ISO,Abertura,Obturador\n' +
-                    approved.map((p) => `"${p.fileName}","${p.sceneGroup}",${p.starRating},${p.iso},${p.aperture},${p.shutterSpeed}`).join('\n');
-                  // Gerar .txt para Lightroom
-                  const txtBlob = new Blob([lines], { type: 'text/plain' });
-                  const txtUrl = URL.createObjectURL(txtBlob);
-                  const a1 = document.createElement('a'); a1.href = txtUrl; a1.download = 'selecao_lightroom.txt'; a1.click();
-                  URL.revokeObjectURL(txtUrl);
-                  // Gerar .csv com metadados
-                  const csvBlob = new Blob([csv], { type: 'text/csv' });
-                  const csvUrl = URL.createObjectURL(csvBlob);
-                  const a2 = document.createElement('a'); a2.href = csvUrl; a2.download = 'selecao_metadados.csv'; a2.click();
-                  URL.revokeObjectURL(csvUrl);
-                }}
-                className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs transition flex items-center gap-2">
-                <Download className="w-4 h-4" />
-                <span>📄 Baixar Lista .txt/.csv ({approvedCount})</span>
+                <span>📋 Exportar Seleção p/ Lightroom ({approvedCount})</span>
               </button>
 
               <button type="button" onClick={handleClearProject}
@@ -1474,12 +1439,6 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               </button>
             </div>
           )}
-
-          {/* Seção de Criação de Posts e Carrosséis para Redes Sociais com Groq IA */}
-          <SocialPostStudio
-            photos={photos}
-            projectTitle={projects.find((p) => p.id === activeProjectId)?.title}
-          />
         </div>
       )}
 
@@ -1916,6 +1875,13 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             }
           }
         }}
+      />
+
+      {/* Modal de Cópia e Exportação de Seleção para Lightroom */}
+      <CullingLightroomExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        approvedPhotos={photos.filter((p) => p.selected && !p.isDiscarded)}
       />
 
       {/* Modal de Instruções e Download do Plugin Lightroom */}
