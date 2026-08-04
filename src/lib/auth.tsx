@@ -27,11 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
 
-      // Salvar credenciais do Google OAuth no profile do usuário
+      // Salvar credenciais do Google OAuth no profile do usuário (sem bloquear a thread de Auth)
       if (session?.user && (session.provider_token || session.provider_refresh_token)) {
         console.log('🔑 [Auth] OAuth tokens detectados!');
         console.log('🔑 [Auth] event:', event);
@@ -39,34 +39,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('🔑 [Auth] provider_refresh_token presente:', !!session.provider_refresh_token);
         console.log('🔑 [Auth] provider_refresh_token inicio:', session.provider_refresh_token?.substring(0, 15));
 
-        try {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('google_auth_data')
-            .eq('id', session.user.id)
-            .maybeSingle();
+        const userId = session.user.id;
+        const providerToken = session.provider_token;
+        const providerRefreshToken = session.provider_refresh_token;
 
-          const existingAuth = profileData?.google_auth_data || {};
+        setTimeout(async () => {
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('google_auth_data')
+              .eq('id', userId)
+              .maybeSingle();
 
-          // IMPORTANTE: só sobrescreve o refresh_token se tiver um novo —
-          // nunca mantém um refresh_token antigo (pode ser de client_id diferente)
-          const newRefreshToken = session.provider_refresh_token;
-          const updatedAuth = {
-            ...existingAuth,
-            access_token: session.provider_token || existingAuth.access_token,
-            ...(newRefreshToken ? { refresh_token: newRefreshToken } : {}),
-            updated_at: new Date().toISOString()
-          };
+            const existingAuth = profileData?.google_auth_data || {};
 
-          await supabase
-            .from('profiles')
-            .update({ google_auth_data: updatedAuth })
-            .eq('id', session.user.id);
+            const updatedAuth = {
+              ...existingAuth,
+              access_token: providerToken || existingAuth.access_token,
+              ...(providerRefreshToken ? { refresh_token: providerRefreshToken } : {}),
+              updated_at: new Date().toISOString()
+            };
 
-          console.log('✅ Google OAuth tokens saved. refresh_token atualizado:', !!newRefreshToken);
-        } catch (err) {
-          console.error('❌ Error saving Google OAuth tokens:', err);
-        }
+            await supabase
+              .from('profiles')
+              .update({ google_auth_data: updatedAuth })
+              .eq('id', userId);
+
+            console.log('✅ Google OAuth tokens saved. refresh_token atualizado:', !!providerRefreshToken);
+          } catch (err) {
+            console.error('❌ Error saving Google OAuth tokens:', err);
+          } finally {
+            if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+          }
+        }, 0);
       }
     });
 
@@ -102,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           access_type: 'offline',
           prompt: 'consent',
         },
-        scopes: 'https://www.googleapis.com/auth/calendar'
+        scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.file'
       }
     });
     return { error };

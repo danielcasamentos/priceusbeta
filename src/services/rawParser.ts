@@ -51,14 +51,14 @@ function blobToPreviewUrl(blob: Blob): string {
 
 /** Gera SVG placeholder estilizado para arquivo RAW sem preview ainda carregado */
 export function createRawPlaceholderDataUrl(fileName: string, format: string): string {
-  const name = fileName.length > 20 ? fileName.slice(0, 17) + '…' : fileName;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
-    <rect width="400" height="300" fill="#0f172a"/>
-    <rect x="12" y="12" width="376" height="276" rx="16" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
-    <circle cx="200" cy="130" r="36" fill="#3b82f6" fill-opacity="0.12" stroke="#3b82f6" stroke-width="2"/>
-    <path d="M187 130h26M200 117v26" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
-    <text x="200" y="200" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#f1f5f9" text-anchor="middle">${name}</text>
-    <text x="200" y="224" font-family="monospace" font-size="11" fill="#60a5fa" text-anchor="middle">${format.toUpperCase()} · Carregando preview…</text>
+  const name = fileName.length > 22 ? fileName.slice(0, 19) + '…' : fileName;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+    <rect width="400" height="400" fill="#090d16"/>
+    <rect x="16" y="16" width="368" height="368" rx="12" fill="#111827" stroke="#1f2937" stroke-width="2"/>
+    <rect x="160" y="140" width="80" height="60" rx="8" fill="#3b82f6" fill-opacity="0.15" stroke="#3b82f6" stroke-width="2"/>
+    <circle cx="200" cy="170" r="16" stroke="#60a5fa" stroke-width="2.5" fill="none"/>
+    <text x="200" y="240" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#e2e8f0" text-anchor="middle">${name}</text>
+    <text x="200" y="265" font-family="monospace" font-size="12" font-weight="600" fill="#38bdf8" text-anchor="middle">${format.toUpperCase()} · Carregando Preview…</text>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -208,10 +208,11 @@ function findLargestJpeg(bytes: Uint8Array): Blob | null {
   let bestStart = -1;
   let bestLength = 0;
 
-  // Global scan for JPEG SOI (0xFF 0xD8 0xFF) and EOI (0xFF 0xD9)
+  // Varredura por marcadores SOI (0xFF 0xD8) no cabeçalho EXIF/TIFF do RAW
   for (let i = 0; i < bytes.length - 4; i++) {
-    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8 && bytes[i + 2] === 0xFF) {
-      for (let j = i + 1000; j < Math.min(bytes.length - 1, i + 8 * 1024 * 1024); j++) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
+      // Procurar marcador EOI (0xFF 0xD9)
+      for (let j = i + 1000; j < Math.min(bytes.length - 1, i + 12 * 1024 * 1024); j++) {
         if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
           const len = (j + 2) - i;
           if (len > bestLength) {
@@ -224,9 +225,17 @@ function findLargestJpeg(bytes: Uint8Array): Blob | null {
     }
   }
 
-  if (bestStart !== -1 && bestLength >= 2000) {
+  if (bestStart !== -1 && bestLength >= 3000) {
     return new Blob([bytes.subarray(bestStart, bestStart + bestLength)], { type: 'image/jpeg' });
   }
+
+  // Se o marcador EOI ultrapassou a fatia de 8MB, retorna a fatia a partir do SOI
+  for (let i = 0; i < Math.min(bytes.length - 4, 131072); i++) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
+      return new Blob([bytes.subarray(i)], { type: 'image/jpeg' });
+    }
+  }
+
   return null;
 }
 
@@ -364,10 +373,18 @@ export async function parseRawImage(file: File): Promise<RawParseResult> {
 
     const jpegBlob = findLargestJpeg(bytes);
     if (jpegBlob) {
-      // Converte o JPEG pesado embutido no RAW em uma Micro-Miniatura WebP leve de 480px (~15KB)
-      const webpUrl = await compressBlobToWebpThumbnail(jpegBlob, 480, 0.75);
-      setCacheUrl(cacheKey, webpUrl);
-      return { previewUrl: webpUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
+      try {
+        const webpUrl = await compressBlobToWebpThumbnail(jpegBlob, 400, 0.70);
+        if (webpUrl && !webpUrl.startsWith('data:image/svg')) {
+          setCacheUrl(cacheKey, webpUrl);
+          return { previewUrl: webpUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
+        }
+      } catch {}
+
+      // Fallback instantâneo: usar o JPEG direto do RAW sem compressão
+      const directJpegUrl = URL.createObjectURL(jpegBlob);
+      setCacheUrl(cacheKey, directJpegUrl);
+      return { previewUrl: directJpegUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
     }
 
     // Fallback: carregar arquivo diretamente

@@ -13,7 +13,25 @@ export interface GalleryVisitor {
   email?: string | null;
   whatsapp?: string | null;
   accessed_at: string;
+  last_accessed_at?: string | null;
+  downloads_count?: number;
+  lead_id?: string | null;
   selected_photo_ids?: string[];
+  gallery_title?: string;
+}
+
+export interface GalleryOrder {
+  id: string;
+  gallery_id: string;
+  visitor_id?: string | null;
+  buyer_name: string;
+  buyer_email?: string | null;
+  buyer_whatsapp?: string | null;
+  photo_count: number;
+  total_price: number;
+  payment_status: 'pending' | 'paid' | 'canceled';
+  payment_method: string;
+  created_at: string;
 }
 
 export interface GallerySelection {
@@ -47,6 +65,7 @@ export interface Gallery {
   allow_high_res_download: boolean;
   watermark_enabled: boolean;
   watermark_text?: string | null;
+  watermark_logo_url?: string | null;
   price_per_extra_photo: number;
   package_photo_limit?: number | null;
   progressive_discounts?: ProgressiveDiscountTier[] | null;
@@ -91,6 +110,7 @@ export interface GalleryFormData {
   allow_high_res_download: boolean;
   watermark_enabled: boolean;
   watermark_text?: string;
+  watermark_logo_url?: string;
   price_per_extra_photo?: number;
   package_photo_limit?: number;
   progressive_discounts?: ProgressiveDiscountTier[];

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Download, Share, PlusSquare, X, Smartphone } from 'lucide-react';
+import { NativeDesktopDownloadModal } from './gallery/NativeDesktopDownloadModal';
 
 interface AppInstallBannerProps {
   variant?: 'default' | 'topbar' | 'mini';
@@ -106,41 +107,65 @@ export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps)
     );
   }
 
-  // Renderização Default (Página de Login)
+  // Renderização Default (Página de Login & Dashboard)
+  const [showDesktopModal, setShowDesktopModal] = useState(false);
+
   return (
     <>
-      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-xl rounded-2xl p-6 text-center border border-blue-500/30 w-full relative overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-purple-900 text-white shadow-xl rounded-2xl p-6 text-center border border-blue-500/30 w-full relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-blue-400 opacity-20 blur-3xl rounded-full"></div>
         
-        <h3 className="text-2xl font-bold text-white mb-2 relative z-10">Instale o App PriceU$</h3>
-        <p className="text-blue-100 text-[15px] mb-6 relative z-10 leading-relaxed max-w-sm mx-auto">
-          Tenha orçamentos, contratos e leads na palma da sua mão com nosso aplicativo nativo e rápido.
+        <h3 className="text-2xl font-bold text-white mb-1.5 relative z-10">Instale os Aplicativos PriceU$</h3>
+        <p className="text-blue-100 text-sm mb-5 relative z-10 leading-relaxed max-w-md mx-auto">
+          Gerencie orçamentos e leads no celular e faça culling ultra-rápido no seu computador com o app nativo.
         </p>
 
-        <div className="flex flex-col gap-3 relative z-10">
-          {(device === 'android' || device === 'desktop') && (
-            <a
-              href="/priceus-android.apk"
-              download
-              className="w-full flex items-center justify-center space-x-2 bg-white text-blue-700 font-bold px-5 py-3.5 rounded-xl hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]"
-            >
-              <Download className="w-5 h-5" />
-              <span>Baixar para Android</span>
-            </a>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 relative z-10">
+          {/* Android: Baixar */}
+          <a
+            href="/priceus-android.apk"
+            download
+            className="flex items-center justify-center space-x-2 bg-white text-blue-700 font-bold px-4 py-3 rounded-xl hover:bg-blue-50 transition-all shadow hover:shadow-md cursor-pointer text-xs"
+          >
+            <Download className="w-4 h-4" />
+            <span>Baixar para Android</span>
+          </a>
           
-          {(device === 'ios' || device === 'desktop') && (
-            <button
-              onClick={() => setShowIosModal(true)}
-              className="w-full flex items-center justify-center space-x-2 bg-black text-white font-bold px-5 py-3.5 rounded-xl hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] border border-gray-700/50"
-            >
-              <Share className="w-5 h-5" />
-              <span>Instalar no iPhone</span>
-            </button>
-          )}
+          {/* iPhone: Instalar */}
+          <button
+            type="button"
+            onClick={() => setShowIosModal(true)}
+            className="flex items-center justify-center space-x-2 bg-slate-900 text-white font-bold px-4 py-3 rounded-xl hover:bg-slate-800 transition-all shadow hover:shadow-md border border-slate-700 cursor-pointer text-xs"
+          >
+            <Share className="w-4 h-4 text-slate-300" />
+            <span>Instalar no iPhone (iOS)</span>
+          </button>
+
+          {/* macOS: Instalar */}
+          <button
+            type="button"
+            onClick={() => setShowDesktopModal(true)}
+            className="flex items-center justify-center space-x-2 bg-purple-600/90 text-white font-bold px-4 py-3 rounded-xl hover:bg-purple-600 transition-all shadow hover:shadow-md cursor-pointer text-xs sm:col-span-1"
+          >
+            <Download className="w-4 h-4 text-purple-200" />
+            <span>Instalar no Mac (macOS)</span>
+          </button>
+
+          {/* Windows: Instalar */}
+          <button
+            type="button"
+            onClick={() => setShowDesktopModal(true)}
+            className="flex items-center justify-center space-x-2 bg-indigo-600/90 text-white font-bold px-4 py-3 rounded-xl hover:bg-indigo-600 transition-all shadow hover:shadow-md cursor-pointer text-xs sm:col-span-1"
+          >
+            <Download className="w-4 h-4 text-indigo-200" />
+            <span>Instalar no Windows</span>
+          </button>
         </div>
       </div>
       {showIosModal && <IosModal onClose={() => setShowIosModal(false)} />}
+      {showDesktopModal && (
+        <NativeDesktopDownloadModal isOpen={showDesktopModal} onClose={() => setShowDesktopModal(false)} />
+      )}
     </>
   );
 }

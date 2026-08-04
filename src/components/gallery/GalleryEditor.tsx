@@ -22,6 +22,8 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [allowHighResDownload, setAllowHighResDownload] = useState(true);
   const [watermarkEnabled, setWatermarkEnabled] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
+  const [watermarkLogoUrl, setWatermarkLogoUrl] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [pricePerExtraPhoto, setPricePerExtraPhoto] = useState<number>(0);
   const [packagePhotoLimit, setPackagePhotoLimit] = useState<number>(0);
   const [requireLeadCapture, setRequireLeadCapture] = useState(true);
@@ -33,11 +35,42 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [leadsList, setLeadsList] = useState<{ id: string; nome_cliente?: string; client_name?: string; email_cliente?: string; tipo_evento?: string; status?: string }[]>([]);
   const [leadSearch, setLeadSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isSlugCustomized, setIsSlugCustomized] = useState(false);
+
+  const formatSlug = (val: string): string => {
+    return val
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/\s+/g, '-')            // substitui espaços por hífen "-"
+      .replace(/[^a-z0-9-_]/g, '')    // remove caracteres especiais
+      .replace(/-+/g, '-');            // evita múltiplos hífens seguidos
+  };
+
+  const formatInstagramHandle = (input: string): string => {
+    if (!input || !input.trim()) return '';
+    let str = input.trim();
+    if (str.includes('instagram.com')) {
+      try {
+        const url = new URL(str.startsWith('http') ? str : `https://${str}`);
+        const parts = url.pathname.split('/').filter(Boolean);
+        if (parts.length > 0) str = parts[0];
+      } catch (e) {
+        str = str.replace(/.*instagram\.com\//i, '');
+      }
+    }
+    str = str.replace(/[\?\/].*/, '').replace(/^@+/, '').trim();
+    if (str.length > 0 && !str.startsWith('@')) {
+      str = `@${str}`;
+    }
+    return str;
+  };
 
   useEffect(() => {
     if (gallery) {
       setTitle(gallery.title);
       setSlug(gallery.slug);
+      setIsSlugCustomized(true);
       setEventDate(gallery.event_date || '');
       setClientId(gallery.client_id || '');
       setIsPublicPortfolio(gallery.is_public_portfolio);
@@ -45,6 +78,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setAllowHighResDownload(gallery.allow_high_res_download);
       setWatermarkEnabled(gallery.watermark_enabled);
       setWatermarkText(gallery.watermark_text || '');
+      setWatermarkLogoUrl(gallery.watermark_logo_url || '');
       setPricePerExtraPhoto(gallery.price_per_extra_photo || 0);
       setPackagePhotoLimit(gallery.package_photo_limit || 0);
       setRequireLeadCapture(gallery.require_lead_capture ?? true);
@@ -57,6 +91,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
     } else {
       setTitle('');
       setSlug('');
+      setIsSlugCustomized(false);
       setEventDate('');
       setClientId('');
       setPassword('');
@@ -66,6 +101,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setAllowHighResDownload(true);
       setWatermarkEnabled(false);
       setWatermarkText('');
+      setWatermarkLogoUrl('');
       setPricePerExtraPhoto(0);
       setPackagePhotoLimit(20);
       setRequireLeadCapture(true);
@@ -80,11 +116,28 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
     }
   }, [gallery, isOpen]);
 
-  // Carregar lista de clientes/leads do fotógrafo
+  // Carregar lista de todos os clientes/leads do fotógrafo para vinculação de workflow
   useEffect(() => {
     if (!isOpen) return;
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
+
+      // Buscar instagram no perfil
+      supabase
+        .from('profiles')
+        .select('instagram')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.instagram) {
+            const formatted = formatInstagramHandle(data.instagram);
+            if (formatted) {
+              setPhotographerInstagram((prev) => prev || formatted);
+            }
+          }
+        });
+
+      // Buscar todos os leads e clientes cadastrados no workflow
       supabase
         .from('leads')
         .select('id, nome_cliente, email_cliente, tipo_evento, status')
@@ -92,13 +145,13 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
         .order('created_at', { ascending: false })
         .then(({ data, error }) => {
           if (error) {
-            console.error('Erro ao carregar clientes/leads:', error);
+            console.error('Erro ao carregar lista de clientes para galeria:', error);
           } else {
             setLeadsList(data || []);
           }
         });
     });
-  }, [isOpen]);
+  }, [isOpen, gallery]);
 
   const filteredLeadsList = leadsList.filter((lead) => {
     if (!leadSearch.trim()) return true;
@@ -111,6 +164,31 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   });
 
   if (!isOpen) return null;
+
+  const handleUploadWatermarkLogo = async (file: File) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `watermarks/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('gallery-assets')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('gallery-assets')
+        .getPublicUrl(filePath);
+
+      setWatermarkLogoUrl(publicUrlData.publicUrl);
+    } catch (err: any) {
+      console.error('Erro ao fazer upload da marca d\'água:', err);
+      alert('Falha ao enviar arquivo de marca d\'água PNG. Verifique se é uma imagem válida.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,6 +208,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
         allow_high_res_download: allowHighResDownload,
         watermark_enabled: watermarkEnabled,
         watermark_text: watermarkText.trim() || undefined,
+        watermark_logo_url: watermarkLogoUrl.trim() || undefined,
         price_per_extra_photo: pricePerExtraPhoto,
         package_photo_limit: packagePhotoLimit,
         progressive_discounts: progressiveDiscounts,
@@ -175,7 +254,11 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                 required
                 placeholder="Ex: Casamento de João e Maria"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  const newTitle = e.target.value;
+                  setTitle(newTitle);
+                  setSlug(formatSlug(newTitle));
+                }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
@@ -365,7 +448,17 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                 type="text"
                 placeholder="casamento-joao-e-maria"
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const formatted = formatSlug(val);
+                  setSlug(formatted);
+                  if (!val.trim()) {
+                    setIsSlugCustomized(false);
+                    setSlug(formatSlug(title));
+                  } else {
+                    setIsSlugCustomized(true);
+                  }
+                }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
@@ -446,21 +539,82 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
               />
             </label>
 
-            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
-              <div className="space-y-0.5">
-                <span className="text-sm font-medium text-white flex items-center space-x-2">
-                  <Shield className="w-4 h-4 text-purple-400" />
-                  <span>Ativar Marca d'Água de Proteção</span>
-                </span>
-                <p className="text-xs text-slate-400">Desenha texto sobre as imagens web</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={watermarkEnabled}
-                onChange={(e) => setWatermarkEnabled(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0"
-              />
-            </label>
+            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800 space-y-3">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-medium text-white flex items-center space-x-2">
+                    <Shield className="w-4 h-4 text-purple-400" />
+                    <span>Ativar Marca d'Água de Proteção (Anti-Print)</span>
+                  </span>
+                  <p className="text-xs text-slate-400">Sobrepõe marca d'água no preview e remove ao baixar fotos contratadas</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={watermarkEnabled}
+                  onChange={(e) => setWatermarkEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-purple-500 focus:ring-0"
+                />
+              </label>
+
+              {watermarkEnabled && (
+                <div className="pt-3 border-t border-slate-700/80 space-y-3 animate-in fade-in duration-200">
+                  {/* Texto da Marca d'Água */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      Texto dos Direitos Autorais (opcional):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: © Nome do Fotógrafo / Estúdio"
+                      value={watermarkText}
+                      onChange={(e) => setWatermarkText(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-purple-200 text-xs focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  {/* Logo PNG sem fundo */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      Logo Personalizado (PNG sem fundo):
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {watermarkLogoUrl ? (
+                        <div className="relative group p-2 bg-slate-950 rounded-xl border border-slate-700 flex items-center gap-2">
+                          <img
+                            src={watermarkLogoUrl}
+                            alt="Logo Marca d'água"
+                            className="h-8 max-w-[120px] object-contain"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setWatermarkLogoUrl('')}
+                            className="p-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                            title="Remover Logo"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all text-xs font-medium inline-flex items-center gap-1.5">
+                          <Image className="w-3.5 h-3.5" />
+                          <span>{uploadingLogo ? 'Enviando...' : 'Upload Logo PNG'}</span>
+                          <input
+                            type="file"
+                            accept="image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadWatermarkLogo(file);
+                            }}
+                            disabled={uploadingLogo}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Status */}

@@ -12,7 +12,7 @@ import { TemplatesManager } from '../components/TemplatesManager';
 import { ProfileEditorWithThemeSelector } from '../components/ProfileEditorWithThemeSelector';
 import { HelpCenter } from '../components/HelpCenter';
 import { VideoGallery } from '../components/VideoGallery';
-import { LogOut, Menu } from 'lucide-react';
+import { LogOut, Menu, Terminal, Download } from 'lucide-react';
 import { ContractsManager } from '../components/ContractsManager';
 import { AgendaManager } from '../components/AgendaManager';
 import { TemplatesContracts } from '../components/TemplatesContracts';
@@ -32,6 +32,8 @@ import { WhatsAppStudio } from '../components/whatsapp/WhatsAppStudio';
 import { PriceusAssistantDrawer } from '../components/PriceusAssistantDrawer';
 import { GalleriesManager } from '../components/gallery/GalleriesManager';
 import { AICullingManager } from '../components/gallery/AICullingManager';
+import { DevSupportLogDrawer } from '../components/DevSupportLogDrawer';
+import { platformAdapter } from '../services/platformAdapter';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -45,13 +47,26 @@ export function DashboardPage() {
   // Captura a página da URL ou usa 'templates' como padrão
   // Sanitiza: remove query params colados no path (ex: leads&id → leads)
   const rawUrlPage = params.page;
-  const urlPage = rawUrlPage ? rawUrlPage.split(/[&?]/)[0] : undefined;
+  const urlPage = rawUrlPage ? rawUrlPage.split(/[&?#]/)[0] : undefined;
   const [currentPage, setCurrentPage] = useState<string>(urlPage || 'meu-dia');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [contractTab, setContractTab] = useState<'templates' | 'manager'>('templates');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userName, setUserName] = useState<string>('');
   const [userPhoto, setUserPhoto] = useState<string>('');
+  const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
+
+  // Atalho global Cmd/Ctrl + Shift + L para abrir/fechar Console de Logs
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setIsLogDrawerOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Busca o nome profissional e foto do perfil
   useEffect(() => {
@@ -221,6 +236,16 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Botão de Console de Logs de Suporte e Dev (Atalhos: Cmd+Shift+L) */}
+            <button
+              onClick={() => setIsLogDrawerOpen(true)}
+              title="Abrir Console de Logs de Suporte / Dev (⌘+Shift+L)"
+              className="p-2 rounded-lg bg-gray-100 dark:bg-[rgba(255,255,255,.08)] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/20 border border-purple-500/30 transition-colors flex items-center gap-1.5 cursor-pointer text-xs font-bold"
+            >
+              <Terminal className="w-4 h-4" />
+              <span className="hidden md:inline">Logs</span>
+            </button>
+
             <PriceusAssistantDrawer />
             {user?.id && (
               <NotificationCenter userId={user.id} onNavigate={handlePageChange} />
@@ -236,6 +261,9 @@ export function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {/* Console de Logs de Suporte & Desenvolvedor */}
+      <DevSupportLogDrawer isOpen={isLogDrawerOpen} onClose={() => setIsLogDrawerOpen(false)} />
 
       <Sidebar
         currentPage={currentPage}

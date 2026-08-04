@@ -236,7 +236,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
             access_type: 'offline',
             prompt: 'consent',
           },
-          scopes: 'https://www.googleapis.com/auth/calendar',
+          scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.file',
           skipBrowserRedirect: true
         }
       });
@@ -253,7 +253,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                 access_type: 'offline',
                 prompt: 'consent',
               },
-              scopes: 'https://www.googleapis.com/auth/calendar',
+              scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.file',
             }
           });
           if (signInError) throw signInError;

@@ -25,11 +25,15 @@ import {
   Sliders,
   Palette,
   SlidersHorizontal,
-  Wand2
+  Wand2,
+  Terminal,
+  AlertTriangle,
 } from 'lucide-react';
 import { CullingPhoto } from './AICullingManager';
 import { GalleryService } from '../../services/galleryService';
 import { NotificationService } from '../../services/notificationService';
+import { scanDataTransferItems, scanFileListWithDirectory, ScannedFileItem } from '../../services/folderScanner';
+import { AiLogEntry } from '../../services/groqCullingService';
 
 interface CullingImportAndProgressModalProps {
   isOpen: boolean;
@@ -39,7 +43,8 @@ interface CullingImportAndProgressModalProps {
   totalFiles: number;
   processedCount: number;
   currentFileName?: string;
-  onSelectFiles: (files: File[]) => void;
+  onSelectFiles: (files: File[], scannedItems?: ScannedFileItem[]) => void;
+  logs?: AiLogEntry[];
 }
 
 export function CullingImportAndProgressModal({
@@ -51,6 +56,7 @@ export function CullingImportAndProgressModal({
   processedCount,
   currentFileName,
   onSelectFiles,
+  logs = [],
 }: CullingImportAndProgressModalProps) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,11 +67,17 @@ export function CullingImportAndProgressModal({
   const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      onSelectFiles(Array.from(files));
+      const scannedItems = scanFileListWithDirectory(files);
+      const fileList = scannedItems.map((item) => item.file);
+      onSelectFiles(fileList, scannedItems);
     }
   };
 
   const handleOpenDirectoryPicker = () => {
+    folderInputRef.current?.click();
+  };
+
+  const handleOpenFilePicker = () => {
     fileInputRef.current?.click();
   };
 
@@ -76,48 +88,16 @@ export function CullingImportAndProgressModal({
     const items = e.dataTransfer.items;
     if (!items || items.length === 0) return;
 
-    const extractedFiles: File[] = [];
-
-    async function traverseEntry(entry: any) {
-      if (entry.isFile) {
-        return new Promise<void>((resolve) => {
-          entry.file((file: File) => {
-            extractedFiles.push(file);
-            resolve();
-          });
-        });
-      } else if (entry.isDirectory) {
-        const dirReader = entry.createReader();
-        return new Promise<void>((resolve) => {
-          dirReader.readEntries(async (entries: any[]) => {
-            for (const child of entries) {
-              await traverseEntry(child);
-            }
-            resolve();
-          });
-        });
-      }
-    }
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const entry = item.webkitGetAsEntry?.();
-      if (entry) {
-        await traverseEntry(entry);
-      } else {
-        const file = item.getAsFile();
-        if (file) extractedFiles.push(file);
-      }
-    }
-
-    if (extractedFiles.length > 0) {
-      onSelectFiles(extractedFiles);
+    const scannedItems = await scanDataTransferItems(items);
+    if (scannedItems.length > 0) {
+      const fileList = scannedItems.map((item) => item.file);
+      onSelectFiles(fileList, scannedItems);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-purple-500/30 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl text-white relative">
+      <div className="bg-slate-900 border border-purple-500/30 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl text-white relative">
         <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950">
@@ -127,12 +107,12 @@ export function CullingImportAndProgressModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-white">
-                {analyzing ? 'Analisando Ensaio com IA...' : 'Importar Pasta de Fotos'}
+                {analyzing ? 'Analisando Ensaio com IA...' : 'Importar Pasta Principal com Subpastas'}
               </h3>
               <p className="text-[11px] text-slate-400">
                 {analyzing
-                  ? 'Processando RAWs, nitidez e rotação EXIF'
-                  : 'Arraste a pasta inteira do ensaio ou selecione os arquivos'}
+                  ? 'Processando RAWs, nitidez e curadoria inteligente'
+                  : 'Suporta 14.000+ fotos e subpastas organizadas'}
               </p>
             </div>
           </div>
@@ -143,9 +123,9 @@ export function CullingImportAndProgressModal({
           )}
         </div>
 
-        <div className="p-6">
+        <div className="p-6 space-y-4">
           {analyzing ? (
-            <div className="space-y-6 py-2">
+            <div className="space-y-4 py-1">
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold font-mono">
                   <span className="text-purple-300">Processando: {processedCount} de {totalFiles} fotos</span>
@@ -159,24 +139,53 @@ export function CullingImportAndProgressModal({
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
                 <div className="flex items-center justify-between text-slate-300 truncate">
                   <span className="text-slate-500">Arquivo Atual:</span>
-                  <span className="font-mono text-purple-300 truncate max-w-[220px]">{currentFileName || 'Carregando...'}</span>
+                  <span className="font-mono text-purple-300 truncate max-w-[240px]">{currentFileName || 'Carregando...'}</span>
                 </div>
                 <div className="flex items-center justify-between text-slate-300">
                   <span className="text-slate-500">Motor de IA:</span>
                   <span className="text-emerald-400 font-bold flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5 fill-emerald-400" /> Groq Vision + Laplaciano EXIF
+                    <Zap className="w-3.5 h-3.5 fill-emerald-400" /> Groq Vision AI + Laplaciano EXIF
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-slate-300">
                   <span className="text-slate-500">Status:</span>
                   <span className="text-purple-300 font-semibold flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 animate-spin text-purple-400" /> Detecção de Foco & Melhores Takes
+                    <RefreshCw className="w-3 h-3 animate-spin text-purple-400" /> Detecção de Foco & Subpastas
                   </span>
                 </div>
               </div>
+
+              {/* Terminal de Log da IA em Tempo Real (Mostra se Groq Vision está rodando ou estourou cota) */}
+              {logs.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-[11px] font-mono max-h-52 overflow-y-auto shadow-inner">
+                  <div className="flex items-center justify-between text-slate-400 font-bold border-b border-slate-800/80 pb-1.5">
+                    <span className="flex items-center gap-1.5 text-purple-400">
+                      <Terminal className="w-3.5 h-3.5" /> Console de Logs da IA em Tempo Real
+                    </span>
+                    <span className="text-[10px] text-slate-500">{logs.length} eventos</span>
+                  </div>
+                  {logs.map((log) => (
+                    <div key={log.id} className="space-y-0.5 leading-relaxed">
+                      <div className={`flex items-start gap-1.5 ${
+                        log.type === 'groq_quota' ? 'text-amber-400 font-bold bg-amber-500/10 p-1 rounded' :
+                        log.type === 'groq_success' ? 'text-emerald-400' :
+                        log.type === 'error' ? 'text-rose-400 font-bold' :
+                        log.type === 'warning' ? 'text-amber-300' :
+                        log.type === 'subfolder' ? 'text-blue-400' : 'text-slate-300'
+                      }`}>
+                        <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
+                        <span>{log.message}</span>
+                      </div>
+                      {log.details && (
+                        <div className="pl-14 text-[10px] text-slate-500 italic font-sans">{log.details}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div
@@ -215,29 +224,29 @@ export function CullingImportAndProgressModal({
               </div>
 
               <div className="space-y-1">
-                <h4 className="text-base font-bold text-white">Arraste a Pasta do Ensaio Aqui</h4>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                  Suporta arquivos RAW de todas as câmeras (Canon, Nikon, Sony, Fuji) e pastas com subpastas.
+                <h4 className="text-base font-bold text-white">Arraste a Pasta Principal do Casamento Aqui</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Escaneia todas as subpastas organizadas (ex: 01_MakingOf, 02_Cerimonia) e analisa até 14.000+ fotos sem travar.
                 </p>
               </div>
 
-              <div className="flex items-center justify-center gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
                   type="button"
                   onClick={handleOpenDirectoryPicker}
-                  className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <FolderUp className="w-4 h-4" />
-                  <span>Selecionar Pasta</span>
+                  <span>Selecionar Pasta Principal (Subpastas Inclusas)</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition flex items-center gap-2 cursor-pointer border border-slate-700"
+                  onClick={handleOpenFilePicker}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700 transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Upload className="w-4 h-4" />
-                  <span>Arquivos Avulsos</span>
+                  <span>Selecionar Arquivos</span>
                 </button>
               </div>
             </div>

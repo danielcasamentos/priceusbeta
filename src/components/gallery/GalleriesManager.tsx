@@ -16,6 +16,9 @@ import {
   ArrowLeft,
   QrCode,
   Download,
+  Settings,
+  Users,
+  CheckSquare,
 } from 'lucide-react';
 import { Gallery, GalleryPhoto, FileUploadProgress, GalleryFormData } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
@@ -26,6 +29,7 @@ import { GoogleDriveSettingsModal } from './GoogleDriveSettingsModal';
 import { GalleryQrCodeModal } from './GalleryQrCodeModal';
 import { LightroomPluginModal } from './LightroomPluginModal';
 import { SocialPostStudio } from './SocialPostStudio';
+import { GalleryVisitorsModal } from './GalleryVisitorsModal';
 import type { CullingPhoto } from './AICullingManager';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
@@ -36,6 +40,8 @@ export function GalleriesManager() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedGalleryIds, setSelectedGalleryIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   // Perfil do fotógrafo (slugUsuario)
   const [photographerSlug, setPhotographerSlug] = useState<string>('');
@@ -56,14 +62,28 @@ export function GalleriesManager() {
     return localStorage.getItem('priceus_google_drive_token') || null;
   });
 
-  const handleSaveGoogleToken = (token: string) => {
+  const handleSaveGoogleToken = async (token: string) => {
     const trimmed = token.trim();
     if (trimmed) {
       localStorage.setItem('priceus_google_drive_token', trimmed);
       setGoogleAccessToken(trimmed);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ google_auth_data: { access_token: trimmed, updated_at: new Date().toISOString() } })
+          .eq('id', user.id);
+      }
     } else {
       localStorage.removeItem('priceus_google_drive_token');
       setGoogleAccessToken(null);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ google_auth_data: null })
+          .eq('id', user.id);
+      }
     }
   };
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
@@ -182,6 +202,18 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
       // Buscar galerias
       const list = await GalleryService.getUserGalleries(user.id);
       setGalleries(list);
+
+      // Auto-Sync Background Worker: detecta fotos no Supabase Storage e as move automaticamente para o Google Drive
+      const activeToken = profile?.google_auth_data?.access_token || localStorage.getItem('priceus_google_drive_token');
+      if (activeToken && user.id) {
+        GalleryService.autoSyncPendingPhotosToDrive(user.id, activeToken).then((count) => {
+          if (count > 0) {
+            console.log(`[Auto-Sync] ✅ ${count} fotos transferidas automaticamente para o Google Drive e espaço do Supabase liberado!`);
+            // Recarregar lista com URLs do Google CDN atualizadas
+            GalleryService.getUserGalleries(user.id).then(setGalleries);
+          }
+        });
+      }
     } catch (err) {
       console.error('Erro ao carregar galerias:', err);
     } finally {
@@ -196,12 +228,53 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
   };
 
   const [qrCodeModalGallery, setQrCodeModalGallery] = useState<Gallery | null>(null);
+  const [visitorsModalGallery, setVisitorsModalGallery] = useState<Gallery | null>(null);
+  const [offloading, setOffloading] = useState(false);
+  const [offloadStatus, setOffloadStatus] = useState<string | null>(null);
+
+  const handleOffloadToDrive = async () => {
+    if (!managingGallery) return;
+    if (!googleAccessToken) {
+      setIsDriveModalOpen(true);
+      return;
+    }
+
+    setOffloading(true);
+    setOffloadStatus('Iniciando cópia para o Google Drive...');
+
+    try {
+      const res = await GalleryService.offloadGalleryPhotosToDrive(
+        managingGallery,
+        googleAccessToken,
+        (current, total, fileName) => {
+          setOffloadStatus(`Transferindo foto ${current}/${total}: ${fileName} e liberando espaço...`);
+        }
+      );
+
+      if (res.transferredCount > 0) {
+        const freedMb = (res.freedBytes / (1024 * 1024)).toFixed(1);
+        alert(`✅ Sucesso! ${res.transferredCount} foto(s) foram salvas no Google Drive e ${freedMb} MB foram liberados no Supabase Storage!`);
+        handleOpenPhotoManager(managingGallery);
+      } else {
+        alert('Todas as fotos desta galeria já estão armazenadas no Google Drive!');
+      }
+    } catch (err: any) {
+      console.error('Erro ao transferir fotos para o Google Drive:', err);
+      alert(err.message || 'Falha ao mover fotos para o Google Drive');
+    } finally {
+      setOffloading(false);
+      setOffloadStatus(null);
+    }
+  };
 
   const handleCreateOrUpdateGallery = async (formData: GalleryFormData) => {
     if (!user?.id) return;
     if (selectedGallery) {
       const updated = await GalleryService.updateGallery(selectedGallery.id, formData);
       setGalleries((prev) => prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)));
+      if (managingGallery?.id === updated.id) {
+        setManagingGallery((prev) => (prev ? { ...prev, ...updated } : null));
+      }
     } else {
       const created = await GalleryService.createGallery(user.id, formData);
       setGalleries((prev) => [created, ...prev]);
@@ -213,11 +286,53 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
     try {
       await GalleryService.deleteGallery(galleryId);
       setGalleries((prev) => prev.filter((g) => g.id !== galleryId));
+      setSelectedGalleryIds((prev) => prev.filter((id) => id !== galleryId));
       if (managingGallery?.id === galleryId) {
         setManagingGallery(null);
       }
     } catch (err) {
       console.error('Erro ao excluir galeria:', err);
+    }
+  };
+
+  const toggleGallerySelection = (galleryId: string) => {
+    setSelectedGalleryIds((prev) =>
+      prev.includes(galleryId)
+        ? prev.filter((id) => id !== galleryId)
+        : [...prev, galleryId]
+    );
+  };
+
+  const handleSelectAllGalleries = () => {
+    if (selectedGalleryIds.length === filteredGalleries.length) {
+      setSelectedGalleryIds([]);
+    } else {
+      setSelectedGalleryIds(filteredGalleries.map((g) => g.id));
+    }
+  };
+
+  const handleBulkDeleteGalleries = async () => {
+    if (selectedGalleryIds.length === 0) return;
+    const count = selectedGalleryIds.length;
+    if (
+      !window.confirm(
+        `Tem certeza que deseja excluir as ${count} galerias selecionadas e todas as suas fotos? Esta ação não pode ser desfeita.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await GalleryService.deleteMultipleGalleries(selectedGalleryIds);
+      setGalleries((prev) => prev.filter((g) => !selectedGalleryIds.includes(g.id)));
+      if (managingGallery && selectedGalleryIds.includes(managingGallery.id)) {
+        setManagingGallery(null);
+      }
+      setSelectedGalleryIds([]);
+      setIsSelectionMode(false);
+    } catch (err) {
+      console.error('Erro ao excluir galerias em lote:', err);
+      alert('Erro ao excluir galerias em lote. Tente novamente.');
     }
   };
 
@@ -314,7 +429,35 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={handleOffloadToDrive}
+                disabled={offloading}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-all flex items-center space-x-2 disabled:opacity-50"
+              >
+                <HardDrive className={`w-4 h-4 text-emerald-400 ${offloading ? 'animate-spin' : ''}`} />
+                <span>{offloading ? 'Movendo...' : 'Mover Fotos p/ Google Drive (Liberar Supabase)'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedGallery(managingGallery);
+                  setIsEditorOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all flex items-center space-x-2"
+              >
+                <Settings className="w-4 h-4 text-blue-400" />
+                <span>Editar Configurações</span>
+              </button>
+
+              <button
+                onClick={() => setVisitorsModalGallery(managingGallery)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-all flex items-center space-x-2"
+              >
+                <Users className="w-4 h-4 text-emerald-400" />
+                <span>Visitantes & Compras</span>
+              </button>
+
               <button
                 onClick={() => setQrCodeModalGallery(managingGallery)}
                 className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors flex items-center space-x-2 border border-slate-700"
@@ -352,14 +495,25 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
             </div>
           </div>
 
+          {/* Banner de status de transferência para o Google Drive */}
+          {offloadStatus && (
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium flex items-center space-x-3 animate-in fade-in">
+              <HardDrive className="w-4 h-4 animate-spin text-emerald-400" />
+              <span>{offloadStatus}</span>
+            </div>
+          )}
+
           {/* Uploader de fotos */}
           <GalleryUploader onUploadFiles={handleUploadBatch} progressMap={uploadProgressMap} />
 
           {/* Grid de Fotos */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-              Fotos da Galeria ({galleryPhotos.length})
-            </h3>
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                <ImageIcon className="w-4 h-4 text-blue-400" />
+                <span>Fotos da Galeria ({galleryPhotos.length})</span>
+              </h3>
+            </div>
             <GalleryPhotoGrid
               photos={galleryPhotos}
               coverPhotoId={managingGallery.cover_photo_id}
@@ -375,7 +529,7 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
                 photos={galleryPhotos.map((gp, i) => ({
                   id: gp.id,
                   fileName: gp.file_name || `foto_${i + 1}.jpg`,
-                  previewUrl: gp.low_res_url || gp.original_url,
+                  previewUrl: gp.supabase_web_path || gp.supabase_thumb_path || (gp as any).low_res_url || (gp as any).original_url || '',
                   format: 'JPG',
                   isRaw: false,
                   rotation: 0,
@@ -402,7 +556,7 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
         /* Listagem de Galerias Principal */
         <div className="space-y-6">
           {/* Header Principal */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl text-white">
             <div>
               <h1 className="text-2xl font-bold text-white flex items-center space-x-3">
                 <ImageIcon className="w-7 h-7 text-blue-500" />
@@ -484,20 +638,38 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
             </div>
           </div>
 
-          {/* Barra de Pesquisa e Filtros */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900 p-4 rounded-2xl border border-slate-800">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Buscar por título ou slug..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500 transition-colors"
-              />
+          {/* Barra de Pesquisa, Seleção Múltipla e Filtros */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900 p-4 rounded-2xl border border-slate-800">
+            <div className="flex items-center space-x-3 w-full md:w-auto flex-1">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar por título ou slug..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500 transition-colors"
+                />
+              </div>
+
+              {/* Botão de Modo Seleção Múltipla */}
+              <button
+                onClick={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  if (isSelectionMode) setSelectedGalleryIds([]);
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer ${
+                  isSelectionMode || selectedGalleryIds.length > 0
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700/60'
+                }`}
+              >
+                <CheckSquare className="w-4 h-4" />
+                <span>{isSelectionMode ? 'Cancelar Seleção' : 'Selecionar Várias'}</span>
+              </button>
             </div>
 
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <div className="flex items-center space-x-2 w-full md:w-auto justify-end">
               {['all', 'active', 'draft', 'archived'].map((statusKey) => (
                 <button
                   key={statusKey}
@@ -519,6 +691,33 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               ))}
             </div>
           </div>
+
+          {/* Barra Flutuante de Ações em Lote quando há galerias selecionadas */}
+          {(isSelectionMode || selectedGalleryIds.length > 0) && (
+            <div className="p-4 rounded-2xl bg-slate-900 border border-blue-500/40 flex items-center justify-between animate-in fade-in slide-in-from-top-2 shadow-xl shadow-blue-950/30">
+              <div className="flex items-center space-x-3">
+                <span className="text-xs font-bold text-white bg-blue-600/30 border border-blue-500/40 px-3 py-1.5 rounded-xl">
+                  {selectedGalleryIds.length} de {filteredGalleries.length} galerias selecionadas
+                </span>
+                <button
+                  onClick={handleSelectAllGalleries}
+                  className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                >
+                  {selectedGalleryIds.length === filteredGalleries.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                </button>
+              </div>
+
+              {selectedGalleryIds.length > 0 && (
+                <button
+                  onClick={handleBulkDeleteGalleries}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 transition-all flex items-center space-x-2 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir Selecionadas ({selectedGalleryIds.length})</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Banner de Migração SQL se as tabelas ainda não existirem */}
           {isTableMissing && (
@@ -601,109 +800,153 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredGalleries.map((gallery) => (
-                <div
-                  key={gallery.id}
-                  className="group bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden transition-all duration-200 flex flex-col justify-between"
-                >
-                  <div>
-                    {/* Imagem de Capa */}
-                    <div
-                      onClick={() => handleOpenPhotoManager(gallery)}
-                      className="aspect-video bg-slate-950 relative overflow-hidden cursor-pointer"
-                    >
-                      {gallery.cover_photo_url ? (
-                        <img
-                          src={gallery.cover_photo_url}
-                          alt={gallery.title}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 bg-gradient-to-br from-slate-900 to-slate-950">
-                          <ImageIcon className="w-10 h-10 mb-1 opacity-50" />
-                          <span className="text-xs font-medium">Clique para gerenciar fotos</span>
-                        </div>
-                      )}
+              {filteredGalleries.map((gallery) => {
+                const isSelected = selectedGalleryIds.includes(gallery.id);
 
-                      {/* Badges de Status */}
-                      <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-                        {gallery.password_hash && (
-                          <span className="bg-amber-500/90 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center space-x-1 shadow-md backdrop-blur-sm">
-                            <Lock className="w-3 h-3" />
-                            <span>Com Senha</span>
-                          </span>
-                        )}
-                        {gallery.is_public_portfolio && (
-                          <span className="bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center space-x-1 shadow-md backdrop-blur-sm">
-                            <Globe className="w-3 h-3" />
-                            <span>Portfólio</span>
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="absolute bottom-3 right-3 bg-slate-950/80 text-white text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-sm border border-slate-800">
-                        {gallery.photo_count || 0} fotos
-                      </div>
-                    </div>
-
-                    {/* Conteúdo */}
-                    <div className="p-5 space-y-3">
-                      <div>
-                        <h3 className="text-base font-bold text-white truncate group-hover:text-blue-400 transition-colors">
-                          {gallery.title}
-                        </h3>
-                        {gallery.event_date && (
-                          <p className="text-xs text-slate-400 flex items-center space-x-1.5 mt-1">
-                            <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                            <span>{new Date(gallery.event_date).toLocaleDateString('pt-BR')}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rodapé de Ações */}
-                  <div className="p-4 border-t border-slate-800/80 bg-slate-900/50 flex items-center justify-between">
-                    <button
-                      onClick={() => copyGalleryLink(gallery)}
-                      title="Copiar Link"
-                      className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-                    >
-                      {copiedSlug === gallery.slug ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleOpenPhotoManager(gallery)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
-                      >
-                        Fotos
-                      </button>
-
-                      <button
+                return (
+                  <div
+                    key={gallery.id}
+                    className={`group bg-slate-900 border rounded-2xl overflow-hidden transition-all duration-200 flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-950/10'
+                        : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      {/* Imagem de Capa */}
+                      <div
                         onClick={() => {
-                          setSelectedGallery(gallery);
-                          setIsEditorOpen(true);
+                          if (isSelectionMode || selectedGalleryIds.length > 0) {
+                            toggleGallerySelection(gallery.id);
+                          } else {
+                            handleOpenPhotoManager(gallery);
+                          }
                         }}
+                        className="aspect-video bg-slate-950 relative overflow-hidden cursor-pointer"
+                      >
+                        {/* Checkbox de Seleção Múltipla */}
+                        {(isSelectionMode || selectedGalleryIds.length > 0) && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleGallerySelection(gallery.id);
+                            }}
+                            className="absolute top-3 left-3 z-20 p-1 rounded-lg bg-slate-950/90 backdrop-blur-md cursor-pointer hover:scale-110 transition-transform border border-slate-700/80"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-900 cursor-pointer block"
+                            />
+                          </div>
+                        )}
+
+                        {gallery.cover_photo_url ? (
+                          <img
+                            src={gallery.cover_photo_url}
+                            alt={gallery.title}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 bg-gradient-to-br from-slate-900 to-slate-950">
+                            <ImageIcon className="w-10 h-10 mb-1 opacity-50" />
+                            <span className="text-xs font-medium">Clique para gerenciar fotos</span>
+                          </div>
+                        )}
+
+                        {/* Badges de Status */}
+                        <div className={`absolute top-3 flex flex-wrap gap-2 ${isSelectionMode || selectedGalleryIds.length > 0 ? 'left-11' : 'left-3'}`}>
+                          {gallery.password_hash && (
+                            <span className="bg-amber-500/90 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center space-x-1 shadow-md backdrop-blur-sm">
+                              <Lock className="w-3 h-3" />
+                              <span>Com Senha</span>
+                            </span>
+                          )}
+                          {gallery.is_public_portfolio && (
+                            <span className="bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center space-x-1 shadow-md backdrop-blur-sm">
+                              <Globe className="w-3 h-3" />
+                              <span>Portfólio</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="absolute bottom-3 right-3 bg-slate-950/80 text-white text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-sm border border-slate-800">
+                          {gallery.photo_count || 0} fotos
+                        </div>
+                      </div>
+
+                      {/* Conteúdo */}
+                      <div className="p-5 space-y-3">
+                        <div>
+                          <h3 className="text-base font-bold text-white truncate group-hover:text-blue-400 transition-colors">
+                            {gallery.title}
+                          </h3>
+                          {gallery.event_date && (
+                            <p className="text-xs text-slate-400 flex items-center space-x-1.5 mt-1">
+                              <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                              <span>{new Date(gallery.event_date).toLocaleDateString('pt-BR')}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Rodapé de Ações */}
+                    <div className="p-4 border-t border-slate-800/80 bg-slate-900/50 flex items-center justify-between">
+                      <button
+                        onClick={() => copyGalleryLink(gallery)}
+                        title="Copiar Link"
                         className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
                       >
-                        <Edit className="w-4 h-4" />
+                        {copiedSlug === gallery.slug ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
                       </button>
 
-                      <button
-                        onClick={() => handleDeleteGallery(gallery.id)}
-                        className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setVisitorsModalGallery(gallery)}
+                          title="Ver Visitantes & Vendas"
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors flex items-center space-x-1"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Visitantes</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenPhotoManager(gallery)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+                        >
+                          Fotos
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedGallery(gallery);
+                            setIsEditorOpen(true);
+                          }}
+                          title="Editar Galeria"
+                          className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+
+                        {/* Botão de Excluir Galeria Individual */}
+                        <button
+                          onClick={() => handleDeleteGallery(gallery.id)}
+                          title="Excluir esta Galeria"
+                          className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all cursor-pointer shadow-sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -737,6 +980,15 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
           galleryTitle={qrCodeModalGallery.title}
           galleryUrl={`${window.location.origin}/${photographerSlug}/g/${qrCodeModalGallery.slug}`}
           photographerName={photographerSlug}
+        />
+      )}
+
+      {visitorsModalGallery && (
+        <GalleryVisitorsModal
+          isOpen={!!visitorsModalGallery}
+          onClose={() => setVisitorsModalGallery(null)}
+          galleryId={visitorsModalGallery.id}
+          galleryTitle={visitorsModalGallery.title}
         />
       )}
     </div>

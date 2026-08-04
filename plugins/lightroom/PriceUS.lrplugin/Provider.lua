@@ -18,6 +18,18 @@ local LOCKOUT_SECS  = 300     -- 5 minutos de bloqueio
 local provider = {}
 
 -- ══════════════════════════════════════════════════════════════
+-- Utilitário: Log no Terminal (/tmp/priceus_plugin.log)
+-- ══════════════════════════════════════════════════════════════
+local function logMsg( text )
+  local logPath = "/tmp/priceus_plugin.log"
+  local f = io.open( logPath, "a" )
+  if f then
+    f:write( os.date( "[%Y-%m-%d %H:%M:%S] " ) .. tostring( text ) .. "\n" )
+    f:close()
+  end
+end
+
+-- ══════════════════════════════════════════════════════════════
 -- Publish Service Properties
 -- ══════════════════════════════════════════════════════════════
 provider.supportsPublish              = true
@@ -28,7 +40,11 @@ provider.titleForPublishedCollection    = "Galeria PriceU$"
 provider.titleForPublishedCollectionSet = "Conjunto de Galerias PriceU$"
 provider.titleForPublishSettings        = "PriceU$"
 
+provider.hideSections = { 'exportLocation' }
+
 provider.exportPresetFields = {
+  { key = 'export_destinationType', default = 'temp' },
+  { key = 'export_useSubfolder',     default = false },
   { key = 'priceus_token',          default = '' },
   { key = 'priceus_refresh_token',  default = '' },
   { key = 'priceus_token_expires',  default = 0 },
@@ -407,6 +423,143 @@ function provider.dialogForCollectionSettings( f, propertyTable )
 end
 
 -- ══════════════════════════════════════════════════════════════
+-- Utilitário: URL Encode
+-- ══════════════════════════════════════════════════════════════
+local function urlEncode( str )
+  if str then
+    str = string.gsub( str, "\n", "\r\n" )
+    str = string.gsub( str, "([^%w %-%_%.%~])", function( c )
+      return string.format( "%%%02X", string.byte( c ) )
+    end )
+    str = string.gsub( str, " ", "%%20" )
+  end
+  return str
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- Utilitário: Geração de Slug
+-- ══════════════════════════════════════════════════════════════
+local function generateSlug( title )
+  local slug = ( title or "galeria" ):lower()
+  slug = slug:gsub( "[áàãâä]", "a" )
+  slug = slug:gsub( "[éèêë]", "e" )
+  slug = slug:gsub( "[íìîï]", "i" )
+  slug = slug:gsub( "[óòõôö]", "o" )
+  slug = slug:gsub( "[úùûü]", "u" )
+  slug = slug:gsub( "[ç]", "c" )
+  slug = slug:gsub( "[^a-z0-9]", "-" )
+  slug = slug:gsub( "-+", "-" )
+  slug = slug:gsub( "^-", "" )
+  slug = slug:gsub( "-$", "" )
+  if slug == "" then slug = "galeria" end
+  return slug .. "-" .. math.floor( LrDate.currentTime() % 100000 )
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- Utilitários para Google Drive Integration
+-- ══════════════════════════════════════════════════════════════
+local function getGoogleDriveToken( token, userId )
+  if not userId or userId == '' then return nil end
+  local profileUrl = SUPABASE_URL .. '/rest/v1/profiles?id=eq.' .. userId .. '&select=google_auth_data'
+  local resp = LrHttp.get( profileUrl, {
+    { field = "apikey", value = SUPABASE_ANON },
+    { field = "Authorization", value = "Bearer " .. token },
+  })
+
+  if resp and resp ~= '' then
+    logMsg( "Verificando Google Drive do usuário... Resposta: " .. tostring( resp ) )
+    local driveToken = resp:match( '"access_token"%s*:%s*"([^"]+)"' )
+    if driveToken and driveToken ~= '' then
+      logMsg( "Token do Google Drive encontrado e ativo!" )
+      return driveToken
+    end
+  end
+  logMsg( "Nenhum token do Google Drive encontrado no perfil do usuário." )
+  return nil
+end
+
+local function ensureDriveGalleryFolder( driveToken, galleryTitle )
+  logMsg( "Buscando/Criando pasta raiz /PriceUS_Galerias no Google Drive..." )
+  -- 1. Buscar ou criar pasta raiz /PriceUS_Galerias no Google Drive
+  local rootQuery = urlEncode( "name = 'PriceUS_Galerias' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" )
+  local searchUrl = "https://www.googleapis.com/drive/v3/files?q=" .. rootQuery .. "&fields=files(id)"
+  local resp = LrHttp.get( searchUrl, { { field = "Authorization", value = "Bearer " .. driveToken } } )
+  logMsg( "Resposta busca pasta raiz: " .. tostring( resp ) )
+  local rootFolderId = parseJsonStr( resp, 'id' )
+
+  if not rootFolderId or rootFolderId == '' then
+    logMsg( "Criando pasta raiz /PriceUS_Galerias no Google Drive..." )
+    local createRootResp = LrHttp.post( "https://www.googleapis.com/drive/v3/files", '{"name":"PriceUS_Galerias","mimeType":"application/vnd.google-apps.folder"}', {
+      { field = "Authorization", value = "Bearer " .. driveToken },
+      { field = "Content-Type", value = "application/json" },
+    })
+    logMsg( "Resposta criacao pasta raiz: " .. tostring( createRootResp ) )
+    rootFolderId = parseJsonStr( createRootResp, 'id' )
+  end
+
+  if not rootFolderId or rootFolderId == '' then
+    logMsg( "ERRO: Não foi possível obter ou criar a pasta raiz no Google Drive." )
+    return nil
+  end
+
+  -- 2. Criar ou buscar subpasta do ensaio dentro de /PriceUS_Galerias
+  logMsg( "Buscando/Criando subpasta '" .. tostring( galleryTitle ) .. "' no Google Drive (raiz: " .. rootFolderId .. ")..." )
+  local subQuery = urlEncode( "name = '" .. galleryTitle .. "' and '" .. rootFolderId .. "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false" )
+  local subResp  = LrHttp.get( "https://www.googleapis.com/drive/v3/files?q=" .. subQuery .. "&fields=files(id)", {
+    { field = "Authorization", value = "Bearer " .. driveToken }
+  })
+  logMsg( "Resposta busca subpasta: " .. tostring( subResp ) )
+  local galleryFolderId = parseJsonStr( subResp, 'id' )
+
+  if not galleryFolderId or galleryFolderId == '' then
+    logMsg( "Criando subpasta '" .. tostring( galleryTitle ) .. "' no Google Drive..." )
+    local createSubResp = LrHttp.post( "https://www.googleapis.com/drive/v3/files", '{"name":"' .. jsonEscape( galleryTitle ) .. '","mimeType":"application/vnd.google-apps.folder","parents":["' .. rootFolderId .. '"]}', {
+      { field = "Authorization", value = "Bearer " .. driveToken },
+      { field = "Content-Type", value = "application/json" },
+    })
+    logMsg( "Resposta criacao subpasta: " .. tostring( createSubResp ) )
+    galleryFolderId = parseJsonStr( createSubResp, 'id' )
+  end
+
+  logMsg( "ID final da pasta da galeria no Google Drive: " .. tostring( galleryFolderId ) )
+  return galleryFolderId
+end
+
+local function uploadToGoogleDrive( driveToken, folderId, filename, binaryData )
+  logMsg( "Iniciando upload multipart para Google Drive: " .. filename .. " (Folder ID: " .. tostring( folderId ) .. ")" )
+  local boundary = "---------------------------PriceUS" .. math.floor( LrDate.currentTime() * 1000 )
+  local metadata = '{"name":"' .. jsonEscape( filename ) .. '","parents":["' .. folderId .. '"]}'
+
+  local body = "--" .. boundary .. "\r\n" ..
+               "Content-Type: application/json; charset=UTF-8\r\n\r\n" ..
+               metadata .. "\r\n" ..
+               "--" .. boundary .. "\r\n" ..
+               "Content-Type: image/jpeg\r\n\r\n" ..
+               binaryData .. "\r\n" ..
+               "--" .. boundary .. "--\r\n"
+
+  local url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id"
+  local resp, headers = LrHttp.post( url, body, {
+    { field = "Authorization", value = "Bearer " .. driveToken },
+    { field = "Content-Type", value = "multipart/related; boundary=" .. boundary },
+  })
+
+  logMsg( "Resposta upload Google Drive para " .. filename .. ": " .. tostring( resp ) )
+  if resp then
+    local fileId = parseJsonStr( resp, 'id' )
+    if fileId and fileId ~= '' then
+      -- Define permissão de leitura pública para download no portal do cliente
+      LrHttp.post( "https://www.googleapis.com/drive/v3/files/" .. fileId .. "/permissions", '{"role":"reader","type":"anyone"}', {
+        { field = "Authorization", value = "Bearer " .. driveToken },
+        { field = "Content-Type", value = "application/json" },
+      })
+      return fileId
+    end
+  end
+  return nil
+end
+
+-- ══════════════════════════════════════════════════════════════
 -- Publicação das Fotos
 -- ══════════════════════════════════════════════════════════════
 function provider.processRenderedPhotos( functionContext, exportContext )
@@ -415,45 +568,241 @@ function provider.processRenderedPhotos( functionContext, exportContext )
 
   if type( exportContext.getPublishService ) == 'function' then
     local pubService = exportContext:getPublishService()
-    if pubService and type( pubService.getInitParams ) == 'function' then
-      local params = pubService:getInitParams()
-      if params and ( params.priceus_token or '' ) ~= '' then
-        propertyTable = params
+    if pubService then
+      if type( pubService.getPublishSettings ) == 'function' then
+        local settings = pubService:getPublishSettings()
+        if settings and ( settings.priceus_token or '' ) ~= '' then
+          propertyTable = settings
+        end
       end
     end
   end
 
   local token = ensureValidToken( propertyTable )
 
-  if not token then
+    if not token then
+      LrDialogs.message(
+        "PriceU$ — Erro de Autenticação",
+        "Sua sessão expirou ou você não está autenticado.\nPor favor, clique duas vezes no Serviço de Publicação 'PriceU$' no painel esquerdo do Lightroom e faça login.",
+        "critical"
+      )
+      return
+    end
+
+  -- Obter nome da coleção no Lightroom (ex: "Bruna e Gustavo")
+  local collectionName = "Galeria Lightroom"
+  if exportContext.publishedCollection and type( exportContext.publishedCollection.getName ) == 'function' then
+    collectionName = exportContext.publishedCollection:getName()
+  end
+
+  local progressScope = exportContext:configureProgress {
+    title = "Sincronizando Galeria '" .. collectionName .. "' com o PriceU$...",
+  }
+
+  -- 1. Obter ID do usuário autenticado
+  local userId = propertyTable.priceus_user_id or ''
+  if userId == '' then
+    local userResp = LrHttp.get( SUPABASE_URL .. '/auth/v1/user', {
+      { field = "apikey", value = SUPABASE_ANON },
+      { field = "Authorization", value = "Bearer " .. token },
+    })
+    if userResp then
+      userId = parseJsonStr( userResp, 'id' ) or ''
+      if userId ~= '' then propertyTable.priceus_user_id = userId end
+    end
+  end
+
+  -- 2. Buscar ou Criar Galeria no Supabase REST API
+  local galleryId = nil
+  local searchUrl = SUPABASE_URL .. '/rest/v1/galleries?title=eq.' .. urlEncode( collectionName ) .. '&select=id'
+  local searchResp = LrHttp.get( searchUrl, {
+    { field = "apikey", value = SUPABASE_ANON },
+    { field = "Authorization", value = "Bearer " .. token },
+  })
+
+  if searchResp and searchResp ~= '' then
+    galleryId = parseJsonStr( searchResp, 'id' )
+  end
+
+  if not galleryId or galleryId == '' then
+    -- Criar nova galeria no PriceU$
+    progressScope:setCaption( "Criando nova galeria no PriceU$..." )
+    local slug = generateSlug( collectionName )
+    local createUrl = SUPABASE_URL .. '/rest/v1/galleries'
+    local bodyJson  = '{"title":"' .. jsonEscape( collectionName ) .. '","slug":"' .. slug .. '","user_id":"' .. userId .. '","status":"active","is_public_portfolio":true}'
+    local createResp, cHeaders = LrHttp.post( createUrl, bodyJson, {
+      { field = "apikey", value = SUPABASE_ANON },
+      { field = "Authorization", value = "Bearer " .. token },
+      { field = "Content-Type", value = "application/json" },
+      { field = "Prefer", value = "return=representation" },
+    })
+    if createResp then
+      galleryId = parseJsonStr( createResp, 'id' )
+      if not galleryId then
+        local errDetail = parseJsonStr( createResp, 'message' ) or createResp
+        LrDialogs.message(
+          "PriceU$ — Erro no Banco de Dados",
+          "O Supabase recusou a criação da galeria:\n" .. tostring( errDetail ),
+          "critical"
+        )
+        progressScope:done()
+        return
+      end
+    end
+  end
+
+  if not galleryId or galleryId == '' then
+    progressScope:done()
     LrDialogs.message(
-      "PriceU$ — Erro de Autenticação",
-      "Sua sessão expirou ou você não está autenticado.\nPor favor, abra as configurações do serviço e faça login novamente.",
+      "PriceU$ — Erro de Sincronização",
+      "Não foi possível criar a galeria '" .. collectionName .. "' no PriceU$. Verifique suas credenciais.",
       "critical"
     )
     return
   end
 
-  local progressScope = exportContext:configureProgress {
-    title = "Publicando fotos no PriceU$...",
-  }
+  -- 2. Verificar conexão com Google Drive
+  progressScope:setCaption( "Verificando integração com Google Drive..." )
+  local driveToken = getGoogleDriveToken( token, userId )
+  local driveFolderId = nil
 
+  if driveToken then
+    driveFolderId = ensureDriveGalleryFolder( driveToken, collectionName )
+    if driveFolderId then
+      logMsg( "Pasta do Google Drive pronta. ID: " .. tostring( driveFolderId ) )
+      local updateFolderJson = '{"google_drive_folder_id":"' .. driveFolderId .. '"}'
+      LrHttp.post( SUPABASE_URL .. "/rest/v1/galleries?id=eq." .. galleryId, updateFolderJson, {
+        { field = "apikey", value = SUPABASE_ANON },
+        { field = "Authorization", value = "Bearer " .. token },
+        { field = "Content-Type", value = "application/json" },
+        { field = "X-HTTP-Method-Override", value = "PATCH" },
+      })
+    end
+  else
+    logMsg( "Google Drive não conectado no perfil do usuário. Fotos serão enviadas para o Supabase Storage." )
+  end
+
+  -- 3. Renderizar e Fazer Upload das Fotos
   local count = 0
-  for i, rendition in exportContext:renderedPhotos() do
+  logMsg( "Iniciando renderização de fotos para a galeria: " .. collectionName .. " (ID: " .. tostring( galleryId ) .. ")" )
+
+  for i, rendition in exportContext:renditions() do
+    if progressScope:isCanceled() then
+      logMsg( "Exportação cancelada pelo usuário no Lightroom." )
+      break
+    end
+
+    -- Renova token se necessário durante exportações longas (> 1 hora)
+    token = ensureValidToken( propertyTable ) or token
+
+    logMsg( "Renderizando foto #" .. i .. "..." )
     local success, pathOrMessage = rendition:waitForRender()
 
     if success then
-      count = count + 1
       local filename = LrPathUtils.leafName( pathOrMessage )
-      progressScope:setCaption( "Publicando " .. filename .. " (" .. count .. " foto(s))" )
+      logMsg( "Foto #" .. i .. " renderizada com sucesso: " .. pathOrMessage .. " (Tamanho: " .. tostring( LrFileUtils.fileAttributes( pathOrMessage ).fileSize ) .. " bytes)" )
+      progressScope:setCaption( "Enviando " .. filename .. " (" .. ( count + 1 ) .. " foto(s))..." )
+
+      local photoData = LrFileUtils.readFile( pathOrMessage )
+      if photoData then
+        local uploadedDrive = false
+
+        -- 1º TENTATIVA: Upload direto do Lightroom para o Google Drive
+        if driveToken and driveFolderId then
+          logMsg( "Enviando " .. filename .. " diretamente para o Google Drive..." )
+          local fileId = uploadToGoogleDrive( driveToken, driveFolderId, filename, photoData )
+          if fileId and fileId ~= '' then
+            uploadedDrive = true
+            count = count + 1
+            logMsg( "✓ Upload direto para Google Drive concluído: ID " .. tostring( fileId ) )
+
+            local driveUrl = "https://lh3.googleusercontent.com/d/" .. fileId
+            local photoJson = '{"gallery_id":"' .. galleryId .. '",' ..
+                              '"google_drive_file_id":"' .. jsonEscape( fileId ) .. '",' ..
+                              '"supabase_thumb_path":"' .. jsonEscape( driveUrl ) .. '",' ..
+                              '"supabase_web_path":"' .. jsonEscape( driveUrl ) .. '",' ..
+                              '"file_name":"' .. jsonEscape( filename ) .. '",' ..
+                              '"display_order":' .. count .. '}'
+
+            LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
+              { field = "apikey", value = SUPABASE_ANON },
+              { field = "Authorization", value = "Bearer " .. token },
+              { field = "Content-Type", value = "application/json" },
+            })
+          else
+            logMsg( "⚠ Falha no upload direto para Google Drive. Tentando ponte..." )
+          end
+        end
+
+        -- 2º TENTATIVA: Ponte Edge Function /upload-to-drive
+        if not uploadedDrive then
+          logMsg( "Enviando " .. filename .. " via Ponte PriceU$..." )
+          local bridgeUrl = SUPABASE_URL .. "/functions/v1/upload-to-drive"
+
+          local bResp, bHeaders = LrHttp.post( bridgeUrl, photoData, {
+            { field = "apikey", value = SUPABASE_ANON },
+            { field = "Authorization", value = "Bearer " .. token },
+            { field = "Content-Type", value = "image/jpeg" },
+            { field = "x-gallery-id", value = galleryId },
+            { field = "x-gallery-title", value = collectionName },
+            { field = "x-filename", value = filename },
+          })
+
+          if bResp and bResp ~= '' and bResp:match( '"success"%s*:%s*true' ) then
+            uploadedDrive = true
+            count = count + 1
+            logMsg( "✓ Envio via Ponte PriceU$ concluído para: " .. filename )
+          else
+            logMsg( "⚠ Ponte PriceU$ indisponível ou desativada: " .. tostring( bResp ) )
+          end
+        end
+
+        -- 3º TENTATIVA (FALLBACK): Supabase Storage Bucket
+        if not uploadedDrive then
+          logMsg( "Executando fallback Supabase Storage para " .. filename .. "..." )
+          local safeFilename = filename:gsub( "[%s]", "_" )
+          local storagePath  = galleryId .. "/" .. safeFilename
+          local uploadUrl    = SUPABASE_URL .. "/storage/v1/object/gallery-assets/" .. storagePath
+
+          local sResp, sHeaders = LrHttp.post( uploadUrl, photoData, {
+            { field = "apikey", value = SUPABASE_ANON },
+            { field = "Authorization", value = "Bearer " .. token },
+            { field = "Content-Type", value = "image/jpeg" },
+            { field = "x-upsert", value = "true" },
+          })
+          local publicUrl = SUPABASE_URL .. "/storage/v1/object/public/gallery-assets/" .. storagePath
+
+          count = count + 1
+          local photoJson = '{"gallery_id":"' .. galleryId .. '",' ..
+                            '"supabase_thumb_path":"' .. jsonEscape( publicUrl ) .. '",' ..
+                            '"supabase_web_path":"' .. jsonEscape( publicUrl ) .. '",' ..
+                            '"file_name":"' .. jsonEscape( filename ) .. '",' ..
+                            '"display_order":' .. count .. '}'
+
+          LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
+            { field = "apikey", value = SUPABASE_ANON },
+            { field = "Authorization", value = "Bearer " .. token },
+            { field = "Content-Type", value = "application/json" },
+          })
+        end
+      end
+
       LrFileUtils.delete( pathOrMessage )
+    else
+      if tostring(pathOrMessage):find("canceled") then
+        logMsg( "Exportação de fotos cancelada no Lightroom." )
+        break
+      else
+        logMsg( "ERRO: Rendition de foto falhou no Lightroom: " .. tostring( pathOrMessage ) )
+      end
     end
   end
 
   progressScope:done()
+  local destText = driveFolderId and "Google Drive (pasta /PriceUS_Galerias/" .. collectionName .. ")" or "PriceU$ Storage"
   LrDialogs.message(
-    "PriceU$ — Publicação Concluída",
-    count .. " foto(s) publicada(s) com sucesso!",
+    "PriceU$ — Galeria Publicada!",
+    "Sincronização concluída!\n\nGaleria '" .. collectionName .. "' com " .. count .. " foto(s) enviada(s) para " .. destText .. ".",
     "info"
   )
 end

@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, signOut } = useAuth()
-  const trialStatus = useTrialStatus(user?.id)
+  const trialStatus = useTrialStatus(user)
   const navigate = useNavigate()
 
   const isUserPrivileged = isPrivilegedUser(user?.email)

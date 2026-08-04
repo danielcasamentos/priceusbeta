@@ -34,7 +34,13 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
   });
 
   useEffect(() => {
+    // Timer de segurança para evitar que a tela fique presa em carregamento caso a query trave
+    const safetyTimer = setTimeout(() => {
+      setTrialStatus(prev => prev.loading ? { ...prev, loading: false } : prev);
+    }, 2500);
+
     if (!user || !user.id) {
+      clearTimeout(safetyTimer);
       setTrialStatus({
         status: null,
         daysRemaining: null,
@@ -49,6 +55,7 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
 
     // Usuários privilegiados não precisam de verificação de trial
     if (isPrivilegedUser(user.email)) {
+      clearTimeout(safetyTimer);
       setTrialStatus({
         status: null,
         daysRemaining: null,

@@ -181,3 +181,45 @@ export async function autoPurgeOldestProjects(activeProjectId: string, projectId
   }
   return 0;
 }
+
+/**
+ * Salva a lista inteira de projetos de culling no IndexedDB (sem limite de 5MB do localStorage)
+ */
+export async function saveProjectsToIndexedDB(userId: string, projectsData: any[]): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_METADATA, 'readwrite');
+    const store = tx.objectStore(STORE_METADATA);
+    const key = `user_projects_${userId || 'default'}`;
+    store.put({ projectId: key, data: projectsData, updatedAt: Date.now() });
+  } catch (err) {
+    console.warn('[IndexedDB Storage] Erro ao salvar projetos no SSD:', err);
+  }
+}
+
+/**
+ * Carrega a lista inteira de projetos de culling do IndexedDB
+ */
+export async function getProjectsFromIndexedDB(userId: string): Promise<any[] | null> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_METADATA, 'readonly');
+    const store = tx.objectStore(STORE_METADATA);
+    const key = `user_projects_${userId || 'default'}`;
+
+    return new Promise((resolve) => {
+      const request = store.get(key);
+      request.onsuccess = () => {
+        if (request.result && request.result.data) {
+          resolve(request.result.data);
+        } else {
+          resolve(null);
+        }
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    console.warn('[IndexedDB Storage] Erro ao carregar projetos do SSD:', err);
+    return null;
+  }
+}

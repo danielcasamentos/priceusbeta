@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
 import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
+import { GalleryService } from '../services/galleryService';
+import { GalleryVisitor } from '../types/gallery';
 import {
   X, User, Mail, Phone, Calendar, MapPin, DollarSign,
-  Briefcase, Tag, MessageSquare, Loader2, UserPlus, ChevronDown, Check, AlertTriangle, Info
+  Briefcase, Tag, MessageSquare, Loader2, UserPlus, ChevronDown, Check, AlertTriangle, Info, Sparkles, Layers
 } from 'lucide-react';
 
 interface TemplateOption {
@@ -107,6 +109,50 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     const desc = (p as any).desconto_percentual || 0;
     return acc + p.valor * (1 - desc / 100);
   }, 0);
+
+  // Contatos de Galerias Online para sugestão
+  const [galleryVisitors, setGalleryVisitors] = useState<GalleryVisitor[]>([]);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
+  const [visitorSearchTerm, setVisitorSearchTerm] = useState('');
+  const [selectedVisitorGalleryTitle, setSelectedVisitorGalleryTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadGalleryVisitors() {
+      if (!userId) return;
+      const v = await GalleryService.getAllGalleryVisitorsForUser(userId);
+      setGalleryVisitors(v);
+    }
+    loadGalleryVisitors();
+  }, [userId]);
+
+  const filteredVisitors = galleryVisitors.filter((v) => {
+    if (!visitorSearchTerm.trim()) return true;
+    const term = visitorSearchTerm.toLowerCase().trim();
+    const cleanTerm = term.replace(/\D/g, '');
+
+    const matchName = v.name?.toLowerCase().includes(term);
+    const matchEmail = v.email?.toLowerCase().includes(term);
+    const cleanPhone = v.whatsapp ? v.whatsapp.replace(/\D/g, '') : '';
+    const matchPhone = cleanTerm.length > 0 ? cleanPhone.includes(cleanTerm) : v.whatsapp?.toLowerCase().includes(term);
+
+    return matchName || matchEmail || matchPhone;
+  });
+
+  const handleSelectGalleryVisitor = (visitor: GalleryVisitor) => {
+    setNome(visitor.name);
+    if (visitor.email) setEmail(visitor.email);
+    if (visitor.whatsapp) setTelefone(visitor.whatsapp);
+    
+    const galTitle = visitor.gallery_title || 'Galeria Online';
+    setSelectedVisitorGalleryTitle(galTitle);
+    setOrigem('evento');
+    
+    const dateFormatted = visitor.accessed_at ? new Date(visitor.accessed_at).toLocaleDateString('pt-BR') : 'recente';
+    const downloadsInfo = visitor.downloads_count ? ` (Baixou ${visitor.downloads_count} foto(s))` : '';
+    setNotas(`📍 Lead capturado via acesso à Galeria Online "${galTitle}"${downloadsInfo}. Data de Acesso: ${dateFormatted}.`);
+    
+    setShowGalleryPicker(false);
+  };
 
   // Carrega templates e cidades ao abrir
   useEffect(() => {
@@ -607,9 +653,87 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
 
           {/* Dados do Cliente */}
           <div className="bg-gray-50 dark:bg-[rgba(255,255,255,0.03)] rounded-2xl p-4 border border-gray-100 dark:border-[rgba(255,255,255,0.06)]">
-            <p className="text-xs font-bold text-gray-400 dark:text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-4 flex items-center gap-2">
-              <User className="w-3.5 h-3.5" /> Dados do Cliente
-            </p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-bold text-gray-400 dark:text-[rgba(255,255,255,0.4)] uppercase tracking-wider flex items-center gap-2">
+                <User className="w-3.5 h-3.5" /> Dados do Cliente
+              </p>
+
+              {galleryVisitors.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowGalleryPicker(!showGalleryPicker)}
+                    className="px-3 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />
+                    <span>Puxar de Galeria Online ({galleryVisitors.length})</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+
+                  {showGalleryPicker && (
+                    <div className="absolute right-0 top-full mt-2 w-80 max-h-80 overflow-hidden bg-white dark:bg-[#07101f] border border-gray-200 dark:border-slate-800 rounded-xl shadow-2xl z-50 p-2 flex flex-col gap-2">
+                      <div className="px-1 pt-1">
+                        <input
+                          type="text"
+                          value={visitorSearchTerm}
+                          onChange={(e) => setVisitorSearchTerm(e.target.value)}
+                          placeholder="🔍 Buscar por nome, e-mail ou whats..."
+                          className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-400 dark:placeholder-slate-500"
+                        />
+                      </div>
+
+                      <div className="overflow-y-auto max-h-56 space-y-1 pr-1 custom-scrollbar">
+                        {filteredVisitors.length === 0 ? (
+                          <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-4">
+                            Nenhum contato encontrado
+                          </p>
+                        ) : (
+                          filteredVisitors.map((v) => (
+                            <div
+                              key={v.id}
+                              onClick={() => handleSelectGalleryVisitor(v)}
+                              className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors text-xs space-y-0.5"
+                            >
+                              <div className="font-bold text-gray-800 dark:text-white flex items-center justify-between">
+                                <span>{v.name}</span>
+                                <span className="text-[10px] font-normal text-blue-500 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded">
+                                  {v.downloads_count ? `${v.downloads_count} foto(s)` : 'Acessou'}
+                                </span>
+                              </div>
+                              {(v.whatsapp || v.email) && (
+                                <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                  {v.whatsapp || v.email}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 mt-0.5">
+                                <Layers className="w-2.5 h-2.5" />
+                                <span>{v.gallery_title}</span>
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {selectedVisitorGalleryTitle && (
+              <div className="mb-3 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Origem identificada: <strong>Galeria "{selectedVisitorGalleryTitle}"</strong></span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVisitorGalleryTitle(null)}
+                  className="text-purple-400 hover:text-purple-600 dark:hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <div className="space-y-3">
               <div>
                 <label className={labelCls}>

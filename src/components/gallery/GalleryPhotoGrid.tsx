@@ -1,5 +1,6 @@
 import { Star, Trash2, Image as ImageIcon } from 'lucide-react';
 import { GalleryPhoto } from '../../types/gallery';
+import { SmartGalleryImage } from './SmartGalleryImage';
 
 interface GalleryPhotoGridProps {
   photos: GalleryPhoto[];
@@ -27,29 +28,28 @@ export function GalleryPhotoGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-1.5">
       {photos.map((photo) => {
         const isCover = photo.id === coverPhotoId;
 
         return (
           <div
             key={photo.id}
-            className={`group relative rounded-xl overflow-hidden bg-slate-900 border transition-all duration-200 ${
+            className={`group relative rounded-none overflow-hidden bg-slate-900 border transition-all duration-200 ${
               isCover ? 'border-amber-500 shadow-lg shadow-amber-500/10' : 'border-slate-800 hover:border-slate-700'
             }`}
           >
             {/* Imagem Thumbnail */}
-            <div className="aspect-square bg-slate-950 overflow-hidden relative">
-              <img
-                src={photo.supabase_thumb_path || photo.supabase_web_path}
+            <div className="aspect-square bg-slate-950 overflow-hidden relative rounded-none">
+              <SmartGalleryImage
+                photo={photo}
                 alt={photo.file_name || 'Foto'}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 rounded-none"
               />
 
               {/* Badge de Capa */}
               {isCover && (
-                <div className="absolute top-2 left-2 bg-amber-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-md flex items-center space-x-1 shadow-md">
+                <div className="absolute top-2 left-2 bg-amber-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-none flex items-center space-x-1 shadow-md">
                   <Star className="w-3 h-3 fill-slate-950" />
                   <span>CAPA DA GALERIA</span>
                 </div>

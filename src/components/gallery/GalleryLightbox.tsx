@@ -11,6 +11,9 @@ interface GalleryLightboxProps {
   allowLowResDownload?: boolean;
   allowHighResDownload?: boolean;
   onDownloadPhoto?: (photo: GalleryPhoto, highRes: boolean) => void;
+  watermarkEnabled?: boolean;
+  watermarkText?: string | null;
+  watermarkLogoUrl?: string | null;
 }
 
 export function GalleryLightbox({
@@ -22,6 +25,9 @@ export function GalleryLightbox({
   allowLowResDownload = true,
   allowHighResDownload = true,
   onDownloadPhoto,
+  watermarkEnabled = false,
+  watermarkText,
+  watermarkLogoUrl,
 }: GalleryLightboxProps) {
   const currentPhoto = photos[currentIndex];
   const touchStartX = useRef<number | null>(null);
@@ -95,12 +101,31 @@ export function GalleryLightbox({
       )}
 
       {/* Imagem lightbox */}
-      <div className="max-w-7xl max-h-[85vh] p-4 flex flex-col items-center justify-center">
-        <img
-          src={currentPhoto.supabase_web_path || currentPhoto.supabase_thumb_path}
-          alt={currentPhoto.file_name || 'Foto em tela cheia'}
-          className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl transition-all duration-200"
-        />
+      <div className="max-w-7xl max-h-[85vh] p-4 flex flex-col items-center justify-center relative">
+        <div className="relative overflow-hidden rounded-lg">
+          <img
+            src={currentPhoto.supabase_web_path || currentPhoto.supabase_thumb_path}
+            alt={currentPhoto.file_name || 'Foto em tela cheia'}
+            className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl transition-all duration-200"
+          />
+
+          {/* Marca d'água no Lightbox */}
+          {watermarkEnabled && (
+            <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center p-6 z-10 overflow-hidden">
+              {watermarkLogoUrl ? (
+                <img
+                  src={watermarkLogoUrl}
+                  alt="Marca d'água"
+                  className="max-w-[65%] max-h-[65%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
+                />
+              ) : (
+                <div className="rotate-[-25deg] text-center text-white/40 font-extrabold text-sm sm:text-base md:text-lg tracking-widest uppercase border border-white/20 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-[1px] shadow-sm pointer-events-none">
+                  © {watermarkText || 'DIREITOS RESERVADOS'}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Rodapé de Informações e Download */}
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 w-full max-w-2xl px-4 py-3 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-md">
