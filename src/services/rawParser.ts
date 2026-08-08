@@ -5,6 +5,8 @@
  *   Phase 2 (parseRawImage)  – lê 4MB para extrair preview JPEG. Chamado sob demanda (lazy).
  */
 
+import { platformAdapter } from './platformAdapter';
+
 export interface RawParseResult {
   previewUrl: string;
   isRaw: boolean;
@@ -117,6 +119,8 @@ function parseExifFromBytes(bytes: Uint8Array, ext: string) {
   let make = '', model = '', lens = '';
   let iso = def.iso, aperture = def.aperture, shutterSpeed = def.shutterSpeed;
   let focalLength = def.focalLength;
+  let jpegOffset = 0;
+  let jpegLength = 0;
 
   try {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -163,10 +167,20 @@ function parseExifFromBytes(bytes: Uint8Array, ext: string) {
           }
           if (tag === 0xA434 && !lens) lens = readASCII(bytes, cnt > 4 ? tiff + view.getUint32(to + 8, le) : to + 8, cnt);
 
-          // Ponteiro ExifIFD (0x8769)
-          if (tag === 0x8769) {
-            const exifPointer = tiff + view.getUint32(to + 8, le);
-            parseIFD(exifPointer);
+          // Tags de Offset do Preview JPEG embutido no RAW (0x0201 e 0x0202)
+          if (tag === 0x0201) {
+            const offVal = view.getUint32(to + 8, le);
+            if (offVal > 0) jpegOffset = tiff + offVal;
+          }
+          if (tag === 0x0202) {
+            const lenVal = view.getUint32(to + 8, le);
+            if (lenVal > 0) jpegLength = lenVal;
+          }
+
+          // SubIFD (0x8769 ou 0x014A ou SubIFDs encadeados)
+          if (tag === 0x8769 || tag === 0x014A) {
+            const subPointer = tiff + view.getUint32(to + 8, le);
+            parseIFD(subPointer);
           }
         }
       };
@@ -177,7 +191,7 @@ function parseExifFromBytes(bytes: Uint8Array, ext: string) {
   } catch {}
 
   const cm = model ? (make && !model.toLowerCase().includes(make.toLowerCase()) ? `${make} ${model}` : model).trim() : def.cameraModel;
-  return { cameraModel: cm, lensModel: lens.trim() || def.lensModel, iso, aperture, shutterSpeed, focalLength };
+  return { cameraModel: cm, lensModel: lens.trim() || def.lensModel, iso, aperture, shutterSpeed, focalLength, jpegOffset, jpegLength };
 }
 
 function parseOrientation(bytes: Uint8Array): number {
@@ -212,10 +226,10 @@ function findLargestJpeg(bytes: Uint8Array): Blob | null {
   for (let i = 0; i < bytes.length - 4; i++) {
     if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
       // Procurar marcador EOI (0xFF 0xD9)
-      for (let j = i + 1000; j < Math.min(bytes.length - 1, i + 12 * 1024 * 1024); j++) {
+      for (let j = i + 1000; j < Math.min(bytes.length - 1, i + 16 * 1024 * 1024); j++) {
         if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
           const len = (j + 2) - i;
-          if (len > bestLength) {
+          if (len > bestLength && len >= 20000) {
             bestStart = i;
             bestLength = len;
           }
@@ -225,14 +239,17 @@ function findLargestJpeg(bytes: Uint8Array): Blob | null {
     }
   }
 
-  if (bestStart !== -1 && bestLength >= 3000) {
+  if (bestStart !== -1 && bestLength >= 20000) {
     return new Blob([bytes.subarray(bestStart, bestStart + bestLength)], { type: 'image/jpeg' });
   }
 
-  // Se o marcador EOI ultrapassou a fatia de 8MB, retorna a fatia a partir do SOI
-  for (let i = 0; i < Math.min(bytes.length - 4, 131072); i++) {
+  // Se o marcador EOI ultrapassou a fatia, retorna a maior fatia a partir do SOI relevante (> 50KB)
+  for (let i = 0; i < Math.min(bytes.length - 4, 524288); i++) {
     if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
-      return new Blob([bytes.subarray(i)], { type: 'image/jpeg' });
+      const sub = bytes.subarray(i);
+      if (sub.length > 50000) {
+        return new Blob([sub], { type: 'image/jpeg' });
+      }
     }
   }
 
@@ -245,9 +262,19 @@ function findLargestJpeg(bytes: Uint8Array): Blob | null {
 export async function quickScanFile(file: File): Promise<QuickScanResult> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'raw';
   const isRaw = isRawFile(file);
-  const placeholderUrl = isRaw
-    ? createRawPlaceholderDataUrl(file.name, ext)
-    : URL.createObjectURL(file);
+
+  let placeholderUrl = '';
+  if (isRaw) {
+    placeholderUrl = createRawPlaceholderDataUrl(file.name, ext);
+  } else {
+    // Para arquivos de imagem comuns (JPG/PNG), gera Data URL WebP permanente
+    try {
+      placeholderUrl = await compressBlobToWebpThumbnail(file, 400, 0.65);
+    } catch {}
+    if (!placeholderUrl || placeholderUrl.startsWith('data:image/svg')) {
+      placeholderUrl = createRawPlaceholderDataUrl(file.name, ext);
+    }
+  }
 
   let exif = defaultExif(ext);
   let orientationDegrees = 0;
@@ -258,6 +285,11 @@ export async function quickScanFile(file: File): Promise<QuickScanResult> {
     const bytes = new Uint8Array(ab);
     exif = parseExifFromBytes(bytes, ext);
     orientationDegrees = parseOrientation(bytes);
+    platformAdapter.addLog(
+      'info',
+      'CULLING',
+      `[RAW QuickScan EXIF] Arquivo: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB) | Câmera: ${exif.cameraModel} | Lente: ${exif.lensModel} | ISO ${exif.iso} | f/${exif.aperture} | ${exif.shutterSpeed} | Orientação: ${orientationDegrees}°`
+    );
   } catch {}
 
   return {
@@ -282,11 +314,28 @@ export function compressBlobToWebpThumbnail(
   return new Promise((resolve) => {
     const tempUrl = URL.createObjectURL(blob);
     const img = new Image();
+    let isResolved = false;
+
+    const safeResolve = (result: string) => {
+      if (isResolved) return;
+      isResolved = true;
+      clearTimeout(timer);
+      try { URL.revokeObjectURL(tempUrl); } catch {}
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+      resolve(result);
+    };
+
+    // Timeout de segurança de 2.5s para evitar travamento em arquivos corrompidos ou headers inválidos
+    const timer = setTimeout(() => {
+      safeResolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
+    }, 2500);
+
     img.onload = () => {
-      URL.revokeObjectURL(tempUrl);
       const canvas = document.createElement('canvas');
-      let w = img.width;
-      let h = img.height;
+      let w = img.width || 400;
+      let h = img.height || 300;
 
       if (w > maxDimension || h > maxDimension) {
         if (w > h) {
@@ -302,95 +351,114 @@ export function compressBlobToWebpThumbnail(
       canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(
-          (webpBlob) => {
-            // Desaloca a memória do Canvas e da Imagem imediatamente após gerar o Blob
-            canvas.width = 0;
-            canvas.height = 0;
-            img.onload = null;
-            img.onerror = null;
-            img.src = '';
-
-            if (webpBlob) {
-              const objectUrl = URL.createObjectURL(webpBlob);
-              resolve(objectUrl);
-            } else {
-              resolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
-            }
-          },
-          'image/webp',
-          quality
-        );
+        try {
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(
+            (webpBlob) => {
+              canvas.width = 0;
+              canvas.height = 0;
+              if (webpBlob) {
+                const reader = new FileReader();
+                reader.onloadend = () => safeResolve(reader.result as string);
+                reader.onerror = () => safeResolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
+                reader.readAsDataURL(webpBlob);
+              } else {
+                safeResolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
+              }
+            },
+            'image/webp',
+            quality
+          );
+        } catch {
+          safeResolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
+        }
       } else {
-        canvas.width = 0;
-        canvas.height = 0;
-        img.onload = null;
-        img.onerror = null;
-        img.src = '';
-        resolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
+        safeResolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
       }
     };
+
     img.onerror = () => {
-      URL.revokeObjectURL(tempUrl);
-      img.onload = null;
-      img.onerror = null;
-      img.src = '';
-      resolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
+      safeResolve(createRawPlaceholderDataUrl('Foto RAW', 'RAW'));
     };
+
     img.src = tempUrl;
   });
 }
 
 // ─────────────────────────────────────────────
 // PHASE 2: Parse RAW preview — 8MB header scan
-// Extrai o preview JPEG real do RAW e converte em WebP Micro-Miniatura
+// Extrai o JPEG embutido e cria blob URL instantâneo (zero canvas, zero thread blocking)
 // ─────────────────────────────────────────────
 export async function parseRawImage(file: File): Promise<RawParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'raw';
   const cacheKey = `${file.name}_${file.size}`;
 
+  // Usa cache em memória para evitar re-leitura do mesmo arquivo
   const cached = RAW_PREVIEW_CACHE.get(cacheKey);
   if (cached && !cached.startsWith('data:image/svg')) {
-    const q = await quickScanFile(file);
-    return { previewUrl: cached, isRaw: q.isRaw, format: q.format, fileSizeBytes: q.fileSizeBytes, orientationDegrees: q.orientationDegrees, cameraModel: q.cameraModel, lensModel: q.lensModel, iso: q.iso, aperture: q.aperture, shutterSpeed: q.shutterSpeed, focalLength: q.focalLength };
+    return {
+      previewUrl: cached,
+      isRaw: isRawFile(file),
+      format: ext.toUpperCase(),
+      fileSizeBytes: file.size,
+      orientationDegrees: 0,
+      ...defaultExif(ext),
+    };
   }
 
+  // Para JPEGs/PNGs normais: blob URL direto sem canvas
   if (!isRawFile(file)) {
-    const url = URL.createObjectURL(file);
-    setCacheUrl(cacheKey, url);
-    const q = await quickScanFile(file);
-    return { previewUrl: url, isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees: q.orientationDegrees, ...q };
+    const blobUrl = blobToPreviewUrl(file);
+    if (blobUrl) {
+      setCacheUrl(cacheKey, blobUrl);
+      return { previewUrl: blobUrl, isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees: 0, ...defaultExif(ext) };
+    }
+    return { previewUrl: createRawPlaceholderDataUrl(file.name, ext), isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees: 0, ...defaultExif(ext) };
   }
 
   try {
-    // 8MB slice: cobre previews de Canon CR3, Sony ARW, Nikon NEF, Fuji RAF e DNG
-    const slice = file.slice(0, Math.min(file.size, 8 * 1024 * 1024));
-    const ab = await slice.arrayBuffer();
-    const bytes = new Uint8Array(ab);
-    const orientationDegrees = parseOrientation(bytes);
-    const exif = parseExifFromBytes(bytes, ext);
+    // 1. Lê os primeiros 512KB para encontrar o EXIF e offset do JPEG via TIFF Tags
+    const headerSlice = file.slice(0, Math.min(file.size, 524288));
+    const headerAb = await headerSlice.arrayBuffer();
+    const headerBytes = new Uint8Array(headerAb);
+    const orientationDegrees = parseOrientation(headerBytes);
+    const exif = parseExifFromBytes(headerBytes, ext);
 
-    const jpegBlob = findLargestJpeg(bytes);
-    if (jpegBlob) {
-      try {
-        const webpUrl = await compressBlobToWebpThumbnail(jpegBlob, 400, 0.70);
-        if (webpUrl && !webpUrl.startsWith('data:image/svg')) {
-          setCacheUrl(cacheKey, webpUrl);
-          return { previewUrl: webpUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
-        }
-      } catch {}
-
-      // Fallback instantâneo: usar o JPEG direto do RAW sem compressão
-      const directJpegUrl = URL.createObjectURL(jpegBlob);
-      setCacheUrl(cacheKey, directJpegUrl);
-      return { previewUrl: directJpegUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
+    // 2. Se as tags TIFF (0x0201 / 0x0202) informarem a localização exata do JPEG no RAW:
+    if (exif.jpegOffset > 0 && exif.jpegLength > 20000 && exif.jpegOffset + exif.jpegLength <= file.size) {
+      const jpegBlob = file.slice(exif.jpegOffset, exif.jpegOffset + exif.jpegLength, 'image/jpeg');
+      const blobUrl = blobToPreviewUrl(jpegBlob);
+      if (blobUrl) {
+        setCacheUrl(cacheKey, blobUrl);
+        platformAdapter.addLog(
+          'success',
+          'CULLING',
+          `[RAW Phase 2] Preview JPEG Sony/Canon/Nikon extraído por TIFF Tag 0x0201 de ${file.name} (${(jpegBlob.size / 1024).toFixed(0)} KB)`
+        );
+        return { previewUrl: blobUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
+      }
     }
 
-    // Fallback: carregar arquivo diretamente
-    const url = URL.createObjectURL(file);
-    setCacheUrl(cacheKey, url);
-    return { previewUrl: url, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
+    // 3. Fallback: Lê uma fatia maior (16MB) e faz busca por marcadores SOI (0xFF 0xD8) -> EOI (0xFF 0xD9)
+    const scanSlice = file.slice(0, Math.min(file.size, 16 * 1024 * 1024));
+    const scanAb = await scanSlice.arrayBuffer();
+    const scanBytes = new Uint8Array(scanAb);
+
+    const jpegBlob = findLargestJpeg(scanBytes);
+    if (jpegBlob) {
+      const blobUrl = blobToPreviewUrl(jpegBlob);
+      if (blobUrl) {
+        setCacheUrl(cacheKey, blobUrl);
+        platformAdapter.addLog(
+          'success',
+          'CULLING',
+          `[RAW Phase 2] Preview JPEG extraído via Marcador SOI/EOI de ${file.name} (${(jpegBlob.size / 1024).toFixed(0)} KB)`
+        );
+        return { previewUrl: blobUrl, isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
+      }
+    }
+
+    return { previewUrl: createRawPlaceholderDataUrl(file.name, ext), isRaw: true, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...exif };
   } catch (err) {
     console.warn(`[RAW Parser] Erro em ${file.name}:`, err);
   }

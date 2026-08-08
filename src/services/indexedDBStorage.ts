@@ -4,6 +4,8 @@
  * sem gastar memória RAM, com purge automático ao excluir/publicar.
  */
 
+import { platformAdapter } from './platformAdapter';
+
 const DB_NAME = 'PriceUS_Culling_SSD_Store';
 const DB_VERSION = 1;
 const STORE_THUMBNAILS = 'micro_thumbnails';
@@ -43,6 +45,7 @@ export async function saveThumbnailToSSD(projectId: string, photoId: string, dat
     const store = tx.objectStore(STORE_THUMBNAILS);
     const key = `${projectId}_${photoId}`;
     store.put({ key, projectId, photoId, data: dataUrlOrBlob, updatedAt: Date.now() });
+    platformAdapter.addLog('info', 'STORAGE', `[IndexedDB SSD] Micro-miniatura salva para foto ${photoId} no projeto ${projectId}`);
   } catch (err) {
     console.warn('[IndexedDB Storage] Erro ao salvar miniatura no SSD:', err);
   }
@@ -64,9 +67,18 @@ export async function getThumbnailFromSSD(projectId: string, photoId: string): P
         if (request.result && request.result.data) {
           const item = request.result.data;
           if (typeof item === 'string') {
-            resolve(item);
+            // Rejeita blob URLs guardados em sessões anteriores (morrem ao reiniciar)
+            if (item.startsWith('data:') || item.startsWith('http')) {
+              resolve(item);
+            } else {
+              resolve(null);
+            }
           } else if (item instanceof Blob) {
-            resolve(URL.createObjectURL(item));
+            // Converte Blob para data URL permanente (blob URLs morrem ao reiniciar o app)
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(item);
           } else {
             resolve(null);
           }
@@ -110,6 +122,7 @@ export async function purgeProjectStorage(projectId: string): Promise<void> {
     };
 
     console.log(`[IndexedDB Storage] 🧹 Purge executado com sucesso para o projeto ${projectId}. Memória e SSD liberados!`);
+    platformAdapter.addLog('info', 'STORAGE', `[IndexedDB Storage] 🧹 Purge executado com sucesso para o projeto ${projectId}. Memória e SSD liberados!`);
   } catch (err) {
     console.warn('[IndexedDB Storage] Erro ao purgar armazenamento do projeto:', err);
   }

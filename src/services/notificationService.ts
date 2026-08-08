@@ -11,10 +11,30 @@ export interface SystemNotificationPayload {
 
 export class NotificationService {
   /**
-   * Envia uma notificação no sistema Supabase que dispara áudio e WebSocket ao vivo
+   * Envia uma notificação no sistema Supabase que dispara áudio e WebSocket ao vivo + Notificação Nativa do macOS (Apple System Notification)
    */
   static async sendNotification(payload: SystemNotificationPayload): Promise<void> {
     try {
+      // 🍏 Notificação Nativa da Apple / macOS (Central de Notificações do Mac)
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification(payload.title, {
+            body: payload.message,
+            icon: '/Logo_Price_Us_192x192.png',
+            silent: false,
+          });
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+              new Notification(payload.title, {
+                body: payload.message,
+                icon: '/Logo_Price_Us_192x192.png',
+              });
+            }
+          });
+        }
+      }
+
       await supabase.from('notifications').insert({
         user_id: payload.userId,
         title: payload.title,

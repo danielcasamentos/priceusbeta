@@ -28,12 +28,16 @@ import {
   Wand2,
   Terminal,
   AlertTriangle,
+  FileCode,
+  Download,
 } from 'lucide-react';
 import { CullingPhoto } from './AICullingManager';
 import { GalleryService } from '../../services/galleryService';
 import { NotificationService } from '../../services/notificationService';
 import { scanDataTransferItems, scanFileListWithDirectory, ScannedFileItem } from '../../services/folderScanner';
 import { AiLogEntry } from '../../services/groqCullingService';
+import { platformAdapter } from '../../services/platformAdapter';
+import { downloadXmpZipPackage } from '../../services/xmpExportService';
 
 interface CullingImportAndProgressModalProps {
   isOpen: boolean;
@@ -45,6 +49,12 @@ interface CullingImportAndProgressModalProps {
   currentFileName?: string;
   onSelectFiles: (files: File[], scannedItems?: ScannedFileItem[]) => void;
   logs?: AiLogEntry[];
+  isCompleted?: boolean;
+  approvedCount?: number;
+  discardedCount?: number;
+  onRestartWithNewParams?: () => void;
+  onCancel?: () => void;
+  onContinueBackground?: () => void;
 }
 
 export function CullingImportAndProgressModal({
@@ -57,6 +67,12 @@ export function CullingImportAndProgressModal({
   currentFileName,
   onSelectFiles,
   logs = [],
+  isCompleted = false,
+  approvedCount = 0,
+  discardedCount = 0,
+  onRestartWithNewParams,
+  onCancel,
+  onContinueBackground,
 }: CullingImportAndProgressModalProps) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,20 +137,78 @@ export function CullingImportAndProgressModal({
               <X className="w-5 h-5" />
             </button>
           )}
+          {analyzing && onContinueBackground && (
+            <button onClick={onContinueBackground} type="button" title="Fechar e continuar em segundo plano" className="p-1.5 text-slate-400 hover:text-white rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         <div className="p-6 space-y-4">
-          {analyzing ? (
+          {isCompleted ? (
+            <div className="space-y-5 py-2 animate-in zoom-in-95 duration-200">
+              <div className="p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-white">Curadoria Concluída com Sucesso!</h4>
+                  <p className="text-xs text-emerald-300 mt-1 font-medium">
+                    O motor de IA compilou a melhor seleção e aplicou os presets de edição inicial.
+                  </p>
+                </div>
+              </div>
+
+              {/* Estatísticas resumidas da seleção */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Processado</span>
+                  <span className="text-lg font-black text-white font-mono">{totalFiles}</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-purple-950/40 border border-purple-500/30">
+                  <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider block">⭐ Aprovadas</span>
+                  <span className="text-lg font-black text-purple-300 font-mono">{approvedCount}</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-rose-950/30 border border-rose-500/20">
+                  <span className="text-[10px] text-rose-300 font-bold uppercase tracking-wider block">🗑️ Descartadas</span>
+                  <span className="text-lg font-black text-rose-400 font-mono">{discardedCount}</span>
+                </div>
+              </div>
+
+              {/* Botões de Ação Final */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full sm:flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-xl shadow-emerald-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Concluir e Ver Galeria</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onRestartWithNewParams) onRestartWithNewParams();
+                  }}
+                  className="w-full sm:flex-1 py-3 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 font-extrabold text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+                  <span>Refinar com Novos Parâmetros</span>
+                </button>
+              </div>
+            </div>
+          ) : analyzing ? (
             <div className="space-y-4 py-1">
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold font-mono">
-                  <span className="text-purple-300">Processando: {processedCount} de {totalFiles} fotos</span>
-                  <span className="text-purple-400 font-extrabold">{progress}%</span>
+                <div className="flex items-center justify-between text-xs font-bold font-mono tabular-nums">
+                  <span className="text-purple-300">Processando: {processedCount.toLocaleString('pt-BR')} de {totalFiles.toLocaleString('pt-BR')} fotos</span>
+                  <span className="text-purple-400 font-extrabold w-10 text-right">{progress}%</span>
                 </div>
                 <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
                   <div
-                    className="h-full bg-gradient-to-r from-purple-600 via-indigo-500 to-emerald-400 rounded-full transition-all duration-300 shadow-lg shadow-purple-500/50"
-                    style={{ width: `${progress}%` }}
+                    className="h-full bg-gradient-to-r from-purple-600 via-indigo-500 to-emerald-400 rounded-full shadow-lg shadow-purple-500/50"
+                    style={{ width: `${progress}%`, transition: 'width 80ms linear' }}
                   />
                 </div>
               </div>
@@ -186,6 +260,30 @@ export function CullingImportAndProgressModal({
                   ))}
                 </div>
               )}
+
+              {/* Botões de ação durante o processamento */}
+              <div className="flex gap-2.5 pt-1">
+                {onContinueBackground && (
+                  <button
+                    type="button"
+                    onClick={onContinueBackground}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition flex items-center justify-center gap-1.5 border border-slate-700"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    Continuar em Segundo Plano
+                  </button>
+                )}
+                {onCancel && (
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className="flex-1 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-400 font-semibold text-xs transition flex items-center justify-center gap-1.5 border border-rose-500/30"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Cancelar Importação
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div
@@ -202,6 +300,8 @@ export function CullingImportAndProgressModal({
               }`}
             >
               <input
+                id="modal_culling_folder_input"
+                name="modal_culling_folder_input"
                 type="file"
                 ref={folderInputRef}
                 {...({ webkitdirectory: "", directory: "" } as any)}
@@ -211,6 +311,8 @@ export function CullingImportAndProgressModal({
               />
 
               <input
+                id="modal_culling_file_input"
+                name="modal_culling_file_input"
                 type="file"
                 ref={fileInputRef}
                 multiple
@@ -343,6 +445,8 @@ export function CullingAiTuningModal({
                 <span className="font-mono text-purple-400">{userPresetPref?.presetIntensity || 85}%</span>
               </div>
               <input
+                id="modal_preset_intensity"
+                name="modal_preset_intensity"
                 type="range"
                 min="10"
                 max="100"
@@ -354,6 +458,8 @@ export function CullingAiTuningModal({
             </div>
 
             <input
+              id="modal_preset_file_input"
+              name="modal_preset_file_input"
               type="file"
               ref={presetInputRef}
               accept=".xmp,.lrtemplate"
@@ -378,6 +484,8 @@ export function CullingAiTuningModal({
                 <span className="text-[10px] text-slate-400">Corrige automaticamente verticais tortas e horizontes inclinados</span>
               </div>
               <input
+                id="modal_auto_straighten"
+                name="modal_auto_straighten"
                 type="checkbox"
                 checked={userPresetPref?.autoStraighten ?? true}
                 onChange={(e) => onUpdateUserPresetPref?.({ autoStraighten: e.target.checked })}
@@ -391,6 +499,8 @@ export function CullingAiTuningModal({
                 <span className="text-[10px] text-slate-400">Gera cópias P&B Fine Art das fotos de maior contraste e expressão</span>
               </div>
               <input
+                id="modal_create_bw_variants"
+                name="modal_create_bw_variants"
                 type="checkbox"
                 checked={userPresetPref?.createBwVariants ?? true}
                 onChange={(e) => onUpdateUserPresetPref?.({ createBwVariants: e.target.checked })}
@@ -408,6 +518,8 @@ export function CullingAiTuningModal({
               <span className="font-mono font-bold text-purple-400">{sharpnessThreshold}%</span>
             </div>
             <input
+              id="modal_sharpness_threshold"
+              name="modal_sharpness_threshold"
               type="range"
               min="60"
               max="90"
@@ -424,6 +536,8 @@ export function CullingAiTuningModal({
               <span className="text-[10px] text-slate-400">Remove imperfeições temporárias de pele e sujeiras no fundo</span>
             </div>
             <input
+              id="modal_enable_ai_retouching"
+              name="modal_enable_ai_retouching"
               type="checkbox"
               checked={enableAiRetouching}
               onChange={(e) => setEnableAiRetouching(e.target.checked)}
@@ -575,6 +689,8 @@ export function CullingPublishModal({
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-300">Título da Galeria Online:</label>
                 <input
+                  id="modal_gallery_title"
+                  name="modal_gallery_title"
                   type="text"
                   value={galleryTitle}
                   onChange={(e) => setGalleryTitle(e.target.value)}
@@ -590,6 +706,8 @@ export function CullingPublishModal({
                     <span>Fotos Inclusas no Pacote:</span>
                   </label>
                   <input
+                    id="modal_package_photo_limit"
+                    name="modal_package_photo_limit"
                     type="number"
                     min="1"
                     max="500"
@@ -605,6 +723,8 @@ export function CullingPublishModal({
                     <span>Valor por Foto Extra (R$):</span>
                   </label>
                   <input
+                    id="modal_price_per_extra_photo"
+                    name="modal_price_per_extra_photo"
                     type="number"
                     min="0"
                     max="1000"
@@ -625,6 +745,8 @@ export function CullingPublishModal({
                     </div>
                   </div>
                   <input
+                    id="modal_require_lead_capture"
+                    name="modal_require_lead_capture"
                     type="checkbox"
                     checked={requireLeadCapture}
                     onChange={(e) => setRequireLeadCapture(e.target.checked)}
@@ -641,6 +763,8 @@ export function CullingPublishModal({
                     </div>
                   </div>
                   <input
+                    id="modal_enable_social_promo"
+                    name="modal_enable_social_promo"
                     type="checkbox"
                     checked={enableSocialPromo}
                     onChange={(e) => setEnableSocialPromo(e.target.checked)}
@@ -719,7 +843,40 @@ export function CullingLightroomExportModal({
   const handleCopyText = () => {
     navigator.clipboard.writeText(formattedText);
     setCopied(true);
+    platformAdapter.addLog(
+      'success',
+      'CULLING',
+      `[Exportação Lightroom] Copiada lista de ${approvedPhotos.length} fotos aprovadas no formato '${formatMode}' para a Área de Transferência.`
+    );
     setTimeout(() => setCopied(false), 3000);
+  };
+
+  const handleDownloadXml = () => {
+    const xmlItems = approvedPhotos
+      .map(
+        (p) =>
+          `    <photo>\n      <filename>${p.fileName}</filename>\n      <rating>${p.starRating || 4}</rating>\n      <scene>${p.sceneGroup || 'Geral'}</scene>\n      <isBestTake>${p.isBestTake}</isBestTake>\n      <camera>${p.cameraModel || ''}</camera>\n      <lens>${p.lensModel || ''}</lens>\n      <iso>${p.iso || 0}</iso>\n      <aperture>${p.aperture || ''}</aperture>\n      <shutter>${p.shutterSpeed || ''}</shutter>\n    </photo>`
+      )
+      .join('\n');
+
+    const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<cullingSelection generator="PriceUs AI Culling" version="2.0">\n  <metadata>\n    <exportedAt>${new Date().toISOString()}</exportedAt>\n    <totalSelected>${approvedPhotos.length}</totalSelected>\n  </metadata>\n  <photos>\n${xmlItems}\n  </photos>\n</cullingSelection>`;
+
+    const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `selecao_culling_${Date.now()}.xml`;
+    link.click();
+    URL.revokeObjectURL(url);
+    platformAdapter.addLog(
+      'success',
+      'CULLING',
+      `[Exportação XML] Gerado arquivo .XML de seleção contendo ${approvedPhotos.length} fotos aprovadas.`
+    );
+  };
+
+  const handleDownloadXmpZip = async () => {
+    await downloadXmpZipPackage(approvedPhotos, 'sidecars_xmp_priceus');
   };
 
   const handleDownloadCsv = () => {
@@ -734,6 +891,11 @@ export function CullingLightroomExportModal({
     link.download = `selecao_culling_${Date.now()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    platformAdapter.addLog(
+      'success',
+      'CULLING',
+      `[Exportação CSV] Gerado relatório CSV com ${approvedPhotos.length} fotos aprovadas e metadados de EXIF.`
+    );
   };
 
   return (
@@ -791,6 +953,8 @@ export function CullingLightroomExportModal({
               <span className="text-[10px] text-slate-400">{approvedPhotos.length} itens</span>
             </div>
             <textarea
+              id="modal_export_formatted_text"
+              name="modal_export_formatted_text"
               readOnly
               rows={4}
               value={formattedText}
@@ -831,16 +995,39 @@ export function CullingLightroomExportModal({
             </ol>
           </div>
 
-          {/* Opções Secundárias (Download CSV opcional) */}
-          <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-xs">
-            <button
-              type="button"
-              onClick={handleDownloadCsv}
-              className="text-slate-400 hover:text-slate-200 font-bold flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <Zap className="w-3.5 h-3.5 text-blue-400" />
-              <span>Baixar Relatório em .CSV (Opcional)</span>
-            </button>
+          {/* Opções Secundárias (Download XML, XMP ZIP e CSV) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadXmpZip}
+                className="px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 border border-purple-500/40 font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="Baixar pacote .ZIP contendo os arquivos .XMP Sidecar de cada foto para colocar direto na pasta de origem"
+              >
+                <Download className="w-3.5 h-3.5 text-purple-300" />
+                <span>📦 Baixar Sidecars .XMP (ZIP)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadXml}
+                className="px-3 py-1.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700/50 font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="Baixar arquivo .XML contendo a seleção de fotos e notas de estrelas"
+              >
+                <FileCode className="w-3.5 h-3.5 text-purple-400" />
+                <span>📄 Baixar Seleção .XML</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                className="text-slate-400 hover:text-slate-200 font-bold flex items-center gap-1.5 transition cursor-pointer ml-1"
+              >
+                <Zap className="w-3.5 h-3.5 text-blue-400" />
+                <span>Baixar .CSV</span>
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={onClose}

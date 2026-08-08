@@ -29,8 +29,12 @@ export function WhatsAppSettings() {
 
   const [saveToast, setSaveToast] = useState(false);
 
-  // 🔄 Fetch em tempo real do Servidor Baileys oficial
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+
+  // 🔄 Fetch em tempo real do Servidor Baileys (Somente quando necessário)
   useEffect(() => {
+    let isMounted = true;
+
     const fetchStatus = async () => {
       try {
         let res = await fetch('/api/whatsapp/qr').catch(() => null);
@@ -39,6 +43,7 @@ export function WhatsAppSettings() {
         }
         if (res && res.ok) {
           const data = await res.json();
+          if (!isMounted) return;
           setIsGatewayOnline(true);
           if (data.status === 'connected') {
             setQrState('connected');
@@ -50,21 +55,27 @@ export function WhatsAppSettings() {
               setRealQrBase64(data.qrBase64);
               setQrState('qr');
             } else {
+              setRealQrBase64(null);
               setQrState('disconnected');
             }
           }
         } else {
-          setIsGatewayOnline(false);
+          if (isMounted) setIsGatewayOnline(false);
         }
       } catch {
-        setIsGatewayOnline(false);
+        if (isMounted) setIsGatewayOnline(false);
       }
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    // Polling inteligente: 3s quando aguardando QR Code, ou 12s quando em repouso
+    const pollInterval = qrState === 'qr' ? 3000 : 12000;
+    const interval = setInterval(fetchStatus, pollInterval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [qrState]);
 
   const handleSaveSettings = () => {
     localStorage.setItem('priceus_ai_persona_name', aiPersonaName.trim());
@@ -72,14 +83,20 @@ export function WhatsAppSettings() {
     setTimeout(() => setSaveToast(false), 3500);
   };
 
-  const handleConnect = async () => {
-    try {
-      await fetch('/api/whatsapp/disconnect', { method: 'POST' }).catch(() => null);
-    } catch (e) {
-      console.warn('Erro ao reiniciar sessão:', e);
-    }
-    setQrState('disconnected');
+  const handleGenerateQrCode = async () => {
+    setIsGeneratingQr(true);
     setRealQrBase64(null);
+    try {
+      let res = await fetch('/api/whatsapp/connect', { method: 'POST' }).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch('http://localhost:3001/api/whatsapp/connect', { method: 'POST' }).catch(() => null);
+      }
+      setQrState('qr');
+    } catch (e) {
+      console.warn('Erro ao solicitar QR Code:', e);
+    } finally {
+      setTimeout(() => setIsGeneratingQr(false), 2000);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -226,11 +243,13 @@ export function WhatsAppSettings() {
 
                 <div className="pt-2">
                   <button
-                    onClick={handleConnect}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center gap-2"
+                    type="button"
+                    onClick={handleGenerateQrCode}
+                    disabled={isGeneratingQr}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shadow-lg shadow-emerald-600/30 cursor-pointer flex items-center justify-center gap-2 mx-auto"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Ativar Conexão do WhatsApp</span>
+                    <QrCode className={`w-4 h-4 ${isGeneratingQr ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingQr ? 'Gerando QR Code...' : '⚡ Gerar QR Code WhatsApp'}</span>
                   </button>
                 </div>
               </>

@@ -8,6 +8,12 @@ interface TawkToChatProps {
 
 export function TawkToChat({ name, email }: TawkToChatProps) {
   useEffect(() => {
+    const isElectronEnv = typeof window !== 'undefined' && (
+      window.location.protocol === 'file:' ||
+      window.navigator.userAgent.toLowerCase().includes('electron')
+    );
+    if (isElectronEnv) return;
+
     if (document.querySelector('script[src*="tawk.to"]')) {
       if (window.Tawk_API && window.Tawk_API.showWidget) {
         window.Tawk_API.showWidget();

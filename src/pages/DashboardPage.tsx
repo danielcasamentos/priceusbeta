@@ -183,19 +183,19 @@ export function DashboardPage() {
         <FreePlanBanner />
       )}
 
-      <header className="bg-white dark:bg-[#0a1628] border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] shadow-sm dark:shadow-none sticky top-0 z-40">
+      <header className="bg-white dark:bg-[#0a1628] border-b border-gray-200 dark:border-[rgba(255,255,255,.08)] shadow-sm dark:shadow-none sticky top-0 z-40 electron-drag select-none">
         <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 relative">
-          {/* PriceUs Logo in the absolute center of top bar */}
+          {/* PriceUs Logo no centro exato da barra superior (também arrastável) */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none">
             <img
-              src="/Logo Price Us Dark.png"
+              src="./Logo Price Us Dark.png"
               alt="Price Us"
-              className="h-[50px] sm:h-[63px] w-auto hidden dark:block"
+              className="h-[50px] sm:h-[63px] w-auto hidden dark:block pointer-events-auto"
             />
             <img
-              src="/Logo Price Us.png"
+              src="./logo-priceus.png"
               alt="Price Us"
-              className="h-[50px] sm:h-[63px] w-auto dark:hidden block"
+              className="h-[50px] sm:h-[63px] w-auto dark:hidden block pointer-events-auto"
             />
           </div>
 
@@ -235,7 +235,7 @@ export function DashboardPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 electron-no-drag relative z-20">
             {/* Botão de Console de Logs de Suporte e Dev (Atalhos: Cmd+Shift+L) */}
             <button
               onClick={() => setIsLogDrawerOpen(true)}
@@ -386,6 +386,12 @@ export function DashboardPage() {
           onPageChange={handlePageChange} 
         />
       )}
+
+      {/* Console Flutuante de Logs em Tempo Real */}
+      <DevSupportLogDrawer 
+        isOpen={isLogDrawerOpen} 
+        onClose={() => setIsLogDrawerOpen(false)} 
+      />
 
       <footer className={`bg-white dark:bg-[#0a1628] border-t border-gray-200 dark:border-[rgba(255,255,255,.07)] ${isMobile ? 'hidden' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-gray-500 dark:text-[rgba(255,255,255,.3)]">

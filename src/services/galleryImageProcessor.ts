@@ -1,3 +1,5 @@
+import { platformAdapter } from './platformAdapter';
+
 export interface ProcessedImages {
   thumbBlob: Blob;
   webBlob: Blob;
@@ -32,6 +34,12 @@ export async function processImageForGallery(
 
           // 2. Gerar Web Display (máx 2048px, WebP, qualidade 80%, com marca d'água e promo social)
           const webBlob = await resizeCanvas(img, 2048, 0.80, watermarkText, socialInstagramHandle);
+
+          platformAdapter.addLog(
+            'success',
+            'CULLING',
+            `[Image Processor] Foto ${file.name} processada: WebP Thumb ${(thumbBlob.size / 1024).toFixed(1)} KB | Web Display ${(webBlob.size / 1024).toFixed(1)} KB (${originalWidth}x${originalHeight}px)`
+          );
 
           resolve({
             thumbBlob,

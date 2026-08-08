@@ -63,3 +63,13 @@
 .animate-marquee {
   animation: marquee 25s linear infinite;
 }
+
+/* Regras de Arraste da Janela do Mac no Electron */
+.electron-drag {
+  -webkit-app-region: drag;
+}
+
+.electron-no-drag {
+  -webkit-app-region: no-drag;
+}
+

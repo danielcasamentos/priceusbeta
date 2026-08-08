@@ -70,7 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('❌ Error saving Google OAuth tokens:', err);
           } finally {
             if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              const routeHash = window.location.hash.split('?')[0].split('&')[0];
+              window.history.replaceState(null, '', window.location.pathname + window.location.search + (routeHash || ''));
             }
           }
         }, 0);

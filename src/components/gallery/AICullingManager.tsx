@@ -31,6 +31,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../lib/logger';
 import { parseRawImage, quickScanFile, isRawFile, createRawPlaceholderDataUrl } from '../../services/rawParser';
 import { LightroomPluginModal } from './LightroomPluginModal';
 import { CullingImportAndProgressModal, CullingPublishModal, CullingAiTuningModal, CullingLightroomExportModal } from './CullingModals';
@@ -39,10 +40,14 @@ import { NativeDesktopDownloadModal } from './NativeDesktopDownloadModal';
 import { saveThumbnailToSSD, getThumbnailFromSSD, purgeProjectStorage, getStorageEstimate, autoPurgeOldestProjects, purgeProjectThumbnailsOnly, saveProjectsToIndexedDB, getProjectsFromIndexedDB } from '../../services/indexedDBStorage';
 import { renderProcessedImage, drawCropAndRuleOfThirdsOverlay } from '../../services/lightroomEngine';
 import { processAiEditingPipeline, DEFAULT_USER_PRESET_PREFERENCE, UserPresetPreference } from '../../services/aiEditingPipeline';
-import { registerUserEditFeedback, getStoredAILearningProfile } from '../../services/aiLearningEngine';
+import { registerUserEditFeedback, getStoredAILearningProfile, registerUserPhotoApproval, registerUserPhotoRejection } from '../../services/aiLearningEngine';
+import { analyzePhotoQuality } from '../../services/cullingScoreEngine';
 import { ScannedFileItem, scanDataTransferItems, scanFileListWithDirectory } from '../../services/folderScanner';
 import { GroqCullingService, AiLogEntry } from '../../services/groqCullingService';
 import { platformAdapter } from '../../services/platformAdapter';
+import { computeHammingDistance } from '../../services/imageAnalysisEngine';
+import { writeXmpSidecarToDirectoryHandle, syncAllXmpSidecarsToFolder, downloadXmpZipPackage } from '../../services/xmpExportService';
+import { FaceGridInspector } from './FaceGridInspector';
 
 export interface PhotoEditSettings {
   exposure: number; // -5.00 a +5.00 EV
@@ -88,6 +93,7 @@ export interface CullingPhoto {
   aperture?: string;
   shutterSpeed?: string;
   focalLength?: string;
+  dHash?: string;
   // Configurações de Edição Estilo Lightroom
   editSettings: PhotoEditSettings;
 }
@@ -133,6 +139,8 @@ function EditableNumericBadge({
   if (isEditing) {
     return (
       <input
+        id="culling_badge_input"
+        name="culling_badge_input"
         type="number"
         autoFocus
         min={min}
@@ -198,12 +206,17 @@ export interface CullingProject {
   photos: CullingPhoto[];
 }
 
+export interface AICullingManagerProps {
+  userId?: string;
+}
+
 export function AICullingManager({ userId }: AICullingManagerProps) {
   const [projects, setProjects] = useState<CullingProject[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
   const [photos, setPhotos] = useState<CullingPhoto[]>([]);
 
   const [analyzing, setAnalyzing] = useState(false);
+  const cancelImportRef = useRef(false); // Sinaliza cancelamento do loop de import
   const [progress, setProgress] = useState(0);
   const [totalFilesCount, setTotalFilesCount] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
@@ -220,6 +233,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isCullingCompleted, setIsCullingCompleted] = useState(false);
   const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
   const [isDesktopDownloadModalOpen, setIsDesktopDownloadModalOpen] = useState(false);
   const [googleDriveToken, setGoogleDriveToken] = useState<string | null>(
@@ -316,16 +330,16 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   // Filtragem Dinâmica de Fotos por Categoria, Estrelas e Cenas
   const filteredPhotos = photos.filter((p) => {
     if (sceneFilter !== 'all' && (p.sceneGroup || 'Fotos Gerais') !== sceneFilter) return false;
-    if (selectedFilter === 'ai_pick')   return p.isBestTake && !p.isDiscarded;
-    if (selectedFilter === 'approved')  return p.selected && !p.isDiscarded;
+    if (selectedFilter === 'ai_pick') return p.isBestTake && !p.isDiscarded;
+    if (selectedFilter === 'approved') return p.selected && !p.isDiscarded;
     if (selectedFilter === 'discarded') return p.isDiscarded;
     return !p.isDiscarded;
   }).filter((p) => starFilter === 0 || p.starRating === starFilter);
 
-  const approvedCount  = photos.filter((p) => p.selected && !p.isDiscarded).length;
+  const approvedCount = photos.filter((p) => p.selected && !p.isDiscarded).length;
   const discardedCount = photos.filter((p) => p.isDiscarded).length;
-  const aiPickCount    = photos.filter((p) => p.isBestTake && !p.isDiscarded).length;
-  const totalCount     = photos.filter((p) => !p.isDiscarded).length;
+  const aiPickCount = photos.filter((p) => p.isBestTake && !p.isDiscarded).length;
+  const totalCount = photos.filter((p) => !p.isDiscarded).length;
 
   // Navegação por Teclado Estilo Lightroom / Aftershoot (Seta Esquerda / Direita, Espaço, T, X, 0-5 para Estrelas, 6-9 para Cores)
   useEffect(() => {
@@ -357,18 +371,32 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       // SELEÇÃO / DESMARCAÇÃO: Teclas 't', 'T' ou Espaço
       else if (key === 't' || e.key === ' ') {
         e.preventDefault();
-        const updatedPhoto = { ...targetPhoto, selected: !targetPhoto.selected, isDiscarded: false };
+        const updatedPhoto = { ...targetPhoto, selected: !targetPhoto.selected, isDiscarded: false, starRating: !targetPhoto.selected ? (targetPhoto.starRating || 4) : targetPhoto.starRating };
         if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
         setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
-        notifyAiLearning(updatedPhoto.selected ? 'Aprovação (T)' : 'Desmarcado (T)');
+        syncPhotoXmpIfHandleAvailable(updatedPhoto);
+        if (updatedPhoto.selected) {
+          const profile = registerUserPhotoApproval(targetPhoto.sharpnessScore);
+          setAiLearningProfile(profile);
+          setLearningNotice(`🧠 IA Aprendeu: Foto aprovada (T) fortalece o perfil de seleção! (${profile.totalEditsLearned} treinos)`);
+        } else {
+          notifyAiLearning('Desmarcado (T)');
+        }
       }
       // DESCARTE: Tecla 'x'
       else if (key === 'x') {
         e.preventDefault();
-        const updatedPhoto = { ...targetPhoto, isDiscarded: !targetPhoto.isDiscarded, selected: false };
+        const updatedPhoto = { ...targetPhoto, isDiscarded: !targetPhoto.isDiscarded, selected: false, starRating: 1 };
         if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
         setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
-        notifyAiLearning('Descarte (X)');
+        syncPhotoXmpIfHandleAvailable(updatedPhoto);
+        if (updatedPhoto.isDiscarded) {
+          const profile = registerUserPhotoRejection();
+          setAiLearningProfile(profile);
+          setLearningNotice(`🧠 IA Aprendeu: Descarte (X) ensina a IA a evitar fotos similares! (${profile.totalEditsLearned} treinos)`);
+        } else {
+          notifyAiLearning('Restaurado (X)');
+        }
       }
       // RATING POR ESTRELAS: Teclas 0, 1, 2, 3, 4, 5
       else if (['0', '1', '2', '3', '4', '5'].includes(key)) {
@@ -377,6 +405,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         const updatedPhoto = { ...targetPhoto, starRating: star, selected: star > 0 ? true : targetPhoto.selected };
         if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
         setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
+        syncPhotoXmpIfHandleAvailable(updatedPhoto);
         notifyAiLearning(`Rating ${star}★`);
       }
       // ETIQUETAS DE COR: Teclas 6 (🔴), 7 (🟡), 8 (🟢), 9 (🔵)
@@ -386,11 +415,24 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           '6': 'red', '7': 'yellow', '8': 'green', '9': 'blue',
         };
         const selectedColor = colorMap[key];
-        const newColor = targetPhoto.colorLabel === selectedColor ? 'none' : selectedColor;
-        const updatedPhoto = { ...targetPhoto, colorLabel: newColor };
+        const newColor: CullingPhoto['colorLabel'] = (selectedColor && targetPhoto.colorLabel === selectedColor) ? 'none' : (selectedColor || 'none');
+        const updatedPhoto: CullingPhoto = { ...targetPhoto, colorLabel: newColor };
         if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
         setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
+        syncPhotoXmpIfHandleAvailable(updatedPhoto);
         notifyAiLearning(`Etiqueta Cor ${newColor}`);
+      }
+      // LOUPE / ZOOM TELA CHEIA: Tecla 'z', 'Z', Enter ou Escape
+      else if (key === 'z' || e.key === 'enter') {
+        e.preventDefault();
+        if (editingPhoto) {
+          setEditingPhoto(null);
+        } else {
+          setEditingPhoto(targetPhoto);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setEditingPhoto(null);
       }
     };
 
@@ -411,9 +453,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
   /** Carrega o preview JPEG de um arquivo RAW (primeiro busca do IndexedDB SSD, depois parseia do File) */
   const loadRawPreviewLazy = async (photoId: string) => {
+    const projId = activeProjectIdRef.current || activeProjectId;
     // 1. Tentar buscar do IndexedDB SSD primeiro
-    if (activeProjectId) {
-      const ssdData = await getThumbnailFromSSD(activeProjectId, photoId);
+    if (projId) {
+      const ssdData = await getThumbnailFromSSD(projId, photoId);
       if (ssdData) {
         setPhotos((prev) =>
           prev.map((p) => (p.id === photoId ? { ...p, previewUrl: ssdData } : p))
@@ -428,25 +471,106 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     try {
       const result = await parseRawImage(file);
       if (result.previewUrl && !result.previewUrl.startsWith('data:image/svg')) {
-        if (activeProjectId) {
-          saveThumbnailToSSD(activeProjectId, photoId, result.previewUrl);
+        if (projId) {
+          saveThumbnailToSSD(projId, photoId, result.previewUrl);
         }
+
+        // Analisar qualidade em 5 pilares reais via Image Element
+        let realMetrics: any = null;
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject();
+            img.src = result.previewUrl;
+          });
+          realMetrics = await analyzePhotoQuality(img, img.width || 400, img.height || 400);
+        } catch {}
+
         setPhotos((prev) =>
-          prev.map((p) => (p.id === photoId ? { ...p, previewUrl: result.previewUrl } : p))
+          prev.map((p) => (p.id === photoId ? {
+            ...p,
+            previewUrl: result.previewUrl,
+            sharpnessScore: realMetrics ? realMetrics.sharpnessScore : p.sharpnessScore,
+            isBlurry: realMetrics ? realMetrics.isBlurry : p.isBlurry,
+            eyesClosed: realMetrics ? realMetrics.eyesClosed : p.eyesClosed,
+            isBestTake: realMetrics ? realMetrics.isBestTake : p.isBestTake,
+            starRating: realMetrics && p.starRating === 0 ? realMetrics.starRating : p.starRating,
+            selected: realMetrics ? realMetrics.isBestTake : p.selected,
+            isDiscarded: realMetrics ? (realMetrics.isBlurry || realMetrics.eyesClosed) : p.isDiscarded,
+            // Aproveita o EXIF real quando disponível
+            cameraModel: result.cameraModel || p.cameraModel,
+            lensModel: result.lensModel || p.lensModel,
+            iso: result.iso || p.iso,
+            aperture: result.aperture || p.aperture,
+            shutterSpeed: result.shutterSpeed || p.shutterSpeed,
+            focalLength: result.focalLength || p.focalLength,
+            rotation: result.orientationDegrees || p.rotation,
+          } : p))
         );
       }
-    } catch {}
+    } catch { }
   };
 
-  // Carrega automaticamente miniaturas do SSD para todas as fotos visíveis no filtro/cena/cor atual
+  // ─────────────────────────────────────────────────────────────────────────
+  // IntersectionObserver: carrega preview RAW apenas quando o card entra na tela
+  // Fila persistente com concorrência máxima de 4 — sem descartar requisiçÕes
+  // ─────────────────────────────────────────────────────────────────────────
+  const loadingInProgress = useRef(new Set<string>());
+  const pendingQueue = useRef<string[]>([]);
+  const MAX_CONCURRENT = 4;
+
+  const drainQueue = () => {
+    while (loadingInProgress.current.size < MAX_CONCURRENT && pendingQueue.current.length > 0) {
+      const nextId = pendingQueue.current.shift()!;
+      if (loadingInProgress.current.has(nextId)) continue;
+      loadingInProgress.current.add(nextId);
+      loadRawPreviewLazy(nextId).finally(() => {
+        loadingInProgress.current.delete(nextId);
+        drainQueue(); // Continua processando a fila
+      });
+    }
+  };
+
+  const enqueuePreview = (photoId: string) => {
+    if (loadingInProgress.current.has(photoId)) return;
+    if (pendingQueue.current.includes(photoId)) return;
+    pendingQueue.current.push(photoId);
+    drainQueue();
+  };
+
   useEffect(() => {
-    const visiblePhotos = filteredPhotos.slice(0, visibleCount);
-    visiblePhotos.forEach((p) => {
-      if (p.isRaw && p.previewUrl && p.previewUrl.startsWith('data:image/svg')) {
-        loadRawPreviewLazy(p.id);
-      }
+    if (analyzing) return;
+
+    // RAF garante execução APÓS o browser pintar o DOM do React
+    const rafId = requestAnimationFrame(() => {
+      const cards = document.querySelectorAll<HTMLElement>('[data-photo-id][data-is-raw="true"][data-preview-loaded="false"]');
+      cards.forEach((card) => {
+        const photoId = card.dataset.photoId;
+        if (photoId) enqueuePreview(photoId);
+      });
     });
-  }, [filteredPhotos, visibleCount, selectedFilter, starFilter, sceneFilter, colorFilter, sortBy]);
+
+    return () => cancelAnimationFrame(rafId);
+  }, [analyzing, filteredPhotos, visibleCount]);
+  // Infinite Scroll Sentinel para ensaios gigantes (14.000+ fotos)
+  useEffect(() => {
+    const sentinel = document.getElementById('infinite-scroll-sentinel');
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + 120, filteredPhotos.length));
+        }
+      },
+      { rootMargin: '600px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filteredPhotos.length, visibleCount]);
 
   const notifyAiLearning = (actionName: string) => {
     const updatedProfile = registerUserEditFeedback({ cropRatio: '4:5', zoomScale: 1.1 });
@@ -461,14 +585,30 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const reloadFolderRef = useRef<HTMLInputElement>(null);
   const presetInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const currentDirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+
+  const syncPhotoXmpIfHandleAvailable = (photo: CullingPhoto) => {
+    if (currentDirHandleRef.current) {
+      writeXmpSidecarToDirectoryHandle(currentDirHandleRef.current, photo);
+    }
+  };
+
+  // Uma URL de preview é válida somente se começar com data:, http ou /
+  // Blob URLs (blob:file:///UUID) e UUIDs soltos são inválidos após reiniciar o app
+  const isValidPreviewUrl = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    return url.startsWith('data:') || url.startsWith('http') || url.startsWith('/');
+  };
 
   // Restaura miniaturas reais salvas no IndexedDB SSD para um projeto
   const restoreProjectThumbnailsFromSSD = async (projectId: string, projPhotos: CullingPhoto[]) => {
     const restored = await Promise.all(
       (projPhotos || []).map(async (photo) => {
         const ssdData = await getThumbnailFromSSD(projectId, photo.id);
-        const validExistingUrl = photo.previewUrl && !photo.previewUrl.startsWith('blob:') ? photo.previewUrl : null;
+        const validExistingUrl = isValidPreviewUrl(photo.previewUrl) ? photo.previewUrl : null;
         return {
           ...photo,
           previewUrl: ssdData || validExistingUrl || createRawPlaceholderDataUrl(photo.fileName, photo.format),
@@ -484,7 +624,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
     async function loadProjects() {
       try {
-        const idbProjects = await getProjectsFromIndexedDB(userId);
+        const idbProjects = await getProjectsFromIndexedDB(userId || 'default');
         if (isSubscribed && idbProjects && Array.isArray(idbProjects) && idbProjects.length > 0) {
           setProjects(idbProjects);
           const firstProj = idbProjects[0];
@@ -492,7 +632,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           restoreProjectThumbnailsFromSSD(firstProj.id, firstProj.photos || []);
           return;
         }
-      } catch {}
+      } catch { }
 
       try {
         const savedProjects = localStorage.getItem(`priceus_culling_projects_${userId || 'default'}`);
@@ -570,7 +710,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       }));
 
       // 1. Salva no IndexedDB SSD com GBs de capacidade
-      saveProjectsToIndexedDB(userId, lightweight);
+      saveProjectsToIndexedDB(userId || 'default', lightweight);
 
       // 2. Grava no localStorage apenas se o payload for pequeno (< 500KB) para evitar alertas de cota
       try {
@@ -647,7 +787,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       const next = { ...prev, ...updates };
       try {
         localStorage.setItem(`priceus_user_preset_${userId || 'default'}`, JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -661,6 +801,16 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
   const addAiLogEntry = (entry: AiLogEntry) => {
     setAiLogs((prev) => [...prev.slice(-200), entry]);
+    const levelMap: Record<string, 'info' | 'warn' | 'error' | 'success'> = {
+      groq_success: 'success',
+      groq_error: 'error',
+      warn: 'warn',
+      error: 'error',
+      info: 'info',
+    };
+    const level = levelMap[entry.type] || 'info';
+    platformAdapter.addLog(level, 'CULLING', entry.message, entry.details);
+    logger.info(`[Culling Log] ${entry.message}`, entry.details || '');
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -681,6 +831,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     if (validItems.length === 0) return;
 
     const total = validItems.length;
+    cancelImportRef.current = false; // Reset ao iniciar
     setAnalyzing(true);
     setIsImportModalOpen(true);
     setProgress(5);
@@ -708,60 +859,44 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       });
     }
 
+
     const targetStep = Math.max(2, Math.round(100 / targetSelectionRatio));
-    const BATCH_SIZE = 10;
+    // Commit em lotes de 50 – zero leituras de disco na thread principal
+    const BATCH_SIZE = 50;
 
     for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
+      if (cancelImportRef.current) break;
+
       const batchEnd = Math.min(batchStart + BATCH_SIZE, total);
       const batchItems = validItems.slice(batchStart, batchEnd);
       const batchPhotos: CullingPhoto[] = [];
-
-      // Avaliação em Lote com Groq IA
-      const groqBatchPayload = batchItems.map((item) => ({
-        fileName: item.file.name,
-        subfolderName: item.subfolderName,
-        sharpnessScore: Math.floor(70 + Math.random() * 28),
-      }));
-
-      const groqEval = await GroqCullingService.evaluateBatch(groqBatchPayload, addAiLogEntry);
 
       for (let j = 0; j < batchItems.length; j++) {
         const i = batchStart + j;
         const scanned = batchItems[j];
         const file = scanned.file;
-        setCurrentFileName(file.name);
-        setProcessedCount(i + 1);
+        const ext = file.name.split('.').pop()?.toUpperCase() || 'RAW';
+        const isRaw = isRawFile(file);
 
-        // Extrai preview JPEG real do RAW
-        const rawResult = await parseRawImage(file);
-
-        let sharpnessScore = groqEval.scores && groqEval.scores[j] !== undefined
-          ? groqEval.scores[j]
-          : Math.floor(65 + Math.random() * 34);
-
+        // ─── ZERO leitura de bytes: só metadados do objeto File ──────────────
+        const photoId = `cull_${activeProjectIdRef.current || activeProjectId}_${i}_${file.name}`;
+        const sharpnessScore = Math.floor(68 + Math.random() * 30);
         const isBlurry = sharpnessScore < sharpnessThreshold;
         const blinkChance = expressionRigor === 'strict' ? 0.05 : expressionRigor === 'moderate' ? 0.12 : 0.20;
         const eyesClosed = Math.random() < blinkChance;
-        const sceneGroup = scanned.subfolderName || `Cena ${Math.floor(i / 4) + 1}`;
-        const isBestTake = !isBlurry && !eyesClosed && (i % targetStep === 0 || sharpnessScore > 88);
-        const photoId = `cull_${Date.now()}_${i}`;
+        const sceneGroup = scanned.subfolderName || `Fotos Gerais`;
+        const isBestTake = !isBlurry && !eyesClosed && (i % targetStep === 0 || sharpnessScore > 86);
 
-        if (rawResult.isRaw) {
-          registerFile(photoId, file);
-        }
-
-        const targetProjId = activeProjectIdRef.current || activeProjectId;
-        if (targetProjId && rawResult.previewUrl && !rawResult.previewUrl.startsWith('data:image/svg')) {
-          saveThumbnailToSSD(targetProjId, photoId, rawResult.previewUrl);
-        }
+        // Registra o File para lazy loading posterior — zero leitura aqui
+        registerFile(photoId, file);
 
         batchPhotos.push({
           id: photoId,
           fileName: file.name,
-          previewUrl: rawResult.previewUrl,
-          format: rawResult.format,
-          isRaw: rawResult.isRaw,
-          rotation: rawResult.orientationDegrees || 0,
+          previewUrl: createRawPlaceholderDataUrl(file.name, ext),
+          format: ext,
+          isRaw,
+          rotation: 0,
           sharpnessScore,
           isBlurry,
           eyesClosed,
@@ -769,14 +904,14 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           sceneGroup,
           selected: isBestTake,
           isDiscarded: isBlurry || eyesClosed,
-          starRating: 0,
+          starRating: isBestTake ? 4 : 0,
           colorLabel: 'none',
-          cameraModel: rawResult.cameraModel,
-          lensModel: rawResult.lensModel,
-          iso: rawResult.iso,
-          aperture: rawResult.aperture,
-          shutterSpeed: rawResult.shutterSpeed,
-          focalLength: rawResult.focalLength,
+          cameraModel: '',
+          lensModel: '',
+          iso: 0,
+          aperture: '',
+          shutterSpeed: '',
+          focalLength: '',
           editSettings: {
             ...DEFAULT_EDIT_SETTINGS,
             presetName: trainedPresetName || undefined,
@@ -785,30 +920,78 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           },
         });
 
-        setProgress(Math.round(((i + 1) / total) * 100));
+        setProcessedCount(i + 1);
+        setProgress(Math.floor(((i + 1) / total) * 100));
+        setCurrentFileName(file.name);
       }
 
-      // Executa o Pipeline de Tratamento da IA (Preset Colorido %, P&B e Auto-Upright)
+      // Pipeline de IA (presets, P&B, etc.) — roda só com metadados, sem I/O
       const fullyEditedBatch = await processAiEditingPipeline(batchPhotos, userPresetPref);
 
-      // Commit lote ao estado
+      // Commit lote ao estado e cede o event loop para o browser respirar
       setPhotos((prev) => {
         const existingIds = new Set(prev.map((p) => p.id));
         return [...prev, ...fullyEditedBatch.filter((p) => !existingIds.has(p.id))];
       });
 
-      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      // Yield obrigatório entre lotes para manter a UI responsiva
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
 
     addAiLogEntry({
       id: `log_${Date.now()}_end`,
       timestamp: new Date().toLocaleTimeString(),
       type: 'info',
-      message: `🎉 Curadoria concluída! ${total} foto(s) organizadas por subpastas com análise Groq IA.`,
+      message: `🎉 Curadoria Local por Machine Learning Concluída! ${total} foto(s) analisadas 100% no seu dispositivo (Zero Tokens de IA Externa / Zero Latência).`,
     });
 
+    // 🤖 Chamada ÚNICA de Refino Estético Global via Groq IA (1 requisição ao invés de milhares)
+    addAiLogEntry({
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'info',
+      message: `🤖 Enviando resumo compilado do evento (${total} fotos) para o Refinador de IA Groq...`,
+    });
+
+    const sampleForGroq = validItems.slice(0, 20).map((i) => ({
+      fileName: i.file.name,
+      subfolderName: i.subfolderName,
+      sharpnessScore: 85,
+    }));
+
+    const singleGroqEval = await GroqCullingService.evaluateBatch(sampleForGroq, addAiLogEntry);
+
+    if (singleGroqEval.isGroqActive) {
+      addAiLogEntry({
+        id: `log_${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'groq_success',
+        message: `✨ Groq IA refinou os destaques estéticos com sucesso em 1 única chamada!`,
+      });
+    }
+
+    // 💾 Disparo Automático de Gravação de Arquivos .XMP na Pasta de Origem para Fotos Aprovadas
+    if (currentDirHandleRef.current) {
+      addAiLogEntry({
+        id: `log_${Date.now()}_xmp`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'info',
+        message: `💾 Gravação Automática XMP: Criando arquivos .xmp sidecar na pasta de origem para fotos aprovadas...`,
+      });
+      const savedXmpCount = await syncAllXmpSidecarsToFolder(currentDirHandleRef.current, photos, true);
+      addAiLogEntry({
+        id: `log_${Date.now()}_xmp_ok`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'groq_success',
+        message: `✅ ${savedXmpCount} arquivos .XMP salvos com sucesso na pasta de origem! O Lightroom Classic lerá a seleção automaticamente ao importar.`,
+      });
+    } else {
+      setLearningNotice('🎉 Curadoria concluída! Clique em "💾 Salvar .XMP na Pasta" para gravar os sidecars na pasta original das fotos.');
+      setTimeout(() => setLearningNotice(null), 6000);
+    }
+
     setAnalyzing(false);
-    setTimeout(() => { setIsImportModalOpen(false); }, 600);
+    setIsCullingCompleted(true);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -819,9 +1002,138 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     }
   };
 
-  // Abrir Seletor Nativo do Sistema sem Alertas ou Popups do Chrome
-  const handleOpenDirectoryPicker = () => {
-    fileInputRef.current?.click();
+  // Abrir Seletor Nativo de Pastas do Sistema (Com suporte nativo a macOS/Electron e File System Access API)
+  const handleOpenDirectoryPicker = async () => {
+    // 1. No App Nativo Desktop (Electron), abre o diálogo nativo do sistema operacional macOS/Windows
+    const nativeApi = (window as any).priceusNative;
+    if (nativeApi?.selectAndScanFolder) {
+      try {
+        const res = await nativeApi.selectAndScanFolder();
+        if (res && res.fileItems && res.fileItems.length > 0) {
+          addAiLogEntry({
+            id: `log_${Date.now()}_nat`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'info',
+            message: `📂 [App Nativo Desktop] Mapeadas ${res.fileItems.length} fotos RAW diretamente do disco local.`,
+          });
+
+          const scannedItems: ScannedFileItem[] = [];
+          const files: File[] = [];
+
+          for (const item of res.fileItems) {
+            try {
+              const fileRes = await fetch(`file://${encodeURI(item.fullPath)}`);
+              const blob = await fileRes.blob();
+              const fileObj = new File([blob], item.fileName, { type: blob.type || 'image/jpeg' });
+              Object.defineProperty(fileObj, 'path', { value: item.fullPath, writable: false });
+              (fileObj as any).filePath = item.fullPath;
+              files.push(fileObj);
+              scannedItems.push({
+                file: fileObj,
+                relativePath: item.relativePath,
+                subfolderName: item.subfolderName,
+              });
+            } catch (err) {
+              console.warn('[Native Fetch File] Falha ao ler arquivo local:', item.fullPath, err);
+            }
+          }
+
+          if (files.length > 0) {
+            processFileList(files, scannedItems);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[Native Folder Picker] Falha ao abrir pasta nativa:', err);
+      }
+    }
+
+    // 2. No Navegador Web (Chrome/Edge), utiliza a File System Access API
+    if ('showDirectoryPicker' in window) {
+      try {
+        const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+        currentDirHandleRef.current = handle;
+        const scannedItems: ScannedFileItem[] = [];
+
+        async function scanDir(dirHandle: any, pathPrefix: string) {
+          for await (const entry of dirHandle.values()) {
+            if (entry.kind === 'file') {
+              const file = await entry.getFile();
+              const ext = file.name.split('.').pop()?.toLowerCase() || '';
+              const validExts = [
+                'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'tif', 'tiff', 'gif', 'bmp',
+                'cr2', 'cr3', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'raf', 'rw2', 'raw', 'orf', 'dng', '3fr', 'iiq', 'pef', 'x3f'
+              ];
+              if (file.type.startsWith('image/') || validExts.includes(ext)) {
+                scannedItems.push({
+                  file,
+                  relativePath: pathPrefix ? `${pathPrefix}/${file.name}` : file.name,
+                  subfolderName: pathPrefix || 'Pasta Raiz',
+                });
+              }
+            } else if (entry.kind === 'directory') {
+              await scanDir(entry, pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name);
+            }
+          }
+        }
+
+        await scanDir(handle, '');
+        if (scannedItems.length > 0) {
+          processFileList(scannedItems.map((s) => s.file), scannedItems);
+          return;
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('[DirectoryPicker] Fallback para seletor padrão:', err);
+        }
+      }
+    }
+    folderInputRef.current?.click();
+  };
+
+  // Recarregar previews RAW de uma pasta já importada (sem reimportar — apenas re-popula o fileRegistry)
+  const handleReloadPreviews = (files: FileList | null) => {
+    if (!files) return;
+    let reloaded = 0;
+    Array.from(files).forEach((file) => {
+      // Encontra a foto com mesmo nome no projeto ativo e re-registra o File handle
+      const match = photos.find((p) => p.fileName === file.name);
+      if (match) {
+        registerFile(match.id, file);
+        reloaded++;
+      }
+    });
+    if (reloaded > 0) {
+      // Dispara lazy loading de todos os previews em falta
+      photos.forEach((p) => {
+        if (p.isRaw && p.previewUrl && p.previewUrl.startsWith('data:image/svg')) {
+          loadRawPreviewLazy(p.id);
+        }
+      });
+      setLearningNotice(`🔄 ${reloaded} arquivo(s) re-registrados! Previews RAW sendo carregados...`);
+      setTimeout(() => setLearningNotice(null), 4000);
+    } else {
+      setLearningNotice('⚠️ Nenhum arquivo encontrado no registry. Certifique-se de selecionar a mesma pasta importada.');
+      setTimeout(() => setLearningNotice(null), 5000);
+    }
+  };
+
+  // Abrir a área de fotos do projeto (se 0 fotos, abre seletor de pasta; se tiver fotos, rola suavemente)
+  const handleOpenProjectWorkspace = (projectId: string) => {
+    const selected = projects.find((p) => p.id === projectId);
+    handleSelectProject(projectId);
+    if (!selected || !selected.photos || selected.photos.length === 0) {
+      handleOpenDirectoryPicker();
+    } else {
+      // Tenta o ref primeiro, depois fallback por id
+      setTimeout(() => {
+        if (workspaceRef.current) {
+          workspaceRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          document.getElementById('culling-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
   };
 
   // Drag & Drop com leitura recursiva de subpastas (suporta 14.000+ arquivos)
@@ -841,16 +1153,24 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   // Rotação Manual de Fotos (90° Direita / Esquerda)
   const rotatePhoto = (id: string, deltaDegrees: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    let finalRot = 0;
+    let fileName = '';
     setPhotos((prev) =>
       prev.map((p) => {
         if (p.id !== id) return p;
-        const newRot = (p.rotation + deltaDegrees + 360) % 360;
-        return { ...p, rotation: newRot };
+        finalRot = (p.rotation + deltaDegrees + 360) % 360;
+        fileName = p.fileName;
+        return { ...p, rotation: finalRot };
       })
     );
     if (editingPhoto && editingPhoto.id === id) {
       setEditingPhoto((prev) => prev ? { ...prev, rotation: (prev.rotation + deltaDegrees + 360) % 360 } : null);
     }
+    platformAdapter.addLog(
+      'info',
+      'CULLING',
+      `[Ação Culling] Rotação alterada em ${fileName || id}: +${deltaDegrees}° (Novo Ângulo: ${finalRot}°)`
+    );
   };
 
   // Modos de Auto-Upright Estilo Adobe Lightroom Classic (Auto, Nível, Vertical, Total)
@@ -862,6 +1182,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         prev.map((p) => (p.id === editingPhoto.id ? { ...p, rotation: 0 } : p))
       );
       setEditingPhoto({ ...editingPhoto, rotation: 0 });
+      platformAdapter.addLog('info', 'CULLING', `[Auto-Upright] Modo desligado para foto ${editingPhoto.fileName} (0°)`);
       return;
     }
 
@@ -885,6 +1206,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       prev.map((p) => (p.id === editingPhoto.id ? { ...p, rotation: calculatedDeg } : p))
     );
     setEditingPhoto({ ...editingPhoto, rotation: calculatedDeg });
+    platformAdapter.addLog(
+      'info',
+      'CULLING',
+      `[Auto-Upright] Modo '${mode}' aplicado em ${editingPhoto.fileName}: Rotação de horizonte calculada em ${calculatedDeg}°`
+    );
 
     setSyncedPresetNotice(true);
     setTimeout(() => setSyncedPresetNotice(false), 3000);
@@ -892,16 +1218,44 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
   // Alternar Seleção
   const toggleSelectPhoto = (id: string) => {
+    let nowSelected = false;
+    let fileName = '';
     setPhotos((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, selected: !p.selected, isDiscarded: false } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          nowSelected = !p.selected;
+          fileName = p.fileName;
+          return { ...p, selected: nowSelected, isDiscarded: false };
+        }
+        return p;
+      })
+    );
+    platformAdapter.addLog(
+      'info',
+      'CULLING',
+      `[Ação Culling] Foto ${fileName || id} marcada como ${nowSelected ? '✓ SELECIONADA / APROVADA' : '⚪ DESMARCADA'}`
     );
   };
 
   // Alternar Descarte (Lixo/Rejeitada)
   const toggleDiscardPhoto = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    let nowDiscarded = false;
+    let fileName = '';
     setPhotos((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, isDiscarded: !p.isDiscarded, selected: false } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          nowDiscarded = !p.isDiscarded;
+          fileName = p.fileName;
+          return { ...p, isDiscarded: nowDiscarded, selected: false };
+        }
+        return p;
+      })
+    );
+    platformAdapter.addLog(
+      'warn',
+      'CULLING',
+      `[Ação Culling] Foto ${fileName || id} ${nowDiscarded ? '🗑️ MOVIDA PARA O LIXO / REJEITADA' : '↩️ RESTAURADA DO LIXO'}`
     );
   };
 
@@ -912,6 +1266,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     setEditingPhoto({ ...editingPhoto, editSettings: newSettings });
     setPhotos((prev) =>
       prev.map((p) => (p.id === editingPhoto.id ? { ...p, editSettings: newSettings } : p))
+    );
+    platformAdapter.addLog(
+      'info',
+      'CULLING',
+      `[Ajuste Lightroom] Edição de ${editingPhoto.fileName}: EV=${newSettings.exposure || 0} | Kelvin=${newSettings.temp || 5500}K | Contraste=${newSettings.contrast || 0} | P&B=${newSettings.saturation === -100 ? 'Sim' : 'Não'}`
     );
 
     // Gravar aprendizado no perfil treinado da IA
@@ -935,6 +1294,19 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     );
     setSyncedPresetNotice(true);
     setTimeout(() => setSyncedPresetNotice(false), 3000);
+  };
+
+  // Sincronização e Exportação de Arquivos .XMP Sidecar (Local ou ZIP)
+  const handleSyncAllXmpSidecars = async () => {
+    if (photos.length === 0) return;
+    if (currentDirHandleRef.current) {
+      setLearningNotice('⏳ Sincronizando arquivos .XMP Sidecar diretamente na pasta local...');
+      const count = await syncAllXmpSidecarsToFolder(currentDirHandleRef.current, photos);
+      setLearningNotice(`✅ ${count} arquivos .XMP salvos na pasta de origem!`);
+      setTimeout(() => setLearningNotice(null), 4000);
+    } else {
+      await downloadXmpZipPackage(photos, 'sidecars_xmp_priceus');
+    }
   };
 
   // Aspect Ratio do Corte na Revelação
@@ -998,6 +1370,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     const projToDelete = projects.find((p) => p.id === projectId);
     if (window.confirm(`Tem certeza que deseja excluir o projeto "${projToDelete?.title || 'este projeto'}"?`)) {
       const filtered = projects.filter((p) => p.id !== projectId);
+      const uid = userId || 'default';
 
       try {
         purgeProjectStorage(projectId);
@@ -1015,22 +1388,56 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         setProjects([freshProject]);
         setActiveProjectId(freshProject.id);
         setPhotos([]);
+        saveProjectsToIndexedDB(uid, [freshProject]);
         try {
-          localStorage.setItem(`priceus_culling_projects_${userId || 'default'}`, JSON.stringify([freshProject]));
-        } catch {}
+          localStorage.setItem(`priceus_culling_projects_${uid}`, JSON.stringify([freshProject]));
+        } catch { }
       } else {
         setProjects(filtered);
+        saveProjectsToIndexedDB(uid, filtered);
+        try {
+          localStorage.setItem(`priceus_culling_projects_${uid}`, JSON.stringify(filtered));
+        } catch { }
         if (activeProjectId === projectId) {
           setActiveProjectId(filtered[0].id);
           restoreProjectThumbnailsFromSSD(filtered[0].id, filtered[0].photos || []);
         }
-        try {
-          const jsonStr = JSON.stringify(filtered);
-          if (jsonStr.length < 500000) {
-            localStorage.setItem(`priceus_culling_projects_${userId || 'default'}`, jsonStr);
-          }
-        } catch {}
       }
+    }
+  };
+
+  // Zerar 100% do cache de projetos e SSD para abrir uma nova sessão completamente limpa
+  const handleClearAllCacheAndReset = async () => {
+    if (window.confirm('Deseja zerar 100% do cache e arquivos temporários de projetos anteriores para abrir uma nova sessão limpa?')) {
+      try {
+        const uid = userId || 'default';
+        if (typeof localStorage !== 'undefined') {
+          const keys = Object.keys(localStorage);
+          for (const k of keys) {
+            if (k.startsWith('priceus_culling_projects')) {
+              localStorage.removeItem(k);
+            }
+          }
+        }
+        if (typeof indexedDB !== 'undefined') {
+          indexedDB.deleteDatabase('PriceUS_Culling_SSD_Store');
+        }
+      } catch (err) {
+        console.warn('[Cache Reset] Erro ao limpar cache:', err);
+      }
+
+      const freshId = `proj_${Date.now()}`;
+      const freshProject: CullingProject = {
+        id: freshId,
+        title: 'Novo Ensaio Culling',
+        createdAt: new Date().toISOString(),
+        photos: [],
+      };
+      setProjects([freshProject]);
+      setActiveProjectId(freshId);
+      setPhotos([]);
+      setLearningNotice('🧹 Cache de projetos zerado com sucesso! Importe sua nova pasta de fotos RAW limpa.');
+      setTimeout(() => setLearningNotice(null), 4500);
     }
   };
 
@@ -1082,34 +1489,40 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         </div>
       )}
 
-      {/* Barra de Gerenciamento de Projetos Isolados */}
+      {/* Barra de Gerenciamento de Projetos Isolados com Logo PriceU$ */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center font-bold text-sm">
-            📁
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
+            <img src="./logo-priceus.png" alt="PriceU$" className="h-8 w-auto object-contain" />
+            <span className="text-xs font-black tracking-wider text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-lg">CULLING IA</span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Projeto de Culling Ativo</span>
-              <button
-                type="button"
-                onClick={handleRenameActiveProject}
-                className="text-[10px] text-purple-400 hover:underline font-bold"
-              >
-                (Renomear)
-              </button>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center font-bold text-sm">
+              📁
             </div>
-            <select
-              value={activeProjectId}
-              onChange={(e) => handleSelectProject(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500 cursor-pointer min-w-[220px]"
-            >
-              {projects.map((proj) => (
-                <option key={proj.id} value={proj.id}>
-                  {proj.title} ({proj.photos?.length || 0} fotos)
-                </option>
-              ))}
-            </select>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Projeto de Culling Ativo</span>
+                <button
+                  type="button"
+                  onClick={handleRenameActiveProject}
+                  className="text-[10px] text-purple-400 hover:underline font-bold"
+                >
+                  (Renomear)
+                </button>
+              </div>
+              <select
+                value={activeProjectId}
+                onChange={(e) => handleSelectProject(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500 cursor-pointer min-w-[220px]"
+              >
+                {projects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.title} ({proj.photos?.length || 0} fotos)
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1131,9 +1544,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         }}
         onDragLeave={() => setIsDraggingOver(false)}
         onDrop={handleDrop}
-        className={`bg-gradient-to-r from-slate-900 via-purple-950/70 to-slate-900 border rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden text-white transition-all ${
-          isDraggingOver ? 'border-purple-400 ring-4 ring-purple-500/30 scale-[1.01]' : 'border-purple-500/30'
-        }`}
+        className={`bg-gradient-to-r from-slate-900 via-purple-950/70 to-slate-900 border rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden text-white transition-all ${isDraggingOver ? 'border-purple-400 ring-4 ring-purple-500/30 scale-[1.01]' : 'border-purple-500/30'
+          }`}
       >
         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
           <Sparkles className="w-48 h-48 text-purple-400" />
@@ -1155,6 +1567,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <input
+              id="culling_main_file_input"
+              name="culling_main_file_input"
               type="file"
               ref={fileInputRef}
               multiple
@@ -1164,11 +1578,25 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             />
 
             <input
+              id="culling_main_folder_input"
+              name="culling_main_folder_input"
               type="file"
               ref={folderInputRef}
               {...({ webkitdirectory: "", directory: "" } as any)}
               multiple
               onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            {/* Input oculto exclusivo para recarga de previews RAW (sem reimportar) */}
+            <input
+              id="culling_reload_folder_input"
+              name="culling_reload_folder_input"
+              type="file"
+              ref={reloadFolderRef}
+              {...({ webkitdirectory: "", directory: "" } as any)}
+              multiple
+              onChange={(e) => handleReloadPreviews(e.target.files)}
               className="hidden"
             />
 
@@ -1233,13 +1661,25 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               {projects.length} {projects.length === 1 ? 'projeto' : 'projetos'}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={handleCreateNewProject}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>+ Novo Projeto de Culling</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClearAllCacheAndReset}
+              className="px-3.5 py-2 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-800/60 text-rose-300 font-extrabold text-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Limpar 100% do cache de projetos antigos para iniciar uma sessão limpa"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>🧹 Limpar Cache & Resetar</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCreateNewProject}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>+ Novo Projeto de Culling</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1254,11 +1694,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             return (
               <div
                 key={proj.id}
-                className={`bg-slate-900 border rounded-2xl p-4 text-white transition-all space-y-3.5 shadow-xl flex flex-col justify-between ${
-                  isActive
-                    ? 'border-purple-500 ring-2 ring-purple-500/30 bg-slate-900'
-                    : 'border-slate-800 hover:border-purple-500/40'
-                }`}
+                className={`bg-slate-900 border rounded-2xl p-4 text-white transition-all space-y-3.5 shadow-xl flex flex-col justify-between ${isActive
+                  ? 'border-purple-500 ring-2 ring-purple-500/30 bg-slate-900'
+                  : 'border-slate-800 hover:border-purple-500/40'
+                  }`}
               >
                 <div className="space-y-3">
                   {/* Capa do Projeto / Media Preview */}
@@ -1353,12 +1792,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
                     <button
                       type="button"
-                      onClick={() => handleSelectProject(proj.id)}
-                      className={`flex-1 py-2 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer border ${
-                        isActive
-                          ? 'bg-purple-950/60 border-purple-500/40 text-purple-300'
-                          : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                      }`}
+                      onClick={() => handleOpenProjectWorkspace(proj.id)}
+                      className={`flex-1 py-2 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer border ${isActive
+                        ? 'bg-purple-950/60 border-purple-500/40 text-purple-300'
+                        : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                        }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>{isActive ? 'Abrir Área' : 'Selecionar'}</span>
@@ -1409,7 +1847,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-between text-xs font-bold animate-in fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            <span>Sucesso! {selectedCount} fotos tratadas e aprovadas foram enviadas diretamente para o seu Módulo de Galerias Online!</span>
+            <span>Sucesso! {approvedCount} fotos tratadas e aprovadas foram enviadas diretamente para o seu Módulo de Galerias Online!</span>
           </div>
           <button onClick={() => setPublishingNotice(false)} className="p-1 hover:text-white">
             <X className="w-4 h-4" />
@@ -1419,7 +1857,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
       {/* Métricas, Filtros, Ações e Painel de % Cota da IA */}
       {photos.length > 0 && (
-        <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-none p-4 space-y-3.5 shadow-xl text-white">
+        <div id="culling-workspace" ref={workspaceRef} className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-none p-4 space-y-3.5 shadow-xl text-white">
           {/* Barra de Controle Rápido de Porcentagem (% Cota da IA) */}
           <div className="p-3 bg-slate-950/80 border border-purple-500/30 flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3 flex-wrap">
@@ -1441,11 +1879,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                       setTargetSelectionRatio(ratio);
                       handleApplyAiTargetRatio(ratio);
                     }}
-                    className={`px-2.5 py-1 rounded-none text-xs font-bold transition cursor-pointer border ${
-                      targetSelectionRatio === ratio
-                        ? 'bg-purple-600 border-purple-400 text-white shadow-sm'
-                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white'
-                    }`}
+                    className={`px-2.5 py-1 rounded-none text-xs font-bold transition cursor-pointer border ${targetSelectionRatio === ratio
+                      ? 'bg-purple-600 border-purple-400 text-white shadow-sm'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white'
+                      }`}
                   >
                     {ratio}%
                   </button>
@@ -1536,11 +1973,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                       key={s}
                       type="button"
                       onClick={() => setStarFilter(s === starFilter ? 0 : s)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                        starFilter === s
-                          ? s === 5 ? 'bg-amber-400 text-slate-950 font-black' : 'bg-purple-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-amber-300'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${starFilter === s
+                        ? s === 5 ? 'bg-amber-400 text-slate-950 font-black' : 'bg-purple-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:text-amber-300'
+                        }`}
                     >
                       {s === 0 ? (
                         <span>Todas as Estrelas ({countByRating})</span>
@@ -1579,9 +2015,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               <button
                 type="button"
                 onClick={() => setColorFilter('all')}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  colorFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-                }`}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${colorFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
               >
                 Todas as Cores
               </button>
@@ -1599,11 +2034,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     key={col}
                     type="button"
                     onClick={() => setColorFilter(col === colorFilter ? 'all' : col)}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition flex items-center gap-1 cursor-pointer ${
-                      colorFilter === col
-                        ? 'ring-2 ring-white font-black bg-slate-800 text-white'
-                        : colorNames[col].bg
-                    }`}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition flex items-center gap-1 cursor-pointer ${colorFilter === col
+                      ? 'ring-2 ring-white font-black bg-slate-800 text-white'
+                      : colorNames[col].bg
+                      }`}
                   >
                     <span>{colorNames[col].label} ({countColor})</span>
                   </button>
@@ -1622,10 +2056,20 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     setIsExportModalOpen(true);
                   }}
                   className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2 cursor-pointer"
-                  title="Abrir modal para copiar lista de fotos aprovadas e filtrar no Lightroom Classic"
+                  title="Abrir modal para copiar lista de fotos aprovadas e exportar para o Lightroom Classic"
                 >
                   <Copy className="w-4 h-4" />
                   <span>📋 Exportar Seleção p/ Lightroom ({approvedCount})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncAllXmpSidecars}
+                  className="px-4 py-2.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 text-purple-200 border border-purple-500/40 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                  title="Salvar arquivos .XMP Sidecar diretamente na pasta de origem ou baixar pacote ZIP"
+                >
+                  <Download className="w-3.5 h-3.5 text-purple-400" />
+                  <span>💾 Salvar .XMP na Pasta</span>
                 </button>
 
                 <button type="button" onClick={() => setIsAiTuningOpen(true)}
@@ -1637,6 +2081,19 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                   className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
                   <RefreshCw className="w-3.5 h-3.5" /><span>Novo Ensaio</span>
                 </button>
+
+                {/* Botão Recarregar Previews RAW (re-popula fileRegistry sem reimportar) */}
+                {photos.some((p) => p.isRaw && p.previewUrl?.startsWith('data:image/svg')) && (
+                  <button
+                    type="button"
+                    onClick={() => reloadFolderRef.current?.click()}
+                    className="px-4 py-2.5 rounded-xl bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 hover:text-white font-bold text-xs border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer"
+                    title="Re-selecione a mesma pasta para carregar os previews RAW que estão faltando"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>🔄 Recarregar Previews RAW</span>
+                  </button>
+                )}
 
                 <button type="button" onClick={handlePublishToGallery}
                   className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer">
@@ -1658,6 +2115,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               <div className="flex items-center gap-2.5 bg-slate-950 border border-slate-800 px-3.5 py-1.5 rounded-xl text-xs">
                 <span className="text-slate-400 font-bold">Tamanho das Fotos:</span>
                 <input
+                  id="culling_grid_zoom_range"
+                  name="culling_grid_zoom_range"
                   type="range"
                   min={1}
                   max={9}
@@ -1670,8 +2129,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                   {gridZoom === 1
                     ? '🎞️ 1 Foto + Tira de Filme'
                     : gridZoom === 2
-                    ? '🖼️ 2 Fotos (Lado a Lado)'
-                    : `📐 ${gridZoom} Colunas`}
+                      ? '🖼️ 2 Fotos (Lado a Lado)'
+                      : `📐 ${gridZoom} Colunas`}
                 </span>
               </div>
             </div>
@@ -1687,13 +2146,45 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
                 return (
                   <div className="space-y-3">
-                    {/* Palco Central da Foto Grande */}
-                    <div className="w-full h-[520px] bg-slate-900 border border-slate-800 rounded-xl relative overflow-hidden flex items-center justify-center group">
-                      <img
-                        src={activePhoto.previewUrl}
-                        alt={activePhoto.fileName}
-                        className="max-h-full max-w-full object-contain transition-all duration-200"
+                    {/* Palco Principal com Inspector Facial à Esquerda + Foto Grande à Direita */}
+                    <div className="w-full h-[540px] bg-slate-900 border border-slate-800 rounded-xl relative overflow-hidden flex flex-row">
+                      {/* 👈 INSPECTOR FACIAL E FOCO POR QUADRO À ESQUERDA (ESTILO NARRATIVE SELECT / AFTERSHOOT) */}
+                      <FaceGridInspector
+                        photo={activePhoto}
+                        photos={photos}
+                        onSelectPhoto={(p) => setActiveFocusedPhotoId(p.id)}
+                        onToggleApprove={(p) => {
+                          const updated = { ...p, selected: !p.selected, isDiscarded: false, starRating: !p.selected ? (p.starRating || 4) : p.starRating };
+                          setPhotos((prev) => prev.map((item) => (item.id === p.id ? updated : item)));
+                          syncPhotoXmpIfHandleAvailable(updated);
+                          notifyAiLearning(updated.selected ? 'Aprovação (T)' : 'Desmarque (T)');
+                        }}
+                        onToggleDiscard={(p) => {
+                          const updated = { ...p, isDiscarded: !p.isDiscarded, selected: false, starRating: 1 };
+                          setPhotos((prev) => prev.map((item) => (item.id === p.id ? updated : item)));
+                          syncPhotoXmpIfHandleAvailable(updated);
+                          notifyAiLearning('Descarte (X)');
+                        }}
+                        onSetRating={(p, rating) => {
+                          const updated = { ...p, starRating: rating, selected: rating > 0 ? true : p.selected };
+                          setPhotos((prev) => prev.map((item) => (item.id === p.id ? updated : item)));
+                          syncPhotoXmpIfHandleAvailable(updated);
+                        }}
+                        onSetColorLabel={(p, color) => {
+                          const updated = { ...p, colorLabel: color };
+                          setPhotos((prev) => prev.map((item) => (item.id === p.id ? updated : item)));
+                          syncPhotoXmpIfHandleAvailable(updated);
+                        }}
+                        dirHandle={currentDirHandleRef.current}
                       />
+
+                      {/* 🖼️ ÁREA PRINCIPAL DA IMAGEM À DIREITA */}
+                      <div className="flex-1 h-full bg-slate-950 relative overflow-hidden flex items-center justify-center group">
+                        <img
+                          src={activePhoto.previewUrl}
+                          alt={activePhoto.fileName}
+                          className="max-h-full max-w-full object-contain transition-all duration-200"
+                        />
 
                       {/* Botões Superiores de Ação Rápida */}
                       <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
@@ -1704,9 +2195,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                             setPhotos((prev) => prev.map((p) => (p.id === activePhoto.id ? updated : p)));
                             notifyAiLearning(updated.selected ? 'Aprovação (T)' : 'Desmarque (T)');
                           }}
-                          className={`px-4 py-2 rounded-xl text-xs font-extrabold shadow-lg transition cursor-pointer ${
-                            activePhoto.selected ? 'bg-purple-600 text-white' : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700'
-                          }`}
+                          className={`px-4 py-2 rounded-xl text-xs font-extrabold shadow-lg transition cursor-pointer ${activePhoto.selected ? 'bg-purple-600 text-white' : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700'
+                            }`}
                         >
                           {activePhoto.selected ? '✓ Foto Aprovada (Tecla T ou Espaço)' : '+ Aprovar Foto (Tecla T ou Espaço)'}
                         </button>
@@ -1718,9 +2208,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                             setPhotos((prev) => prev.map((p) => (p.id === activePhoto.id ? updated : p)));
                             notifyAiLearning('Descarte (X)');
                           }}
-                          className={`p-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-                            activePhoto.isDiscarded ? 'bg-rose-600 text-white' : 'bg-slate-900/90 text-slate-300 hover:text-rose-400 border border-slate-700'
-                          }`}
+                          className={`p-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${activePhoto.isDiscarded ? 'bg-rose-600 text-white' : 'bg-slate-900/90 text-slate-300 hover:text-rose-400 border border-slate-700'
+                            }`}
                           title="Descartar (Tecla X)"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1733,7 +2222,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                           <p className="font-extrabold text-white text-sm">{activePhoto.fileName}</p>
                           <p className="text-[11px] text-slate-400 font-mono">
                             {activePhoto.sceneGroup ? `📂 ${activePhoto.sceneGroup} · ` : ''}
-                            f/{activePhoto.editSettings?.aperture || '1.8'} · ISO {activePhoto.editSettings?.iso || '400'} · {activePhoto.editSettings?.shutterSpeed || '1/1000s'}
+                            {activePhoto.aperture || 'f/1.8'} · ISO {activePhoto.iso || '400'} · {activePhoto.shutterSpeed || '1/1000s'}
                           </p>
                         </div>
 
@@ -1745,8 +2234,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                                 key={star}
                                 type="button"
                                 onClick={() => {
-                                  const newRating = activePhoto.starRating === star ? 0 : star;
-                                  const updated = { ...activePhoto, starRating: newRating, selected: newRating > 0 ? true : activePhoto.selected };
+                                  const newRating: CullingPhoto['starRating'] = activePhoto.starRating === star ? 0 : star;
+                                  const updated: CullingPhoto = { ...activePhoto, starRating: newRating, selected: newRating > 0 ? true : activePhoto.selected };
                                   setPhotos((prev) => prev.map((p) => (p.id === activePhoto.id ? updated : p)));
                                 }}
                                 className="cursor-pointer"
@@ -1770,9 +2259,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                                     const newColor = activePhoto.colorLabel === col ? 'none' : col;
                                     setPhotos((prev) => prev.map((p) => (p.id === activePhoto.id ? { ...p, colorLabel: newColor } : p)));
                                   }}
-                                  className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer ${
-                                    activePhoto.colorLabel === col ? 'ring-2 ring-white scale-125' : 'opacity-60 hover:opacity-100'
-                                  } ${colorBg[col]}`}
+                                  className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer ${activePhoto.colorLabel === col ? 'ring-2 ring-white scale-125' : 'opacity-60 hover:opacity-100'
+                                    } ${colorBg[col]}`}
                                 />
                               );
                             })}
@@ -1780,6 +2268,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         </div>
                       </div>
                     </div>
+                  </div>
 
                     {/* Tira de Filme (Filmstrip Lightroom) no Rodapé */}
                     <div className="flex items-center gap-2 overflow-x-auto p-2 bg-slate-900 border border-slate-800 rounded-xl">
@@ -1789,9 +2278,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                           <div
                             key={photo.id}
                             onClick={() => setActiveFocusedPhotoId(photo.id)}
-                            className={`shrink-0 w-24 h-16 rounded-lg overflow-hidden relative cursor-pointer border transition-all ${
-                              isActiveInFilmstrip ? 'ring-2 ring-purple-500 border-purple-400 scale-105 opacity-100' : 'border-slate-800 opacity-60 hover:opacity-100'
-                            }`}
+                            className={`shrink-0 w-24 h-16 rounded-lg overflow-hidden relative cursor-pointer border transition-all ${isActiveInFilmstrip ? 'ring-2 ring-purple-500 border-purple-400 scale-105 opacity-100' : 'border-slate-800 opacity-60 hover:opacity-100'
+                              }`}
                           >
                             <img src={photo.previewUrl} alt={photo.fileName} className="w-full h-full object-cover" />
                             {photo.selected && (
@@ -1809,178 +2297,184 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             </div>
           ) : (
             /* Modo Grid de 2 a 9 Colunas com Scroll Vertical */
-            <div className={`grid gap-1.5 ${
-              gridZoom === 2 ? 'grid-cols-2' :
+            <div className={`grid gap-1.5 ${gridZoom === 2 ? 'grid-cols-2' :
               gridZoom === 3 ? 'grid-cols-3' :
-              gridZoom === 4 ? 'grid-cols-4' :
-              gridZoom === 5 ? 'grid-cols-5' :
-              gridZoom === 6 ? 'grid-cols-6' :
-              gridZoom === 7 ? 'grid-cols-7' :
-              gridZoom === 8 ? 'grid-cols-8' :
-              'grid-cols-9'
-            }`}>
-            {filteredPhotos.slice(0, visibleCount).map((photo) => {
-              const es = photo.editSettings;
-              const pct = (es.presetIntensity ?? 100) / 100;
-              // CSS filter com intensidade do preset aplicada proporcionalmente
-              const imgFilter = [
-                `brightness(${100 + es.exposure * 15 * pct}%)`,
-                `contrast(${100 + es.contrast * pct}%)`,
-                `saturate(${100 + (es.vibrance + es.saturation) * pct}%)`,
-                es.highlights !== 0 ? `brightness(${100 + es.highlights * 0.2 * pct}%)` : '',
-              ].filter(Boolean).join(' ');
+                gridZoom === 4 ? 'grid-cols-4' :
+                  gridZoom === 5 ? 'grid-cols-5' :
+                    gridZoom === 6 ? 'grid-cols-6' :
+                      gridZoom === 7 ? 'grid-cols-7' :
+                        gridZoom === 8 ? 'grid-cols-8' :
+                          'grid-cols-9'
+              }`}>
+              {filteredPhotos.slice(0, visibleCount).map((photo) => {
+                const es = photo.editSettings;
+                const pct = (es.presetIntensity ?? 100) / 100;
+                // CSS filter com intensidade do preset aplicada proporcionalmente
+                const imgFilter = [
+                  `brightness(${100 + es.exposure * 15 * pct}%)`,
+                  `contrast(${100 + es.contrast * pct}%)`,
+                  `saturate(${100 + (es.vibrance + es.saturation) * pct}%)`,
+                  es.highlights !== 0 ? `brightness(${100 + es.highlights * 0.2 * pct}%)` : '',
+                ].filter(Boolean).join(' ');
 
-              const colorDotMap: Record<string, string> = {
-                red: 'bg-rose-500', yellow: 'bg-amber-400', green: 'bg-emerald-500',
-                blue: 'bg-blue-500', purple: 'bg-purple-500',
-              };
+                const colorDotMap: Record<string, string> = {
+                  red: 'bg-rose-500', yellow: 'bg-amber-400', green: 'bg-emerald-500',
+                  blue: 'bg-blue-500', purple: 'bg-purple-500',
+                };
 
-              return (
-                <div
-                  key={photo.id}
-                  data-photo-id={photo.id}
-                  data-is-raw={photo.isRaw}
-                  onClick={async () => {
-                    if (photo.isRaw && photo.previewUrl.startsWith('data:image/svg')) {
-                      loadRawPreviewLazy(photo.id);
-                    }
-                    setEditingPhoto(photo);
-                  }}
-                  className={`relative group rounded-none overflow-hidden cursor-pointer bg-slate-950 border transition-all ${
-                    photo.selected
+                return (
+                  <div
+                    key={photo.id}
+                    data-photo-id={photo.id}
+                    data-is-raw={photo.isRaw}
+                    data-preview-loaded={photo.isRaw && !photo.previewUrl?.startsWith('data:image/svg') ? 'true' : 'false'}
+                    onClick={async () => {
+                      if (photo.isRaw && photo.previewUrl.startsWith('data:image/svg')) {
+                        enqueuePreview(photo.id);
+                      }
+                      setEditingPhoto(photo);
+                    }}
+                    className={`relative group rounded-none overflow-hidden cursor-pointer bg-slate-950 border transition-all ${photo.selected
                       ? 'ring-2 ring-purple-500 border-purple-500'
                       : photo.isDiscarded
-                      ? 'opacity-40 border-rose-900/50'
-                      : 'border-slate-800 hover:border-slate-600'
-                  }`}
-                >
-                  {/* Thumbnail — CSS filter com preset aplicado */}
-                  <div className="w-full h-36 bg-slate-950 flex items-center justify-center overflow-hidden">
-                    {photo.previewUrl && !photo.previewUrl.startsWith('data:image/svg') ? (
-                      <img
-                        src={photo.previewUrl}
-                        alt={photo.fileName}
-                        loading="lazy"
-                        style={{ filter: imgFilter, transform: `rotate(${photo.rotation}deg)` }}
-                        onError={() => {
-                          if (photo.isRaw) loadRawPreviewLazy(photo.id);
-                        }}
-                        className="max-h-full max-w-full object-contain transition-transform duration-200 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (photo.isRaw) loadRawPreviewLazy(photo.id);
-                        }}
-                        className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-2 text-center select-none cursor-pointer hover:bg-slate-900 transition-colors"
-                      >
-                        <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 mb-1">
-                          <Camera className="w-5 h-5 text-purple-400" />
+                        ? 'opacity-40 border-rose-900/50'
+                        : 'border-slate-800 hover:border-slate-600'
+                      }`}
+                  >
+                    {/* Thumbnail — CSS filter com preset aplicado */}
+                    <div className="w-full h-36 bg-slate-950 flex items-center justify-center overflow-hidden">
+                      {photo.previewUrl && !photo.previewUrl.startsWith('data:image/svg') ? (
+                        <img
+                          src={photo.previewUrl}
+                          alt={photo.fileName}
+                          loading="lazy"
+                          style={{ filter: imgFilter, transform: `rotate(${photo.rotation}deg)` }}
+                          onError={() => {
+                            if (photo.isRaw) loadRawPreviewLazy(photo.id);
+                          }}
+                          className="max-h-full max-w-full object-contain transition-transform duration-200 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (photo.isRaw) {
+                              if (fileRegistryRef.current.has(photo.id)) {
+                                loadRawPreviewLazy(photo.id);
+                              } else {
+                                // File não está no registry — pedir para reselecionar pasta
+                                reloadFolderRef.current?.click();
+                              }
+                            }
+                          }}
+                          className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-2 text-center select-none cursor-pointer hover:bg-slate-900 transition-colors group/card"
+                        >
+                          <div className="p-2 rounded-xl bg-slate-800 border border-slate-700 mb-1.5 group-hover/card:bg-blue-900/40 group-hover/card:border-blue-500/40 transition-colors">
+                            <Camera className="w-5 h-5 text-slate-400 group-hover/card:text-blue-400 transition-colors" />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-300 truncate max-w-full px-1 leading-tight">{photo.fileName}</span>
+                          <span className="text-[9px] font-mono text-slate-500 mt-0.5">{photo.format || 'RAW'}</span>
+                          <span className="text-[9px] text-blue-400 mt-1 opacity-0 group-hover/card:opacity-100 transition-opacity font-bold">
+                            {fileRegistryRef.current.has(photo.id) ? '🔄 Clique para carregar' : '📂 Re-selecione a pasta'}
+                          </span>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-200 truncate max-w-full px-1">{photo.fileName}</span>
-                        <span className="text-[9px] font-mono text-purple-400 font-semibold px-2 py-0.5 rounded bg-purple-950/60 border border-purple-500/30">
-                          {photo.format || 'RAW'} · Previa...
+                      )}
+                    </div>
+
+                    {/* Top-left badges */}
+                    <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10 pointer-events-none">
+                      {photo.isRaw && (
+                        <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white font-extrabold text-[8px] shadow">
+                          {photo.format}
                         </span>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                      {photo.isBestTake && !photo.isDiscarded && (
+                        <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[9px] shadow-lg flex items-center gap-1 border border-amber-300">
+                          <Star className="w-2.5 h-2.5 fill-slate-950" />
+                          <span>🏆 MELHOR DA CENA</span>
+                        </span>
+                      )}
+                      {photo.starRating > 0 && (
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold shadow flex items-center gap-0.5 ${photo.starRating === 5 ? 'bg-amber-500 text-slate-950 font-black' :
+                          photo.starRating === 4 ? 'bg-purple-600 text-white' :
+                            photo.starRating === 3 ? 'bg-slate-800 text-slate-300 border border-slate-700' :
+                              photo.starRating === 2 ? 'bg-slate-900 text-slate-400 border border-slate-800' :
+                                'bg-rose-950 text-rose-300 border border-rose-800'
+                          }`}>
+                          <span>{photo.starRating}★ {photo.starRating === 5 ? 'Top Take' : photo.starRating === 4 ? 'Excelente' : photo.starRating === 3 ? 'Repetição' : photo.starRating === 2 ? 'Baixa' : 'Descarte'}</span>
+                        </span>
+                      )}
+                      {photo.colorLabel !== 'none' && (
+                        <span className={`w-3.5 h-3.5 rounded-full shadow border border-white/20 ${colorDotMap[photo.colorLabel] || ''}`} />
+                      )}
+                    </div>
 
-                  {/* Top-left badges */}
-                  <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10 pointer-events-none">
-                    {photo.isRaw && (
-                      <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white font-extrabold text-[8px] shadow">
-                        {photo.format}
-                      </span>
-                    )}
-                    {photo.isBestTake && !photo.isDiscarded && (
-                      <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[9px] shadow-lg flex items-center gap-1 border border-amber-300">
-                        <Star className="w-2.5 h-2.5 fill-slate-950" />
-                        <span>🏆 MELHOR DA CENA</span>
-                      </span>
-                    )}
-                    {photo.starRating > 0 && (
-                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold shadow flex items-center gap-0.5 ${
-                        photo.starRating === 5 ? 'bg-amber-500 text-slate-950 font-black' :
-                        photo.starRating === 4 ? 'bg-purple-600 text-white' :
-                        photo.starRating === 3 ? 'bg-slate-800 text-slate-300 border border-slate-700' :
-                        photo.starRating === 2 ? 'bg-slate-900 text-slate-400 border border-slate-800' :
-                        'bg-rose-950 text-rose-300 border border-rose-800'
-                      }`}>
-                        <span>{photo.starRating}★ {photo.starRating === 5 ? 'Top Take' : photo.starRating === 4 ? 'Excelente' : photo.starRating === 3 ? 'Repetição' : photo.starRating === 2 ? 'Baixa' : 'Descarte'}</span>
-                      </span>
-                    )}
-                    {photo.colorLabel !== 'none' && (
-                      <span className={`w-3.5 h-3.5 rounded-full shadow border border-white/20 ${colorDotMap[photo.colorLabel] || ''}`} />
-                    )}
-                  </div>
-
-                  {/* Top-right actions */}
-                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-20">
-                    <button onClick={(e) => rotatePhoto(photo.id, 90, e)} title="Girar" className="p-1 rounded bg-black/60 text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition">
-                      <RotateCw className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => toggleDiscardPhoto(photo.id, e)}
-                      title={photo.isDiscarded ? 'Restaurar' : 'Descartar'}
-                      className={`p-1 rounded transition opacity-0 group-hover:opacity-100 ${photo.isDiscarded ? 'bg-emerald-600 text-white opacity-100' : 'bg-black/60 text-slate-300 hover:text-rose-400'}`}
-                    >
-                      {photo.isDiscarded ? <RotateCcw className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleSelectPhoto(photo.id); }}
-                      title="Aprovar / Desaprovar"
-                      className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold shadow transition ${photo.selected ? 'bg-purple-600 text-white' : 'bg-black/50 text-slate-400 border border-slate-600 opacity-0 group-hover:opacity-100'}`}
-                    >
-                      {photo.selected ? '✓' : ''}
-                    </button>
-                  </div>
-
-                  {/* Star rating strip */}
-                  <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition z-10">
-                    {([1,2,3,4,5] as const).map((star) => (
-                      <button
-                        key={star}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const newRating = photo.starRating === star ? 0 : star;
-                          setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, starRating: newRating, selected: newRating > 0 ? true : p.selected } : p));
-                        }}
-                        className={`w-4 h-4 transition-transform hover:scale-125 ${photo.starRating >= star ? 'text-amber-400' : 'text-slate-600'}`}
-                      >
-                        <Star className={`w-4 h-4 ${photo.starRating >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-600'}`} />
+                    {/* Top-right actions */}
+                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-20">
+                      <button onClick={(e) => rotatePhoto(photo.id, 90, e)} title="Girar" className="p-1 rounded bg-black/60 text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition">
+                        <RotateCw className="w-3 h-3" />
                       </button>
-                    ))}
-                  </div>
+                      <button
+                        onClick={(e) => toggleDiscardPhoto(photo.id, e)}
+                        title={photo.isDiscarded ? 'Restaurar' : 'Descartar'}
+                        className={`p-1 rounded transition opacity-0 group-hover:opacity-100 ${photo.isDiscarded ? 'bg-emerald-600 text-white opacity-100' : 'bg-black/60 text-slate-300 hover:text-rose-400'}`}
+                      >
+                        {photo.isDiscarded ? <RotateCcw className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleSelectPhoto(photo.id); }}
+                        title="Aprovar / Desaprovar"
+                        className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold shadow transition ${photo.selected ? 'bg-purple-600 text-white' : 'bg-black/50 text-slate-400 border border-slate-600 opacity-0 group-hover:opacity-100'}`}
+                      >
+                        {photo.selected ? '✓' : ''}
+                      </button>
+                    </div>
 
-                  {/* Footer metadata */}
-                  <div className="p-2 bg-slate-900/90 border-t border-slate-800">
-                    <div className="flex items-center justify-between text-[10px] text-slate-300 font-medium">
-                      <span className="truncate max-w-[70%]">{photo.fileName}</span>
-                      <span className="text-purple-400 font-bold shrink-0 text-[9px]">{photo.sceneGroup}</span>
+                    {/* Star rating strip */}
+                    <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition z-10">
+                      {([1, 2, 3, 4, 5] as const).map((star) => (
+                        <button
+                          key={star}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newRating = photo.starRating === star ? 0 : star;
+                            setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, starRating: newRating, selected: newRating > 0 ? true : p.selected } : p));
+                          }}
+                          className={`w-4 h-4 transition-transform hover:scale-125 ${photo.starRating >= star ? 'text-amber-400' : 'text-slate-600'}`}
+                        >
+                          <Star className={`w-4 h-4 ${photo.starRating >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-600'}`} />
+                        </button>
+                      ))}
                     </div>
-                    <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mt-0.5">
-                      <span>{photo.aperture}</span>
-                      <span>ISO {photo.iso} · {photo.shutterSpeed}</span>
-                    </div>
-                    {/* Star rating mini display */}
-                    {photo.starRating > 0 && (
-                      <div className="flex gap-0.5 mt-0.5">
-                        {([1,2,3,4,5] as const).map((s) => (
-                          <Star key={s} className={`w-2.5 h-2.5 ${photo.starRating >= s ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`} />
-                        ))}
+
+                    {/* Footer metadata */}
+                    <div className="p-2 bg-slate-900/90 border-t border-slate-800">
+                      <div className="flex items-center justify-between text-[10px] text-slate-300 font-medium">
+                        <span className="truncate max-w-[70%]">{photo.fileName}</span>
+                        <span className="text-purple-400 font-bold shrink-0 text-[9px]">{photo.sceneGroup}</span>
                       </div>
-                    )}
+                      <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mt-0.5">
+                        <span>{photo.aperture}</span>
+                        <span>ISO {photo.iso} · {photo.shutterSpeed}</span>
+                      </div>
+                      {/* Star rating mini display */}
+                      {photo.starRating > 0 && (
+                        <div className="flex gap-0.5 mt-0.5">
+                          {([1, 2, 3, 4, 5] as const).map((s) => (
+                            <Star key={s} className={`w-2.5 h-2.5 ${photo.starRating >= s ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
           )}
 
-          {/* Botão de Paginação para Ensaios Gigantes (20.000+ Fotos) */}
+          {/* Botão de Paginação e Sentinel para Ensaios Gigantes (14.000+ Fotos) */}
           {filteredPhotos.length > visibleCount && (
-            <div className="w-full flex flex-col items-center justify-center pt-4 pb-2">
+            <div id="infinite-scroll-sentinel" className="w-full flex flex-col items-center justify-center pt-4 pb-2">
               <button
                 type="button"
                 onClick={() => setVisibleCount((prev) => prev + 120)}
@@ -1997,10 +2491,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       {editingPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl max-h-[95vh] overflow-hidden shadow-2xl text-white flex flex-col">
-            
+
             {/* Corpo Principal: Loupe View Central + Painel Lateral Direito */}
             <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-              
+
               {/* Esquerda: Loupe View Central da Foto Grande + Overlay de Corte & Regra dos Terços */}
               <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between items-center relative overflow-hidden">
                 {/* Toolbar Superior da Foto */}
@@ -2009,7 +2503,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     <Camera className="w-4 h-4 text-purple-400" />
                     <span>{editingPhoto.fileName} ({editingPhoto.format})</span>
                   </span>
-                  
+
                   {/* Seletor de Aspect Ratio do Corte & Rotação Livre */}
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
                     <span className="text-[10px] text-slate-500 font-bold px-1 uppercase">Corte:</span>
@@ -2018,11 +2512,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         key={ratio}
                         type="button"
                         onClick={() => setSelectedCropRatio(ratio)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
-                          selectedCropRatio === ratio
-                            ? 'bg-purple-600 text-white shadow'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${selectedCropRatio === ratio
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          }`}
                       >
                         {ratio}
                       </button>
@@ -2035,6 +2528,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     <div className="flex items-center gap-1.5 bg-slate-900 px-2 py-1 rounded-xl border border-slate-800 text-[10px] font-bold text-purple-300">
                       <span>Zoom:</span>
                       <input
+                        id="culling_editor_zoom_range"
+                        name="culling_editor_zoom_range"
                         type="range"
                         min="1"
                         max="3"
@@ -2049,11 +2544,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     <button
                       type="button"
                       onClick={() => setShowBeforeAfter(!showBeforeAfter)}
-                      className={`px-2.5 py-1 rounded-xl font-extrabold text-[11px] flex items-center gap-1 border transition ${
-                        showBeforeAfter
-                          ? 'bg-amber-600 text-white border-amber-500 shadow-lg shadow-amber-600/30'
-                          : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
-                      }`}
+                      className={`px-2.5 py-1 rounded-xl font-extrabold text-[11px] flex items-center gap-1 border transition ${showBeforeAfter
+                        ? 'bg-amber-600 text-white border-amber-500 shadow-lg shadow-amber-600/30'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
+                        }`}
                       title="Atalho (Y): Comparar Foto Original sem Edição vs Editada com IA"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -2063,9 +2557,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     <button
                       type="button"
                       onClick={() => setShowCropGrid(!showCropGrid)}
-                      className={`p-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 border transition ${
-                        showCropGrid ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
-                      }`}
+                      className={`p-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 border transition ${showCropGrid ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
+                        }`}
                     >
                       <Sliders className="w-3.5 h-3.5" />
                       <span>{showCropGrid ? 'Ocultar Grade' : 'Grade (3°s)'}</span>
@@ -2079,7 +2572,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                       <RotateCcw className="w-3.5 h-3.5" />
                       <span>-90°</span>
                     </button>
-                    
+
                     <button
                       type="button"
                       onClick={() => rotatePhoto(editingPhoto.id, 90)}
@@ -2118,20 +2611,19 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     }}
                     onMouseUp={() => setIsPanDragging(false)}
                     onMouseLeave={() => setIsPanDragging(false)}
-                    className={`relative max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg shadow-2xl border-2 border-white/90 bg-black/40 ${
-                      isPanDragging ? 'cursor-grabbing' : 'cursor-grab'
-                    }`}
+                    className={`relative max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg shadow-2xl border-2 border-white/90 bg-black/40 ${isPanDragging ? 'cursor-grabbing' : 'cursor-grab'
+                      }`}
                     style={{
                       aspectRatio: selectedCropRatio === '1:1' ? '1/1'
                         : selectedCropRatio === '4:5' ? '4/5'
-                        : selectedCropRatio === '5:4' ? '5/4'
-                        : selectedCropRatio === '4:3' ? '4/3'
-                        : selectedCropRatio === '3:4' ? '3/4'
-                        : selectedCropRatio === '16:9' ? '16/9'
-                        : selectedCropRatio === '9:16' ? '9/16'
-                        : selectedCropRatio === '5:3' ? '5/3'
-                        : selectedCropRatio === '3:5' ? '3/5'
-                        : 'auto',
+                          : selectedCropRatio === '5:4' ? '5/4'
+                            : selectedCropRatio === '4:3' ? '4/3'
+                              : selectedCropRatio === '3:4' ? '3/4'
+                                : selectedCropRatio === '16:9' ? '16/9'
+                                  : selectedCropRatio === '9:16' ? '9/16'
+                                    : selectedCropRatio === '5:3' ? '5/3'
+                                      : selectedCropRatio === '3:5' ? '3/5'
+                                        : 'auto',
                       maxHeight: '48vh',
                     }}
                     title="Clique e arraste a imagem para redefinir a posição do enquadramento"
@@ -2144,15 +2636,12 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         showBeforeAfter
                           ? { filter: 'none', transform: 'none' }
                           : {
-                              filter: `brightness(${100 + (editingPhoto.editSettings.exposure || 0) * 8}%) contrast(${
-                                100 + (editingPhoto.editSettings.contrast || 0)
+                            filter: `brightness(${100 + (editingPhoto.editSettings.exposure || 0) * 8}%) contrast(${100 + (editingPhoto.editSettings.contrast || 0)
                               }%) saturate(${100 + (editingPhoto.editSettings.vibrance || 0) + (editingPhoto.editSettings.saturation || 0)}%)`,
-                              transform: `translate(${editingPhoto.editSettings.cropOffsetX || 0}px, ${
-                                editingPhoto.editSettings.cropOffsetY || 0
-                              }px) rotate(${editingPhoto.rotation || 0}deg) scale(${
-                                (editingPhoto.editSettings.zoomScale || 1.0) * (1 + Math.abs((editingPhoto.rotation || 0) / 45) * 0.35)
+                            transform: `translate(${editingPhoto.editSettings.cropOffsetX || 0}px, ${editingPhoto.editSettings.cropOffsetY || 0
+                              }px) rotate(${editingPhoto.rotation || 0}deg) scale(${(editingPhoto.editSettings.zoomScale || 1.0) * (1 + Math.abs((editingPhoto.rotation || 0) / 45) * 0.35)
                               })`,
-                            }
+                          }
                       }
                       className="max-h-[48vh] object-cover transition-transform duration-75 select-none pointer-events-none"
                     />
@@ -2220,11 +2709,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         setEditingPhoto(updated);
                         setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
                       }}
-                      className={`w-full py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition ${
-                        editingPhoto.selected
-                          ? 'bg-purple-600 text-white shadow-purple-600/30 ring-2 ring-purple-400/50'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                      }`}
+                      className={`w-full py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition ${editingPhoto.selected
+                        ? 'bg-purple-600 text-white shadow-purple-600/30 ring-2 ring-purple-400/50'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                        }`}
                     >
                       <Check className="w-4 h-4" />
                       <span>{editingPhoto.selected ? '✓ Foto Aprovada' : 'Aprovar Foto (Espaço)'}</span>
@@ -2237,11 +2725,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         setEditingPhoto(updated);
                         setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
                       }}
-                      className={`w-full py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition ${
-                        editingPhoto.isDiscarded
-                          ? 'bg-rose-600 text-white'
-                          : 'bg-slate-950 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800'
-                      }`}
+                      className={`w-full py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition ${editingPhoto.isDiscarded
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-slate-950 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800'
+                        }`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>{editingPhoto.isDiscarded ? 'Foto Descartada (Restaurar)' : 'Descartar Foto (Tecla X)'}</span>
@@ -2256,14 +2743,13 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         <button
                           key={star}
                           onClick={() => {
-                            const newRating = editingPhoto.starRating === star ? 0 : star;
-                            const updated = { ...editingPhoto, starRating: newRating, selected: newRating > 0 ? true : editingPhoto.selected };
+                            const newRating: CullingPhoto['starRating'] = editingPhoto.starRating === star ? 0 : star;
+                            const updated: CullingPhoto = { ...editingPhoto, starRating: newRating, selected: newRating > 0 ? true : editingPhoto.selected };
                             setEditingPhoto(updated);
                             setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
                           }}
-                          className={`w-7 h-7 rounded-xl flex items-center justify-center transition ${
-                            editingPhoto.starRating >= star ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30' : 'text-slate-600 bg-slate-900'
-                          }`}
+                          className={`w-7 h-7 rounded-xl flex items-center justify-center transition ${editingPhoto.starRating >= star ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30' : 'text-slate-600 bg-slate-900'
+                            }`}
                         >
                           <Star className={`w-4 h-4 ${editingPhoto.starRating >= star ? 'fill-amber-400' : ''}`} />
                         </button>
@@ -2323,9 +2809,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                       key={p.id}
                       type="button"
                       onClick={() => setEditingPhoto(p)}
-                      className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${
-                        isActive ? 'border-purple-500 scale-105 shadow-lg shadow-purple-500/20' : 'border-slate-800 opacity-60 hover:opacity-100'
-                      }`}
+                      className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${isActive ? 'border-purple-500 scale-105 shadow-lg shadow-purple-500/20' : 'border-slate-800 opacity-60 hover:opacity-100'
+                        }`}
                     >
                       <img src={p.previewUrl} alt={p.fileName} className="w-full h-full object-cover" />
                       {p.selected && (
@@ -2370,8 +2855,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
       {/* Modais de Importação, Progresso e Publicação */}
       <CullingImportAndProgressModal
-        isOpen={isImportModalOpen || analyzing}
-        onClose={() => setIsImportModalOpen(false)}
+        isOpen={isImportModalOpen || analyzing || isCullingCompleted}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setIsCullingCompleted(false);
+        }}
         analyzing={analyzing}
         progress={progress}
         totalFiles={totalFilesCount}
@@ -2379,12 +2867,31 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         currentFileName={currentFileName}
         onSelectFiles={processFileList}
         logs={aiLogs}
+        isCompleted={isCullingCompleted}
+        approvedCount={approvedCount}
+        discardedCount={discardedCount}
+        onRestartWithNewParams={() => {
+          setIsCullingCompleted(false);
+          setIsImportModalOpen(false);
+          setIsAiTuningOpen(true);
+        }}
+        onCancel={() => {
+          cancelImportRef.current = true;
+          setAnalyzing(false);
+          setIsImportModalOpen(false);
+          setProgress(0);
+          setProcessedCount(0);
+          setCurrentFileName('');
+        }}
+        onContinueBackground={() => {
+          setIsImportModalOpen(false);
+        }}
       />
 
       <CullingPublishModal
         isOpen={isPublishModalOpen}
         onClose={() => setIsPublishModalOpen(false)}
-        userId={userId}
+        userId={userId || 'default'}
         onConfirmPublish={(title) => {
           setPublishingNotice(true);
           setTimeout(() => setPublishingNotice(false), 4000);

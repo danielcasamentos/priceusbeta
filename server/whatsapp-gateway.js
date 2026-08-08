@@ -211,7 +211,23 @@ function recordLiveMessage({ jid, pushName, sender, text, mediaUrl, mediaType, m
 
 loadStorage();
 
-async function startWhatsAppServer() {
+let isManualConnectRequest = false;
+
+async function startWhatsAppServer(forceManual = false) {
+  if (forceManual) {
+    isManualConnectRequest = true;
+  }
+
+  const credsFile = path.join(AUTH_FOLDER, 'creds.json');
+  const hasSavedCreds = fs.existsSync(credsFile);
+
+  if (!hasSavedCreds && !isManualConnectRequest) {
+    console.log('[WhatsApp Gateway] ⏸️ Nenhuma sessão ativa salva. Aguardando clique do usuário em "Gerar QR Code WhatsApp".');
+    connectionStatus = 'disconnected';
+    currentQrBase64 = null;
+    return;
+  }
+
   try {
     if (!fs.existsSync(AUTH_FOLDER)) {
       fs.mkdirSync(AUTH_FOLDER, { recursive: true });
@@ -225,8 +241,8 @@ async function startWhatsAppServer() {
     sock = makeWASocket({
       version,
       auth: state,
-      printQRInTerminal: true,
-      syncFullHistory: true,
+      printQRInTerminal: false,
+      syncFullHistory: false,
       browser: ['PriceU$ Sales AI', 'Chrome', '1.0.0']
     });
 
@@ -335,17 +351,20 @@ async function startWhatsAppServer() {
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const credsExist = fs.existsSync(path.join(AUTH_FOLDER, 'creds.json'));
+
         connectionStatus = 'disconnected';
         currentQrBase64 = null;
+        isManualConnectRequest = false;
 
-        if (shouldReconnect && statusCode !== 401 && statusCode !== 403) {
-          setTimeout(startWhatsAppServer, 3000);
+        if (credsExist && statusCode !== DisconnectReason.loggedOut && statusCode !== 401 && statusCode !== 403) {
+          console.log('[WhatsApp Gateway] 🔄 Sessão autenticada desconectou. Tentando reconectar em 8 segundos...');
+          setTimeout(() => startWhatsAppServer(false), 8000);
         } else {
-          if (fs.existsSync(AUTH_FOLDER)) {
-            fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+          console.log('[WhatsApp Gateway] ⏸️ Sessão do WhatsApp encerrada. Aguardando clique do usuário em "Gerar QR Code WhatsApp".');
+          if (fs.existsSync(AUTH_FOLDER) && !credsExist) {
+            try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
           }
-          setTimeout(startWhatsAppServer, 1500);
         }
       }
     });
@@ -628,6 +647,23 @@ app.post('/api/whatsapp/send', async (req, res) => {
 });
 
 // Desconectar Sessão
+// ✅ Gerar QR Code WhatsApp On-Demand (Solicitação explícita do usuário por clique no botão)
+app.post('/api/whatsapp/connect', async (req, res) => {
+  try {
+    console.log('[WhatsApp Gateway] ⚡ Solicitação manual de geração de QR Code recebida.');
+    if (sock) {
+      try { await sock.logout(); } catch (e) {}
+      sock = null;
+    }
+    connectionStatus = 'connecting';
+    currentQrBase64 = null;
+    startWhatsAppServer(true);
+    res.json({ success: true, message: 'Gerando QR Code do WhatsApp...' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao solicitar QR Code.' });
+  }
+});
+
 // Desconectar Sessão (preserva histórico de conversas e contatos)
 app.post('/api/whatsapp/disconnect', async (req, res) => {
   try {
@@ -640,7 +676,7 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
     currentQrBase64 = null;
     connectedUser = null;
     sock = null;
-    setTimeout(startWhatsAppServer, 1000);
+    isManualConnectRequest = false;
     res.json({ success: true, message: 'Sessão desconectada. Histórico de conversas mantido.' });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao desconectar.' });
@@ -651,7 +687,7 @@ app.listen(PORT, () => {
   console.log(`\n🚀 [WhatsApp Gateway Baileys Real] Rodando na porta ${PORT}`);
   console.log(`👉 Endpoint QR: http://localhost:${PORT}/api/whatsapp/qr`);
   console.log(`👉 Endpoint Chats: http://localhost:${PORT}/api/whatsapp/chats\n`);
-  startWhatsAppServer();
+  startWhatsAppServer(false);
 });
 
 // 🛡️ Handlers globais para evitar crashes por exceções não tratadas

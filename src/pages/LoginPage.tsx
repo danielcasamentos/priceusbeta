@@ -24,7 +24,7 @@ export function LoginPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <img
-          src="/Logo Price Us.png"
+          src="./logo-priceus.png"
           alt="Price Us"
           className="h-16 w-auto mx-auto mb-8"
         />

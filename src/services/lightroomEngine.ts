@@ -5,6 +5,7 @@
  */
 
 import { PhotoEditSettings } from '../components/gallery/AICullingManager';
+import { platformAdapter } from './platformAdapter';
 
 export interface SpotHealingPoint {
   xPct: number; // 0 a 100% da largura
@@ -134,6 +135,11 @@ export function renderProcessedImage(
   }
 
   ctx.restore();
+  platformAdapter.addLog(
+    'info',
+    'CULLING',
+    `[Lightroom Engine] Imagem renderizada (${width}x${height}px) | EV: ${settings.exposure || 0} | Kelvin: ${settings.temp || 5500}K | Contraste: ${settings.contrast || 0} | P&B: ${settings.saturation === -100 ? 'Sim' : 'Não'} | Alinhamento: ${straightenDegrees}°`
+  );
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './lib/auth';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter, BrowserRouter, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
@@ -21,12 +21,17 @@ import { InteractiveTutorialsPage } from './pages/InteractiveTutorialsPage'
 import { PublicBookingPage } from './pages/PublicBookingPage'
 import { PublicGalleryPage } from './pages/PublicGalleryPage';
 import { PublicPortfolioPage } from './pages/PublicPortfolioPage';
+import { MobileAppDownloadPage, DesktopAppDownloadPage } from './pages/AppDownloadsPages';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
 import { supabase } from './lib/supabase';
+
+// No Electron (file:// protocol), usamos HashRouter para rotas funcionarem offline/localmente
+const isElectron = window.location.protocol === 'file:' || navigator.userAgent.toLowerCase().includes('electron');
+const Router = isElectron ? HashRouter : BrowserRouter;
 
 function App() {
   useTawkTo(); // Inicializa o Tawk.to e esconde o widget
@@ -81,6 +86,10 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              {/* Rotas unificadas de Download dos Aplicativos */}
+              <Route path="/celular" element={<MobileAppDownloadPage />} />
+              <Route path="/desktop" element={<DesktopAppDownloadPage />} />
+
               {/* Rotas públicas de tutoriais, galerias, políticas e portfólio */}
               <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
               <Route path="/termos-de-servico" element={<TermsOfServicePage />} />

@@ -32,9 +32,12 @@ export async function scanDataTransferItems(
               subfolder = 'Pasta Raiz';
             }
 
-            // Somente arquivos de imagem ou RAW
+            // Somente arquivos de imagem ou RAW (Sony, Canon, Nikon, Fuji, Panasonic, Olympus, etc.)
             const ext = file.name.split('.').pop()?.toLowerCase() || '';
-            const validExts = ['jpg', 'jpeg', 'png', 'webp', 'cr2', 'cr3', 'nef', 'arw', 'dng', 'heic', 'tif', 'tiff'];
+            const validExts = [
+              'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'tif', 'tiff', 'gif', 'bmp',
+              'cr2', 'cr3', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'raf', 'rw2', 'raw', 'orf', 'dng', '3fr', 'iiq', 'pef', 'x3f'
+            ];
             if (file.type.startsWith('image/') || validExts.includes(ext)) {
               fileItems.push({
                 file,
@@ -109,7 +112,10 @@ export function scanFileListWithDirectory(files: FileList | File[]): ScannedFile
     }
 
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    const validExts = ['jpg', 'jpeg', 'png', 'webp', 'cr2', 'cr3', 'nef', 'arw', 'dng', 'heic', 'tif', 'tiff'];
+    const validExts = [
+      'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'tif', 'tiff', 'gif', 'bmp',
+      'cr2', 'cr3', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'raf', 'rw2', 'raw', 'orf', 'dng', '3fr', 'iiq', 'pef', 'x3f'
+    ];
     if (file.type.startsWith('image/') || validExts.includes(ext)) {
       result.push({
         file,

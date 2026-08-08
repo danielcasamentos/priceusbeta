@@ -1126,12 +1126,14 @@ export function MeuDia({ userId }: MeuDiaProps) {
                           key={t.id}
                           onClick={() => {
                             if (t.tipo === 'crm' && t.taskObject?.leadId) {
-                              navigate(`/dashboard/leads?id=${t.taskObject.leadId}`);
+                              window.location.href = `/dashboard/leads?id=${t.taskObject.leadId}`;
+                            } else if (t.tipo === 'company') {
+                              window.location.href = `/dashboard/empresa`;
                             }
                           }}
-                          className={`flex items-center gap-3 p-3 rounded-xl border transition-all group ${
-                            t.tipo === 'crm' ? 'cursor-pointer hover:bg-indigo-50/20 dark:hover:bg-white/5' : ''
-                          } ${t.concluida ? 'opacity-50 bg-gray-50 dark:bg-white/2 border-gray-100 dark:border-white/3' : 'bg-white dark:bg-white/3 border-gray-100 dark:border-white/5 hover:border-indigo-200 dark:hover:border-indigo-500/30'}`}
+                          className={`flex items-center gap-3 p-3 rounded-xl border transition-all group cursor-pointer hover:bg-indigo-50/20 dark:hover:bg-white/5 ${
+                            t.concluida ? 'opacity-50 bg-gray-50 dark:bg-white/2 border-gray-100 dark:border-white/3' : 'bg-white dark:bg-white/3 border-gray-100 dark:border-white/5 hover:border-indigo-200 dark:hover:border-indigo-500/30'
+                          }`}
                         >
                           {t.tipo === 'company' ? (
                             <input

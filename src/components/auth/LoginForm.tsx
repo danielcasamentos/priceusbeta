@@ -36,6 +36,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         setError(error.message)
       } else {
         onSuccess?.()
+        navigate('/dashboard/meu-dia')
       }
     } catch (err) {
       setError('Ocorreu um erro inesperado. Por favor, tente novamente.')

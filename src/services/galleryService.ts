@@ -241,33 +241,7 @@ export class GalleryService {
     };
   }
 
-  /**
-   * Salva dados do visitante da galeria (Lead capture / Log de Acesso)
-   */
-  static async registerVisitor(galleryId: string, visitor: { name: string; email?: string; whatsapp?: string }): Promise<void> {
-    try {
-      await supabase.from('gallery_visitors').insert({
-        gallery_id: galleryId,
-        name: visitor.name.trim(),
-        email: visitor.email?.trim() || null,
-        whatsapp: visitor.whatsapp?.trim() || null,
-        accessed_at: new Date().toISOString()
-      }).catch(() => null);
 
-      // Buscar dados da galeria para enviar notificação em tempo real ao fotógrafo
-      const { data: gallery } = await supabase
-        .from('galleries')
-        .select('title, user_id')
-        .eq('id', galleryId)
-        .single();
-
-      if (gallery?.user_id) {
-        await NotificationService.notifyVisitorAccess(gallery.user_id, gallery.title, visitor);
-      }
-    } catch {
-      // Graceful fallback
-    }
-  }
 
 
   /**

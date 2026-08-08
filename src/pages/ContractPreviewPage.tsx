@@ -431,6 +431,16 @@ export function ContractPreviewPage() {
       // Faz isso em segundo plano para não atrasar o usuário.
       if (updatedContract) {
         createFinancialTransactions(updatedContract);
+        // 🔔 Envia Notificação Nativa no Mac + Sistema quando o contrato for assinado
+        const clientName = clientDataFromState.nome_completo || 'Cliente';
+        NotificationService.sendNotification({
+          userId: updatedContract.user_id,
+          title: '📝 Contrato Assinado!',
+          message: `O contrato do evento de ${clientName} foi assinado digitalmente com sucesso.`,
+          type: 'payment',
+          link: '/dashboard/contracts',
+          relatedId: updatedContract.id,
+        }).catch(() => null);
       }
 
       console.log('✅ [DB] Contrato finalizado no banco de dados.');

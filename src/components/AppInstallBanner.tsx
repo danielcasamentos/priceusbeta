@@ -8,10 +8,22 @@ interface AppInstallBannerProps {
 
 export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps) {
   const [showIosModal, setShowIosModal] = useState(false);
+  const [showDesktopModal, setShowDesktopModal] = useState(false);
   const [device, setDevice] = useState<'android' | 'ios' | 'desktop'>('desktop');
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [isElectron, setIsElectron] = useState(false);
 
   useEffect(() => {
+    // Detecta se já está rodando dentro do aplicativo Desktop nativo (Electron)
+    const isElectronEnv = typeof window !== 'undefined' && (
+      window.location.protocol === 'file:' ||
+      window.navigator.userAgent.toLowerCase().includes('electron')
+    );
+    if (isElectronEnv) {
+      setIsElectron(true);
+      return;
+    }
+
     // Detect mobile OS
     const userAgent = window.navigator.userAgent.toLowerCase();
     if (/iphone|ipad|ipod/.test(userAgent)) {
@@ -26,7 +38,8 @@ export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps)
     }
   }, []);
 
-  if (isPwaInstalled) return null; // Hide if already inside the app
+  // Esconde o card e os botões de instalação quando o app nativo Desktop (Electron) ou PWA já estiver aberto
+  if (isPwaInstalled || isElectron) return null;
 
   // Renderização da Topbar (Muitíssimo mais discreta e fina, para ficar grudada abaixo do header)
   if (variant === 'topbar') {
@@ -108,8 +121,6 @@ export function AppInstallBanner({ variant = 'default' }: AppInstallBannerProps)
   }
 
   // Renderização Default (Página de Login & Dashboard)
-  const [showDesktopModal, setShowDesktopModal] = useState(false);
-
   return (
     <>
       <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-purple-900 text-white shadow-xl rounded-2xl p-6 text-center border border-blue-500/30 w-full relative overflow-hidden">

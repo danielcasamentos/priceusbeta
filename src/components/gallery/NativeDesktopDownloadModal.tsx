@@ -10,17 +10,37 @@ interface NativeDesktopDownloadModalProps {
 export function NativeDesktopDownloadModal({ isOpen, onClose }: NativeDesktopDownloadModalProps) {
   if (!isOpen) return null;
 
-  const handleDownload = (platform: 'mac-arm' | 'mac-intel' | 'win') => {
+  const [downloadNotice, setDownloadNotice] = React.useState<string | null>(null);
+
+  const handleDownload = async (platform: 'mac-arm' | 'mac-intel' | 'win') => {
     platformAdapter.addLog('info', 'SYSTEM', `Download do App Nativo solicitado para: ${platform}`);
     
-    // Links de download de release (ou fallback direto)
-    const downloadUrls: Record<string, string> = {
-      'mac-arm': 'https://github.com/priceus/desktop-releases/releases/latest/download/PriceUS_macOS_AppleSilicon.dmg',
-      'mac-intel': 'https://github.com/priceus/desktop-releases/releases/latest/download/PriceUS_macOS_Intel.dmg',
-      'win': 'https://github.com/priceus/desktop-releases/releases/latest/download/PriceUS_Windows_x64.exe',
+    const fileMap: Record<string, { name: string; filename: string; url: string }> = {
+      'mac-arm': { name: 'macOS Apple Silicon', filename: 'PriceUS_macOS_AppleSilicon.dmg', url: '/downloads/PriceUS_macOS_AppleSilicon.dmg' },
+      'mac-intel': { name: 'macOS Intel', filename: 'PriceUS_macOS_Intel.dmg', url: '/downloads/PriceUS_macOS_Intel.dmg' },
+      'win': { name: 'Windows', filename: 'PriceUS_Windows_x64.exe', url: '/downloads/PriceUS_Windows_x64.exe' },
     };
 
-    platformAdapter.openExternalUrl(downloadUrls[platform] || 'https://priceus.com.br/download');
+    const target = fileMap[platform] || fileMap['mac-arm'];
+
+    try {
+      // Verifica se o arquivo binário .dmg/.exe real existe no servidor (evita baixar HTML como .dmg)
+      const res = await fetch(target.url, { method: 'HEAD' });
+      const contentType = res.headers.get('content-type') || '';
+
+      if (res.ok && !contentType.includes('text/html')) {
+        const link = document.createElement('a');
+        link.href = target.url;
+        link.setAttribute('download', target.filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        setDownloadNotice(`📦 O arquivo ${target.filename} está configurado. Se o arquivo DMG já estiver publicado em uma URL externa (como Google Drive, Dropbox ou GitHub Release), você pode colá-la aqui para download direto.`);
+      }
+    } catch {
+      setDownloadNotice(`ℹ️ O arquivo ${target.filename} estará disponível para download assim que o binário for colocado em /downloads/${target.filename} ou em uma URL de release.`);
+    }
   };
 
   return (
@@ -53,6 +73,13 @@ export function NativeDesktopDownloadModal({ isOpen, onClose }: NativeDesktopDow
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {downloadNotice && (
+          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-200 text-xs flex items-center justify-between">
+            <span>{downloadNotice}</span>
+            <button onClick={() => setDownloadNotice(null)} className="text-purple-400 font-bold hover:text-white ml-2">✕</button>
+          </div>
+        )}
 
         {/* Recursos Principais */}
         <div className="p-6 space-y-6 overflow-y-auto">
