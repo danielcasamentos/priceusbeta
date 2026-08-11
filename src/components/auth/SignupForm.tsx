@@ -129,6 +129,13 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
     try {
       console.log('[Signup] Iniciando signUp para:', email)
+
+      const trialExpirationDate = new Date()
+      trialExpirationDate.setDate(trialExpirationDate.getDate() + 30)
+      const now = new Date().toISOString()
+
+      // Passar dados extras no user_metadata para que o trigger handle_new_user
+      // possa usar como fallback se o upsert client-side falhar
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -136,59 +143,78 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           emailRedirectTo: undefined,
           data: {
             full_name: name,
+            nome_admin: name || email.split('@')[0],
+            data_nascimento: birthDate,
+            pais: pais === 'Outro' ? paisOutro : pais,
+            estado,
+            cidade,
+            terms_accepted_at: now,
+            terms_version: TERMS_VERSION,
+            trial_expiration: trialExpirationDate.toISOString(),
           }
         }
       })
 
-      console.log('[Signup] Resultado signUp:', { userId: data?.user?.id, error: error?.message })
+      console.log('[Signup] Resultado signUp:', { userId: data?.user?.id, hasSession: !!data?.session, error: error?.message })
 
       if (error) {
         setError(error.message)
         return
       }
 
-      if (data.user) {
-        const trialExpirationDate = new Date()
-        trialExpirationDate.setDate(trialExpirationDate.getDate() + 30)
-        const now = new Date().toISOString()
-
-        console.log('[Signup] Fazendo upsert do profile para user:', data.user.id)
-
-        // Usar UPSERT (onConflict: merge) porque o trigger `handle_new_user`
-        // pode ter criado um registro mínimo em profiles antes deste código.
-        // Se já existe, atualizamos com os dados completos do formulário.
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            nome_admin: name || email.split('@')[0],
-            status_assinatura: 'trial',
-            data_expiracao_trial: trialExpirationDate.toISOString(),
-            terms_accepted_at: now,
-            terms_version: TERMS_VERSION,
-            privacy_policy_accepted_at: now,
-            data_nascimento: birthDate,
-            pais: pais === 'Outro' ? paisOutro : pais,
-            estado: estado,
-            cidade: cidade,
-          }, { onConflict: 'id' })
-
-        console.log('[Signup] Resultado upsert profile:', { profileError: profileError?.message, code: profileError?.code })
-
-        if (profileError) {
-          console.error('Error saving profile:', profileError)
-          setError('Database error saving new user: ' + profileError.message)
-          return
-        }
-
-        console.log('[Signup] Sucesso! Chamando onSuccess()')
-      } else {
-        console.warn('[Signup] signUp retornou sem user — pode ser que email confirmation esteja ativo no Supabase')
-        setError('Cadastro pendente: verifique se a confirmação de e-mail está desabilitada no Supabase.')
+      if (!data.user) {
+        console.warn('[Signup] signUp retornou sem user — confirmação de e-mail pode estar ativa no Supabase')
+        setError('Cadastro pendente: verifique se a confirmação de e-mail está desabilitada no Supabase Dashboard.')
         return
       }
 
+      // CRÍTICO: setar a sessão explicitamente antes de qualquer chamada ao banco.
+      // Sem isso, auth.uid() retorna null e o RLS bloqueia com erro 42501.
+      if (data.session) {
+        console.log('[Signup] Sessão disponível — setando via setSession()')
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
+      } else {
+        // Sem sessão (ex: confirmação de e-mail ativa), o trigger já criou o perfil
+        console.warn('[Signup] Sem session após signUp — dependendo do trigger handle_new_user')
+        onSuccess?.()
+        return
+      }
+
+      console.log('[Signup] Fazendo upsert do profile para user:', data.user.id)
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: data.user.id,
+          nome_admin: name || email.split('@')[0],
+          status_assinatura: 'trial',
+          data_expiracao_trial: trialExpirationDate.toISOString(),
+          terms_accepted_at: now,
+          terms_version: TERMS_VERSION,
+          privacy_policy_accepted_at: now,
+          data_nascimento: birthDate,
+          pais: pais === 'Outro' ? paisOutro : pais,
+          estado,
+          cidade,
+        }, { onConflict: 'id' })
+
+      console.log('[Signup] Resultado upsert profile:', { code: profileError?.code, message: profileError?.message })
+
+      if (profileError) {
+        // Logar o erro real (não vai ser criptografado pois é só string)
+        console.error('[Signup] profileError code:', profileError.code, '| message:', profileError.message, '| details:', profileError.details)
+        // Não bloquear o usuário — o trigger handle_new_user já criou o perfil mínimo
+        // Apenas logamos e seguimos para o dashboard
+        console.warn('[Signup] Continuando mesmo com erro no upsert — perfil mínimo criado pelo trigger')
+      } else {
+        console.log('[Signup] ✅ Profile salvo com sucesso!')
+      }
+
       onSuccess?.()
+
     } catch (err: any) {
       console.error('[Signup] Erro inesperado catch:', err)
       setError('Ocorreu um erro inesperado. Por favor, tente novamente.')
