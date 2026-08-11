@@ -18,24 +18,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
+    // Detectar se a requisição atual é um retorno de login OAuth (Google, etc.)
+    const hasOAuthHash = typeof window !== 'undefined' && window.location.hash &&
+      (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token') || window.location.hash.includes('refresh_token'));
+    const hasOAuthCode = typeof window !== 'undefined' && window.location.search && window.location.search.includes('code=');
+    const isOAuthRedirect = !!(hasOAuthHash || hasOAuthCode);
+
+    let safetyTimer: NodeJS.Timeout | null = null;
+    if (isOAuthRedirect) {
+      console.log('🔑 [Auth] Retorno de OAuth detectado! Aguardando validação de sessão pelo Supabase...');
+      // Timer de segurança de 4s caso a validação do hash demore
+      safetyTimer = setTimeout(() => {
+        setLoading((prev) => {
+          if (prev) console.warn('⚠️ [Auth] Safety timeout de OAuth atingido — finalizando loading');
+          return false;
+        });
+      }, 4000);
+    }
+
+    // Buscar sessão inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[Auth] getSession:', session?.user?.id ?? 'sem sessão')
-      setUser(session?.user ?? null);
-      setLoading(false);
+      console.log('[Auth] getSession:', session?.user?.id ?? 'sem sessão', '| isOAuthRedirect:', isOAuthRedirect);
+      if (session) {
+        setUser(session.user);
+        setLoading(false);
+      } else if (!isOAuthRedirect) {
+        // Se NÃO for retorno de OAuth, define a sessão como nula e remove o loading
+        setUser(null);
+        setLoading(false);
+      }
     });
 
-    // Listen for auth changes
+    // Escutar alterações de Auth (incluindo processamento do hash do Google OAuth)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[Auth] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'null')
+      console.log('[Auth] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'null');
       setUser(session?.user ?? null);
       setLoading(false);
 
+      if (safetyTimer) clearTimeout(safetyTimer);
+
       // Salvar credenciais do Google OAuth no profile do usuário (sem bloquear a thread de Auth)
       if (session?.user && (session.provider_token || session.provider_refresh_token)) {
-        console.log('🔑 [Auth] OAuth tokens detectados! event:', event)
+        console.log('🔑 [Auth] OAuth tokens detectados! event:', event);
 
         const userId = session.user.id;
         const providerToken = session.provider_token;
@@ -43,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setTimeout(async () => {
           try {
-            console.log('[Auth] Buscando profile para user:', userId)
+            console.log('[Auth] Buscando profile para user:', userId);
             const { data: profileData, error: profileSelectError } = await supabase
               .from('profiles')
               .select('google_auth_data')
@@ -51,14 +77,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .maybeSingle();
 
             if (profileSelectError) {
-              console.error('[Auth] Erro ao buscar profile:', profileSelectError.message, profileSelectError.code)
+              console.error('[Auth] Erro ao buscar profile:', profileSelectError.message, profileSelectError.code);
             }
 
             // Se profile não existe (novo usuário Google), criar agora via upsert
             if (!profileData) {
-              console.warn('[Auth] Profile não encontrado — criando profile para Google user:', userId)
-              const trialExp = new Date()
-              trialExp.setDate(trialExp.getDate() + 30)
+              console.warn('[Auth] Profile não encontrado — criando profile para Google user:', userId);
+              const trialExp = new Date();
+              trialExp.setDate(trialExp.getDate() + 30);
               const { error: insertErr } = await supabase
                 .from('profiles')
                 .upsert({
@@ -66,12 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   nome_admin: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuário',
                   status_assinatura: 'trial',
                   data_expiracao_trial: trialExp.toISOString(),
-                }, { onConflict: 'id' })
+                }, { onConflict: 'id' });
 
               if (insertErr) {
-                console.error('[Auth] Erro ao criar profile Google:', insertErr.message, 'code:', insertErr.code)
+                console.error('[Auth] Erro ao criar profile Google:', insertErr.message, 'code:', insertErr.code);
               } else {
-                console.log('[Auth] ✅ Profile Google criado com sucesso!')
+                console.log('[Auth] ✅ Profile Google criado com sucesso!');
               }
             }
 
@@ -89,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .eq('id', userId);
 
             if (updateErr) {
-              console.error('[Auth] Erro ao salvar google_auth_data:', updateErr.message)
+              console.error('[Auth] Erro ao salvar google_auth_data:', updateErr.message);
             } else {
               console.log('✅ Google OAuth tokens saved. refresh_token atualizado:', !!providerRefreshToken);
             }
@@ -105,7 +131,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (safetyTimer) clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -131,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${window.location.origin}/dashboard/meu-dia`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
