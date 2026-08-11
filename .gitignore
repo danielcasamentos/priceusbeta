@@ -8,6 +8,11 @@ node_modules/
 
 # Build output
 dist/
+dist-app/
+dist-electron/
+release/
+out/
+
 
 # Environment variables (Bloqueio total de arquivos .env)
 .env
