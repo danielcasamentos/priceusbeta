@@ -13,7 +13,7 @@ interface LoginFormProps {
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { signInWithGoogle } = useAuth()
+  const { signInWithGoogle, signIn } = useAuth()
   const stateError = location.state?.error || ''
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -27,10 +27,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setError('')
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
+      const { error } = await signIn(email, password)
 
       if (error) {
         setError(error.message)
