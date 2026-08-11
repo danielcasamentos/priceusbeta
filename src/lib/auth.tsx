@@ -131,8 +131,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // 📱 PWA iOS/Android fix: quando o app volta do background, renovar a sessão se necessário
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error || !session) {
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (refreshData?.session) {
+              setUser(refreshData.session.user);
+            }
+          } else {
+            setUser(session.user);
+          }
+        } catch (e) {
+          console.warn('[AuthProvider] Erro ao revalidar sessão no retorno do background:', e);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       if (safetyTimer) clearTimeout(safetyTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       subscription.unsubscribe();
     };
   }, []);
