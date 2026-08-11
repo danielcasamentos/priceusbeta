@@ -71,12 +71,14 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
   const [termsError, setTermsError] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [infoMessage, setInfoMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const handleGoogleSignUp = async () => {
     setLoading(true)
     setError('')
+    setInfoMessage('')
     try {
       const { error } = await signInWithGoogle()
       if (error) setError(error.message)
@@ -91,6 +93,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setInfoMessage('')
     setTermsError(false)
 
     if (password !== confirmPassword) {
@@ -163,24 +166,38 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
       }
 
       if (!data.user) {
-        console.warn('[Signup] signUp retornou sem user — confirmação de e-mail pode estar ativa no Supabase')
-        setError('Cadastro pendente: verifique se a confirmação de e-mail está desabilitada no Supabase Dashboard.')
+        setError('Ocorreu um erro ao criar o usuário. Por favor, tente novamente.')
         return
       }
 
-      // CRÍTICO: setar a sessão explicitamente antes de qualquer chamada ao banco.
-      // Sem isso, auth.uid() retorna null e o RLS bloqueia com erro 42501.
-      if (data.session) {
+      let activeSession = data.session
+
+      // Se a sessão não veio no signUp, tenta auto-login imediato com senha
+      if (!activeSession) {
+        console.log('[Signup] Sem session no signUp — tentando auto-login com signInWithPassword...')
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (signInData?.session) {
+          console.log('[Signup] Auto-login com sucesso!')
+          activeSession = signInData.session
+        } else {
+          console.warn('[Signup] Auto-login não retornou sessão:', signInErr?.message)
+          // Se o auto-login falhar por confirmação de e-mail ser exigida
+          setInfoMessage('Conta criada com sucesso! Enviamos um e-mail de confirmação. Por favor, verifique sua caixa de entrada para ativar sua conta antes de fazer o login.')
+          return
+        }
+      }
+
+      // Setar sessão explicitamente para evitar erro de RLS (42501)
+      if (activeSession) {
         console.log('[Signup] Sessão disponível — setando via setSession()')
         await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
+          access_token: activeSession.access_token,
+          refresh_token: activeSession.refresh_token,
         })
-      } else {
-        // Sem sessão (ex: confirmação de e-mail ativa), o trigger já criou o perfil
-        console.warn('[Signup] Sem session após signUp — dependendo do trigger handle_new_user')
-        onSuccess?.()
-        return
       }
 
       console.log('[Signup] Fazendo upsert do profile para user:', data.user.id)
@@ -204,11 +221,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
       console.log('[Signup] Resultado upsert profile:', { code: profileError?.code, message: profileError?.message })
 
       if (profileError) {
-        // Logar o erro real (não vai ser criptografado pois é só string)
-        console.error('[Signup] profileError code:', profileError.code, '| message:', profileError.message, '| details:', profileError.details)
-        // Não bloquear o usuário — o trigger handle_new_user já criou o perfil mínimo
-        // Apenas logamos e seguimos para o dashboard
-        console.warn('[Signup] Continuando mesmo com erro no upsert — perfil mínimo criado pelo trigger')
+        console.error('[Signup] profileError code:', profileError.code, '| message:', profileError.message)
       } else {
         console.log('[Signup] ✅ Profile salvo com sucesso!')
       }
@@ -226,6 +239,12 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {infoMessage && (
+        <Alert type="success">
+          {infoMessage}
+        </Alert>
+      )}
+
       {error && (
         <Alert type="error">
           {error}

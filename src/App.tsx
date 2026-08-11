@@ -39,6 +39,17 @@ function App() {
 
   useEffect(() => {
     checkEnvVariables();
+
+    // Redirecionar se a URL contém hash de OAuth do Google (ex: https://priceus.com.br/#access_token=...)
+    if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
+      const currentPath = window.location.pathname;
+      if (currentPath === '/' || currentPath === '/login' || currentPath === '/signup') {
+        console.log('🔑 [App] OAuth hash detectado em', currentPath, '-> redirecionando para /dashboard/meu-dia');
+        window.location.href = '/dashboard/meu-dia' + window.location.hash;
+        return;
+      }
+    }
+
     // Fallback: Verifica manualmente se há type=recovery no hash no carregamento
     if (window.location.hash && window.location.hash.includes('type=recovery')) {
       window.location.href = '/reset-password' + window.location.hash;
