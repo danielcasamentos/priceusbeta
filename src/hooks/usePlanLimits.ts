@@ -41,8 +41,8 @@ export function usePlanLimits(): PlanLimits {
   // Verificar se é usuário privilegiado
   const isPrivileged = isPrivilegedUser(user?.email);
 
-  // Definir se é premium (assinatura ativa, trialing, trial ativo de 30 dias ou privilegiado)
-  const isPremium = isPrivileged || isActive || isTrialing || (trialStatus.status === 'trial' && !trialStatus.isExpired);
+  // Definir se é premium (assinatura ativa, trialing, trial ativo de 30 dias, privilegiado ou em período de teste)
+  const isPremium = isPrivileged || isActive || isTrialing || (trialStatus.status === 'trial' && !trialStatus.isExpired) || trialStatus.status === null || trialStatus.loading;
 
   // Definir limites baseado no plano (premium = ilimitado)
   const templatesLimit = isPremium ? Infinity : 1;

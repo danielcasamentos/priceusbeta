@@ -79,47 +79,22 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
         if (error) throw error;
 
         if (!profile || !profile.status_assinatura) {
-          // Fallback: se não encontrar o profile ou o status no banco de dados, assume "trial" se a conta foi criada há menos de 30 dias!
-          let status: TrialStatus['status'] = null;
-          let expirationDate: string | null = null;
-
-          const createdAtStr = user?.created_at;
-          if (createdAtStr) {
-            const createdAtDate = new Date(createdAtStr);
-            const trialExpiration = new Date(createdAtDate);
-            trialExpiration.setDate(trialExpiration.getDate() + 30);
-            
-            const now = new Date();
-            if (trialExpiration > now) {
-              status = 'trial';
-              expirationDate = trialExpiration.toISOString();
-            }
-          }
-
-          if (status === 'trial') {
-            const now = new Date();
-            const expiration = new Date(expirationDate!);
-            const diffTime = expiration.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            setTrialStatus({
-              status,
-              daysRemaining: Math.max(0, diffDays),
-              expirationDate,
-              isExpired: false,
-              graceDaysRemaining: null,
-              isGraceExpired: false,
-              loading: false,
-            });
-            return;
-          }
+          // Fallback: se não encontrar o profile ou o status no DB, assume "trial" ativo de 30 dias por padrão!
+          const createdAtDate = user?.created_at ? new Date(user.created_at) : new Date();
+          const trialExpiration = new Date(createdAtDate);
+          trialExpiration.setDate(trialExpiration.getDate() + 30);
+          
+          const now = new Date();
+          const diffTime = trialExpiration.getTime() - now.getTime();
+          const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+          const isExpired = diffDays <= 0;
 
           setTrialStatus({
-            status: null,
-            daysRemaining: null,
-            expirationDate: null,
-            isExpired: false,
-            graceDaysRemaining: null,
+            status: 'trial',
+            daysRemaining: diffDays,
+            expirationDate: trialExpiration.toISOString(),
+            isExpired,
+            graceDaysRemaining: isExpired ? 15 : null,
             isGraceExpired: false,
             loading: false,
           });
