@@ -59,6 +59,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (safetyTimer) clearTimeout(safetyTimer);
 
+      // Se o usuário está autenticado e na página de login, signup ou landing, redirecionar para o dashboard
+      if (session?.user && typeof window !== 'undefined') {
+        const currentPath = window.location.pathname;
+        if (currentPath === '/' || currentPath === '/login' || currentPath === '/signup') {
+          console.log('🚀 [Auth] Usuário autenticado na rota', currentPath, '-> redirecionando para /dashboard/meu-dia');
+          // Limpar hash antes de redirecionar
+          if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
+            window.history.replaceState(null, '', currentPath + window.location.search);
+          }
+          window.location.href = '/dashboard/meu-dia';
+          return;
+        }
+      }
+
       // Salvar credenciais do Google OAuth no profile do usuário (sem bloquear a thread de Auth)
       if (session?.user && (session.provider_token || session.provider_refresh_token)) {
         console.log('🔑 [Auth] OAuth tokens detectados! event:', event);
@@ -123,8 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('❌ Error saving Google OAuth tokens:', err);
           } finally {
             if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
-              const routeHash = window.location.hash.split('?')[0].split('&')[0];
-              window.history.replaceState(null, '', window.location.pathname + window.location.search + (routeHash || ''));
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
             }
           }
         }, 0);
