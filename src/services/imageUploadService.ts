@@ -49,11 +49,11 @@ export interface UploadProgress {
 // ==========================================
 
 const DEFAULT_OPTIONS: Required<UploadOptions> = {
-  maxSizeMB: 5,           // 💡 Limite: 5MB por imagem
-  maxWidthPx: 1280,       // 💡 Resolução suficiente para web (antes era 1920)
+  maxSizeMB: 10,          // 💡 Limite de 10MB para fotos de câmeras/smartphones modernas
+  maxWidthPx: 1280,       // 💡 Resolução suficiente para web
   maxHeightPx: 1280,
   quality: 0.80,          // 💡 Boa qualidade visual com boa compressão
-  allowedFormats: ['image/jpeg', 'image/png'], // 💡 Só JPEG e PNG — força conversão para WebP
+  allowedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/avif', 'image/gif', 'image/heic', 'image/heif'],
   generateThumbnail: false,
   folder: 'uploads',
 };
@@ -141,8 +141,9 @@ export class ImageUploadService {
    */
   private validateFile(file: File, opts: Required<UploadOptions>): string | null {
     // Validar formato
-    if (!opts.allowedFormats.includes(file.type)) {
-      return `Formato não suportado. Envie uma imagem JPEG ou PNG.`;
+    const isImage = file.type ? file.type.startsWith('image/') : /\.(jpe?g|png|webp|avif|gif|heic|heif)$/i.test(file.name);
+    if (!isImage && !opts.allowedFormats.includes(file.type)) {
+      return `Formato não suportado. Por favor, envie uma imagem válida (JPEG, PNG, WebP, etc).`;
     }
 
     // Validar tamanho

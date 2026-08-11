@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase, Profile } from '../lib/supabase';
 import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, Mail, Phone, Instagram as InstagramIcon } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
+import { ImageUploadService } from '../services/imageUploadService';
 
 interface ProfileEditorMinimalistProps {
   userId: string;
@@ -157,33 +158,45 @@ export function ProfileEditorMinimalist({ userId }: ProfileEditorMinimalistProps
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('❌ Arquivo muito grande! Máximo: 5MB');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('❌ Arquivo muito grande! Máximo: 10MB');
       return;
     }
 
+    const originalUrl = profile?.profile_image_url;
+    const localPreviewUrl = URL.createObjectURL(file);
+    handleUpdateField('profile_image_url', localPreviewUrl);
+
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `profile/${userId}/${Date.now()}.${fileExt}`;
+      const uploadService = new ImageUploadService();
+      const result = await uploadService.uploadImage(file, userId, { folder: 'profile' });
 
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(fileName, file, { upsert: true });
+      if (result.success && result.url) {
+        handleUpdateField('profile_image_url', result.url);
 
-      if (uploadError) throw uploadError;
+        const { error: dbError } = await supabase
+          .from('profiles')
+          .update({ profile_image_url: result.url })
+          .eq('id', userId);
 
-      const { data: publicUrlData } = supabase.storage
-        .from('images')
-        .getPublicUrl(fileName);
+        if (dbError) {
+          console.warn('Aviso ao salvar foto no perfil:', dbError);
+        }
 
-      handleUpdateField('profile_image_url', publicUrlData.publicUrl);
-      alert('✅ Imagem carregada! Clique em "Salvar Perfil" para confirmar.');
-    } catch (error) {
+        alert('✅ Foto de perfil atualizada e salva com sucesso!');
+      } else {
+        throw new Error(result.error || 'Erro ao processar a imagem');
+      }
+    } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
-      alert('❌ Erro ao fazer upload da imagem');
+      alert(`❌ Erro ao fazer upload da imagem: ${error?.message || String(error)}`);
+      if (originalUrl) {
+        handleUpdateField('profile_image_url', originalUrl);
+      }
     } finally {
       setUploading(false);
+      URL.revokeObjectURL(localPreviewUrl);
     }
   };
 
