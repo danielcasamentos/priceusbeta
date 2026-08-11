@@ -196,6 +196,7 @@ export function ProfileEditorMinimalist({ userId }: ProfileEditorMinimalistProps
       }
     } finally {
       setUploading(false);
+      if (event.target) event.target.value = '';
       URL.revokeObjectURL(localPreviewUrl);
     }
   };
@@ -258,17 +259,22 @@ export function ProfileEditorMinimalist({ userId }: ProfileEditorMinimalistProps
                 </div>
               )}
 
-              <label className="mt-4 flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-md hover:bg-slate-800 cursor-pointer text-sm font-medium transition-colors">
+              <label
+                htmlFor="profile-photo-input-minimalist"
+                className="mt-4 flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-md hover:bg-slate-800 cursor-pointer text-sm font-medium transition-colors"
+              >
                 <Upload className="w-4 h-4" />
                 {uploading ? 'Enviando...' : 'Alterar Foto'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadImage}
-                  disabled={uploading}
-                  className="hidden"
-                />
               </label>
+              <input
+                id="profile-photo-input-minimalist"
+                type="file"
+                accept="image/*"
+                onClick={(e) => (e.currentTarget.value = '')}
+                onChange={handleUploadImage}
+                disabled={uploading}
+                className="hidden"
+              />
               <p className="text-xs text-slate-500 text-center mt-2">
                 PNG, JPG ou WEBP · Máximo 5MB
               </p>

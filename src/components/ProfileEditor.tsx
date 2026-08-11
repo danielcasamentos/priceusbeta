@@ -386,6 +386,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       }
     } finally {
       setUploading(false);
+      if (event.target) event.target.value = '';
       URL.revokeObjectURL(localPreviewUrl);
     }
   };
@@ -426,17 +427,22 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
               </div>
             )}
 
-            <label className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer text-sm font-medium">
+            <label
+              htmlFor="profile-photo-input-original"
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer text-sm font-medium"
+            >
               <Upload className="w-4 h-4" />
               {uploading ? 'Enviando...' : 'Alterar Foto'}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleUploadImage}
-                disabled={uploading}
-                className="hidden"
-              />
             </label>
+            <input
+              id="profile-photo-input-original"
+              type="file"
+              accept="image/*"
+              onClick={(e) => (e.currentTarget.value = '')}
+              onChange={handleUploadImage}
+              disabled={uploading}
+              className="hidden"
+            />
             <p className="text-xs text-gray-500 text-center">
               PNG, JPG ou WEBP
               <br />

@@ -197,6 +197,7 @@ export function ProfileEditorMagazine({ userId }: ProfileEditorMagazineProps) {
       }
     } finally {
       setUploading(false);
+      if (event.target) event.target.value = '';
       URL.revokeObjectURL(localPreviewUrl);
     }
   };
@@ -282,17 +283,22 @@ export function ProfileEditorMagazine({ userId }: ProfileEditorMagazineProps) {
               </div>
 
               <div className="p-6">
-                <label className="flex items-center justify-center gap-2 bg-amber-600 text-white px-6 py-3 hover:bg-amber-700 cursor-pointer font-sans font-semibold uppercase tracking-wider text-sm transition-colors">
+                <label
+                  htmlFor="profile-photo-input-magazine"
+                  className="flex items-center justify-center gap-2 bg-amber-600 text-white px-6 py-3 hover:bg-amber-700 cursor-pointer font-sans font-semibold uppercase tracking-wider text-sm transition-colors"
+                >
                   <Upload className="w-4 h-4" />
                   {uploading ? 'Enviando...' : 'Alterar Imagem'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleUploadImage}
-                    disabled={uploading}
-                    className="hidden"
-                  />
                 </label>
+                <input
+                  id="profile-photo-input-magazine"
+                  type="file"
+                  accept="image/*"
+                  onClick={(e) => (e.currentTarget.value = '')}
+                  onChange={handleUploadImage}
+                  disabled={uploading}
+                  className="hidden"
+                />
                 <p className="text-xs text-center text-gray-500 mt-3 font-sans">
                   PNG, JPG ou WEBP · Máximo 5MB
                 </p>

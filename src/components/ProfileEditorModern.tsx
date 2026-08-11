@@ -196,6 +196,7 @@ export function ProfileEditorModern({ userId }: ProfileEditorModernProps) {
       }
     } finally {
       setUploading(false);
+      if (event.target) event.target.value = '';
       URL.revokeObjectURL(localPreviewUrl);
     }
   };
@@ -281,17 +282,22 @@ export function ProfileEditorModern({ userId }: ProfileEditorModernProps) {
                 </div>
               </div>
 
-              <label className="mt-6 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-6 py-3 rounded-full hover:from-cyan-600 hover:to-blue-600 cursor-pointer text-sm font-bold transition-all transform hover:scale-105 shadow-lg">
+              <label
+                htmlFor="profile-photo-input-modern"
+                className="mt-6 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-6 py-3 rounded-full hover:from-cyan-600 hover:to-blue-600 cursor-pointer text-sm font-bold transition-all transform hover:scale-105 shadow-lg"
+              >
                 <Upload className="w-4 h-4" />
                 {uploading ? 'Enviando...' : 'Alterar Foto'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadImage}
-                  disabled={uploading}
-                  className="hidden"
-                />
               </label>
+              <input
+                id="profile-photo-input-modern"
+                type="file"
+                accept="image/*"
+                onClick={(e) => (e.currentTarget.value = '')}
+                onChange={handleUploadImage}
+                disabled={uploading}
+                className="hidden"
+              />
               <p className="text-xs text-gray-600 text-center mt-3">
                 PNG, JPG ou WEBP · Max 5MB
               </p>
