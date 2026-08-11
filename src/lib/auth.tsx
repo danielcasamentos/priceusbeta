@@ -37,8 +37,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Buscar sessão inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
       console.log('[Auth] getSession:', session?.user?.id ?? 'sem sessão', '| isOAuthRedirect:', isOAuthRedirect);
+      if (error) {
+        console.warn('⚠️ [Auth] Erro na verificação da sessão:', error.message);
+        if (error.message.includes('Refresh Token') || error.message.includes('invalid_grant')) {
+          console.warn('⚠️ [Auth] Refresh Token inválido ou expirado — deslogando para renovação...');
+          supabase.auth.signOut();
+        }
+      }
       if (session) {
         setUser(session.user);
         setLoading(false);
@@ -47,6 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setLoading(false);
       }
+    }).catch((err) => {
+      console.warn('⚠️ [Auth] Exceção em getSession:', err);
+      setUser(null);
+      setLoading(false);
     });
 
     // Escutar alterações de Auth (incluindo processamento do hash do Google OAuth)
