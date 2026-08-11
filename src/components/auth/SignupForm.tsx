@@ -164,7 +164,15 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
       console.log('[Signup] Resultado signUp:', { userId: data?.user?.id, hasSession: !!data?.session, error: error?.message })
 
       if (error) {
-        setError(error.message)
+        let msg = error.message
+        if (msg.toLowerCase().includes('rate limit')) {
+          msg = 'Limite de envios de e-mail do servidor excedido. Por favor, aguarde alguns minutos antes de tentar novamente ou entre em contato com o suporte.'
+        } else if (msg.toLowerCase().includes('already registered')) {
+          msg = 'Este e-mail já está cadastrado em nossa plataforma.'
+        } else if (msg.toLowerCase().includes('password should be')) {
+          msg = 'A senha deve conter no mínimo 6 caracteres.'
+        }
+        setError(msg)
         return
       }
 
