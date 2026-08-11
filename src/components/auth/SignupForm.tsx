@@ -128,6 +128,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
     }
 
     try {
+      console.log('[Signup] Iniciando signUp para:', email)
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -139,6 +140,8 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         }
       })
 
+      console.log('[Signup] Resultado signUp:', { userId: data?.user?.id, error: error?.message })
+
       if (error) {
         setError(error.message)
         return
@@ -149,9 +152,14 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         trialExpirationDate.setDate(trialExpirationDate.getDate() + 30)
         const now = new Date().toISOString()
 
+        console.log('[Signup] Fazendo upsert do profile para user:', data.user.id)
+
+        // Usar UPSERT (onConflict: merge) porque o trigger `handle_new_user`
+        // pode ter criado um registro mínimo em profiles antes deste código.
+        // Se já existe, atualizamos com os dados completos do formulário.
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert({
+          .upsert({
             id: data.user.id,
             nome_admin: name || email.split('@')[0],
             status_assinatura: 'trial',
@@ -163,16 +171,28 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
             pais: pais === 'Outro' ? paisOutro : pais,
             estado: estado,
             cidade: cidade,
-          })
+          }, { onConflict: 'id' })
+
+        console.log('[Signup] Resultado upsert profile:', { profileError: profileError?.message, code: profileError?.code })
 
         if (profileError) {
-          console.error('Error creating profile:', profileError)
+          console.error('Error saving profile:', profileError)
+          setError('Database error saving new user: ' + profileError.message)
+          return
         }
+
+        console.log('[Signup] Sucesso! Chamando onSuccess()')
+      } else {
+        console.warn('[Signup] signUp retornou sem user — pode ser que email confirmation esteja ativo no Supabase')
+        setError('Cadastro pendente: verifique se a confirmação de e-mail está desabilitada no Supabase.')
+        return
       }
 
       onSuccess?.()
-    } catch (err) {
+    } catch (err: any) {
+      console.error('[Signup] Erro inesperado catch:', err)
       setError('Ocorreu um erro inesperado. Por favor, tente novamente.')
+
     } finally {
       setLoading(false)
     }

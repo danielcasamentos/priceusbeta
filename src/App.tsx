@@ -25,6 +25,7 @@ import { MobileAppDownloadPage, DesktopAppDownloadPage } from './pages/AppDownlo
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { DebugOverlay } from './components/DebugOverlay'
 import { useTawkTo } from './hooks/useTawkTo'
 import { checkEnvVariables } from './lib/debug';
 import { supabase } from './lib/supabase';
@@ -60,6 +61,7 @@ function App() {
       <AuthProvider>
         <Router>
           <div className="App">
+            <DebugOverlay />
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
