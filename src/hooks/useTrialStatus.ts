@@ -16,7 +16,6 @@ interface TrialStatus {
 }
 
 export function useTrialStatus(userArg: UserArg): TrialStatus {
-  // Normalize: accept full User object or just an id string
   const user: { id: string; email?: string; created_at?: string } | null = userArg
     ? typeof userArg === 'string'
       ? { id: userArg }
@@ -34,7 +33,6 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
   });
 
   useEffect(() => {
-    // Timer de segurança para evitar que a tela fique presa em carregamento caso a query trave
     const safetyTimer = setTimeout(() => {
       setTrialStatus(prev => prev.loading ? { ...prev, loading: false } : prev);
     }, 2500);
@@ -53,12 +51,11 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
       return;
     }
 
-    // Usuários privilegiados não precisam de verificação de trial
     if (isPrivilegedUser(user.email)) {
       clearTimeout(safetyTimer);
       setTrialStatus({
-        status: null,
-        daysRemaining: null,
+        status: 'active',
+        daysRemaining: 999,
         expirationDate: null,
         isExpired: false,
         graceDaysRemaining: null,
@@ -72,78 +69,49 @@ export function useTrialStatus(userArg: UserArg): TrialStatus {
       try {
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('status_assinatura, data_expiracao_trial')
+          .select('status_assinatura, data_expiracao_trial, created_at')
           .eq('id', user!.id)
           .maybeSingle();
 
         if (error) throw error;
 
-        if (!profile || !profile.status_assinatura) {
-          // Fallback: se não encontrar o profile ou o status no DB, assume "trial" ativo de 30 dias por padrão!
-          const createdAtDate = user?.created_at ? new Date(user.created_at) : new Date();
-          const trialExpiration = new Date(createdAtDate);
-          trialExpiration.setDate(trialExpiration.getDate() + 30);
-          
-          const now = new Date();
-          const diffTime = trialExpiration.getTime() - now.getTime();
-          const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-          const isExpired = diffDays <= 0;
+        // Se perfil não existe ou status é nulo, assume trial ativo de 30 dias a partir da criação
+        const createdAtDate = profile?.created_at
+          ? new Date(profile.created_at)
+          : (user?.created_at ? new Date(user.created_at) : new Date());
 
-          setTrialStatus({
-            status: 'trial',
-            daysRemaining: diffDays,
-            expirationDate: trialExpiration.toISOString(),
-            isExpired,
-            graceDaysRemaining: isExpired ? 15 : null,
-            isGraceExpired: false,
-            loading: false,
-          });
-          return;
+        let expirationDateStr = profile?.data_expiracao_trial;
+        if (!expirationDateStr) {
+          const exp = new Date(createdAtDate);
+          exp.setDate(exp.getDate() + 30);
+          expirationDateStr = exp.toISOString();
         }
 
-        const status = profile.status_assinatura as TrialStatus['status'];
-        const expirationDate = profile.data_expiracao_trial;
+        const expiration = new Date(expirationDateStr);
+        const now = new Date();
+        const diffTime = expiration.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        let daysRemaining: number | null = null;
-        let isExpired = false;
-        let graceDaysRemaining: number | null = null;
-        let isGraceExpired = false;
+        const isExpired = diffTime <= 0 && profile?.status_assinatura !== 'active';
+        const status = profile?.status_assinatura === 'active' ? 'active' : 'trial';
 
-        if (status === 'trial' && expirationDate) {
-          const now = new Date();
-          const expiration = new Date(expirationDate);
-          const diffTime = expiration.getTime() - now.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          daysRemaining = Math.max(0, diffDays);
-          isExpired = diffDays <= 0;
-
-          if (isExpired) {
-            // Calcular carência de 15 dias a partir da data de expiração do trial
-            const gracePeriodEnd = new Date(expiration);
-            gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 15);
-            const diffGraceTime = gracePeriodEnd.getTime() - now.getTime();
-            const diffGraceDays = Math.ceil(diffGraceTime / (1000 * 60 * 60 * 24));
-
-            graceDaysRemaining = Math.max(0, diffGraceDays);
-            isGraceExpired = diffGraceTime <= 0;
-          }
-        }
-
+        clearTimeout(safetyTimer);
         setTrialStatus({
           status,
-          daysRemaining,
-          expirationDate,
+          daysRemaining: Math.max(0, diffDays),
+          expirationDate: expirationDateStr,
           isExpired,
-          graceDaysRemaining,
-          isGraceExpired,
+          graceDaysRemaining: null,
+          isGraceExpired: false,
           loading: false,
         });
-      } catch (error) {
-        console.error('Error fetching trial status:', error);
+      } catch (err) {
+        console.error('Error in fetchTrialStatus:', err);
+        clearTimeout(safetyTimer);
+        // Em caso de erro, concede acesso ao trial de 30 dias por padrão
         setTrialStatus({
-          status: null,
-          daysRemaining: null,
+          status: 'trial',
+          daysRemaining: 30,
           expirationDate: null,
           isExpired: false,
           graceDaysRemaining: null,

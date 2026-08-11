@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTrialStatus } from '../hooks/useTrialStatus'
+import { useSubscription } from '../hooks/useSubscription'
 import { isPrivilegedUser } from '../config/privilegedUsers'
 
 interface ProtectedRouteProps {
@@ -9,31 +10,28 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
   const trialStatus = useTrialStatus(user)
+  const { isActive } = useSubscription()
   const navigate = useNavigate()
 
   const isUserPrivileged = isPrivilegedUser(user?.email)
 
-  useEffect(() => {
-    // Usuários privilegiados não são redirecionados
-    if (isUserPrivileged) return
+  // Acesso total: Usuários VIP, assinantes pagantes (isActive), ou usuários nos 30 dias de teste grátis
+  const hasFullAccess =
+    isUserPrivileged ||
+    isActive ||
+    (trialStatus.status === 'trial' && !trialStatus.isExpired) ||
+    trialStatus.status === 'active' ||
+    trialStatus.status === null ||
+    trialStatus.loading
 
-    if (!trialStatus.loading && trialStatus.status === 'trial') {
-      if (trialStatus.isGraceExpired) {
-        // Se a carência expirou, força sign out imediato e joga para login com mensagem explicativa
-        signOut().then(() => {
-          navigate('/login', { 
-            state: { 
-              error: 'Seu período de teste de 30 dias e a carência de 15 dias expiraram. Sua conta foi desativada e agendada para exclusão permanente.' 
-            } 
-          })
-        })
-      } else if (trialStatus.isExpired) {
-        navigate('/pricing')
-      }
+  useEffect(() => {
+    // Se o trial de 30 dias expirou e o usuário não é VIP nem pagante: Paywall (/pricing)
+    if (!loading && !trialStatus.loading && user && !hasFullAccess) {
+      navigate('/pricing')
     }
-  }, [trialStatus.isExpired, trialStatus.isGraceExpired, trialStatus.loading, trialStatus.status, navigate, isUserPrivileged, signOut])
+  }, [hasFullAccess, loading, trialStatus.loading, user, navigate])
 
   if (loading || trialStatus.loading) {
     return (
@@ -47,11 +45,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />
   }
 
-  // Usuários privilegiados não são redirecionados para pricing
-  if (!isUserPrivileged && trialStatus.isExpired && trialStatus.status === 'trial') {
-    if (trialStatus.isGraceExpired) {
-      return <Navigate to="/login" replace />
-    }
+  if (!hasFullAccess) {
     return <Navigate to="/pricing" replace />
   }
 
