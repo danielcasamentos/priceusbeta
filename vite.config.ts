@@ -2,13 +2,16 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const isElectronBuild = process.env.ELECTRON === 'true';
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: './',
+  base: isElectronBuild ? './' : '/',
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'script',
       includeAssets: ['favicon.svg', 'Logo_Price_Us_192x192.png', 'Logo_price_Us_512x512.png'],
       manifest: {
         name: 'PriceU$ - Sistema de Orçamentos Online',
