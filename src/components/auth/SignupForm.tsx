@@ -131,6 +131,9 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
     }
 
     try {
+      // Garante que qualquer sessão anterior seja totalmente encerrada antes de criar um novo usuário
+      await supabase.auth.signOut()
+
       console.log('[Signup] Iniciando signUp para:', email)
 
       const trialExpirationDate = new Date()
