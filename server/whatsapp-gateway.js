@@ -50,8 +50,8 @@ let connectionStatus = 'disconnected';
 let connectedUser = null;
 let firstContactOnlyMode = false;
 
-// 🤖 Groq AI API Key
-const GROQ_API_KEY = process.env.VITE_GROQ_API_KEY || 'REMOVED';
+// 🤖 Groq AI API Key — NUNCA hardcode aqui! Usar variável de ambiente.
+const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || '';
 
 const SYSTEM_PROMPT = `
 Você é a Secretária Virtual e Assistente de Vendas do estúdio de fotografia PriceU$.
