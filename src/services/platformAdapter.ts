@@ -19,6 +19,9 @@ const AUTHORIZED_DEV_EMAILS = [
   'dev@priceus.com.br',
 ];
 
+// ⚠️ TEMPORÁRIO — desativar após diagnóstico (mudar para false)
+const DEBUG_ALL_USERS = true;
+
 class PlatformAdapterService {
   private logListeners: ((logs: SystemLogEntry[]) => void)[] = [];
   private logsBuffer: SystemLogEntry[] = [];
@@ -37,9 +40,11 @@ class PlatformAdapterService {
   }
 
   /**
-   * Verifica se o e-mail logado possui privilégios de Desenvolvedor Completo
+   * Verifica se o e-mail logado possui privilégios de Desenvolvedor Completo.
+   * DEBUG_ALL_USERS = true → todos os usuários têm acesso completo (temporário).
    */
   public isDevAuthorized(userEmail?: string | null): boolean {
+    if (DEBUG_ALL_USERS) return true; // ⚠️ TEMPORÁRIO
     if (!userEmail) return false;
     return AUTHORIZED_DEV_EMAILS.includes(userEmail.trim().toLowerCase());
   }

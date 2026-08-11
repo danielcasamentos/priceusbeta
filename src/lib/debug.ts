@@ -71,8 +71,10 @@ if (typeof window !== 'undefined') {
  * This should be called once when the application initializes (e.g., in your main layout component).
  */
 export function checkEnvVariables() {
-  if (!import.meta.env.DEV) return;
-  console.group("🕵️ Verificação de Variáveis de Ambiente (Desenvolvimento)");
+  // ⚠️ TEMPORÁRIO: removido guard DEV-only para debug em produção
+  // Restaurar: if (!import.meta.env.DEV) return;
+  console.group("🕵️ Verificação de Variáveis de Ambiente");
+
 
   const variables = [
     'VITE_SUPABASE_URL',
