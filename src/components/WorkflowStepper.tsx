@@ -787,7 +787,7 @@ export function WorkflowStepper({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Fechar menu ao clicar fora (também ao pressionar Escape)
+  // Fechar menu ao clicar fora, ao rolar ou ao pressionar Escape
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
@@ -805,9 +805,22 @@ export function WorkflowStepper({
         setShowTemplateMenu(false); setTemplateMenuPos(null);
       }
     };
+    const scrollHandler = () => {
+      setShowStartChoice(false); setStartChoicePos(null);
+      setShowTemplateMenu(false); setTemplateMenuPos(null);
+    };
+
     document.addEventListener('mousedown', handler);
     document.addEventListener('keydown', keyHandler);
-    return () => document.removeEventListener('mousedown', handler);
+    window.addEventListener('scroll', scrollHandler, { capture: true, passive: true });
+    window.addEventListener('resize', scrollHandler, { passive: true });
+
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
+      window.removeEventListener('scroll', scrollHandler, { capture: true });
+      window.removeEventListener('resize', scrollHandler);
+    };
   }, []);
 
   // Carregar templates ao abrir menu
@@ -968,7 +981,8 @@ export function WorkflowStepper({
     const openStartMenu = () => {
       if (startBtnRef.current) {
         const r = startBtnRef.current.getBoundingClientRect();
-        setStartChoicePos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: 272 });
+        const left = Math.max(8, Math.min(r.left, window.innerWidth - 280));
+        setStartChoicePos({ top: r.bottom + 4, left, width: 272 });
       }
       setShowStartChoice((v) => !v);
       setShowTemplateMenu(false);
@@ -977,7 +991,8 @@ export function WorkflowStepper({
     const openTemplateMenu = () => {
       if (templateBtnRef.current) {
         const r = templateBtnRef.current.getBoundingClientRect();
-        setTemplateMenuPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: 272 });
+        const left = Math.max(8, Math.min(r.left, window.innerWidth - 280));
+        setTemplateMenuPos({ top: r.bottom + 4, left, width: 272 });
       }
       setShowTemplateMenu((v) => !v);
       setShowStartChoice(false);
