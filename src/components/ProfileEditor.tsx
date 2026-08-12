@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, Profile } from '../lib/supabase';
 import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, CreditCard, Trash2 } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
@@ -10,10 +10,12 @@ interface ProfileEditorProps {
 }
 
 export function ProfileEditor({ userId }: ProfileEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [slugInput, setSlugInput] = useState('');
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
@@ -51,19 +53,9 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
 
     loadProfile();
 
-    const handleFocus = () => {
-      if (document.visibilityState === 'visible') {
-        loadProfile();
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleFocus);
-    window.addEventListener('focus', handleFocus);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleFocus);
-      window.removeEventListener('focus', handleFocus);
-    };
+    // Nota: Removido listener de focus/visibilitychange que causava reload do perfil
+    // enquanto a janela de seleção de arquivo estava aberta, interferindo no upload.
+    return () => {};
   }, [userId]);
 
   const loadProfile = async () => {
@@ -343,6 +335,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
 
   const handleUploadImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    console.log('🖼️ [ProfileUpload] onChange acionado. Arquivo:', file ? `${file.name} (${(file.size/1024).toFixed(1)}KB, ${file.type})` : 'NENHUM');
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
@@ -350,44 +343,96 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       return;
     }
 
-    const originalUrl = profile?.profile_image_url;
-    // Criar um preview local instantâneo
     const localPreviewUrl = URL.createObjectURL(file);
-    handleUpdateField('profile_image_url', localPreviewUrl);
-
+    setUploadPreviewUrl(localPreviewUrl);
     setUploading(true);
+
+    // Guardar referência ao target antes de qualquer await
+    const inputTarget = event.target;
+
     try {
-      const uploadService = new ImageUploadService();
-      const result = await uploadService.uploadImage(file, userId, { folder: 'profile' });
+      // PASSO 1: Upload direto para Supabase Storage (sem ImageUploadService)
+      const timestamp = Date.now();
+      const ext = file.type.includes('png') ? 'png' : file.type.includes('webp') ? 'webp' : 'jpg';
+      const fileName = `profile/${userId}/${timestamp}.${ext}`;
+      console.log('🚀 [ProfileUpload] PASSO 1: Uploading para Storage:', { bucket: 'images', fileName, size: file.size, type: file.type });
 
-      if (result.success && result.url) {
-        handleUpdateField('profile_image_url', result.url);
-        
-        // Persistir imediatamente no banco de dados para refletir no perfil público e navegador anônimo
-        const { error: dbError } = await supabase
-          .from('profiles')
-          .update({ profile_image_url: result.url })
-          .eq('id', userId);
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('images')
+        .upload(fileName, file, {
+          upsert: true,
+          contentType: file.type,
+          cacheControl: '3600',
+        });
 
-        if (dbError) {
-          console.warn('Aviso ao salvar foto no perfil:', dbError);
-        }
+      if (storageError) {
+        console.error('❌ [ProfileUpload] ERRO no Storage upload:', storageError);
+        throw new Error(`Erro no Storage: ${storageError.message} (${(storageError as any).statusCode || 'sem código'})`);
+      }
 
-        alert('✅ Foto de perfil atualizada e salva com sucesso!');
+      console.log('✅ [ProfileUpload] PASSO 1 concluído. Storage data:', storageData);
+
+      // PASSO 2: Obter URL pública
+      const { data: urlData } = supabase.storage.from('images').getPublicUrl(fileName);
+      const photoUrl = urlData.publicUrl;
+      console.log('🌐 [ProfileUpload] PASSO 2: URL pública gerada:', photoUrl);
+
+      // PASSO 3: Atualizar banco de dados
+      console.log('💾 [ProfileUpload] PASSO 3: Salvando no banco via upsert...');
+      const { error: dbError } = await supabase
+        .from('profiles')
+        .upsert(
+          { id: userId, profile_image_url: photoUrl, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+
+      if (dbError) {
+        console.error('❌ [ProfileUpload] ERRO no banco (upsert):', dbError);
+        alert(`⚠️ Upload no Storage OK, mas erro ao salvar: ${dbError.message}`);
       } else {
-        throw new Error(result.error || 'Erro ao processar a imagem');
+        console.log('✅ [ProfileUpload] PASSO 3 concluído. Perfil salvo com sucesso!');
+        handleUpdateField('profile_image_url', photoUrl);
+        setUploadPreviewUrl(photoUrl);
+        window.dispatchEvent(new CustomEvent('profile-updated', { detail: { profile_image_url: photoUrl } }));
+        alert('✅ Foto de perfil atualizada com sucesso!');
       }
     } catch (error: any) {
-      console.error('Erro ao fazer upload:', error);
-      alert(`❌ Erro ao fazer upload da imagem: ${error?.message || String(error)}`);
-      // Reverter para a imagem original em caso de erro
-      if (originalUrl) {
-        handleUpdateField('profile_image_url', originalUrl);
-      }
+      console.error('❌ [ProfileUpload] FALHA TOTAL:', error);
+      alert(`❌ Erro ao fazer upload: ${error?.message || String(error)}`);
+      setUploadPreviewUrl(null);
     } finally {
       setUploading(false);
-      if (event.target) event.target.value = '';
       URL.revokeObjectURL(localPreviewUrl);
+      if (inputTarget) inputTarget.value = '';
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!window.confirm('Deseja realmente remover sua foto de perfil?')) return;
+
+    try {
+      console.log('🗑️ [ProfileUpload] Removendo foto de perfil para userId:', userId);
+      handleUpdateField('profile_image_url', null);
+      setUploadPreviewUrl(null);
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(
+          { id: userId, profile_image_url: null, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+
+      if (error) {
+        console.error('❌ [ProfileUpload] Erro ao remover foto no banco:', error);
+        alert(`❌ Erro ao remover foto: ${error.message}`);
+      } else {
+        console.log('✅ [ProfileUpload] Foto removida com sucesso no banco.');
+        window.dispatchEvent(new CustomEvent('profile-updated', { detail: { profile_image_url: null } }));
+        alert('✅ Foto de perfil removida com sucesso!');
+      }
+    } catch (err: any) {
+      console.error('❌ [ProfileUpload] Exceção ao remover foto:', err);
+      alert('❌ Erro ao remover foto de perfil');
     }
   };
 
@@ -403,6 +448,8 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
     return <div>Erro ao carregar perfil</div>;
   }
 
+  const activePhotoUrl = uploadPreviewUrl || profile.profile_image_url;
+
   return (
     <div className="space-y-6">
       <div>
@@ -415,38 +462,62 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
       <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none border border-transparent dark:border-[rgba(255,255,255,.05)] p-6 space-y-6">
         <div className="flex items-start gap-6">
           <div className="flex flex-col items-center gap-3">
-            {profile.profile_image_url ? (
+            {activePhotoUrl ? (
               <img
-                src={profile.profile_image_url}
+                src={activePhotoUrl}
                 alt="Foto de perfil"
-                className="w-32 h-32 rounded-full object-cover border-4 border-blue-600"
+                className="w-32 h-32 rounded-full object-cover border-4 border-blue-600 shadow-md"
               />
             ) : (
-              <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-300">
-                <User className="w-16 h-16 text-gray-400" />
+              <div className="w-32 h-32 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border-4 border-gray-300 dark:border-gray-700 shadow-inner">
+                <User className="w-16 h-16 text-gray-400 dark:text-gray-500" />
               </div>
             )}
 
-            <label
-              htmlFor="profile-photo-input-original"
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer text-sm font-medium"
-            >
-              <Upload className="w-4 h-4" />
-              {uploading ? 'Enviando...' : 'Alterar Foto'}
-            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  console.log('🖼️ [ProfileUpload] Botão "Alterar Foto" clicado, limpando seletor...');
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                    fileInputRef.current.click();
+                  }
+                }}
+                disabled={uploading}
+                className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 cursor-pointer text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4" />
+                {uploading ? 'Enviando...' : 'Alterar Foto'}
+              </button>
+              {activePhotoUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  disabled={uploading}
+                  className="flex items-center gap-1 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 px-3 py-2 rounded-lg text-xs font-medium transition-colors border border-red-500/30 disabled:opacity-50"
+                  title="Remover Foto"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Remover
+                </button>
+              )}
+            </div>
             <input
+              ref={fileInputRef}
               id="profile-photo-input-original"
               type="file"
               accept="image/*"
-              onClick={(e) => (e.currentTarget.value = '')}
-              onChange={handleUploadImage}
-              disabled={uploading}
+              onChange={(e) => {
+                console.log('🖼️ [ProfileUpload] Evento onChange disparado no input. Arquivos:', e.target.files);
+                handleUploadImage(e);
+              }}
               className="hidden"
             />
             <p className="text-xs text-gray-500 text-center">
-              PNG, JPG ou WEBP
+              PNG, JPG, WEBP ou HEIC
               <br />
-              Máximo 5MB
+              Máximo 10MB
             </p>
           </div>
 

@@ -54,31 +54,19 @@ export function initGlobalLogger() {
   isInitialized = true;
 
   console.log = (message?: any, ...optionalParams: any[]) => {
-    if (shouldShowLogs()) {
-      originalLog(message, ...optionalParams);
-    }
+    originalLog(message, ...optionalParams);
   };
 
   console.info = (message?: any, ...optionalParams: any[]) => {
-    if (shouldShowLogs()) {
-      originalInfo(message, ...optionalParams);
-    }
+    originalInfo(message, ...optionalParams);
   };
 
   console.warn = (message?: any, ...optionalParams: any[]) => {
-    if (shouldShowLogs()) {
-      originalWarn(message, ...optionalParams);
-    } else {
-      originalWarn(message, ...optionalParams.map(obfuscate));
-    }
+    originalWarn(message, ...optionalParams);
   };
 
   console.error = (message?: any, ...optionalParams: any[]) => {
-    if (shouldShowLogs()) {
-      originalError(message, ...optionalParams);
-    } else {
-      originalError(message, ...optionalParams.map(obfuscate));
-    }
+    originalError(message, ...optionalParams);
   };
 }
 

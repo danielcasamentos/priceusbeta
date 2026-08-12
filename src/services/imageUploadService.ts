@@ -81,21 +81,27 @@ export class ImageUploadService {
     options: Partial<UploadOptions> = {}
   ): Promise<UploadResult> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
+    console.log('📸 [ImageUploadService] uploadImage INICIADO:', { fileName: file.name, fileSize: file.size, fileType: file.type, userId, options: opts });
 
     try {
       // FASE 1: VALIDAÇÃO
       this.updateProgress('validating', 10, 'Validando arquivo...');
       const validationError = this.validateFile(file, opts);
       if (validationError) {
+        console.warn('⚠️ [ImageUploadService] Falha na validação do arquivo:', validationError);
         return { success: false, error: validationError };
       }
+      console.log('✅ [ImageUploadService] Validação concluída com sucesso.');
 
       // FASE 2: COMPRESSÃO
       this.updateProgress('compressing', 30, 'Otimizando imagem...');
+      console.log('🔄 [ImageUploadService] Iniciando compressão da imagem...');
       const { blob, metadata } = await this.compressImage(file, opts);
+      console.log('✅ [ImageUploadService] Compressão concluída:', metadata);
 
       // FASE 3: UPLOAD COM RETRY
       this.updateProgress('uploading', 60, 'Enviando para servidor...');
+      console.log('🚀 [ImageUploadService] Enviando para Supabase Storage...');
       const uploadResult = await this.uploadWithRetry(
         blob,
         userId,
@@ -105,6 +111,7 @@ export class ImageUploadService {
       );
 
       if (!uploadResult.success) {
+        console.error('❌ [ImageUploadService] Falha no uploadWithRetry:', uploadResult.error);
         return uploadResult;
       }
 
@@ -118,6 +125,7 @@ export class ImageUploadService {
 
       // FASE 5: COMPLETO
       this.updateProgress('complete', 100, 'Upload concluído!');
+      console.log('🎉 [ImageUploadService] Upload concluído com sucesso. URL:', uploadResult.url);
 
       return {
         success: true,
@@ -126,7 +134,7 @@ export class ImageUploadService {
         metadata,
       };
     } catch (error) {
-      console.error('❌ Erro no upload:', error);
+      console.error('❌ [ImageUploadService] EXCEÇÃO no upload:', error);
       this.updateProgress('error', 0, 'Erro ao fazer upload');
 
       return {
@@ -207,29 +215,46 @@ export class ImageUploadService {
           ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
-          // 💡 Sempre converte para WebP: menor tamanho, melhor qualidade visual
-          // WebP é 25-35% menor que JPEG e 60-80% menor que PNG
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) {
-                reject(new Error('Falha ao comprimir imagem'));
-                return;
+          const getCanvasBlob = (mimeType: string): Promise<Blob | null> => {
+            return new Promise((res) => {
+              try {
+                canvas.toBlob((b) => res(b), mimeType, opts.quality);
+              } catch {
+                res(null);
               }
+            });
+          };
 
-              const metadata: ImageMetadata = {
-                originalSize: file.size,
-                compressedSize: blob.size,
-                width,
-                height,
-                format: 'image/webp',
-                compressionRatio: ((1 - blob.size / file.size) * 100),
-              };
+          (async () => {
+            let blob = await getCanvasBlob('image/webp');
+            let format = 'image/webp';
 
-              resolve({ blob, metadata });
-            },
-            'image/webp',  // 💡 Saída sempre em WebP independente do input
-            opts.quality
-          );
+            if (!blob) {
+              blob = await getCanvasBlob('image/jpeg');
+              format = 'image/jpeg';
+            }
+
+            if (!blob) {
+              blob = await getCanvasBlob('image/png');
+              format = 'image/png';
+            }
+
+            if (!blob) {
+              reject(new Error('Falha ao gerar arquivo de imagem no navegador'));
+              return;
+            }
+
+            const metadata: ImageMetadata = {
+              originalSize: file.size,
+              compressedSize: blob.size,
+              width,
+              height,
+              format,
+              compressionRatio: ((1 - blob.size / file.size) * 100),
+            };
+
+            resolve({ blob, metadata });
+          })();
         } catch (error) {
           reject(error);
         }
@@ -259,14 +284,15 @@ export class ImageUploadService {
     attempt = 1
   ): Promise<UploadResult> {
     try {
-      // 💡 Extensão sempre .webp (saída convertida)
-      const fileExt = 'webp';
+      const fileExt = metadata.format === 'image/jpeg' ? 'jpg' : metadata.format === 'image/png' ? 'png' : 'webp';
       const timestamp = Date.now();
       const randomSuffix = Math.random().toString(36).substring(7);
       const fileName = `${opts.folder}/${userId}/${timestamp}-${randomSuffix}.${fileExt}`;
 
+      console.log(`📡 [ImageUploadService] (Tentativa ${attempt}/${MAX_RETRIES}) Uploading blob para Supabase Storage:`, { fileName, blobSize: blob.size, contentType: metadata.format });
+
       // Upload para Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('images')
         .upload(fileName, blob, {
           upsert: true,
@@ -275,16 +301,19 @@ export class ImageUploadService {
         });
 
       if (uploadError) {
+        console.error(`❌ [ImageUploadService] Erro no Supabase Storage upload:`, uploadError);
         throw uploadError;
       }
+
+      console.log(`✅ [ImageUploadService] Arquivo enviado ao Storage. Resposta:`, uploadData);
 
       // Obter URL pública limpa (sem query params)
       const { data: publicUrlData } = supabase.storage
         .from('images')
         .getPublicUrl(fileName);
 
-      // 🔥 CORREÇÃO: Retornar URL limpa sem ?v= (cache-busting feito no frontend)
       const cleanUrl = publicUrlData.publicUrl;
+      console.log(`🌐 [ImageUploadService] URL pública gerada:`, cleanUrl);
 
       return {
         success: true,

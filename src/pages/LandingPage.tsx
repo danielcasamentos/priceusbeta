@@ -168,7 +168,7 @@ export default function LandingPage() {
         <AppInstallBanner variant="topbar" />
         <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 24px', display:'flex', justifyContent:'space-between', alignItems:'center', height:64 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <img src="./Logo Price Us.png" alt="PriceUs" style={{ height:34, width:'auto' }} />
+            <img src="/Logo Price Us.png" alt="PriceUs" style={{ height:34, width:'auto' }} />
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:32 }} className="hidden-mobile">
             {['#sistema','#jornada','#roi','#planos'].map((href, i) => (

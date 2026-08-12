@@ -158,7 +158,7 @@ export function SeasonalPricingManager({
       const { error } = await supabase.from('paises').insert({
         user_id: userId,
         nome,
-        codigo: codigo,
+        codigo_pais: codigo,
       });
 
       if (error) {
@@ -204,7 +204,6 @@ export function SeasonalPricingManager({
         user_id: userId,
         pais_id: selectedPais,
         nome,
-        codigo: siglaUpper,
         sigla: siglaUpper,
       });
 

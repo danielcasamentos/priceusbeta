@@ -1493,7 +1493,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white shadow-xl">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
-            <img src="./logo-priceus.png" alt="PriceU$" className="h-8 w-auto object-contain" />
+            <img src="/logo-priceus.png" alt="PriceU$" className="h-8 w-auto object-contain" />
             <span className="text-xs font-black tracking-wider text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-lg">CULLING IA</span>
           </div>
           <div className="flex items-center gap-3">

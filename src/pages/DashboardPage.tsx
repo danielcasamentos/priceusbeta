@@ -71,15 +71,31 @@ export function DashboardPage() {
   // Busca o nome profissional e foto do perfil
   useEffect(() => {
     if (!user?.id) return;
-    supabase
-      .from('profiles')
-      .select('nome_profissional, profile_image_url')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.nome_profissional) setUserName(data.nome_profissional);
-        if (data?.profile_image_url) setUserPhoto(data.profile_image_url);
-      });
+
+    const fetchProfile = () => {
+      supabase
+        .from('profiles')
+        .select('nome_profissional, profile_image_url')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.nome_profissional) setUserName(data.nome_profissional);
+          if (data?.profile_image_url) setUserPhoto(data.profile_image_url);
+        });
+    };
+
+    fetchProfile();
+
+    const handleProfileUpdated = (e: any) => {
+      if (e?.detail?.profile_image_url) {
+        setUserPhoto(e.detail.profile_image_url);
+      } else {
+        fetchProfile();
+      }
+    };
+
+    window.addEventListener('profile-updated', handleProfileUpdated);
+    return () => window.removeEventListener('profile-updated', handleProfileUpdated);
   }, [user?.id]);
 
   // Sincroniza o estado com a URL quando a página mudar
@@ -188,14 +204,14 @@ export function DashboardPage() {
           {/* PriceUs Logo no centro exato da barra superior (também arrastável) */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none">
             <img
-              src="./Logo Price Us Dark.png"
+              src="/Logo Price Us Dark.png"
               alt="Price Us"
-              className="h-[50px] sm:h-[63px] w-auto hidden dark:block pointer-events-auto"
+              className="h-[40px] sm:h-[50px] w-auto hidden dark:block pointer-events-auto object-contain"
             />
             <img
-              src="./logo-priceus.png"
+              src="/logo-priceus.png"
               alt="Price Us"
-              className="h-[50px] sm:h-[63px] w-auto dark:hidden block pointer-events-auto"
+              className="h-[40px] sm:h-[50px] w-auto dark:hidden block pointer-events-auto object-contain"
             />
           </div>
 
