@@ -3082,8 +3082,8 @@ const ProducaoTab = React.memo(function ProducaoTab({
   onLeadFinalizado,
   onSolicitarAvaliacao: _onSolicitarAvaliacao = undefined,
 }: ProducaoTabProps) {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); // asc = mais próximo primeiro, desc = mais distante primeiro
+  const [cols, setCols] = useState<1 | 2 | 3>(2);  // 1=lista, 2=padrão desktop, 3=compacto
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   if (leads.length === 0) {
     return (
@@ -3113,10 +3113,12 @@ const ProducaoTab = React.memo(function ProducaoTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between bg-white dark:bg-[#0a1628] p-3 rounded-xl border border-gray-200 dark:border-white/[0.07] shadow-sm">
+      {/* ── Barra de controles ─────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#0a1628] p-3 rounded-xl border border-gray-200 dark:border-white/[0.07] shadow-sm">
+        {/* Ordenação */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">Ordenar por data:</span>
-          <button 
+          <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">Ordenar:</span>
+          <button
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/[0.05] text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-white/[0.1] transition-colors"
           >
@@ -3124,35 +3126,67 @@ const ProducaoTab = React.memo(function ProducaoTab({
             {sortOrder === 'asc' ? 'Mais Próximo' : 'Mais Distante'}
           </button>
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-[#07101f] p-1 rounded-lg">
-          <button 
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-          >
-            <List className="w-4 h-4" />
-          </button>
+
+        {/* Controle de colunas (slider) */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 hidden sm:block">
+            {cols === 1 ? 'Lista' : `${cols} col${cols > 1 ? 's' : ''}`}
+          </span>
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-[#07101f] p-1 rounded-lg">
+            {([1, 2, 3] as const).map((n) => (
+              <button
+                key={n}
+                onClick={() => setCols(n)}
+                title={n === 1 ? 'Lista' : `${n} colunas`}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${
+                  cols === n
+                    ? 'bg-white dark:bg-[#1a2b42] text-purple-600 dark:text-purple-400 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {n === 1 ? (
+                  <span className="flex gap-0.5 items-center"><List className="w-3.5 h-3.5" /></span>
+                ) : n === 2 ? (
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-3.5 bg-current rounded-sm" />
+                    <span className="w-1 h-3.5 bg-current rounded-sm" />
+                  </span>
+                ) : (
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-3.5 bg-current rounded-sm" />
+                    <span className="w-1 h-3.5 bg-current rounded-sm" />
+                    <span className="w-1 h-3.5 bg-current rounded-sm" />
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-4"}>
+      {/* ── Grade de cards ──────────────────────────────────── */}
+      <div
+        className={`grid gap-4 ${
+          cols === 1
+            ? 'grid-cols-1'
+            : cols === 2
+            ? 'grid-cols-1 md:grid-cols-2'
+            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+        }`}
+      >
         {sortedLeads.map((lead) => (
-        <ProducaoCard
-          key={lead.id}
-          lead={lead}
-          userId={userId}
-          templateName={templates[lead.template_id]?.nome_template || ''}
-          formatCurrency={formatCurrency}
-          formatDate={formatDate}
-          onWorkflowChange={onWorkflowChange}
-          onLeadFinalizado={onLeadFinalizado}
-        />
-      ))}
+          <ProducaoCard
+            key={lead.id}
+            lead={lead}
+            userId={userId}
+            templateName={templates[lead.template_id]?.nome_template || ''}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            onWorkflowChange={onWorkflowChange}
+            onLeadFinalizado={onLeadFinalizado}
+            compact={cols >= 2}
+          />
+        ))}
       </div>
     </div>
   );
@@ -3167,6 +3201,7 @@ interface ProducaoCardProps {
   formatDate: (v: string) => string;
   onWorkflowChange: (leadId: string, workflow: any[]) => void;
   onLeadFinalizado: (lead: any) => void;
+  compact?: boolean;  // true quando em grid 2-3 colunas — card usa altura controlada
 }
 
 function ProducaoCard({
@@ -3177,6 +3212,7 @@ function ProducaoCard({
   formatDate,
   onWorkflowChange,
   onLeadFinalizado,
+  compact = false,
 }: ProducaoCardProps) {
   const workflow: WorkflowStep[] = Array.isArray(lead.workflow) ? lead.workflow : [];
 
@@ -3189,9 +3225,11 @@ function ProducaoCard({
   const emailLink = lead.email_cliente ? `mailto:${lead.email_cliente}` : null;
 
   return (
-    <div className="bg-white dark:bg-[#0a1628] rounded-xl border border-gray-200 dark:border-white/[0.07] shadow-sm hover:shadow-md dark:hover:shadow-none transition-shadow overflow-hidden">
+    <div className={`bg-white dark:bg-[#0a1628] rounded-xl border border-gray-200 dark:border-white/[0.07] shadow-sm hover:shadow-md dark:hover:shadow-none transition-shadow overflow-hidden flex flex-col ${
+      compact ? 'max-h-[600px]' : ''
+    }`}>
       {/* Cabeçalho do card */}
-      <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
+      <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 flex-shrink-0">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-gray-900 dark:text-white text-base truncate">
@@ -3236,8 +3274,8 @@ function ProducaoCard({
         </div>
       </div>
 
-      {/* WorkflowStepper */}
-      <div className="px-5 pb-4">
+      {/* WorkflowStepper — scrollável quando card é compacto */}
+      <div className={`px-5 pb-4 ${compact ? 'overflow-y-auto flex-1' : ''}`}>
         <WorkflowStepper
           leadId={lead.id}
           leadName={lead.nome_cliente || 'Cliente'}
