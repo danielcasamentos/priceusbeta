@@ -106,8 +106,8 @@ export function PriceusAssistantDrawer() {
 
       {/* 📐 DRAWER SLIDE-OVER DA DIREITA */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-md bg-slate-900 border-l border-slate-800 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-[200] bg-slate-950/70 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-md bg-slate-900 border-l border-slate-800 flex flex-col h-[100dvh] shadow-2xl animate-in slide-in-from-right duration-300">
             {/* Header do Drawer */}
             <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -132,7 +132,7 @@ export function PriceusAssistantDrawer() {
             </div>
 
             {/* Feed de Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/60">
+            <div className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-4 space-y-4 bg-slate-900/60">
               {messages.map((m) => (
                 <div
                   key={m.id}
@@ -198,7 +198,7 @@ export function PriceusAssistantDrawer() {
             </div>
 
             {/* Input de Pergunta */}
-            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
+            <div className="p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:pb-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
               <input
                 type="text"
                 value={input}
