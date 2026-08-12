@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 /** Gera UUID v4 usando a API nativa do browser — sem dependência externa */
 const uuidv4 = () => crypto.randomUUID();
@@ -751,8 +752,13 @@ export function WorkflowStepper({
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showStartChoice, setShowStartChoice] = useState(false);
   const [highlightedStepId, setHighlightedStepId] = useState<string | null>(null);
+  // Posições fixas para os popups (evita clip por overflow:hidden nos cards)
+  const [startChoicePos, setStartChoicePos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const templateMenuRef = useRef<HTMLDivElement>(null);
   const startMenuRef = useRef<HTMLDivElement>(null);
+  const startBtnRef = useRef<HTMLButtonElement>(null);
+  const templateBtnRef = useRef<HTMLButtonElement>(null);
   const stepRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [searchParams] = useSearchParams();
 
@@ -781,17 +787,26 @@ export function WorkflowStepper({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Fechar menu ao clicar fora
+  // Fechar menu ao clicar fora (também ao pressionar Escape)
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
         setShowTemplateMenu(false);
+        setTemplateMenuPos(null);
       }
       if (startMenuRef.current && !startMenuRef.current.contains(e.target as Node)) {
         setShowStartChoice(false);
+        setStartChoicePos(null);
+      }
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowStartChoice(false); setStartChoicePos(null);
+        setShowTemplateMenu(false); setTemplateMenuPos(null);
       }
     };
     document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
@@ -950,87 +965,109 @@ export function WorkflowStepper({
 
   // ── Workflow vazio ─────────────────────────────────────
   if (workflow.length === 0 && !expanded) {
+    const openStartMenu = () => {
+      if (startBtnRef.current) {
+        const r = startBtnRef.current.getBoundingClientRect();
+        setStartChoicePos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: 272 });
+      }
+      setShowStartChoice((v) => !v);
+      setShowTemplateMenu(false);
+    };
+
+    const openTemplateMenu = () => {
+      if (templateBtnRef.current) {
+        const r = templateBtnRef.current.getBoundingClientRect();
+        setTemplateMenuPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: 272 });
+      }
+      setShowTemplateMenu((v) => !v);
+      setShowStartChoice(false);
+      loadTemplates();
+    };
+
     return (
-      <div className="mt-3 p-3 rounded-xl border-2 border-dashed border-gray-200 dark:border-white/10 flex items-center justify-between gap-3">
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          Nenhum workflow iniciado
-        </div>
-        <div className="flex items-center gap-2">
-          <div ref={startMenuRef} className="relative">
-            <button
-              onClick={() => setShowStartChoice(!showStartChoice)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
-            </button>
-            
-            {showStartChoice && (
-              <div className="absolute bottom-full right-0 mb-1 w-64 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden py-1 text-left">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setShowStartChoice(false);
-                    await handleIniciarWorkflow();
-                  }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors border-b border-gray-100 dark:border-white/5"
-                >
-                  <span className="text-sm mt-0.5">🪄</span>
-                  <div>
-                    <div className="font-bold text-blue-600 dark:text-blue-400">Sugerir Inteligente</div>
-                    <div className="text-[10px] text-gray-400 font-normal mt-0.5">Analisa os produtos e gera etapas inteligentes automaticamente.</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStartChoice(false);
-                    setExpanded(true);
-                    updateWorkflow([{
-                      id: uuidv4(),
-                      label: 'Nova etapa',
-                      description: 'Descreva a tarefa...',
-                      deadline: '',
-                      status: 'pendente',
-                      duracao_minutos: null,
-                      horario_inicio: null,
-                      ambiente: 'externo',
-                    }]);
-                  }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors"
-                >
-                  <span className="text-sm mt-0.5">📝</span>
-                  <div>
-                    <div className="font-bold">Começar Vazio / Personalizado</div>
-                    <div className="text-[10px] text-gray-400 font-normal mt-0.5">Inicie do zero com uma única etapa personalizada.</div>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-          <div ref={templateMenuRef} className="relative">
-            <button
-              onClick={() => { setShowTemplateMenu(!showTemplateMenu); loadTemplates(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
-            >
-              <FolderOpen className="w-3.5 h-3.5" /> Usar Modelo
-            </button>
-            {showTemplateMenu && (
-              <TemplateMenu 
-                templates={templates} 
-                onApply={applyTemplate} 
-                onDelete={deleteTemplate} 
-                onClose={() => setShowTemplateMenu(false)} 
-              />
-            )}
-          </div>
+      <div className="mt-3 p-3 rounded-xl border-2 border-dashed border-gray-200 dark:border-white/10">
+        {/* Linha 1: rótulo + botão principal */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">Nenhum workflow iniciado</span>
           <button
-            onClick={() => { setShowManageTemplates(true); loadTemplates(); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
-            title="Gerenciar Modelos de Workflow"
+            ref={startBtnRef}
+            onClick={openStartMenu}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap"
           >
-            ⚙️ Gerenciar Modelos
+            <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
           </button>
         </div>
+
+        {/* Linha 2: botões secundários */}
+        <div className="flex items-center gap-2">
+          <button
+            ref={templateBtnRef}
+            onClick={openTemplateMenu}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
+          >
+            <FolderOpen className="w-3.5 h-3.5" /> Usar Modelo
+          </button>
+          <button
+            onClick={() => { setShowManageTemplates(true); loadTemplates(); }}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
+            title="Gerenciar Modelos de Workflow"
+          >
+            ⚙️ Modelos
+          </button>
+        </div>
+
+        {/* Popup "Iniciar Workflow" — fixed para não ser recortado pelo card */}
+        {showStartChoice && startChoicePos && createPortal(
+          <div
+            ref={startMenuRef}
+            style={{ position: 'fixed', top: startChoicePos.top, left: startChoicePos.left, width: startChoicePos.width, zIndex: 9999 }}
+            className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden py-1 text-left"
+          >
+            <button
+              type="button"
+              onClick={async () => { setShowStartChoice(false); await handleIniciarWorkflow(); }}
+              className="w-full text-left px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors border-b border-gray-100 dark:border-white/5"
+            >
+              <span className="text-sm mt-0.5">🪄</span>
+              <div>
+                <div className="font-bold text-blue-600 dark:text-blue-400">Sugerir Inteligente</div>
+                <div className="text-[10px] text-gray-400 font-normal mt-0.5">Analisa os produtos e gera etapas inteligentes automaticamente.</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowStartChoice(false);
+                setExpanded(true);
+                updateWorkflow([{ id: uuidv4(), label: 'Nova etapa', description: 'Descreva a tarefa...', deadline: '', status: 'pendente', duracao_minutos: null, horario_inicio: null, ambiente: 'externo' }]);
+              }}
+              className="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors"
+            >
+              <span className="text-sm mt-0.5">📝</span>
+              <div>
+                <div className="font-bold">Começar Vazio / Personalizado</div>
+                <div className="text-[10px] text-gray-400 font-normal mt-0.5">Inicie do zero com uma única etapa personalizada.</div>
+              </div>
+            </button>
+          </div>,
+          document.body
+        )}
+
+        {/* Popup "Usar Modelo" — fixed para não ser recortado pelo card */}
+        {showTemplateMenu && templateMenuPos && createPortal(
+          <div
+            ref={templateMenuRef}
+            style={{ position: 'fixed', top: templateMenuPos.top, left: templateMenuPos.left, width: templateMenuPos.width, zIndex: 9999 }}
+          >
+            <TemplateMenu
+              templates={templates}
+              onApply={(t) => { applyTemplate(t); setTemplateMenuPos(null); setShowTemplateMenu(false); }}
+              onDelete={deleteTemplate}
+              onClose={() => { setShowTemplateMenu(false); setTemplateMenuPos(null); }}
+            />
+          </div>,
+          document.body
+        )}
       </div>
     );
   }
@@ -1303,7 +1340,7 @@ function TemplateMenu({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute bottom-full left-0 mb-1 w-64 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
+    <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden">
       <div className="px-3 py-2 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Seus Modelos</span>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
