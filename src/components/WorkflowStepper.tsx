@@ -1001,37 +1001,29 @@ export function WorkflowStepper({
 
     return (
       <div className="mt-3 p-3 rounded-xl border-2 border-dashed border-gray-200 dark:border-white/10">
-        {/* Linha 1: rótulo + botão principal */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Nenhum workflow iniciado</span>
-          <button
-            ref={startBtnRef}
-            onClick={openStartMenu}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
-          </button>
+        {/* Botões limpos e bem alinhados */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Nenhum workflow iniciado</span>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              ref={startBtnRef}
+              onClick={openStartMenu}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5" /> Iniciar Workflow
+            </button>
+
+            <button
+              ref={templateBtnRef}
+              onClick={openTemplateMenu}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
+            >
+              <FolderOpen className="w-3.5 h-3.5" /> Usar Modelo
+            </button>
+          </div>
         </div>
 
-        {/* Linha 2: botões secundários */}
-        <div className="flex items-center gap-2">
-          <button
-            ref={templateBtnRef}
-            onClick={openTemplateMenu}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
-          >
-            <FolderOpen className="w-3.5 h-3.5" /> Usar Modelo
-          </button>
-          <button
-            onClick={() => { setShowManageTemplates(true); loadTemplates(); }}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg transition-colors"
-            title="Gerenciar Modelos de Workflow"
-          >
-            ⚙️ Modelos
-          </button>
-        </div>
-
-        {/* Popup "Iniciar Workflow" — fixed para não ser recortado pelo card */}
+        {/* Popup "Iniciar Workflow" — fixed via Portal */}
         {showStartChoice && startChoicePos && createPortal(
           <div
             ref={startMenuRef}
@@ -1068,7 +1060,7 @@ export function WorkflowStepper({
           document.body
         )}
 
-        {/* Popup "Usar Modelo" — fixed para não ser recortado pelo card */}
+        {/* Popup "Usar Modelo" — fixed via Portal */}
         {showTemplateMenu && templateMenuPos && createPortal(
           <div
             ref={templateMenuRef}
@@ -1079,6 +1071,7 @@ export function WorkflowStepper({
               onApply={(t) => { applyTemplate(t); setTemplateMenuPos(null); setShowTemplateMenu(false); }}
               onDelete={deleteTemplate}
               onClose={() => { setShowTemplateMenu(false); setTemplateMenuPos(null); }}
+              onManageTemplates={() => { setShowManageTemplates(true); loadTemplates(); }}
             />
           </div>,
           document.body
@@ -1348,11 +1341,13 @@ function TemplateMenu({
   onApply,
   onDelete,
   onClose,
+  onManageTemplates,
 }: {
   templates: WorkflowTemplate[];
   onApply: (t: WorkflowTemplate) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  onManageTemplates?: () => void;
 }) {
   return (
     <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden">
@@ -1389,6 +1384,16 @@ function TemplateMenu({
             </li>
           ))}
         </ul>
+      )}
+      {onManageTemplates && (
+        <div className="p-1.5 border-t border-gray-100 dark:border-white/5 bg-gray-50/80 dark:bg-white/[0.02]">
+          <button
+            onClick={() => { onClose(); onManageTemplates(); }}
+            className="w-full text-center text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 py-1.5 rounded-lg transition-colors"
+          >
+            ⚙️ Gerenciar / Criar Modelos
+          </button>
+        </div>
       )}
     </div>
   );
