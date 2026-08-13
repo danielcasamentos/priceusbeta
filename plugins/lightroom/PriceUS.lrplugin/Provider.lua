@@ -774,13 +774,18 @@ function provider.processRenderedPhotos( functionContext, exportContext )
     -- Renova token se necessário durante exportações longas (> 1 hora)
     token = ensureValidToken( propertyTable ) or token
 
-    -- Verifica se a foto já consta como publicada no servidor
-    local targetPath = rendition.destinationPath
-    local leafName   = targetPath and LrPathUtils.leafName( targetPath ) or nil
+    -- Obtém o nome da foto direto dos metadados do catálogo do Lightroom
+    local catalogFileName = nil
+    if rendition.photo then
+      local rawName = rendition.photo:getFormattedMetadata( 'fileName' )
+      if rawName and rawName ~= '' then
+        catalogFileName = LrPathUtils.removeExtension( rawName ) .. ".jpg"
+      end
+    end
 
-    if leafName and existingPhotosMap[leafName] then
-      logMsg( "Foto #" .. i .. " (" .. leafName .. ") já consta no servidor. Marcando como publicada..." )
-      rendition:recordPublishedPhotoId( leafName )
+    if catalogFileName and existingPhotosMap[catalogFileName] then
+      logMsg( "Foto #" .. i .. " (" .. catalogFileName .. ") já consta no servidor. Marcando como publicada..." )
+      rendition:recordPublishedPhotoId( catalogFileName )
       count = count + 1
     else
       logMsg( "Renderizando foto #" .. i .. "..." )
