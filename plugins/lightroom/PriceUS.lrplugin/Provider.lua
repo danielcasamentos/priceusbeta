@@ -787,7 +787,10 @@ function provider.processRenderedPhotos( functionContext, exportContext )
         end
       end
 
+      -- Excluir arquivo temporário exportado pelo Lightroom e liberar memória RAM do Lua
       LrFileUtils.delete( pathOrMessage )
+      photoData = nil
+      collectgarbage( "collect" )
     else
       if tostring(pathOrMessage):find("canceled") then
         logMsg( "Exportação de fotos cancelada no Lightroom." )
