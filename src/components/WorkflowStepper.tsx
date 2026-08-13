@@ -978,11 +978,29 @@ export function WorkflowStepper({
 
   // ── Workflow vazio ─────────────────────────────────────
   if (workflow.length === 0 && !expanded) {
+    const calcSmartPopupPosition = (el: HTMLElement | null, menuHeight: number) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const width = 272;
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+
+      const spaceBelow = window.innerHeight - r.bottom;
+      const spaceAbove = r.top;
+
+      let top: number;
+      // Se não houver espaço suficiente abaixo e houver espaço acima, abre para CIMA
+      if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+        top = Math.max(8, r.top - menuHeight - 6);
+      } else {
+        top = r.bottom + 6;
+      }
+
+      return { top, left, width };
+    };
+
     const openStartMenu = () => {
       if (startBtnRef.current) {
-        const r = startBtnRef.current.getBoundingClientRect();
-        const left = Math.max(8, Math.min(r.left, window.innerWidth - 280));
-        setStartChoicePos({ top: r.bottom + 4, left, width: 272 });
+        setStartChoicePos(calcSmartPopupPosition(startBtnRef.current, 130));
       }
       setShowStartChoice((v) => !v);
       setShowTemplateMenu(false);
@@ -990,9 +1008,7 @@ export function WorkflowStepper({
 
     const openTemplateMenu = () => {
       if (templateBtnRef.current) {
-        const r = templateBtnRef.current.getBoundingClientRect();
-        const left = Math.max(8, Math.min(r.left, window.innerWidth - 280));
-        setTemplateMenuPos({ top: r.bottom + 4, left, width: 272 });
+        setTemplateMenuPos(calcSmartPopupPosition(templateBtnRef.current, 260));
       }
       setShowTemplateMenu((v) => !v);
       setShowStartChoice(false);
