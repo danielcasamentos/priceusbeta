@@ -478,10 +478,15 @@ export function PublicGalleryView({
                       >
                         {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : <Heart className="w-4 h-4" />}
                       </button>
-
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-4 flex items-end justify-between">
                         <span className="text-xs text-white font-semibold truncate">{photo.file_name}</span>
-                        <span className="p-2 rounded-xl bg-white/20 backdrop-blur-md text-white hover:bg-white/40 transition-colors">
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadSinglePhoto(photo, false);
+                          }}
+                          className="p-2 rounded-xl bg-white/20 backdrop-blur-md text-white hover:bg-white/40 transition-colors"
+                        >
                           <Download className="w-4 h-4" />
                         </span>
                       </div>
@@ -490,7 +495,10 @@ export function PublicGalleryView({
                 })}
               </div>
             )}
-          </main>
+          </>
+        );
+      })()}
+    </main>
 
           {/* Barra Flutuante de Seleção / Proofing no Rodapé */}
           {selectedPhotoIds.length > 0 && (
