@@ -896,7 +896,10 @@ function provider.processRenderedPhotos( functionContext, exportContext )
 
         -- GARANTIA AUTOMÁTICA E INCONDICIONAL DE DELEÇÃO DO ARQUIVO TEMPORÁRIO E FAXINA DA RAM LUA
         LrFileUtils.delete( pathOrMessage )
-        collectgarbage( "collect" )
+        if type( collectgarbage ) == 'function' then
+          pcall( collectgarbage, 'collect' )
+        end
+        LrTasks.yield()
       else
         if tostring(pathOrMessage):find("canceled") then
           logMsg( "Exportação de fotos cancelada no Lightroom." )
