@@ -361,21 +361,21 @@ function provider.sectionsForTopOfDialog( f, propertyTable )
 end
 
 -- ══════════════════════════════════════════════════════════════
--- Utilitário: garante token válido (renova apenas quando necessário)
+-- Utilitário: garante token válido (renova automaticamente se expirado)
 -- ══════════════════════════════════════════════════════════════
-local function ensureValidToken( propertyTable )
+local function ensureValidToken( propertyTable, forceRefresh )
   if not propertyTable then return nil end
   local token        = propertyTable.priceus_token or ''
   local refreshToken = propertyTable.priceus_refresh_token or ''
   local expiresAt    = propertyTable.priceus_token_expires or 0
   local now          = LrDate.currentTime()
 
-  -- 1. Se temos um token e ele ainda está válido (com folga de 5 minutos), usa diretamente sem fazer HTTP
-  if token ~= '' and expiresAt > 0 and now < ( expiresAt - 300 ) then
+  -- 1. Se temos um token válido e não estamos forçando renovação (com folga de 5 minutos), usa diretamente
+  if not forceRefresh and token ~= '' and expiresAt > 0 and now < ( expiresAt - 300 ) then
     return token
   end
 
-  -- 2. Se o token expirou (ou está perto de expirar) e temos refresh_token, renova
+  -- 2. Tentar renovar via refresh_token se disponível
   if refreshToken ~= '' then
     local body = '{"refresh_token":"' .. jsonEscape( refreshToken ) .. '"}'
     local response = LrHttp.post(
@@ -397,12 +397,42 @@ local function ensureValidToken( propertyTable )
         if newRefresh and newRefresh ~= '' then
           propertyTable.priceus_refresh_token = newRefresh
         end
+        logMsg( "✓ Token da sessão do Lightroom renovado via refresh_token!" )
         return newToken
       end
     end
   end
 
-  -- 3. Fallback: se a renovação falhar por oscilação de rede, reutiliza o token existente se houver
+  -- 3. Auto-login silencioso via email e senha salvos se a sessão expirou completamente
+  local email    = propertyTable.priceus_email or ''
+  local password = propertyTable.priceus_password or ''
+  if email ~= '' and password ~= '' then
+    logMsg( "Renovando sessão via credenciais salvas do usuário..." )
+    local bodyJson = '{"email":"' .. jsonEscape( email ) .. '","password":"' .. jsonEscape( password ) .. '"}'
+    local loginResp = LrHttp.post(
+      SUPABASE_URL .. '/auth/v1/token?grant_type=password',
+      bodyJson,
+      {
+        { field = 'Content-Type', value = 'application/json' },
+        { field = 'apikey',       value = SUPABASE_ANON },
+      }
+    )
+    if loginResp then
+      local newToken   = parseJsonStr( loginResp, 'access_token' )
+      local newRefresh = parseJsonStr( loginResp, 'refresh_token' )
+      local expiresIn  = parseJsonNum( loginResp, 'expires_in' ) or 3600
+
+      if newToken and newToken ~= '' then
+        propertyTable.priceus_token         = newToken
+        propertyTable.priceus_token_expires = now + expiresIn
+        if newRefresh and newRefresh ~= '' then propertyTable.priceus_refresh_token = newRefresh end
+        logMsg( "✓ Auto-renovação de sessão realizada com sucesso!" )
+        return newToken
+      end
+    end
+  end
+
+  -- 4. Fallback: retorna o token existente
   return token ~= '' and token or nil
 end
 
@@ -620,13 +650,25 @@ function provider.processRenderedPhotos( functionContext, exportContext )
     { field = "Authorization", value = "Bearer " .. token },
   })
 
+  -- Se o token expirou no meio da busca, força renovação automática
+  if searchResp and (searchResp:find("JWT expired") or searchResp:find("invalid JWT")) then
+    logMsg( "⚠ Sessão do Lightroom expirou. Renovando token automaticamente..." )
+    token = ensureValidToken( propertyTable, true )
+    if token then
+      searchResp = LrHttp.get( searchUrl, {
+        { field = "apikey", value = SUPABASE_ANON },
+        { field = "Authorization", value = "Bearer " .. token },
+      })
+    end
+  end
+
   if searchResp and searchResp ~= '' then
     galleryId = parseJsonStr( searchResp, 'id' )
   end
 
   if not galleryId or galleryId == '' then
-    -- Criar nova galeria no PriceU$
-    progressScope:setCaption( "Criando nova galeria no PriceU$..." )
+    -- Criar nova galeria no PriceU$ se ela não existir
+    progressScope:setCaption( "Criando galeria no PriceU$..." )
     local slug = generateSlug( collectionName )
     local createUrl = SUPABASE_URL .. '/rest/v1/galleries'
     local bodyJson  = '{"title":"' .. jsonEscape( collectionName ) .. '","slug":"' .. slug .. '","user_id":"' .. userId .. '","status":"active","is_public_portfolio":true}'
@@ -636,17 +678,41 @@ function provider.processRenderedPhotos( functionContext, exportContext )
       { field = "Content-Type", value = "application/json" },
       { field = "Prefer", value = "return=representation" },
     })
+
+    -- Se o token expirou na tentativa de criar, renova e tenta de novo
+    if createResp and (createResp:find("JWT expired") or createResp:find("invalid JWT")) then
+      logMsg( "⚠ Token expirou na criação. Renovando sessão..." )
+      token = ensureValidToken( propertyTable, true )
+      if token then
+        createResp = LrHttp.post( createUrl, bodyJson, {
+          { field = "apikey", value = SUPABASE_ANON },
+          { field = "Authorization", value = "Bearer " .. token },
+          { field = "Content-Type", value = "application/json" },
+          { field = "Prefer", value = "return=representation" },
+        })
+      end
+    end
+
     if createResp then
       galleryId = parseJsonStr( createResp, 'id' )
       if not galleryId then
         local errDetail = parseJsonStr( createResp, 'message' ) or createResp
-        LrDialogs.message(
-          "PriceU$ — Erro no Banco de Dados",
-          "O Supabase recusou a criação da galeria:\n" .. tostring( errDetail ),
-          "critical"
-        )
-        progressScope:done()
-        return
+        -- Se mesmo após renovação der erro, verifica se a galeria já foi criada em paralelo
+        local retrySearch = LrHttp.get( searchUrl, {
+          { field = "apikey", value = SUPABASE_ANON },
+          { field = "Authorization", value = "Bearer " .. token },
+        })
+        galleryId = parseJsonStr( retrySearch, 'id' )
+
+        if not galleryId then
+          LrDialogs.message(
+            "PriceU$ — Galeria em Sincronização",
+            "Não foi possível obter o ID da galeria:\n" .. tostring( errDetail ) .. "\n\nPor favor, refaça o login no Serviço de Publicação 'PriceU$'.",
+            "warning"
+          )
+          progressScope:done()
+          return
+        end
       end
     end
   end
