@@ -3,11 +3,13 @@ import { Download, Calendar, Camera, Loader2, Sparkles, Heart, Check, CheckCircl
 import { Gallery, GalleryPhoto } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
 import { convertWebpToLowResJpeg } from '../../services/galleryImageProcessor';
+import { applyWatermarkToImage } from '../../services/watermarkService';
 import { GalleryPasswordModal } from './GalleryPasswordModal';
 import { GalleryLightbox } from './GalleryLightbox';
 import { GalleryLeadCaptureModal } from './GalleryLeadCaptureModal';
 import { GalleryProofingCheckoutModal } from './GalleryProofingCheckoutModal';
 import { GallerySocialPromoModal } from './GallerySocialPromoModal';
+import { GalleryUsagePolicyModal } from './GalleryUsagePolicyModal';
 import { SmartGalleryImage } from './SmartGalleryImage';
 
 interface PublicGalleryViewProps {
@@ -32,12 +34,22 @@ export function PublicGalleryView({
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
 
+  // Seleção de subgalerias / abas de álbuns (ex: Pré-Casamento vs Casamento)
+  const [activeSubgallery, setActiveSubgallery] = useState<string>('all');
+
   // Seleção de fotos pelo cliente (Proofing)
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [showProofingCheckout, setShowProofingCheckout] = useState(false);
 
   // Social promo modal ao baixar fotos
   const [showSocialPromo, setShowSocialPromo] = useState(false);
+
+  // Modal de Política de Liberação de Imagem
+  const [showUsagePolicyModal, setShowUsagePolicyModal] = useState(false);
+  const [pendingDownloadAction, setPendingDownloadAction] = useState<(() => Promise<void>) | null>(null);
+  const [hasAcceptedUsagePolicy, setHasAcceptedUsagePolicy] = useState<boolean>(() => {
+    return sessionStorage.getItem(`gallery_policy_accepted_${gallery.id}`) === 'true';
+  });
 
   // LGPD Consentimento e Política de Privacidade
   const [hasAcceptedLgpd, setHasAcceptedLgpd] = useState<boolean>(() => {
@@ -65,6 +77,30 @@ export function PublicGalleryView({
       setShowLeadModal(true);
     }
   }, [isAuthorized, gallery.require_lead_capture, visitorLead]);
+
+  // Registro automático do visitante na galeria para estatísticas do fotógrafo
+  useEffect(() => {
+    if (isAuthorized && gallery.id) {
+      const saved = sessionStorage.getItem(`gallery_visitor_${gallery.id}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          GalleryService.registerVisitor(gallery.id, parsed.name, parsed.email, parsed.whatsapp).then((reg) => {
+            if (reg?.id) sessionStorage.setItem(`gallery_visitor_id_${gallery.id}`, reg.id);
+          });
+        } catch (e) {}
+      } else if (!gallery.require_lead_capture) {
+        let anonSessionId = sessionStorage.getItem(`gallery_anon_id_${gallery.id}`);
+        if (!anonSessionId) {
+          anonSessionId = `Visitante #${Math.floor(1000 + Math.random() * 9000)}`;
+          sessionStorage.setItem(`gallery_anon_id_${gallery.id}`, anonSessionId);
+        }
+        GalleryService.registerVisitor(gallery.id, anonSessionId, null, null).then((reg) => {
+          if (reg?.id) sessionStorage.setItem(`gallery_visitor_id_${gallery.id}`, reg.id);
+        });
+      }
+    }
+  }, [isAuthorized, gallery.id, gallery.require_lead_capture]);
 
   const handleVerifyPassword = async (password: string): Promise<boolean> => {
     const isValid = await GalleryService.verifyGalleryPassword(gallery, password);
@@ -100,7 +136,31 @@ export function PublicGalleryView({
     );
   };
 
+  const handleConfirmUsagePolicy = async () => {
+    setHasAcceptedUsagePolicy(true);
+    sessionStorage.setItem(`gallery_policy_accepted_${gallery.id}`, 'true');
+    setShowUsagePolicyModal(false);
+    if (pendingDownloadAction) {
+      const act = pendingDownloadAction;
+      setPendingDownloadAction(null);
+      await act();
+    }
+  };
+
   const handleDownloadSinglePhoto = async (photo: GalleryPhoto, highRes: boolean) => {
+    if (gallery.enable_downloads === false) return;
+
+    // Se exige modal de liberação e é download em baixa res / marca d'água
+    if (!highRes && gallery.enable_usage_policy_modal && !hasAcceptedUsagePolicy) {
+      setPendingDownloadAction(() => () => executeDownloadSinglePhoto(photo, highRes));
+      setShowUsagePolicyModal(true);
+      return;
+    }
+
+    await executeDownloadSinglePhoto(photo, highRes);
+  };
+
+  const executeDownloadSinglePhoto = async (photo: GalleryPhoto, highRes: boolean) => {
     if (gallery.enable_social_promo && gallery.photographer_instagram) {
       setShowSocialPromo(true);
     }
@@ -120,19 +180,35 @@ export function PublicGalleryView({
         a.click();
         document.body.removeChild(a);
       } else {
-        const jpegBlob = await convertWebpToLowResJpeg(
-          photo.supabase_web_path || photo.supabase_thumb_path,
-          1920,
-          0.88
-        );
-        const blobUrl = URL.createObjectURL(jpegBlob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `${baseName}.jpg`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
+        // Download em Baixa Resolução / Redes Sociais com Marca d'Água dinâmica
+        if (gallery.watermark_enabled || gallery.watermark_text || gallery.watermark_logo_url) {
+          const watermarkedBlob = await applyWatermarkToImage(photo.supabase_web_path, {
+            type: gallery.watermark_type || 'text',
+            position: gallery.watermark_position || 'bottom-right',
+            opacity: gallery.watermark_opacity ?? 0.7,
+            scale: gallery.watermark_scale ?? 0.18,
+            text: gallery.watermark_text || photographer.nome_profissional || '© Direitos Reservados',
+            logoUrl: gallery.watermark_logo_url || '',
+          });
+          const blobUrl = URL.createObjectURL(watermarkedBlob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `${baseName}_redes_sociais.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } else {
+          const jpegBlob = await convertWebpToLowResJpeg(photo.supabase_web_path);
+          const url = URL.createObjectURL(jpegBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${baseName}_redes_sociais.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
       }
     } catch (err) {
       console.error('Erro ao baixar foto:', err);
@@ -297,25 +373,75 @@ export function PublicGalleryView({
             </div>
           </div>
 
-          {/* Grid Masonry de Fotos com Fundo Branco Limpo e botão de Seleção de Proofing */}
+          {/* Grid Masonry de Fotos com Fundo Branco Limpo, Abas de Subgalerias (Ensaio/Casamento) e Proofing */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-white">
-            {photos.length === 0 ? (
-              <div className="text-center py-20 border border-slate-200 rounded-3xl bg-slate-50/50">
-                <Sparkles className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                <p className="text-slate-600 text-base font-semibold">Galeria sem fotos disponíveis no momento.</p>
-              </div>
-            ) : (
-              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5">
-                {photos.map((photo, index) => {
-                  const isSelected = selectedPhotoIds.includes(photo.id);
-                  return (
-                    <div
-                      key={photo.id}
-                      onClick={() => setLightboxIndex(index)}
-                      className={`break-inside-avoid relative group rounded-none overflow-hidden cursor-pointer bg-slate-100 border transition-all duration-300 shadow-sm hover:shadow-xl ${
-                        isSelected ? 'ring-4 ring-emerald-500 border-emerald-500' : 'border-slate-200/70 hover:border-slate-400'
-                      }`}
-                    >
+            {/* Abas de Navegação das Subgalerias / Álbuns (ex: Pré-Casamento, Cerimônia, Festa) */}
+            {(() => {
+              const subgalleryList = Array.from(
+                new Set(
+                  photos
+                    .map((p) => p.subgallery_name)
+                    .filter((name): name is string => Boolean(name && name.trim() && name !== 'Geral'))
+                )
+              );
+
+              return (
+                <>
+                  {subgalleryList.length > 0 && (
+                    <div className="flex items-center justify-center gap-2 mb-10 overflow-x-auto pb-2 scrollbar-none">
+                      <button
+                        onClick={() => setActiveSubgallery('all')}
+                        className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                          activeSubgallery === 'all'
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>✨ Todas</span>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 text-[10px]">{photos.length}</span>
+                      </button>
+
+                      {subgalleryList.map((subName) => {
+                        const count = photos.filter((p) => p.subgallery_name === subName).length;
+                        const isActive = activeSubgallery === subName;
+                        return (
+                          <button
+                            key={subName}
+                            onClick={() => setActiveSubgallery(subName)}
+                            className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                              isActive
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/30 scale-105'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>📂 {subName}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] ${isActive ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {photos.length === 0 ? (
+                    <div className="text-center py-20 border border-slate-200 rounded-3xl bg-slate-50/50">
+                      <Sparkles className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                      <p className="text-slate-600 text-base font-semibold">Galeria sem fotos disponíveis no momento.</p>
+                    </div>
+                  ) : (
+                    <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5">
+                      {(activeSubgallery === 'all'
+                        ? photos
+                        : photos.filter((p) => p.subgallery_name === activeSubgallery)
+                      ).map((photo, index) => {
+                        const isSelected = selectedPhotoIds.includes(photo.id);
+                        return (
+                          <div
+                            key={photo.id}
+                            onClick={() => setLightboxIndex(index)}
+                            className={`break-inside-avoid relative group rounded-none overflow-hidden cursor-pointer bg-slate-100 border transition-all duration-300 shadow-sm hover:shadow-xl ${
+                              isSelected ? 'ring-4 ring-emerald-500 border-emerald-500' : 'border-slate-200/70 hover:border-slate-400'
+                            }`}
+                          >
                       <SmartGalleryImage
                         photo={photo}
                         src={photo.supabase_web_path || photo.supabase_thumb_path}

@@ -766,21 +766,27 @@ export class GalleryService {
         visitorRecord = updated || existing;
       } else {
         // Insere novo visitante
+        const newVisitorData = {
+          gallery_id: galleryId,
+          name: cleanName,
+          email: cleanEmail,
+          whatsapp: cleanPhone,
+          accessed_at: new Date().toISOString(),
+          last_accessed_at: new Date().toISOString(),
+          downloads_count: 0,
+        };
+
         const { data: inserted, error: insErr } = await supabase
           .from('gallery_visitors')
-          .insert({
-            gallery_id: galleryId,
-            name: cleanName,
-            email: cleanEmail,
-            whatsapp: cleanPhone,
-            accessed_at: new Date().toISOString(),
-            last_accessed_at: new Date().toISOString(),
-            downloads_count: 0,
-          })
+          .insert(newVisitorData)
           .select()
           .single();
 
-        if (insErr) console.warn('Erro ao inserir visitante:', insErr);
+        if (insErr) {
+          console.warn('[GalleryService] AVISO ao inserir visitante com .select():', insErr.message);
+          // Fallback sem .select() caso RLS limite a leitura imediata
+          await supabase.from('gallery_visitors').insert(newVisitorData);
+        }
         visitorRecord = inserted;
       }
 

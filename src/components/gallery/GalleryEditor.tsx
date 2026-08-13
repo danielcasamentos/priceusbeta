@@ -35,7 +35,24 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [leadsList, setLeadsList] = useState<{ id: string; nome_cliente?: string; client_name?: string; email_cliente?: string; tipo_evento?: string; status?: string }[]>([]);
   const [leadSearch, setLeadSearch] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isSlugCustomized, setIsSlugCustomized] = useState(false);
+  const [enableSales, setEnableSales] = useState(true);
+  const [enableDownloads, setEnableDownloads] = useState(true);
+  const [watermarkType, setWatermarkType] = useState<'text' | 'image'>('text');
+  const [watermarkPosition, setWatermarkPosition] = useState<
+    | 'top-left'
+    | 'top-center'
+    | 'top-right'
+    | 'center-left'
+    | 'center'
+    | 'center-right'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'bottom-right'
+  >('bottom-right');
+  const [watermarkOpacity, setWatermarkOpacity] = useState<number>(0.7);
+  const [watermarkScale, setWatermarkScale] = useState<number>(0.18);
+  const [enableUsagePolicyModal, setEnableUsagePolicyModal] = useState(false);
+  const [usagePolicyText, setUsagePolicyText] = useState('');
 
   const formatSlug = (val: string): string => {
     return val
@@ -76,9 +93,17 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setIsPublicPortfolio(gallery.is_public_portfolio);
       setAllowLowResDownload(gallery.allow_low_res_download);
       setAllowHighResDownload(gallery.allow_high_res_download);
+      setEnableSales(gallery.enable_sales ?? true);
+      setEnableDownloads(gallery.enable_downloads ?? true);
       setWatermarkEnabled(gallery.watermark_enabled);
+      setWatermarkType(gallery.watermark_type || 'text');
+      setWatermarkPosition(gallery.watermark_position || 'bottom-right');
+      setWatermarkOpacity(gallery.watermark_opacity ?? 0.7);
+      setWatermarkScale(gallery.watermark_scale ?? 0.18);
       setWatermarkText(gallery.watermark_text || '');
       setWatermarkLogoUrl(gallery.watermark_logo_url || '');
+      setEnableUsagePolicyModal(gallery.enable_usage_policy_modal ?? false);
+      setUsagePolicyText(gallery.usage_policy_text || '');
       setPricePerExtraPhoto(gallery.price_per_extra_photo || 0);
       setPackagePhotoLimit(gallery.package_photo_limit || 0);
       setRequireLeadCapture(gallery.require_lead_capture ?? true);
@@ -99,9 +124,17 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setIsPublicPortfolio(false);
       setAllowLowResDownload(true);
       setAllowHighResDownload(true);
+      setEnableSales(true);
+      setEnableDownloads(true);
       setWatermarkEnabled(false);
+      setWatermarkType('text');
+      setWatermarkPosition('bottom-right');
+      setWatermarkOpacity(0.7);
+      setWatermarkScale(0.18);
       setWatermarkText('');
       setWatermarkLogoUrl('');
+      setEnableUsagePolicyModal(false);
+      setUsagePolicyText('');
       setPricePerExtraPhoto(0);
       setPackagePhotoLimit(20);
       setRequireLeadCapture(true);
@@ -206,9 +239,17 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
         is_public_portfolio: isPublicPortfolio,
         allow_low_res_download: allowLowResDownload,
         allow_high_res_download: allowHighResDownload,
+        enable_sales: enableSales,
+        enable_downloads: enableDownloads,
         watermark_enabled: watermarkEnabled,
+        watermark_type: watermarkType,
+        watermark_position: watermarkPosition,
+        watermark_opacity: watermarkOpacity,
+        watermark_scale: watermarkScale,
         watermark_text: watermarkText.trim() || undefined,
         watermark_logo_url: watermarkLogoUrl.trim() || undefined,
+        enable_usage_policy_modal: enableUsagePolicyModal,
+        usage_policy_text: usagePolicyText.trim() || undefined,
         price_per_extra_photo: pricePerExtraPhoto,
         package_photo_limit: packagePhotoLimit,
         progressive_discounts: progressiveDiscounts,
@@ -521,6 +562,41 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
             )}
           </div>
 
+          {/* Master Toggles: Ativar/Desativar Vendas e Downloads */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
+              <div className="space-y-0.5">
+                <span className="text-sm font-medium text-white flex items-center space-x-2">
+                  <span className="text-emerald-400">💰</span>
+                  <span>Permitir Venda de Fotos Extras</span>
+                </span>
+                <p className="text-xs text-slate-400">Ativa o sistema de compras de fotos adicionais na galeria</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={enableSales}
+                onChange={(e) => setEnableSales(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-0"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
+              <div className="space-y-0.5">
+                <span className="text-sm font-medium text-white flex items-center space-x-2">
+                  <span className="text-blue-400">📥</span>
+                  <span>Permitir Downloads na Galeria</span>
+                </span>
+                <p className="text-xs text-slate-400">Habilita botão de download de fotos para os clientes</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={enableDownloads}
+                onChange={(e) => setEnableDownloads(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-0"
+              />
+            </label>
+          </div>
+
           {/* Toggles de Configuração */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
@@ -544,9 +620,9 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                 <div className="space-y-0.5">
                   <span className="text-sm font-medium text-white flex items-center space-x-2">
                     <Shield className="w-4 h-4 text-purple-400" />
-                    <span>Ativar Marca d'Água de Proteção (Anti-Print)</span>
+                    <span>Ativar Marca d'Água (Divulgação/Anti-Print)</span>
                   </span>
-                  <p className="text-xs text-slate-400">Sobrepõe marca d'água no preview e remove ao baixar fotos contratadas</p>
+                  <p className="text-xs text-slate-400">Insere marca d'água de direitos autorais ou logo PNG</p>
                 </div>
                 <input
                   type="checkbox"
@@ -557,64 +633,189 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
               </label>
 
               {watermarkEnabled && (
-                <div className="pt-3 border-t border-slate-700/80 space-y-3 animate-in fade-in duration-200">
-                  {/* Texto da Marca d'Água */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-300">
-                      Texto dos Direitos Autorais (opcional):
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: © Nome do Fotógrafo / Estúdio"
-                      value={watermarkText}
-                      onChange={(e) => setWatermarkText(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-purple-200 text-xs focus:outline-none focus:border-purple-500"
-                    />
+                <div className="pt-3 border-t border-slate-700/80 space-y-4 animate-in fade-in duration-200">
+                  {/* Tipo de Marca: Texto ou Logo PNG */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-300">Tipo de Marca d'Água:</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWatermarkType('text')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all ${
+                          watermarkType === 'text'
+                            ? 'bg-purple-600/30 text-purple-300 border-purple-500'
+                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        ✍️ Texto Simples
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWatermarkType('image')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all ${
+                          watermarkType === 'image'
+                            ? 'bg-purple-600/30 text-purple-300 border-purple-500'
+                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        🖼️ Logo PNG (sem fundo)
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Logo PNG sem fundo */}
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-300">
-                      Logo Personalizado (PNG sem fundo):
+                  {/* Texto da Marca d'Água */}
+                  {watermarkType === 'text' ? (
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300">Texto dos Direitos Autorais:</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: © Nome do Fotógrafo / Estúdio"
+                        value={watermarkText}
+                        onChange={(e) => setWatermarkText(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-purple-200 text-xs focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  ) : (
+                    /* Logo PNG sem fundo */
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-300">Logo Personalizado (PNG sem fundo):</label>
+                      <div className="flex items-center gap-3">
+                        {watermarkLogoUrl ? (
+                          <div className="relative group p-2 bg-slate-950 rounded-xl border border-slate-700 flex items-center gap-2">
+                            <img src={watermarkLogoUrl} alt="Logo Marca d'água" className="h-8 max-w-[120px] object-contain" />
+                            <button
+                              type="button"
+                              onClick={() => setWatermarkLogoUrl('')}
+                              className="p-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                              title="Remover Logo"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all text-xs font-medium inline-flex items-center gap-1.5">
+                            <Image className="w-3.5 h-3.5" />
+                            <span>{uploadingLogo ? 'Enviando...' : 'Upload Logo PNG'}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadWatermarkLogo(file);
+                              }}
+                              disabled={uploadingLogo}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Grid Seletor de 9 Posições da Marca d'Água */}
+                  <div className="space-y-2 pt-2 border-t border-slate-700/60">
+                    <label className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                      <span>Posição da Marca d'Água (9 Cantos/Laterais):</span>
+                      <span className="text-purple-400 font-bold capitalize text-[10px]">{watermarkPosition}</span>
                     </label>
-                    <div className="flex items-center gap-3">
-                      {watermarkLogoUrl ? (
-                        <div className="relative group p-2 bg-slate-950 rounded-xl border border-slate-700 flex items-center gap-2">
-                          <img
-                            src={watermarkLogoUrl}
-                            alt="Logo Marca d'água"
-                            className="h-8 max-w-[120px] object-contain"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setWatermarkLogoUrl('')}
-                            className="p-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
-                            title="Remover Logo"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all text-xs font-medium inline-flex items-center gap-1.5">
-                          <Image className="w-3.5 h-3.5" />
-                          <span>{uploadingLogo ? 'Enviando...' : 'Upload Logo PNG'}</span>
-                          <input
-                            type="file"
-                            accept="image/png,image/webp"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleUploadWatermarkLogo(file);
-                            }}
-                            disabled={uploadingLogo}
-                          />
-                        </label>
-                      )}
+                    <div className="grid grid-cols-3 gap-1.5 p-2 bg-slate-950 rounded-xl border border-slate-700 max-w-[240px] mx-auto">
+                      {[
+                        { id: 'top-left', label: '↖ Superior Esquerdo' },
+                        { id: 'top-center', label: '⬆ Superior Meio' },
+                        { id: 'top-right', label: '↗ Superior Direito' },
+                        { id: 'center-left', label: '⬅ Meio Esquerdo' },
+                        { id: 'center', label: '🎯 Centro' },
+                        { id: 'center-right', label: '➡ Meio Direito' },
+                        { id: 'bottom-left', label: '↙ Inferior Esquerdo' },
+                        { id: 'bottom-center', label: '⬇ Inferior Meio' },
+                        { id: 'bottom-right', label: '↘ Inferior Direito' },
+                      ].map((pos) => (
+                        <button
+                          key={pos.id}
+                          type="button"
+                          title={pos.label}
+                          onClick={() => setWatermarkPosition(pos.id as any)}
+                          className={`h-8 rounded-lg text-xs font-bold transition-all flex items-center justify-center border ${
+                            watermarkPosition === pos.id
+                              ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30 scale-105'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white'
+                          }`}
+                        >
+                          {pos.label.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Transparência & Tamanho Sliders */}
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-slate-300">
+                        <span>Opacidade:</span>
+                        <span className="font-bold text-purple-400">{Math.round(watermarkOpacity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.1}
+                        max={1.0}
+                        step={0.05}
+                        value={watermarkOpacity}
+                        onChange={(e) => setWatermarkOpacity(parseFloat(e.target.value))}
+                        className="w-full accent-purple-500 cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-slate-300">
+                        <span>Tamanho:</span>
+                        <span className="font-bold text-purple-400">{Math.round(watermarkScale * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.05}
+                        max={0.5}
+                        step={0.01}
+                        value={watermarkScale}
+                        onChange={(e) => setWatermarkScale(parseFloat(e.target.value))}
+                        className="w-full accent-purple-500 cursor-pointer"
+                      />
                     </div>
                   </div>
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Modal de Política de Liberação de Imagem */}
+          <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800 space-y-3">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="space-y-0.5">
+                <span className="text-sm font-medium text-white flex items-center space-x-2">
+                  <span>📜</span>
+                  <span>Exibir Modal de Termos de Liberação de Imagem</span>
+                </span>
+                <p className="text-xs text-slate-400">Cliente lê os termos de divulgação/marcação antes de baixar fotos gratuitas com marca</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={enableUsagePolicyModal}
+                onChange={(e) => setEnableUsagePolicyModal(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-purple-500 focus:ring-0"
+              />
+            </label>
+
+            {enableUsagePolicyModal && (
+              <div className="space-y-1.5 pt-2 border-t border-slate-700/80 animate-in fade-in duration-200">
+                <label className="text-[11px] font-semibold text-slate-300">Texto Personalizado do Modal de Liberação (opcional):</label>
+                <textarea
+                  rows={3}
+                  placeholder="Deixe em branco para usar os termos padrão (marcação do Instagram obrigatoria e não remoção da marca)..."
+                  value={usagePolicyText}
+                  onChange={(e) => setUsagePolicyText(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* Status */}

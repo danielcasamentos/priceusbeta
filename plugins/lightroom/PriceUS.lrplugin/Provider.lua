@@ -619,14 +619,26 @@ function provider.processRenderedPhotos( functionContext, exportContext )
       return
     end
 
-  -- Obter nome da coleção no Lightroom (ex: "Bruna e Gustavo")
+  -- Obter nome da coleção e subgaleria (abas) no Lightroom
   local collectionName = "Galeria Lightroom"
+  local subgalleryName = "Geral"
+
   if exportContext.publishedCollection and type( exportContext.publishedCollection.getName ) == 'function' then
     collectionName = exportContext.publishedCollection:getName()
+
+    local parentSet = exportContext.publishedCollection:getParent()
+    if parentSet and type( parentSet.getName ) == 'function' then
+      local parentTitle = parentSet:getName()
+      if parentTitle and parentTitle ~= '' then
+        subgalleryName = collectionName
+        collectionName = parentTitle
+        logMsg( "Detectado Conjunto de Coleções! Galeria Pai: '" .. collectionName .. "' | Subgaleria/Aba: '" .. subgalleryName .. "'" )
+      end
+    end
   end
 
   local progressScope = exportContext:configureProgress {
-    title = "Sincronizando Galeria '" .. collectionName .. "' com o PriceU$...",
+    title = "Sincronizando Galeria '" .. collectionName .. "' (Aba: " .. subgalleryName .. ") com o PriceU$...",
   }
 
   -- 1. Obter ID do usuário autenticado
@@ -817,6 +829,7 @@ function provider.processRenderedPhotos( functionContext, exportContext )
                                   '"supabase_thumb_path":"' .. jsonEscape( driveUrl ) .. '",' ..
                                   '"supabase_web_path":"' .. jsonEscape( driveUrl ) .. '",' ..
                                   '"file_name":"' .. jsonEscape( filename ) .. '",' ..
+                                  '"subgallery_name":"' .. jsonEscape( subgalleryName ) .. '",' ..
                                   '"display_order":' .. count .. '}'
 
                 LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
@@ -843,6 +856,7 @@ function provider.processRenderedPhotos( functionContext, exportContext )
                 { field = "x-gallery-id", value = galleryId },
                 { field = "x-gallery-title", value = collectionName },
                 { field = "x-filename", value = filename },
+                { field = "x-subgallery-name", value = subgalleryName },
               })
 
               if bResp and bResp ~= '' and bResp:match( '"success"%s*:%s*true' ) then
@@ -875,6 +889,7 @@ function provider.processRenderedPhotos( functionContext, exportContext )
                                 '"supabase_thumb_path":"' .. jsonEscape( publicUrl ) .. '",' ..
                                 '"supabase_web_path":"' .. jsonEscape( publicUrl ) .. '",' ..
                                 '"file_name":"' .. jsonEscape( filename ) .. '",' ..
+                                '"subgallery_name":"' .. jsonEscape( subgalleryName ) .. '",' ..
                                 '"display_order":' .. count .. '}'
 
               LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
