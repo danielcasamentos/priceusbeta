@@ -33,11 +33,12 @@ end
 -- Publish Service Properties
 -- ══════════════════════════════════════════════════════════════
 provider.supportsPublish              = true
+provider.supportsCollectionSets       = true
 provider.supportsTargetOrders         = false
 provider.supportsIncrementalPublish   = 'only'
 provider.canExportVideo               = false
-provider.titleForPublishedCollection    = "Galeria PriceU$"
-provider.titleForPublishedCollectionSet = "Conjunto de Galerias PriceU$"
+provider.titleForPublishedCollection    = "Aba / Subgaleria (ex: Pré-Casamento)"
+provider.titleForPublishedCollectionSet = "Galeria do Cliente (ex: João e Maria)"
 provider.titleForPublishSettings        = "PriceU$"
 
 provider.hideSections = { 'exportLocation' }
