@@ -808,86 +808,25 @@ function provider.processRenderedPhotos( functionContext, exportContext )
         logMsg( "Foto #" .. i .. " renderizada com sucesso: " .. pathOrMessage .. " (Tamanho: " .. tostring( LrFileUtils.fileAttributes( pathOrMessage ).fileSize ) .. " bytes)" )
         progressScope:setCaption( "Enviando " .. filename .. " (" .. ( count + 1 ) .. " foto(s))..." )
 
-        -- Processa upload garantindo limpeza incondicional no disco e RAM
-        local pSuccess, pErr = pcall( function()
-          local photoData = LrFileUtils.readFile( pathOrMessage )
-          if photoData then
-            local uploadedDrive = false
+        -- Processa upload sem pcall (pcall em Lua 5.1 impede LrHttp de pausar/yield)
+        local photoData = LrFileUtils.readFile( pathOrMessage )
+        if photoData then
+          local uploadedDrive = false
 
-            -- 1º TENTATIVA: Upload direto do Lightroom para o Google Drive
-            if driveToken and driveFolderId then
-              logMsg( "Enviando " .. filename .. " diretamente para o Google Drive..." )
-              local fileId = uploadToGoogleDrive( driveToken, driveFolderId, filename, photoData )
-              if fileId and fileId ~= '' then
-                uploadedDrive = true
-                count = count + 1
-                logMsg( "✓ Upload direto para Google Drive concluído: ID " .. tostring( fileId ) )
-
-                local driveUrl = "https://lh3.googleusercontent.com/d/" .. fileId
-                local photoJson = '{"gallery_id":"' .. galleryId .. '",' ..
-                                  '"google_drive_file_id":"' .. jsonEscape( fileId ) .. '",' ..
-                                  '"supabase_thumb_path":"' .. jsonEscape( driveUrl ) .. '",' ..
-                                  '"supabase_web_path":"' .. jsonEscape( driveUrl ) .. '",' ..
-                                  '"file_name":"' .. jsonEscape( filename ) .. '",' ..
-                                  '"subgallery_name":"' .. jsonEscape( subgalleryName ) .. '",' ..
-                                  '"display_order":' .. count .. '}'
-
-                LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
-                  { field = "apikey", value = SUPABASE_ANON },
-                  { field = "Authorization", value = "Bearer " .. token },
-                  { field = "Content-Type", value = "application/json" },
-                })
-                rendition:recordPublishedPhotoId( fileId )
-                rendition:recordPublishedPhotoUrl( driveUrl )
-              else
-                logMsg( "⚠ Falha no upload direto para Google Drive. Tentando ponte..." )
-              end
-            end
-
-            -- 2º TENTATIVA: Ponte Edge Function /upload-to-drive
-            if not uploadedDrive then
-              logMsg( "Enviando " .. filename .. " via Ponte PriceU$..." )
-              local bridgeUrl = SUPABASE_URL .. "/functions/v1/upload-to-drive"
-
-              local bResp, bHeaders = LrHttp.post( bridgeUrl, photoData, {
-                { field = "apikey", value = SUPABASE_ANON },
-                { field = "Authorization", value = "Bearer " .. token },
-                { field = "Content-Type", value = "image/jpeg" },
-                { field = "x-gallery-id", value = galleryId },
-                { field = "x-gallery-title", value = collectionName },
-                { field = "x-filename", value = filename },
-                { field = "x-subgallery-name", value = subgalleryName },
-              })
-
-              if bResp and bResp ~= '' and bResp:match( '"success"%s*:%s*true' ) then
-                uploadedDrive = true
-                count = count + 1
-                logMsg( "✓ Envio via Ponte PriceU$ concluído para: " .. filename )
-                rendition:recordPublishedPhotoId( filename )
-              else
-                logMsg( "⚠ Ponte PriceU$ indisponível ou desativada: " .. tostring( bResp ) )
-              end
-            end
-
-            -- 3º TENTATIVA (FALLBACK): Supabase Storage Bucket
-            if not uploadedDrive then
-              logMsg( "Executando fallback Supabase Storage para " .. filename .. "..." )
-              local safeFilename = filename:gsub( "[%s]", "_" )
-              local storagePath  = galleryId .. "/" .. safeFilename
-              local uploadUrl    = SUPABASE_URL .. "/storage/v1/object/gallery-assets/" .. storagePath
-
-              local sResp, sHeaders = LrHttp.post( uploadUrl, photoData, {
-                { field = "apikey", value = SUPABASE_ANON },
-                { field = "Authorization", value = "Bearer " .. token },
-                { field = "Content-Type", value = "image/jpeg" },
-                { field = "x-upsert", value = "true" },
-              })
-              local publicUrl = SUPABASE_URL .. "/storage/v1/object/public/gallery-assets/" .. storagePath
-
+          -- 1º TENTATIVA: Upload direto do Lightroom para o Google Drive
+          if driveToken and driveFolderId then
+            logMsg( "Enviando " .. filename .. " diretamente para o Google Drive..." )
+            local fileId = uploadToGoogleDrive( driveToken, driveFolderId, filename, photoData )
+            if fileId and fileId ~= '' then
+              uploadedDrive = true
               count = count + 1
+              logMsg( "✓ Upload direto para Google Drive concluído: ID " .. tostring( fileId ) )
+
+              local driveUrl = "https://lh3.googleusercontent.com/d/" .. fileId
               local photoJson = '{"gallery_id":"' .. galleryId .. '",' ..
-                                '"supabase_thumb_path":"' .. jsonEscape( publicUrl ) .. '",' ..
-                                '"supabase_web_path":"' .. jsonEscape( publicUrl ) .. '",' ..
+                                '"google_drive_file_id":"' .. jsonEscape( fileId ) .. '",' ..
+                                '"supabase_thumb_path":"' .. jsonEscape( driveUrl ) .. '",' ..
+                                '"supabase_web_path":"' .. jsonEscape( driveUrl ) .. '",' ..
                                 '"file_name":"' .. jsonEscape( filename ) .. '",' ..
                                 '"subgallery_name":"' .. jsonEscape( subgalleryName ) .. '",' ..
                                 '"display_order":' .. count .. '}'
@@ -897,16 +836,71 @@ function provider.processRenderedPhotos( functionContext, exportContext )
                 { field = "Authorization", value = "Bearer " .. token },
                 { field = "Content-Type", value = "application/json" },
               })
-              rendition:recordPublishedPhotoId( filename )
-              rendition:recordPublishedPhotoUrl( publicUrl )
+              rendition:recordPublishedPhotoId( fileId )
+              rendition:recordPublishedPhotoUrl( driveUrl )
+            else
+              logMsg( "⚠ Falha no upload direto para Google Drive. Tentando ponte..." )
             end
-
-            photoData = nil
           end
-        end )
 
-        if not pSuccess then
-          logMsg( "⚠ Erro de upload na foto " .. filename .. ": " .. tostring( pErr ) )
+          -- 2º TENTATIVA: Ponte Edge Function /upload-to-drive
+          if not uploadedDrive then
+            logMsg( "Enviando " .. filename .. " via Ponte PriceU$..." )
+            local bridgeUrl = SUPABASE_URL .. "/functions/v1/upload-to-drive"
+
+            local bResp, bHeaders = LrHttp.post( bridgeUrl, photoData, {
+              { field = "apikey", value = SUPABASE_ANON },
+              { field = "Authorization", value = "Bearer " .. token },
+              { field = "Content-Type", value = "image/jpeg" },
+              { field = "x-gallery-id", value = galleryId },
+              { field = "x-gallery-title", value = collectionName },
+              { field = "x-filename", value = filename },
+              { field = "x-subgallery-name", value = subgalleryName },
+            })
+
+            if bResp and bResp ~= '' and bResp:match( '"success"%s*:%s*true' ) then
+              uploadedDrive = true
+              count = count + 1
+              logMsg( "✓ Envio via Ponte PriceU$ concluído para: " .. filename )
+              rendition:recordPublishedPhotoId( filename )
+            else
+              logMsg( "⚠ Ponte PriceU$ indisponível ou desativada: " .. tostring( bResp ) )
+            end
+          end
+
+          -- 3º TENTATIVA (FALLBACK): Supabase Storage Bucket
+          if not uploadedDrive then
+            logMsg( "Executando fallback Supabase Storage para " .. filename .. "..." )
+            local safeFilename = filename:gsub( "[%s]", "_" )
+            local storagePath  = galleryId .. "/" .. safeFilename
+            local uploadUrl    = SUPABASE_URL .. "/storage/v1/object/gallery-assets/" .. storagePath
+
+            local sResp, sHeaders = LrHttp.post( uploadUrl, photoData, {
+              { field = "apikey", value = SUPABASE_ANON },
+              { field = "Authorization", value = "Bearer " .. token },
+              { field = "Content-Type", value = "image/jpeg" },
+              { field = "x-upsert", value = "true" },
+            })
+            local publicUrl = SUPABASE_URL .. "/storage/v1/object/public/gallery-assets/" .. storagePath
+
+            count = count + 1
+            local photoJson = '{"gallery_id":"' .. galleryId .. '",' ..
+                              '"supabase_thumb_path":"' .. jsonEscape( publicUrl ) .. '",' ..
+                              '"supabase_web_path":"' .. jsonEscape( publicUrl ) .. '",' ..
+                              '"file_name":"' .. jsonEscape( filename ) .. '",' ..
+                              '"subgallery_name":"' .. jsonEscape( subgalleryName ) .. '",' ..
+                              '"display_order":' .. count .. '}'
+
+            LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
+              { field = "apikey", value = SUPABASE_ANON },
+              { field = "Authorization", value = "Bearer " .. token },
+              { field = "Content-Type", value = "application/json" },
+            })
+            rendition:recordPublishedPhotoId( filename )
+            rendition:recordPublishedPhotoUrl( publicUrl )
+          end
+
+          photoData = nil
         end
 
         -- GARANTIA AUTOMÁTICA E INCONDICIONAL DE DELEÇÃO DO ARQUIVO TEMPORÁRIO E FAXINA DA RAM LUA
