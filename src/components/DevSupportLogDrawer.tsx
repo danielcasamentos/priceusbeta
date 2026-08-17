@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Terminal, Shield, Copy, Check, Trash2, X, Info, AlertTriangle, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
 import { platformAdapter, SystemLogEntry } from '../services/platformAdapter';
 import { useAuth } from '../lib/auth';
@@ -55,9 +56,9 @@ export function DevSupportLogDrawer({ isOpen, onClose }: DevSupportLogDrawerProp
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/70 backdrop-blur-sm transition-all duration-300">
-      <div className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col h-full text-slate-100">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex justify-end bg-slate-950/80 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
+      <div className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col h-[100dvh] text-slate-100 animate-in slide-in-from-right duration-300">
         
         {/* Cabeçalho do Console */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
@@ -184,6 +185,7 @@ export function DevSupportLogDrawer({ isOpen, onClose }: DevSupportLogDrawerProp
           <span className="font-mono text-slate-500">{logs.length} eventos registrados</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
