@@ -130,25 +130,39 @@ export async function analyzePhotoQuality(
     }
   }
 
-  // Pontuação Ponderada Final
+  // Pontuação Ponderada Final Determinística
   const finalScore = Math.min(100, Math.max(1, Math.round(
-    sharpnessScore * 0.35 +
+    sharpnessScore * 0.40 +
     roiFocusScore * 0.25 +
     exposureScore * 0.20 +
     compositionScore * 0.15 +
     userPreferenceBonus
   )));
 
-  const isBlurry = sharpnessScore < 45 || finalScore < 40;
-  // Detecção simples baseada em padrão de amostragem na área superior central
-  const eyesClosed = Math.random() < (isBlurry ? 0.25 : 0.04); 
-  const isBestTake = !isBlurry && !eyesClosed && (finalScore >= 78);
+  const isBlurry = sharpnessScore < 45 || finalScore < 38;
+
+  // Análise determinística de olhos fechados baseada no contraste da região dos olhos
+  let darkPixelCount = 0;
+  let brightPixelCount = 0;
+  for (let y = minY; y < maxY; y++) {
+    for (let x = minX; x < maxX; x++) {
+      const l = gray[y * w + x];
+      if (l < 50) darkPixelCount++;
+      if (l > 170) brightPixelCount++;
+    }
+  }
+  const eyeRegionTotal = (maxY - minY) * (maxX - minX);
+  const scleraIrisRatio = (darkPixelCount * brightPixelCount) / Math.max(1, eyeRegionTotal * eyeRegionTotal);
+  // Olhos fechados não têm o par esclera/íris de alto contraste
+  const eyesClosed = !isBlurry && centerVar < 18 && scleraIrisRatio < 0.0008;
+
+  const isBestTake = !isBlurry && !eyesClosed && (finalScore >= 75);
 
   const starRating: 0 | 1 | 2 | 3 | 4 | 5 = 
-    finalScore >= 90 ? 5 :
-    finalScore >= 78 ? 4 :
-    finalScore >= 65 ? 3 :
-    finalScore >= 50 ? 2 :
+    finalScore >= 88 ? 5 :
+    finalScore >= 75 ? 4 :
+    finalScore >= 62 ? 3 :
+    finalScore >= 48 ? 2 :
     finalScore >= 35 ? 1 : 0;
 
   platformAdapter.addLog(
@@ -172,17 +186,16 @@ export async function analyzePhotoQuality(
 }
 
 function defaultFallbackMetrics(): CullingScoreMetrics {
-  const score = Math.floor(65 + Math.random() * 25);
   return {
-    sharpnessScore: score,
-    roiFocusScore: score,
-    exposureScore: score,
-    compositionScore: score,
+    sharpnessScore: 70,
+    roiFocusScore: 70,
+    exposureScore: 70,
+    compositionScore: 70,
     userPreferenceBonus: 0,
-    finalScore: score,
+    finalScore: 70,
     isBlurry: false,
     eyesClosed: false,
-    isBestTake: score > 80,
-    starRating: score > 85 ? 4 : 3,
+    isBestTake: true,
+    starRating: 3,
   };
 }

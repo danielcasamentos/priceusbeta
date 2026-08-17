@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { GalleryPhoto } from '../../types/gallery';
+import { SmartGalleryImage } from './SmartGalleryImage';
 
 interface GalleryLightboxProps {
   photos: GalleryPhoto[];
@@ -14,6 +15,8 @@ interface GalleryLightboxProps {
   watermarkEnabled?: boolean;
   watermarkText?: string | null;
   watermarkLogoUrl?: string | null;
+  watermarkPosition?: string | null;
+  watermarkRotation?: number | null;
 }
 
 export function GalleryLightbox({
@@ -28,9 +31,33 @@ export function GalleryLightbox({
   watermarkEnabled = false,
   watermarkText,
   watermarkLogoUrl,
+  watermarkPosition = 'bottom-right',
+  watermarkRotation = 0,
 }: GalleryLightboxProps) {
   const currentPhoto = photos[currentIndex];
   const touchStartX = useRef<number | null>(null);
+
+  // Pré-carregamento em background das próximas fotos e da anterior para transição instantânea (0ms)
+  useEffect(() => {
+    if (!isOpen || currentIndex < 0) return;
+    const indicesToPreload = [currentIndex + 1, currentIndex + 2, currentIndex - 1].filter(
+      (idx) => idx >= 0 && idx < photos.length
+    );
+
+    indicesToPreload.forEach((idx) => {
+      const p = photos[idx];
+      if (p) {
+        const url =
+          p.supabase_web_path ||
+          (p.google_drive_file_id ? `https://lh3.googleusercontent.com/d/${p.google_drive_file_id}=w1600` : null) ||
+          p.supabase_thumb_path;
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+      }
+    });
+  }, [isOpen, currentIndex, photos]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -75,7 +102,7 @@ export function GalleryLightbox({
       {/* Botão Fechar */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 z-50 p-3 rounded-full bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+        className="absolute top-4 right-4 z-50 p-3 rounded-full bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
       >
         <X className="w-6 h-6" />
       </button>
@@ -84,7 +111,7 @@ export function GalleryLightbox({
       {currentIndex > 0 && (
         <button
           onClick={() => onNavigate(currentIndex - 1)}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-slate-900/80 text-white hover:bg-slate-800 transition-colors shadow-lg"
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-slate-900/80 text-white hover:bg-slate-800 transition-colors shadow-lg cursor-pointer"
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
@@ -94,7 +121,7 @@ export function GalleryLightbox({
       {currentIndex < photos.length - 1 && (
         <button
           onClick={() => onNavigate(currentIndex + 1)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-slate-900/80 text-white hover:bg-slate-800 transition-colors shadow-lg"
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-slate-900/80 text-white hover:bg-slate-800 transition-colors shadow-lg cursor-pointer"
         >
           <ChevronRight className="w-6 h-6" />
         </button>
@@ -102,29 +129,53 @@ export function GalleryLightbox({
 
       {/* Imagem lightbox */}
       <div className="max-w-7xl max-h-[85vh] p-4 flex flex-col items-center justify-center relative">
-        <div className="relative overflow-hidden rounded-lg">
-          <img
+        <div className="relative overflow-hidden rounded-lg max-h-[78vh] flex items-center justify-center">
+          <SmartGalleryImage
+            photo={currentPhoto}
             src={currentPhoto.supabase_web_path || currentPhoto.supabase_thumb_path}
+            preferThumbnail={false}
             alt={currentPhoto.file_name || 'Foto em tela cheia'}
-            className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl transition-all duration-200"
+            className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl"
+            objectFit="contain"
           />
 
           {/* Marca d'água no Lightbox */}
-          {watermarkEnabled && (
-            <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center p-6 z-10 overflow-hidden">
-              {watermarkLogoUrl ? (
-                <img
-                  src={watermarkLogoUrl}
-                  alt="Marca d'água"
-                  className="max-w-[65%] max-h-[65%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
-                />
-              ) : (
-                <div className="rotate-[-25deg] text-center text-white/40 font-extrabold text-sm sm:text-base md:text-lg tracking-widest uppercase border border-white/20 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-[1px] shadow-sm pointer-events-none">
-                  © {watermarkText || 'DIREITOS RESERVADOS'}
-                </div>
-              )}
-            </div>
-          )}
+          {watermarkEnabled && (() => {
+            const pos = watermarkPosition || 'bottom-right';
+            const alignMap: Record<string, string> = {
+              'top-left':      'items-start justify-start',
+              'top-center':    'items-start justify-center',
+              'top-right':     'items-start justify-end',
+              'center-left':   'items-center justify-start',
+              'center':        'items-center justify-center',
+              'center-right':  'items-center justify-end',
+              'bottom-left':   'items-end justify-start',
+              'bottom-center': 'items-end justify-center',
+              'bottom-right':  'items-end justify-end',
+            };
+            const align = alignMap[pos] ?? 'items-end justify-end';
+            const rot = watermarkRotation ?? 0;
+
+            return (
+              <div className={`absolute inset-0 pointer-events-none select-none flex ${align} p-6 z-10 overflow-hidden`}>
+                {watermarkLogoUrl ? (
+                  <img
+                    src={watermarkLogoUrl}
+                    alt="Marca d'água"
+                    style={{ transform: `rotate(${rot}deg)` }}
+                    className="max-w-[65%] max-h-[65%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
+                  />
+                ) : (
+                  <div
+                    style={{ transform: `rotate(${rot}deg)` }}
+                    className="text-center text-white/40 font-extrabold text-sm sm:text-base md:text-lg tracking-widest uppercase border border-white/20 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-[1px] shadow-sm pointer-events-none"
+                  >
+                    © {watermarkText || 'DIREITOS RESERVADOS'}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Rodapé de Informações e Download */}

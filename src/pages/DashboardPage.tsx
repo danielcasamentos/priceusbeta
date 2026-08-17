@@ -204,12 +204,12 @@ export function DashboardPage() {
           {/* PriceUs Logo no centro exato da barra superior (também arrastável) */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none">
             <img
-              src="/Logo Price Us Dark.png"
+              src="./Logo Price Us Dark.png"
               alt="Price Us"
               className="h-[40px] sm:h-[50px] w-auto hidden dark:block pointer-events-auto object-contain"
             />
             <img
-              src="/logo-priceus.png"
+              src="./logo-priceus.png"
               alt="Price Us"
               className="h-[40px] sm:h-[50px] w-auto dark:hidden block pointer-events-auto object-contain"
             />

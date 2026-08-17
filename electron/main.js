@@ -152,8 +152,23 @@ function setupNativeMenu() {
 app.whenReady().then(() => {
   createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+const { exec } = require('child_process');
+
+ipcMain.handle('launch-lightroom', async (event, folderPath) => {
+  return new Promise((resolve) => {
+    const isMac = process.platform === 'darwin';
+    let cmd = isMac
+      ? (folderPath ? `open -a "Adobe Lightroom Classic" --args -import "${folderPath}"` : `open -a "Adobe Lightroom Classic"`)
+      : (folderPath ? `start "" "Lightroom.exe" -import "${folderPath}"` : `start "" "Lightroom.exe"`);
+
+    exec(cmd, (err) => {
+      if (err) {
+        console.warn('[Electron] Erro ao abrir Adobe Lightroom Classic:', err);
+        resolve(false);
+      } else {
+        resolve(true);
+      }
+    });
   });
 });
 

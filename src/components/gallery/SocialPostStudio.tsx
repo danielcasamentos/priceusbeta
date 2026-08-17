@@ -28,10 +28,89 @@ interface SocialPostStudioProps {
   projectTitle?: string;
 }
 
+export function getCandidateImageUrls(primaryUrl?: string | null): string[] {
+  if (!primaryUrl) return [];
+  const urls: string[] = [];
+
+  const addUrl = (u?: string | null) => {
+    if (u && !urls.includes(u)) urls.push(u);
+  };
+
+  addUrl(primaryUrl);
+
+  // Extrair ID do Google Drive se existir na URL
+  let driveId: string | null = null;
+  if (primaryUrl.includes('googleusercontent.com/d/')) {
+    driveId = primaryUrl.split('/d/')[1]?.split('=')[0]?.split('?')[0] || null;
+  } else if (primaryUrl.includes('drive.google.com') || primaryUrl.includes('docs.google.com')) {
+    const match = primaryUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (match) driveId = match[1];
+  }
+
+  if (driveId) {
+    addUrl(`https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`);
+    addUrl(`https://drive.google.com/thumbnail?id=${driveId}&sz=w800`);
+    addUrl(`https://lh3.googleusercontent.com/d/${driveId}=w1200`);
+    addUrl(`https://lh3.googleusercontent.com/d/${driveId}=w800`);
+    addUrl(`https://drive.google.com/uc?export=view&id=${driveId}`);
+    addUrl(`https://docs.google.com/uc?id=${driveId}`);
+  }
+
+  return urls;
+}
+
+export function StudioImage({
+  src,
+  alt = 'Foto',
+  className = 'w-full h-full object-cover',
+  loading = 'lazy',
+}: {
+  src?: string;
+  alt?: string;
+  className?: string;
+  loading?: 'lazy' | 'eager';
+}) {
+  const candidateUrls = React.useMemo(() => getCandidateImageUrls(src), [src]);
+  const [index, setIndex] = React.useState(0);
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    setIndex(0);
+    setHasError(false);
+  }, [src]);
+
+  const currentUrl = candidateUrls[index];
+
+  if (!currentUrl || hasError) {
+    return (
+      <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-slate-500 text-xs p-2 text-center">
+        <ImageIcon className="w-6 h-6 mb-1 opacity-50 text-purple-400" />
+        <span className="truncate max-w-full text-[10px]">{alt}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={currentUrl}
+      alt={alt}
+      className={className}
+      loading={loading}
+      onError={() => {
+        if (index + 1 < candidateUrls.length) {
+          setIndex((prev) => prev + 1);
+        } else {
+          setHasError(true);
+        }
+      }}
+    />
+  );
+}
+
 export interface PostSlide {
-  type: 'single' | 'grid_6' | 'grid_9';
+  type: 'single' | 'grid_9';
   photoIds: string[];
-  bgTheme: 'white' | 'black';
+  bgTheme: 'white';
 }
 
 export interface CaptionOption {
@@ -62,6 +141,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
 
   // Modal de escolha manual ou automática para troca de foto
   const [selectingPhotoId, setSelectingPhotoId] = useState<string | null>(null);
+  const [modalPhotoSearch, setModalPhotoSearch] = useState('');
 
   // Pool limpo da galeria ativa desconsiderando fotos recusadas
   const pool = getCleanPhotoPool(photos, dislikedPhotoIds);
@@ -79,6 +159,9 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [activeCaptionIndex, setActiveCaptionIndex] = useState(0);
 
+  // Palavras-chave personalizadas pelo fotógrafo para direcionar o tom/conteúdo da IA
+  const [captionKeywords, setCaptionKeywords] = useState('');
+
   // Estado de carregamento do Groq IA e cópia
   const [generatingGroq, setGeneratingGroq] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -86,14 +169,19 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
   // Canvas invisível para download em alta resolução (1080x1350)
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Re-gerar composições APENAS quando alteradas as preferências gerais ou ao recusar o post inteiro.
-  // IMPORTANTE: NÃO incluir dislikedPhotoIds aqui para não sobrescrever trocas manuais de foto!
+  // Flag para evitar que re-renderizações da galeria pai apaguem trocas manuais feitas pelo fotógrafo
+  const initializedPhotosCountRef = useRef<number>(0);
+
   useEffect(() => {
     if (photos.length === 0) return;
-    const curated = generateCuratedPosts(photos, prefBg, allowGrids, rejectionOffsets);
-    setPosts(curated);
-    setActiveCaptionIndex(0);
-  }, [photos, prefBg, allowGrids, rejectionOffsets]);
+    const shouldReinit = initializedPhotosCountRef.current !== photos.length || Object.keys(rejectionOffsets).length > 0;
+    if (shouldReinit) {
+      const curated = generateCuratedPosts(photos, prefBg, allowGrids, rejectionOffsets);
+      setPosts(curated);
+      setActiveCaptionIndex(0);
+      initializedPhotosCountRef.current = photos.length;
+    }
+  }, [photos.length, prefBg, allowGrids, rejectionOffsets]);
 
   const currentPost = posts[activePostIndex] || posts[0];
   const currentSlide = currentPost?.slides[activeSlideIndex] || currentPost?.slides[0];
@@ -127,7 +215,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
     );
 
     setSelectingPhotoId(null);
-    setFeedbackToast('✨ Nova foto salva e mantida no post!');
+    setFeedbackToast('✨ Foto substituída e mantida no post!');
     setTimeout(() => setFeedbackToast(null), 3000);
   };
 
@@ -184,45 +272,82 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
     );
   };
 
-  // Recusar legenda -> Chama Groq IA para substituir por uma nova
-  const handleRejectCaption = async (captionId: string) => {
+  // Editar texto da legenda manualmente
+  const handleEditCaptionText = (captionId: string, newText: string) => {
     setPosts((prev) =>
       prev.map((post, pIdx) => {
         if (pIdx !== activePostIndex) return post;
         return {
           ...post,
           captions: post.captions.map((cap) =>
-            cap.id === captionId ? { ...cap, rejected: true, approved: false } : cap
+            cap.id === captionId ? { ...cap, text: newText } : cap
           ),
         };
       })
     );
+  };
+
+  // Recusar legenda -> Chama Groq IA para substituir por uma nova versão estilizada
+  const handleRejectCaption = async (captionId: string) => {
     await handleGenerateGroqCaptions(true, captionId);
   };
 
-  // Gerar ou Substituir Legendas via Groq LLM API
+  // Gerar ou Substituir Legendas via Groq LLM API (com suporte a palavras-chave e fallback robusto)
   const handleGenerateGroqCaptions = async (singleReplace = false, targetCaptionId?: string) => {
     const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-    if (!apiKey) {
-      alert('Chave de API do Groq não configurada no .env (VITE_GROQ_API_KEY).');
-      return;
-    }
+    const titleStr = projectTitle || 'Ensaio Fotográfico Exclusivo';
+    const postTypeStr = currentPost?.title || 'Post Especial';
+    const keywordsInstruction = captionKeywords.trim()
+      ? `\n- Palavras-chave / Temas Obrigatórios do Fotógrafo: "${captionKeywords.trim()}"`
+      : '';
 
     setGeneratingGroq(true);
 
-    const titleStr = projectTitle || 'Ensaio Fotográfico Exclusivo';
-    const postTypeStr = currentPost?.title || 'Post Especial';
+    const coverPhotoId = currentPost?.slides[0]?.photoIds[0];
+    const coverPhoto = coverPhotoId ? getPhotoById(coverPhotoId) : photos[0];
+
+    if (!apiKey) {
+      // Fallback sem API key: gera com motor de templates inteligente incorporando keywords
+      if (singleReplace && targetCaptionId) {
+        const fallbacks = generateSmartCaptions(coverPhoto, captionKeywords);
+        const randomFallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+        setPosts((prev) =>
+          prev.map((post, pIdx) => {
+            if (pIdx !== activePostIndex) return post;
+            return {
+              ...post,
+              captions: post.captions.map((cap) =>
+                cap.id === targetCaptionId
+                  ? { ...cap, text: randomFallback.text, rejected: false, approved: false }
+                  : cap
+              ),
+            };
+          })
+        );
+        setFeedbackToast('✨ Nova variação de legenda gerada com sucesso!');
+        setTimeout(() => setFeedbackToast(null), 3000);
+      } else {
+        const newCaptions = generateSmartCaptions(coverPhoto, captionKeywords);
+        setPosts((prev) =>
+          prev.map((post, pIdx) => (pIdx === activePostIndex ? { ...post, captions: newCaptions } : post))
+        );
+        setFeedbackToast('✨ 5 legendas atualizadas com base nas palavras-chave!');
+        setTimeout(() => setFeedbackToast(null), 3000);
+      }
+      setGeneratingGroq(false);
+      return;
+    }
 
     const prompt = `Você é um Copywriter especialista de elite no mercado de fotografia de casamentos e ensaios premium no Instagram.
-Gere ${singleReplace ? '1 NOVA LEGENDA' : '5 OPÇÕES DE LEGENDAS ALTAMENTE ENGAJADORAS'} para o Instagram.
+Gere ${singleReplace ? '1 NOVA LEGENDA ÚNICA' : '5 OPÇÕES DE LEGENDAS ALTAMENTE ENGAJADORAS'} para o Instagram.
 
 Informações do Ensaio:
 - Título do Projeto: "${titleStr}"
-- Tipo de Post: "${postTypeStr}"
+- Tipo de Post: "${postTypeStr}"${keywordsInstruction}
 
 Requisitos obrigatórios:
 1. SEM MENCIONAR EQUIPAMENTOS, LENTES OU DADOS TÉCNICOS DE CÂMERA.
-2. Foque 100% na emoção, estética editorial, narrativa e conexão com o cliente.
+2. Foque 100% na emoção, estética editorial, narrativa e conexão com o cliente.${captionKeywords.trim() ? ` Incorpore a essência de: ${captionKeywords.trim()}.` : ''}
 3. Cada legenda deve ter:
    - 1 Frase de impacto inicial (Hook).
    - 2 a 3 parágrafos curtos e poéticos com emojis elegantes.
@@ -230,7 +355,7 @@ Requisitos obrigatórios:
    - 8 a 12 Hashtags estratégicas de fotografia.
 ${
   singleReplace
-    ? 'Responda APENAS com o texto da legenda pronta.'
+    ? 'Responda APENAS com o texto da legenda pronta, sem json e sem aspas extras.'
     : `Retorne exatamente 5 legendas no formato JSON:
 [
   { "title": "1. Emocional & Poética", "text": "..." },
@@ -260,17 +385,40 @@ ${
       const contentText = data.choices?.[0]?.message?.content || '';
 
       if (singleReplace && targetCaptionId) {
-        setPosts((prev) =>
-          prev.map((post, pIdx) => {
-            if (pIdx !== activePostIndex) return post;
-            return {
-              ...post,
-              captions: post.captions.map((cap) =>
-                cap.id === targetCaptionId ? { ...cap, text: contentText.trim(), rejected: false, approved: true } : cap
-              ),
-            };
-          })
-        );
+        if (contentText.trim()) {
+          setPosts((prev) =>
+            prev.map((post, pIdx) => {
+              if (pIdx !== activePostIndex) return post;
+              return {
+                ...post,
+                captions: post.captions.map((cap) =>
+                  cap.id === targetCaptionId
+                    ? { ...cap, text: contentText.trim(), rejected: false, approved: false }
+                    : cap
+                ),
+              };
+            })
+          );
+          setFeedbackToast('✨ Nova versão da legenda gerada com sucesso!');
+          setTimeout(() => setFeedbackToast(null), 3000);
+        } else {
+          // Fallback se a resposta vier vazia
+          const fallbacks = generateSmartCaptions(coverPhoto, captionKeywords);
+          const randomFallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+          setPosts((prev) =>
+            prev.map((post, pIdx) => {
+              if (pIdx !== activePostIndex) return post;
+              return {
+                ...post,
+                captions: post.captions.map((cap) =>
+                  cap.id === targetCaptionId
+                    ? { ...cap, text: randomFallback.text, rejected: false, approved: false }
+                    : cap
+                ),
+              };
+            })
+          );
+        }
       } else {
         try {
           const jsonMatch = contentText.match(/\[[\s\S]*\]/);
@@ -286,9 +434,9 @@ ${
             setPosts((prev) =>
               prev.map((post, pIdx) => (pIdx === activePostIndex ? { ...post, captions: newCaptions } : post))
             );
-          }
-        } catch {
-          if (contentText.trim()) {
+            setFeedbackToast('✨ 5 novas legendas geradas com sucesso!');
+            setTimeout(() => setFeedbackToast(null), 3000);
+          } else if (contentText.trim()) {
             setPosts((prev) =>
               prev.map((post, pIdx) => {
                 if (pIdx !== activePostIndex) return post;
@@ -300,10 +448,42 @@ ${
               })
             );
           }
+        } catch {
+          const newCaptions = generateSmartCaptions(coverPhoto, captionKeywords);
+          setPosts((prev) =>
+            prev.map((post, pIdx) => (pIdx === activePostIndex ? { ...post, captions: newCaptions } : post))
+          );
         }
       }
     } catch (err) {
       console.error('Erro ao chamar Groq IA:', err);
+      // Fallback gracioso em caso de erro de rede ou quota
+      if (singleReplace && targetCaptionId) {
+        const fallbacks = generateSmartCaptions(coverPhoto, captionKeywords);
+        const randomFallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+        setPosts((prev) =>
+          prev.map((post, pIdx) => {
+            if (pIdx !== activePostIndex) return post;
+            return {
+              ...post,
+              captions: post.captions.map((cap) =>
+                cap.id === targetCaptionId
+                  ? { ...cap, text: randomFallback.text, rejected: false, approved: false }
+                  : cap
+              ),
+            };
+          })
+        );
+        setFeedbackToast('✨ Nova variação gerada via IA interna!');
+        setTimeout(() => setFeedbackToast(null), 3000);
+      } else {
+        const newCaptions = generateSmartCaptions(coverPhoto, captionKeywords);
+        setPosts((prev) =>
+          prev.map((post, pIdx) => (pIdx === activePostIndex ? { ...post, captions: newCaptions } : post))
+        );
+        setFeedbackToast('✨ 5 legendas atualizadas!');
+        setTimeout(() => setFeedbackToast(null), 3000);
+      }
     } finally {
       setGeneratingGroq(false);
     }
@@ -331,55 +511,73 @@ ${
       .map((id) => getPhotoById(id))
       .filter((p): p is CullingPhoto => Boolean(p));
 
-    const drawImgOnCanvas = (photo: CullingPhoto, x: number, y: number, w: number, h: number, radius = 0): Promise<void> => {
-      return new Promise((resolve) => {
-        const src = photo.previewUrl;
-        if (!src) {
-          resolve();
-          return;
-        }
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          ctx.save();
-          if (radius > 0) {
-            ctx.beginPath();
-            ctx.roundRect(x, y, w, h, radius);
-            ctx.clip();
-          }
-          ctx.drawImage(img, x, y, w, h);
-          ctx.restore();
-          resolve();
-        };
-        img.onerror = () => resolve();
-        img.src = src;
-      });
+    const drawImgOnCanvas = async (photo: CullingPhoto, x: number, y: number, w: number, h: number, radius = 0): Promise<void> => {
+      const candidates = getCandidateImageUrls(photo.previewUrl);
+      if (candidates.length === 0) return;
+
+      for (const url of candidates) {
+        const success = await new Promise<boolean>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            ctx.save();
+            if (radius > 0) {
+              ctx.beginPath();
+              ctx.roundRect(x, y, w, h, radius);
+              ctx.clip();
+            }
+            ctx.drawImage(img, x, y, w, h);
+            ctx.restore();
+            resolve(true);
+          };
+          img.onerror = () => {
+            // Tenta carregar sem crossOrigin como fallback se for mesmo domínio ou blob
+            const imgFallback = new Image();
+            imgFallback.onload = () => {
+              ctx.save();
+              if (radius > 0) {
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, radius);
+                ctx.clip();
+              }
+              ctx.drawImage(imgFallback, x, y, w, h);
+              ctx.restore();
+              resolve(true);
+            };
+            imgFallback.onerror = () => resolve(false);
+            imgFallback.src = url;
+          };
+          img.src = url;
+        });
+
+        if (success) return;
+      }
     };
 
     if (currentSlide.type === 'single' && slidePhotos[0]) {
-      // Foto solo: 100% full bleed sem margens, bordas pretas/brancas ou cortes forçados!
+      // Foto solo: 100% full bleed sem margens, cantos retos (radius = 0), sem contornos
       await drawImgOnCanvas(slidePhotos[0], 0, 0, canvas.width, canvas.height, 0);
     } else if (slidePhotos.length > 0) {
-      // Grids usam fundo e espaçamento entre fotos
-      ctx.fillStyle = currentSlide.bgTheme === 'white' ? '#ffffff' : '#0a0d14';
+      // Grade 3x3 (9 fotos): Fundo 100% branco, cantos retos (radius = 0), sem contornos
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const cols = 3;
-      const rows = currentSlide.type === 'grid_6' ? 2 : 3;
-      const padding = 16;
-      const outerMargin = 32;
+      const rows = 3;
+      const padding = 12;
+      const outerMargin = 20;
 
       const availableW = canvas.width - outerMargin * 2 - padding * (cols - 1);
       const availableH = canvas.height - outerMargin * 2 - padding * (rows - 1);
       const cellW = availableW / cols;
       const cellH = availableH / rows;
 
-      for (let i = 0; i < Math.min(slidePhotos.length, cols * rows); i++) {
+      for (let i = 0; i < Math.min(slidePhotos.length, 9); i++) {
         const c = i % cols;
         const r = Math.floor(i / cols);
         const x = outerMargin + c * (cellW + padding);
         const y = outerMargin + r * (cellH + padding);
-        await drawImgOnCanvas(slidePhotos[i], x, y, cellW, cellH, 12);
+        await drawImgOnCanvas(slidePhotos[i], x, y, cellW, cellH, 0);
       }
     }
 
@@ -408,22 +606,22 @@ ${
 
       {/* Modal de Escolha de Troca de Foto (IA ou Seleção Manual da Galeria) */}
       {selectingPhotoId && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-scale-in">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-5 animate-scale-in max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300">
+                <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300">
                   <ImageIcon className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-black text-white">Substituir Foto do Slide</h3>
-                  <p className="text-xs text-slate-400">Escolha a substituição automática pela IA ou selecione uma foto específica da galeria.</p>
+                  <p className="text-xs text-slate-400">Escolha a substituição automática pela IA ou selecione uma foto específica da galeria ({photos.length} fotos).</p>
                 </div>
               </div>
 
               <button
                 onClick={() => setSelectingPhotoId(null)}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -432,59 +630,71 @@ ${
             {/* Opção 1: Troca Automática pela IA */}
             <button
               onClick={() => handleAutoReplacePhoto(selectingPhotoId)}
-              className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-900/60 to-pink-900/60 hover:from-purple-900 hover:to-pink-900 border border-purple-500/40 text-left transition flex items-center justify-between group shadow-lg"
+              className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/50 to-pink-900/50 hover:from-purple-900 hover:to-pink-900 border border-purple-500/40 text-left transition flex items-center justify-between group shadow-lg shrink-0 cursor-pointer"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-purple-600 text-white shadow-md">
-                  <Sparkles className="w-5 h-5 text-amber-300" />
+                <div className="p-2 rounded-xl bg-purple-600 text-white shadow-md">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white group-hover:text-amber-200 transition">
-                    ✨ Substituir Automático com IA (Aprendizado)
+                  <h4 className="text-xs font-bold text-white group-hover:text-amber-200 transition">
+                    ✨ Substituir Automaticamente com IA
                   </h4>
-                  <p className="text-xs text-slate-300">
-                    A IA aprende sua preferência, descarta a foto atual e escolhe o próximo melhor clique da galeria.
+                  <p className="text-[11px] text-slate-300">
+                    A IA escolhe o próximo melhor clique da galeria que ainda não foi usado no post.
                   </p>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-purple-300 group-hover:translate-x-1 transition-transform" />
+              <ChevronRight className="w-4 h-4 text-purple-300 group-hover:translate-x-1 transition-transform" />
             </button>
 
-            {/* Opção 2: Grade de Seleção Manual de Foto da Galeria */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                Ou escolha manualmente uma foto da galeria ({photos.length}):
-              </span>
+            {/* Opção 2: Grade de Seleção Manual com Busca */}
+            <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Ou escolha qualquer foto da galeria:
+                </span>
+                <input
+                  type="text"
+                  placeholder="Buscar por nome do arquivo (ex: DSC_001)..."
+                  value={modalPhotoSearch}
+                  onChange={(e) => setModalPhotoSearch(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 w-64"
+                />
+              </div>
 
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2.5 max-h-64 overflow-y-auto p-1">
-                {photos.map((p) => {
-                  const isCurrent = p.id === selectingPhotoId;
-                  return (
-                    <button
-                      key={p.id}
-                      disabled={isCurrent}
-                      onClick={() => executePhotoSwap(selectingPhotoId, p.id, false)}
-                      className={`aspect-square rounded-xl overflow-hidden border relative group transition-all ${
-                        isCurrent
-                          ? 'border-purple-500 ring-2 ring-purple-500/50 opacity-40 cursor-not-allowed'
-                          : 'border-slate-800 hover:border-purple-400 hover:scale-105 shadow-md'
-                      }`}
-                    >
-                      {p.previewUrl ? (
-                        <img src={p.previewUrl} alt="Opção da Galeria" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-500">
-                          Foto
-                        </div>
-                      )}
-                      {isCurrent && (
-                        <div className="absolute inset-0 bg-slate-950/60 flex items-center justify-center text-[10px] font-bold text-purple-300">
-                          Atual
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 overflow-y-auto p-1 flex-1 max-h-[340px]">
+                {photos
+                  .filter((p) => !modalPhotoSearch.trim() || p.fileName.toLowerCase().includes(modalPhotoSearch.toLowerCase()))
+                  .map((p) => {
+                    const isCurrent = p.id === selectingPhotoId;
+                    return (
+                      <button
+                        key={p.id}
+                        disabled={isCurrent}
+                        onClick={() => executePhotoSwap(selectingPhotoId, p.id, false)}
+                        title={p.fileName}
+                        className={`aspect-square rounded-xl overflow-hidden border relative group transition-all cursor-pointer ${
+                          isCurrent
+                            ? 'border-purple-500 ring-2 ring-purple-500/50 opacity-40 cursor-not-allowed'
+                            : 'border-slate-800 hover:border-purple-400 hover:scale-105 shadow-md bg-slate-950'
+                        }`}
+                      >
+                        {p.previewUrl ? (
+                          <StudioImage src={p.previewUrl} alt={p.fileName} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full bg-slate-800 flex items-center justify-center text-[9px] text-slate-500 p-1 text-center truncate">
+                            {p.fileName}
+                          </div>
+                        )}
+                        {isCurrent && (
+                          <div className="absolute inset-0 bg-slate-950/75 flex items-center justify-center text-[10px] font-bold text-purple-300">
+                            Atual
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           </div>
@@ -521,39 +731,8 @@ ${
               className="w-4 h-4 rounded accent-purple-600 bg-slate-900 border-slate-700"
             />
             <LayoutGrid className="w-3.5 h-3.5 text-purple-400" />
-            <span>Permitir Grids (3x2 e 3x3)</span>
+            <span>Permitir Grade 3x3 (9 Fotos · Fundo Branco)</span>
           </label>
-
-          {allowGrids && (
-            <>
-              <div className="h-4 w-px bg-slate-800 mx-1" />
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPrefBg('white')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    prefBg === 'white'
-                      ? 'bg-white text-slate-950 shadow-md font-extrabold'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Sun className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Fundo Grid Branco</span>
-                </button>
-
-                <button
-                  onClick={() => setPrefBg('black')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    prefBg === 'black'
-                      ? 'bg-slate-800 text-white shadow-md font-extrabold'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Moon className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Fundo Grid Preto</span>
-                </button>
-              </div>
-            </>
-          )}
         </div>
       </div>
 
@@ -582,7 +761,7 @@ ${
                 {/* Miniatura Real da Capa do Post */}
                 <div className="aspect-[4/3] rounded-none overflow-hidden bg-slate-900 border border-slate-800 relative">
                   {coverPhoto?.previewUrl ? (
-                    <img
+                    <StudioImage
                       src={coverPhoto.previewUrl}
                       alt={post.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -674,7 +853,7 @@ ${
               <div
                 className="relative w-full max-w-[340px] aspect-[4/5] rounded-none overflow-hidden border border-slate-800 shadow-2xl bg-slate-950 group"
               >
-                {/* Visualização de Slide Único (Foto Inteira Solo - Full Bleed Sem Fundo/Bordas) */}
+                {/* Visualização de Slide Único (Foto Inteira Solo 4:5) */}
                 {currentSlide?.type === 'single' && (
                   <div className="w-full h-full relative rounded-none">
                     {(() => {
@@ -682,16 +861,15 @@ ${
                       const photo = photoId ? getPhotoById(photoId) : undefined;
                       return photo?.previewUrl ? (
                         <>
-                          <img
+                          <StudioImage
                             src={photo.previewUrl}
                             alt="Slide Solo"
                             className="w-full h-full object-cover rounded-none"
                           />
-                          {/* Botão de Substituir Foto Solo Individual */}
                           <button
                             onClick={() => setSelectingPhotoId(photo.id)}
                             title="Trocar esta foto por outra da galeria ou automática"
-                            className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-slate-950/85 hover:bg-purple-600 text-white font-bold text-xs shadow-lg backdrop-blur-sm border border-slate-700/80 transition flex items-center gap-1.5"
+                            className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-slate-950/85 hover:bg-purple-600 text-white font-bold text-xs shadow-lg backdrop-blur-sm border border-slate-700/80 transition flex items-center gap-1.5 cursor-pointer"
                           >
                             <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
                             <span>Trocar Foto</span>
@@ -706,51 +884,27 @@ ${
                   </div>
                 )}
 
-                {/* Visualização de Slide Grid 6 (3 colunas x 2 linhas) */}
-                {currentSlide?.type === 'grid_6' && (
-                  <div className={`w-full h-full p-1 grid grid-cols-3 grid-rows-2 gap-1 ${currentSlide.bgTheme === 'white' ? 'bg-white' : 'bg-[#0a0d14]'}`}>
-                    {currentSlide.photoIds.slice(0, 6).map((id, pIdx) => {
-                      const p = getPhotoById(id);
-                      return (
-                        <div key={pIdx} className="w-full h-full rounded-none overflow-hidden bg-slate-900 relative group/cell">
-                          {p?.previewUrl && (
-                            <>
-                              <img src={p.previewUrl} alt={`Grid ${pIdx}`} className="w-full h-full object-cover rounded-none" />
-                              <button
-                                onClick={() => setSelectingPhotoId(p.id)}
-                                title="Trocar apenas esta foto da grade"
-                                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover/cell:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold gap-1 p-1 text-center"
-                              >
-                                <RotateCcw className="w-3 h-3 text-amber-400" />
-                                <span>Trocar</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Visualização de Slide Grid 9 (3 colunas x 3 linhas - Estilo Feed Instagram Chic 90°) */}
+                {/* Visualização de Slide Grade 3x3 (9 Fotos - Fundo Branco, Sem Cantos Arredondados, Sem Contornos) */}
                 {currentSlide?.type === 'grid_9' && (
-                  <div className={`w-full h-full p-1 grid grid-cols-3 grid-rows-3 gap-1 ${currentSlide.bgTheme === 'white' ? 'bg-white' : 'bg-[#0a0d14]'}`}>
+                  <div className="w-full h-full p-2 grid grid-cols-3 grid-rows-3 gap-1 bg-white rounded-none border-0">
                     {currentSlide.photoIds.slice(0, 9).map((id, pIdx) => {
                       const p = getPhotoById(id);
                       return (
-                        <div key={pIdx} className="w-full h-full rounded-none overflow-hidden bg-slate-900 relative group/cell">
-                          {p?.previewUrl && (
+                        <div key={pIdx} className="w-full h-full rounded-none overflow-hidden bg-white border-0 relative group/cell">
+                          {p?.previewUrl ? (
                             <>
-                              <img src={p.previewUrl} alt={`Grid 9 - ${pIdx}`} className="w-full h-full object-cover rounded-none" />
+                              <StudioImage src={p.previewUrl} alt={`Grid 9 - ${pIdx}`} className="w-full h-full object-cover rounded-none border-0" />
                               <button
                                 onClick={() => setSelectingPhotoId(p.id)}
                                 title="Trocar apenas esta foto da grade"
-                                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover/cell:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold gap-1 p-1 text-center"
+                                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover/cell:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold gap-1 p-1 text-center cursor-pointer"
                               >
                                 <RotateCcw className="w-3 h-3 text-amber-400" />
                                 <span>Trocar</span>
                               </button>
                             </>
+                          ) : (
+                            <div className="w-full h-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">Foto {pIdx + 1}</div>
                           )}
                         </div>
                       );
@@ -807,7 +961,7 @@ ${
                           : 'bg-slate-800 text-slate-400 hover:text-white'
                       }`}
                     >
-                      Slide {sIdx + 1} ({s.type === 'single' ? 'Foto' : s.type === 'grid_6' ? 'Grid 6' : 'Grid 9'})
+                      Slide {sIdx + 1} ({s.type === 'single' ? 'Foto' : 'Grade 3x3'})
                     </button>
                   ))}
                 </div>
@@ -817,7 +971,7 @@ ${
             {/* Direita: 5 Opções de Legendas da IA Groq */}
             <div className="lg:col-span-7 space-y-4">
               <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <Wand2 className="w-4 h-4 text-purple-400" />
                     <span>5 Legendas Geradas pela IA (Escolha a Ideal)</span>
@@ -826,15 +980,59 @@ ${
                   <button
                     onClick={() => handleGenerateGroqCaptions(false)}
                     disabled={generatingGroq}
-                    className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-300 text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50"
+                    className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 border border-purple-500/50 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-md shadow-purple-600/20"
                   >
                     {generatingGroq ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     )}
-                    <span>{generatingGroq ? 'Gerando com Groq...' : 'Re-gerar com Groq IA'}</span>
+                    <span>{generatingGroq ? 'Gerando com IA...' : 'Re-gerar 5 com IA'}</span>
                   </button>
+                </div>
+
+                {/* Direcionar com Palavras-chave */}
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-purple-400">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Palavras-chave & Contexto para a IA:</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500">Pressione Enter ou clique em Re-gerar</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Casamento ao ar livre, pôr do sol, noiva emocionada, vagas abertas 2026..."
+                    value={captionKeywords}
+                    onChange={(e) => setCaptionKeywords(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleGenerateGroqCaptions(false);
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition"
+                  />
+                  {/* Sugestões Rápidas de Tags */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {[
+                      '🌅 Pôr do Sol Dourado',
+                      '💍 Votos Emocionantes',
+                      '🌿 Campo & Rústico',
+                      '✨ Editorial & Elegante',
+                      '🖤 P&B Atemporal',
+                      '📅 Agenda 2026 Aberta',
+                    ].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const cleanTag = tag.replace(/^[^\s]+\s/, '');
+                          setCaptionKeywords((prev) => (prev ? `${prev}, ${cleanTag}` : cleanTag));
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-purple-900/60 hover:text-purple-200 text-[10px] font-medium text-slate-400 border border-slate-700/60 transition cursor-pointer"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Abas das 5 Opções de Legenda */}
@@ -868,7 +1066,7 @@ ${
                           </button>
                           <button
                             onClick={() => handleRejectCaption(cap.id)}
-                            title="Recusar e Gerar Nova Legenda no Groq IA"
+                            title="Recusar e Gerar Nova Variação com IA"
                             className={`p-1.5 rounded-lg text-xs transition ${
                               cap.rejected ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-rose-400'
                             }`}
@@ -891,6 +1089,7 @@ ${
                       {currentCaption.approved && (
                         <span className="text-emerald-400 text-[10px] font-bold">✓ (Aprovada por você)</span>
                       )}
+                      <span className="text-slate-500 text-[10px] font-normal">(Você pode editar o texto abaixo)</span>
                     </span>
 
                     <button
@@ -903,10 +1102,10 @@ ${
                   </div>
 
                   <textarea
-                    readOnly
                     rows={10}
                     value={currentCaption.text}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 font-sans focus:outline-none resize-none leading-relaxed"
+                    onChange={(e) => handleEditCaptionText(currentCaption.id, e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl p-3.5 text-xs text-slate-200 font-sans focus:outline-none resize-none leading-relaxed"
                   />
                 </div>
               )}

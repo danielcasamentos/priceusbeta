@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('priceusNative', {
   onToggleLogDrawer: (callback) => {
     ipcRenderer.on('toggle-log-drawer', () => callback());
   },
+  launchLightroom: (folderPath) => ipcRenderer.invoke('launch-lightroom', folderPath),
 });

@@ -17,46 +17,38 @@ export async function processImageForGallery(
   socialInstagramHandle?: string | null
 ): Promise<ProcessedImages> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = objectUrl;
 
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
+    img.onload = async () => {
+      URL.revokeObjectURL(objectUrl);
+      const originalWidth = img.naturalWidth || img.width;
+      const originalHeight = img.naturalHeight || img.height;
 
-      img.onload = async () => {
-        const originalWidth = img.naturalWidth || img.width;
-        const originalHeight = img.naturalHeight || img.height;
+      try {
+        // 1. Gerar Thumbnail (máx 400px, WebP, qualidade 75%, sem marca d'água)
+        const thumbBlob = await resizeCanvas(img, 400, 0.75, null, null);
 
-        try {
-          // 1. Gerar Thumbnail (máx 400px, WebP, qualidade 75%, sem marca d'água)
-          const thumbBlob = await resizeCanvas(img, 400, 0.75, null, null);
+        // 2. Gerar Web Display (máx 2048px, WebP, qualidade 80%, com marca d'água e promo social)
+        const webBlob = await resizeCanvas(img, 2048, 0.80, watermarkText, socialInstagramHandle);
 
-          // 2. Gerar Web Display (máx 2048px, WebP, qualidade 80%, com marca d'água e promo social)
-          const webBlob = await resizeCanvas(img, 2048, 0.80, watermarkText, socialInstagramHandle);
-
-          platformAdapter.addLog(
-            'success',
-            'CULLING',
-            `[Image Processor] Foto ${file.name} processada: WebP Thumb ${(thumbBlob.size / 1024).toFixed(1)} KB | Web Display ${(webBlob.size / 1024).toFixed(1)} KB (${originalWidth}x${originalHeight}px)`
-          );
-
-          resolve({
-            thumbBlob,
-            webBlob,
-            width: originalWidth,
-            height: originalHeight,
-            fileSizeBytes: file.size,
-          });
-        } catch (err) {
-          reject(err);
-        }
-      };
-
-      img.onerror = () => reject(new Error(`Falha ao carregar imagem: ${file.name}`));
+        resolve({
+          thumbBlob,
+          webBlob,
+          width: originalWidth,
+          height: originalHeight,
+          fileSizeBytes: file.size,
+        });
+      } catch (err) {
+        reject(err);
+      }
     };
 
-    reader.onerror = () => reject(new Error(`Falha ao ler arquivo: ${file.name}`));
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error(`Falha ao carregar imagem: ${file.name}`));
+    };
   });
 }
 
@@ -107,9 +99,8 @@ function resizeCanvas(
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Posicionar texto inclinado no centro da imagem
+      // Sem rotação — texto horizontal centralizado
       ctx.translate(width / 2, height / 2);
-      ctx.rotate(-Math.PI / 6); // Rotação de -30 graus
 
       ctx.strokeText(watermarkText, 0, 0);
       ctx.fillText(watermarkText, 0, 0);
@@ -147,6 +138,8 @@ function resizeCanvas(
     // Converter para WebP
     canvas.toBlob(
       (blob) => {
+        canvas.width = 0;
+        canvas.height = 0;
         if (blob) {
           resolve(blob);
         } else {

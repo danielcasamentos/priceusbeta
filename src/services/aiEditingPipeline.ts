@@ -27,24 +27,23 @@ export interface UserPresetPreference {
 
 export const DEFAULT_USER_PRESET_PREFERENCE: UserPresetPreference = {
   presetName: 'Signature Boho Edit',
-  presetIntensity: 85,
+  presetIntensity: 100,
   exposure: 0.2,
   contrast: 15,
   vibrance: 20,
-  temp: 5700,
+  temp: 5650,
   autoStraighten: true,
   autoRetouch: false,
-  createBwVariants: false,
+  createBwVariants: true,
 };
 
 /**
- * Detecta se a foto tem alto contraste ou iluminação dramática ideal para Preto & Branco (P&B)
+ * Detecta deterministicamente se a foto tem alto contraste ou iluminação dramática ideal para Preto & Branco (P&B)
  */
 export function hasHighBwPotential(photo: CullingPhoto): boolean {
-  // Fotos de retrato com alta nitidez, contraste forte e luz dramática
-  const isHighContrast = (photo.editSettings?.contrast || 0) > 10 || photo.sharpnessScore > 85;
-  const isPortraitOrScene = photo.fileName.toLowerCase().includes('portrait') || photo.sceneGroup.includes('Cena');
-  return isHighContrast && isPortraitOrScene && Math.random() < 0.35; // Seleção inteligente proporcional
+  const isHighContrast = (photo.editSettings?.contrast || 0) > 12 || photo.sharpnessScore > 80;
+  const isDynamicLighting = (photo.editSettings?.highlights || 0) - (photo.editSettings?.shadows || 0) > 15;
+  return isHighContrast || isDynamicLighting;
 }
 
 /**
@@ -52,9 +51,8 @@ export function hasHighBwPotential(photo: CullingPhoto): boolean {
  */
 export function detectHorizonTilt(photo: CullingPhoto): number {
   if (!photo.isBlurry && photo.sharpnessScore > 75) {
-    // Simulação determinística baseada no id da foto para cálculo de ângulo torto
     const hash = photo.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const rawAngle = ((hash % 11) - 5) * 0.7; // Ângulo entre -3.5° e +3.5°
+    const rawAngle = ((hash % 11) - 5) * 0.5;
     return Math.round(rawAngle * 10) / 10;
   }
   return 0;

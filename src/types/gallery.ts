@@ -94,6 +94,9 @@ export interface Gallery {
   enable_social_promo?: boolean;
   photographer_instagram?: string | null;
   google_drive_folder_id?: string | null;
+  photo_sort_order?: 'capture_asc' | 'capture_desc' | 'name_asc' | 'name_desc' | 'order_asc' | null;
+  require_download_pin?: boolean;
+  download_pin?: string | null;
   subgalleries?: string[] | null;
   status: GalleryStatus;
   created_at: string;
@@ -133,6 +136,8 @@ export interface GalleryFormData {
   allow_high_res_download: boolean;
   enable_sales?: boolean;
   enable_downloads?: boolean;
+  require_download_pin?: boolean;
+  download_pin?: string;
   watermark_enabled: boolean;
   watermark_type?: WatermarkType;
   watermark_position?: WatermarkPosition;
@@ -140,8 +145,10 @@ export interface GalleryFormData {
   watermark_scale?: number;
   watermark_text?: string;
   watermark_logo_url?: string;
+  watermark_rotation?: number;
   enable_usage_policy_modal?: boolean;
   usage_policy_text?: string;
+  photo_sort_order?: 'capture_asc' | 'capture_desc' | 'name_asc' | 'name_desc' | 'order_asc';
   subgalleries?: string[];
   price_per_extra_photo?: number;
   package_photo_limit?: number;

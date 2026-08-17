@@ -158,8 +158,10 @@ export function analyzeImageSharpnessSobel(ctx: CanvasRenderingContext2D, width:
 }
 
 /**
- * Heurística de Análise Facial para Olhos Fechados / Piscadas.
- * Analisa a variação de luminosidade e variância nas regiões faciais centrais superiores.
+ * Heurística Determinística de Análise Facial e Contraste Ocular (Zero Math.random).
+ * Analisa a razão de contraste entre esclera (branca) e íris/pupila (escura) na região facial.
+ * Olhos abertos possuem transições de alto contraste (esclera >160 vs íris <60).
+ * Olhos fechados possuem gradiente suave de pele homogênea.
  */
 export function detectEyeBlinkHeuristic(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
   try {
@@ -169,23 +171,89 @@ export function detectEyeBlinkHeuristic(ctx: CanvasRenderingContext2D, width: nu
     const eCtx = eyeCanvas.getContext('2d', { willReadFrequently: true });
     if (!eCtx) return false;
 
-    // Recorta o terço médio superior
-    eCtx.drawImage(ctx.canvas, Math.round(width * 0.25), Math.round(height * 0.15), Math.round(width * 0.5), Math.round(height * 0.4), 0, 0, 64, 64);
+    // Recorta o terço médio superior (região dos olhos)
+    eCtx.drawImage(
+      ctx.canvas,
+      Math.round(width * 0.25),
+      Math.round(height * 0.18),
+      Math.round(width * 0.5),
+      Math.round(height * 0.35),
+      0,
+      0,
+      64,
+      64
+    );
     const data = eCtx.getImageData(0, 0, 64, 64).data;
 
-    let darkPixelCount = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      if (lum < 45) darkPixelCount++;
+    let darkPixels = 0;
+    let brightPixels = 0;
+    let localGradients = 0;
+
+    const grays = new Float32Array(64 * 64);
+    for (let i = 0; i < 4096; i++) {
+      const lum = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+      grays[i] = lum;
+      if (lum < 55) darkPixels++;
+      if (lum > 175) brightPixels++;
+    }
+
+    // Calcula gradiente horizontal (bordas dos olhos)
+    for (let y = 1; y < 63; y++) {
+      for (let x = 1; x < 63; x++) {
+        const idx = y * 64 + x;
+        const gradX = Math.abs(grays[idx + 1] - grays[idx - 1]);
+        if (gradX > 45) localGradients++;
+      }
     }
 
     eyeCanvas.width = 0;
     eyeCanvas.height = 0;
 
-    return darkPixelCount > 400 && Math.random() < 0.08;
+    // Se houver ausência de transições fortes de borda (olho fechado) mesmo com presença de pele
+    const hasScleraIrisPair = darkPixels > 30 && brightPixels > 25 && localGradients > 120;
+    const isEyelidCreaseOnly = darkPixels > 10 && localGradients < 40;
+
+    return isEyelidCreaseOnly && !hasScleraIrisPair;
   } catch {
     return false;
   }
+}
+
+/**
+ * Agrupa fotos em rajadas (bursts / sequências de poses idênticas)
+ * usando distância de Hamming do dHash e diferença temporal.
+ */
+export function clusterPhotosByBurst<T extends { id: string; dHash?: string; capturedAt?: string; fileName: string }>(
+  photos: T[],
+  hammingThreshold = 12
+): Map<string, T[]> {
+  const clusters = new Map<string, T[]>();
+  let currentClusterId = `burst_0`;
+
+  for (let i = 0; i < photos.length; i++) {
+    const current = photos[i];
+    if (i === 0) {
+      clusters.set(currentClusterId, [current]);
+      continue;
+    }
+
+    const prev = photos[i - 1];
+    const distance = current.dHash && prev.dHash
+      ? computeHammingDistance(current.dHash, prev.dHash)
+      : 64;
+
+    // Se a distância for pequena (mesmo enquadramento/pose), coloca no mesmo cluster
+    if (distance <= hammingThreshold) {
+      const existing = clusters.get(currentClusterId) || [];
+      existing.push(current);
+      clusters.set(currentClusterId, existing);
+    } else {
+      currentClusterId = `burst_${i}`;
+      clusters.set(currentClusterId, [current]);
+    }
+  }
+
+  return clusters;
 }
 
 /**
@@ -216,7 +284,7 @@ export async function analyzeImageQuality(
 
   const dHash = computeDHashFromCanvas(ctx, width, height);
   const sharpnessScore = analyzeImageSharpnessSobel(ctx, width, height);
-  const isBlurry = sharpnessScore < 48;
+  const isBlurry = sharpnessScore < 45;
   const eyesClosed = detectEyeBlinkHeuristic(ctx, width, height);
 
   canvas.width = 0;

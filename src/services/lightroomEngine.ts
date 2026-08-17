@@ -13,8 +13,63 @@ export interface SpotHealingPoint {
   radiusPx: number;
 }
 
+// Helper de conversão RGB para HSL (0..360, 0..1, 0..1)
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+
+// Helper de conversão HSL para RGB (0..255)
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  h = ((h % 360) + 360) % 360 / 360;
+  let r: number, g: number, b: number;
+
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
 /**
- * Renderiza uma imagem tratada com as configurações de edição estilo Lightroom em um Canvas 2D
+ * Renderiza uma imagem tratada com todas as configurações profissionais estilo Lightroom Classic
  */
 export function renderProcessedImage(
   imageElement: HTMLImageElement,
@@ -43,7 +98,6 @@ export function renderProcessedImage(
 
     ctx.translate(centerX, centerY);
     ctx.rotate(rad);
-    // Escala para evitar bordas vazias ao rotacionar (Crop de Alinhamento)
     const scale = 1 + Math.abs(straightenDegrees) * 0.03;
     ctx.scale(scale, scale);
     ctx.translate(-centerX, -centerY);
@@ -52,69 +106,104 @@ export function renderProcessedImage(
   // 2. Desenhar Imagem Base
   ctx.drawImage(imageElement, 0, 0, width, height);
 
-  // 3. Remoção de Imperfeições e Retoque por IA (Spot Healing)
+  // 3. Remoção de Imperfeições (Spot Healing)
   if (healingPoints && healingPoints.length > 0) {
     applySpotHealing(ctx, width, height, healingPoints);
   }
 
-  // 4. Extrair Buffer de Pixels para Processamento de Cor / P&B
+  // 4. Processamento de Cor com Pipeline Completo do Lightroom Classic
   try {
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
 
-    // Fatores de Ajuste (Curva EV Normalizada estilo Lightroom Classic)
-    const rawEv = Math.min(3, Math.max(-3, settings.exposure || 0));
-    const expFactor = Math.pow(2, rawEv * 0.45);
-    const contrastFactor = (255 + (settings.contrast || 0) * 1.8) / 255;
+    // Fator de intensidade do preset (0% a 200%)
+    const intensity = (settings.presetIntensity !== undefined ? settings.presetIntensity : 100) / 100;
+
+    // Básico
+    const rawEv = Math.min(5, Math.max(-5, (settings.exposure || 0) * intensity));
+    const expFactor = Math.pow(2, rawEv * 0.5);
+    const contrastFactor = (255 + (settings.contrast || 0) * intensity * 1.8) / 255;
     const tempK = settings.temp || 5500;
+    const tintVal = (settings.tint || 0) * intensity;
 
-    // Balanço de Brancos Kelvin (Shift suave Amarelo/Azul)
-    const tempShift = (tempK - 5500) / 10000;
-    const rTemp = Math.max(0.7, Math.min(1.4, 1 + tempShift * 0.25));
-    const bTemp = Math.max(0.7, Math.min(1.4, 1 - tempShift * 0.25));
+    // Balanço de Brancos Planckian Kelvin
+    const tempShift = ((tempK - 5500) / 10000) * intensity;
+    const rTemp = Math.max(0.6, Math.min(1.5, 1 + tempShift * 0.35));
+    const bTemp = Math.max(0.6, Math.min(1.5, 1 - tempShift * 0.35));
+    const gTint = Math.max(0.6, Math.min(1.5, 1 - (tintVal / 300)));
+    const rTint = Math.max(0.6, Math.min(1.5, 1 + (tintVal / 600)));
+    const bTint = Math.max(0.6, Math.min(1.5, 1 + (tintVal / 600)));
 
-    // Vibração / Saturação
-    const vibrance = (settings.vibrance || 10) / 100;
-    const saturation = (settings.saturation || 0) / 100;
-    const isBlackAndWhite = settings.saturation === -100;
+    // Saturação e Vibração
+    const vibrance = ((settings.vibrance || 0) * intensity) / 100;
+    const saturation = ((settings.saturation || 0) * intensity) / 100;
+    const isBlackAndWhite = settings.isBlackAndWhite || settings.saturation === -100;
+
+    // HSL 8 Canais
+    const hsl = settings.hsl;
 
     for (let i = 0; i < data.length; i += 4) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
 
-      // A. Exposição (EV) + Balanço de Brancos
-      r = r * expFactor * rTemp;
-      g = g * expFactor;
-      b = b * expFactor * bTemp;
+      // A. Exposição Física (EV) + Balanço de Brancos Kelvin e Tint
+      r = r * expFactor * rTemp * rTint;
+      g = g * expFactor * gTint;
+      b = b * expFactor * bTemp * bTint;
 
-      // B. Contraste em torno do tom médio (128)
+      // B. Contraste em torno do cinza médio (128)
       r = (r - 128) * contrastFactor + 128;
       g = (g - 128) * contrastFactor + 128;
       b = (b - 128) * contrastFactor + 128;
 
-      // C. Realces (Highlights) & Sombras (Shadows)
+      // C. Realces (Highlights), Sombras (Shadows), Brancos (Whites), Pretos (Blacks)
       const avg = (r + g + b) / 3;
-      if (avg > 150 && settings.highlights !== 0) {
-        const hMult = 1 + (settings.highlights / 200) * ((avg - 150) / 105);
-        r *= hMult;
-        g *= hMult;
-        b *= hMult;
-      } else if (avg < 100 && settings.shadows !== 0) {
-        const sMult = 1 + (settings.shadows / 200) * ((100 - avg) / 100);
-        r *= sMult;
-        g *= sMult;
-        b *= sMult;
+      if (avg > 140 && settings.highlights) {
+        const hMult = 1 + ((settings.highlights * intensity) / 220) * ((avg - 140) / 115);
+        r *= hMult; g *= hMult; b *= hMult;
+      } else if (avg < 110 && settings.shadows) {
+        const sMult = 1 + ((settings.shadows * intensity) / 220) * ((110 - avg) / 110);
+        r *= sMult; g *= sMult; b *= sMult;
+      }
+      if (settings.whites) {
+        const wMult = 1 + ((settings.whites * intensity) / 300) * (avg / 255);
+        r *= wMult; g *= wMult; b *= wMult;
+      }
+      if (settings.blacks) {
+        const bMult = 1 + ((settings.blacks * intensity) / 300) * (1 - avg / 255);
+        r *= bMult; g *= bMult; b *= bMult;
       }
 
       if (isBlackAndWhite) {
-        // Conversão em Preto & Branco Fine Art (Pesos de Luminância Rec. 709)
+        // Conversão Preto & Branco Fine Art (Pesos de Luminância Rec. 709)
         const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         data[i] = Math.min(255, Math.max(0, gray));
         data[i + 1] = Math.min(255, Math.max(0, gray));
         data[i + 2] = Math.min(255, Math.max(0, gray));
       } else {
-        // D. Vibração & Saturação Colorida
+        // D. HSL 8 Canais de Cores Individuais
+        if (hsl) {
+          let [h, s, l] = rgbToHsl(Math.min(255, Math.max(0, r)), Math.min(255, Math.max(0, g)), Math.min(255, Math.max(0, b)));
+          let ch = hsl.red;
+          if (h >= 15 && h < 45) ch = hsl.orange; // TOM DE PELE
+          else if (h >= 45 && h < 75) ch = hsl.yellow;
+          else if (h >= 75 && h < 165) ch = hsl.green; // FOLHAGENS
+          else if (h >= 165 && h < 200) ch = hsl.aqua;
+          else if (h >= 200 && h < 265) ch = hsl.blue;
+          else if (h >= 265 && h < 315) ch = hsl.purple;
+          else if (h >= 315 && h < 345) ch = hsl.magenta;
+
+          if (ch) {
+            h += (ch.hue * intensity * 0.3);
+            s = Math.max(0, Math.min(1, s * (1 + (ch.saturation * intensity) / 100)));
+            l = Math.max(0, Math.min(1, l * (1 + (ch.luminance * intensity) / 100)));
+            const [nr, ng, nb] = hslToRgb(h, s, l);
+            r = nr; g = ng; b = nb;
+          }
+        }
+
+        // E. Vibração & Saturação Geral
         const maxC = Math.max(r, g, b);
         const satAmount = (maxC - avg) / (maxC || 1);
         const vFactor = 1 + vibrance * (1 - satAmount) + saturation;
@@ -131,15 +220,10 @@ export function renderProcessedImage(
 
     ctx.putImageData(imageData, 0, 0);
   } catch (err) {
-    // Graceful fallback se o Canvas estiver protegido por CORS
+    // Fallback gracioso
   }
 
   ctx.restore();
-  platformAdapter.addLog(
-    'info',
-    'CULLING',
-    `[Lightroom Engine] Imagem renderizada (${width}x${height}px) | EV: ${settings.exposure || 0} | Kelvin: ${settings.temp || 5500}K | Contraste: ${settings.contrast || 0} | P&B: ${settings.saturation === -100 ? 'Sim' : 'Não'} | Alinhamento: ${straightenDegrees}°`
-  );
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 

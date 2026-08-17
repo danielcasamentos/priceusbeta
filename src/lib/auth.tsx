@@ -72,6 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Se o usuário está autenticado e na página de login, signup ou landing, redirecionar para o dashboard
       if (session?.user && typeof window !== 'undefined') {
+        const isFileProtocol = window.location.protocol === 'file:' || navigator.userAgent.toLowerCase().includes('electron');
+        if (isFileProtocol) {
+          // No Electron (HashRouter), navegamos alterando o hash para não quebrar o file:///
+          if (!window.location.hash || window.location.hash === '#/' || window.location.hash === '#/login' || window.location.hash === '#/signup') {
+            window.location.hash = '#/dashboard/meu-dia';
+          }
+          return;
+        }
+
         const currentPath = window.location.pathname;
         if (currentPath === '/' || currentPath === '/login' || currentPath === '/signup') {
           console.log('🚀 [Auth] Usuário autenticado na rota', currentPath, '-> redirecionando para /dashboard/meu-dia');

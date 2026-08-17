@@ -24,6 +24,7 @@ import { PublicPortfolioPage } from './pages/PublicPortfolioPage';
 import { MobileAppDownloadPage, DesktopAppDownloadPage } from './pages/AppDownloadsPages';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
+import { DesktopAuthBridge } from './components/auth/DesktopAuthBridge';
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { DebugOverlay } from './components/DebugOverlay'
 import { useTawkTo } from './hooks/useTawkTo'
@@ -41,7 +42,7 @@ function App() {
     checkEnvVariables();
 
     // Redirecionar se a URL contém hash de OAuth do Google (ex: https://priceus.com.br/#access_token=...)
-    if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
+    if (!isElectron && window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token'))) {
       const currentPath = window.location.pathname;
       if (currentPath === '/' || currentPath === '/login' || currentPath === '/signup') {
         console.log('🔑 [App] OAuth hash detectado em', currentPath, '-> redirecionando para /dashboard/meu-dia');
@@ -51,13 +52,13 @@ function App() {
     }
 
     // Fallback: Verifica manualmente se há type=recovery no hash no carregamento
-    if (window.location.hash && window.location.hash.includes('type=recovery')) {
+    if (!isElectron && window.location.hash && window.location.hash.includes('type=recovery')) {
       window.location.href = '/reset-password' + window.location.hash;
     }
 
     // Escuta o evento de recuperação de senha e redireciona imediatamente
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (!isElectron && event === 'PASSWORD_RECOVERY') {
         window.location.href = '/reset-password' + window.location.hash;
       }
     });
@@ -99,9 +100,10 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* Rotas unificadas de Download dos Aplicativos */}
+              {/* Rotas unificadas de Download dos Aplicativos & Autenticação Desktop */}
               <Route path="/celular" element={<MobileAppDownloadPage />} />
               <Route path="/desktop" element={<DesktopAppDownloadPage />} />
+              <Route path="/desktop-auth" element={<DesktopAuthBridge />} />
 
               {/* Rotas públicas de tutoriais, galerias, políticas e portfólio */}
               <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />

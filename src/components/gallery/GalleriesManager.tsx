@@ -19,6 +19,7 @@ import {
   Settings,
   Users,
   CheckSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { Gallery, GalleryPhoto, FileUploadProgress, GalleryFormData } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
@@ -202,18 +203,6 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
       // Buscar galerias
       const list = await GalleryService.getUserGalleries(user.id);
       setGalleries(list);
-
-      // Auto-Sync Background Worker: detecta fotos no Supabase Storage e as move automaticamente para o Google Drive
-      const activeToken = profile?.google_auth_data?.access_token || localStorage.getItem('priceus_google_drive_token');
-      if (activeToken && user.id) {
-        GalleryService.autoSyncPendingPhotosToDrive(user.id, activeToken).then((count) => {
-          if (count > 0) {
-            console.log(`[Auto-Sync] ✅ ${count} fotos transferidas automaticamente para o Google Drive e espaço do Supabase liberado!`);
-            // Recarregar lista com URLs do Google CDN atualizadas
-            GalleryService.getUserGalleries(user.id).then(setGalleries);
-          }
-        });
-      }
     } catch (err) {
       console.error('Erro ao carregar galerias:', err);
     } finally {
@@ -231,6 +220,44 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
   const [visitorsModalGallery, setVisitorsModalGallery] = useState<Gallery | null>(null);
   const [offloading, setOffloading] = useState(false);
   const [offloadStatus, setOffloadStatus] = useState<string | null>(null);
+  const [isSyncingFromDrive, setIsSyncingFromDrive] = useState(false);
+
+  const handleSyncFromDrive = async () => {
+    if (!managingGallery) return;
+    const token = googleAccessToken || localStorage.getItem('priceus_google_drive_token');
+    if (!token) {
+      setIsDriveModalOpen(true);
+      return;
+    }
+
+    try {
+      setIsSyncingFromDrive(true);
+      setOffloadStatus('Sincronizando fotos existentes da pasta do Google Drive...');
+      const result = await GalleryService.syncPhotosFromDriveFolder(
+        managingGallery,
+        token,
+        (synced, total) => {
+          setOffloadStatus(`Importando fotos do Google Drive: ${synced}/${total}...`);
+        }
+      );
+
+      if (result.addedCount > 0) {
+        alert(`✅ Sucesso! ${result.addedCount} fotos novas foram importadas da pasta do Google Drive.`);
+        // Recarregar fotos da galeria superando a trava de 1000 linhas
+        const allPhotos = await GalleryService.getAllPhotosForGallery(managingGallery.id);
+        setGalleryPhotos(allPhotos);
+        loadData();
+      } else {
+        alert(`Sua galeria já está 100% atualizada! Encontradas ${result.totalInDrive} fotos no Google Drive.`);
+      }
+    } catch (err: any) {
+      console.error('Erro ao sincronizar do Drive:', err);
+      alert(`Erro ao sincronizar do Google Drive: ${err?.message || 'Falha na conexão'}`);
+    } finally {
+      setIsSyncingFromDrive(false);
+      setOffloadStatus(null);
+    }
+  };
 
   const handleOffloadToDrive = async () => {
     if (!managingGallery) return;
@@ -339,13 +366,26 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
   const handleOpenPhotoManager = async (gallery: Gallery) => {
     setManagingGallery(gallery);
     setUploadProgressMap({});
-    // Carregar fotos da galeria
-    const { data } = await supabase
-      .from('gallery_photos')
-      .select('*')
-      .eq('gallery_id', gallery.id)
-      .order('display_order', { ascending: true });
-    setGalleryPhotos(data || []);
+    // Carregar todas as fotos da galeria (superando a trava de 1000 linhas do PostgREST)
+    const initialPhotos = await GalleryService.getAllPhotosForGallery(gallery.id);
+    setGalleryPhotos(initialPhotos);
+
+    // 🛡️ AUTO-HEALER INVISÍVEL EM BACKGROUND:
+    // Se a galeria estiver com 0 fotos no banco, sincroniza automaticamente do Google Drive em background
+    const token = googleAccessToken || localStorage.getItem('priceus_google_drive_token');
+    if (token && initialPhotos.length === 0) {
+      console.log(`[Auto-Healer 🛡️] Galeria vazia detectada. Importando fotos do Google Drive em background...`);
+      GalleryService.syncPhotosFromDriveFolder(gallery, token).then(async (res) => {
+        if (res.addedCount > 0) {
+          console.log(`[Auto-Healer 🛡️] ⚡ Detectadas e importadas +${res.addedCount} fotos do Google Drive!`);
+          const refreshed = await GalleryService.getAllPhotosForGallery(gallery.id);
+          setGalleryPhotos(refreshed);
+          loadData();
+        }
+      }).catch((err) => {
+        console.warn('[Auto-Healer 🛡️] Aviso de verificação Drive:', err?.message || err);
+      });
+    }
   };
 
   const handleUploadBatch = async (files: File[]) => {
@@ -430,6 +470,17 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleSyncFromDrive}
+                disabled={isSyncingFromDrive}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all flex items-center space-x-2 disabled:opacity-50 cursor-pointer shadow-sm"
+                title="Puxa todas as fotos que já estão na pasta do Google Drive para dentro da galeria sem precisar fazer upload"
+              >
+                <RefreshCw className={`w-4 h-4 text-amber-400 ${isSyncingFromDrive ? 'animate-spin' : ''}`} />
+                <span>{isSyncingFromDrive ? 'Importando do Google Drive...' : '🔄 Sincronizar Fotos do Google Drive'}</span>
+              </button>
+
               <button
                 onClick={handleOffloadToDrive}
                 disabled={offloading}
@@ -526,27 +577,35 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
           {galleryPhotos.length > 0 && (
             <div className="pt-6 border-t border-slate-800">
               <SocialPostStudio
-                photos={galleryPhotos.map((gp, i) => ({
-                  id: gp.id,
-                  fileName: gp.file_name || `foto_${i + 1}.jpg`,
-                  previewUrl: gp.supabase_web_path || gp.supabase_thumb_path || (gp as any).low_res_url || (gp as any).original_url || '',
-                  format: 'JPG',
-                  isRaw: false,
-                  rotation: 0,
-                  sharpnessScore: 92,
-                  isBlurry: false,
-                  eyesClosed: false,
-                  isBestTake: true,
-                  sceneGroup: 'Galeria Entregue',
-                  selected: true,
-                  isDiscarded: false,
-                  starRating: 5,
-                  colorLabel: 'none',
-                  editSettings: {
-                    exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0,
-                    temp: 5500, tint: 0, vibrance: 10, saturation: 0, sharpness: 25, presetIntensity: 100
-                  }
-                }))}
+                photos={galleryPhotos.map((gp, i) => {
+                  const driveId = (gp.google_drive_file_id && gp.google_drive_file_id !== 'LOCAL_ONLY') ? gp.google_drive_file_id : null;
+                  const driveThumbnail = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : '';
+                  const driveCdn = driveId ? `https://lh3.googleusercontent.com/d/${driveId}=w1200` : '';
+                  const supabaseUrl = gp.supabase_web_path || gp.supabase_thumb_path || (gp as any).low_res_url || (gp as any).original_url || '';
+                  const resolvedUrl = supabaseUrl || driveThumbnail || driveCdn;
+
+                  return {
+                    id: gp.id,
+                    fileName: gp.file_name || `foto_${i + 1}.jpg`,
+                    previewUrl: resolvedUrl,
+                    format: 'JPG',
+                    isRaw: false,
+                    rotation: 0,
+                    sharpnessScore: 92,
+                    isBlurry: false,
+                    eyesClosed: false,
+                    isBestTake: true,
+                    sceneGroup: 'Galeria Entregue',
+                    selected: true,
+                    isDiscarded: false,
+                    starRating: 5,
+                    colorLabel: 'none',
+                    editSettings: {
+                      exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0,
+                      temp: 5500, tint: 0, vibrance: 10, saturation: 0, sharpness: 25, presetIntensity: 100
+                    }
+                  };
+                })}
                 projectTitle={managingGallery.title}
               />
             </div>

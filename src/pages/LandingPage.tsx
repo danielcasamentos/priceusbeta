@@ -168,7 +168,7 @@ export default function LandingPage() {
         <AppInstallBanner variant="topbar" />
         <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 24px', display:'flex', justifyContent:'space-between', alignItems:'center', height:64 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <img src="/Logo Price Us.png" alt="PriceUs" style={{ height:34, width:'auto' }} />
+            <img src="./Logo Price Us.png" alt="PriceUs" style={{ height:34, width:'auto' }} />
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:32 }} className="hidden-mobile">
             {['#sistema','#jornada','#roi','#planos'].map((href, i) => (
@@ -616,7 +616,7 @@ export default function LandingPage() {
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div className="grid-footer">
             <div>
-              <img src="/Logo Price Us.png" alt="PriceUs" style={{ height:36, width:'auto', marginBottom:14, filter:'brightness(1)' }}/>
+              <img src="./Logo Price Us.png" alt="PriceUs" style={{ height:36, width:'auto', marginBottom:14, filter:'brightness(1)' }}/>
               <p style={{ fontSize:13, color:'rgba(255,255,255,.35)', lineHeight:1.6, maxWidth:280 }}>
                 Plataforma all-in-one para fotógrafos profissionais. Orçamentos interativos, contratos digitais e gestão financeira completa.
               </p>

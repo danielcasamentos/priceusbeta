@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Download, Calendar, Camera, Loader2, Sparkles, Heart, Check, CheckCircle2, ShoppingBag, ShieldCheck, FileText, Lock, X } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Download, Calendar, Camera, Loader2, Sparkles, Heart, Check, CheckCircle2, ShoppingBag, ShieldCheck, FileText, Lock, X, ArrowUpDown, Clock, ArrowDownAZ } from 'lucide-react';
 import { Gallery, GalleryPhoto } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
 import { convertWebpToLowResJpeg } from '../../services/galleryImageProcessor';
@@ -10,7 +10,9 @@ import { GalleryLeadCaptureModal } from './GalleryLeadCaptureModal';
 import { GalleryProofingCheckoutModal } from './GalleryProofingCheckoutModal';
 import { GallerySocialPromoModal } from './GallerySocialPromoModal';
 import { GalleryUsagePolicyModal } from './GalleryUsagePolicyModal';
+import { GalleryDownloadPinModal } from './GalleryDownloadPinModal';
 import { SmartGalleryImage } from './SmartGalleryImage';
+import { PhotoSortMode, sortGalleryPhotos } from '../../utils/photoSorter';
 
 interface PublicGalleryViewProps {
   gallery: Gallery;
@@ -34,12 +36,62 @@ export function PublicGalleryView({
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
 
+  // Proteção de Download por Senha / PIN
+  const [isDownloadPinAuthorized, setIsDownloadPinAuthorized] = useState(() => {
+    if (!gallery.require_download_pin || !gallery.download_pin) return true;
+    return sessionStorage.getItem(`gallery_download_pin_${gallery.id}`) === 'authorized';
+  });
+  const [showDownloadPinModal, setShowDownloadPinModal] = useState(false);
+
   // Seleção de subgalerias / abas de álbuns (ex: Pré-Casamento vs Casamento)
   const [activeSubgallery, setActiveSubgallery] = useState<string>('all');
 
   // Seleção de fotos pelo cliente (Proofing)
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [showProofingCheckout, setShowProofingCheckout] = useState(false);
+
+  // Ordenação por Hora de Captura / Nome / Recentes definida pelo fotógrafo nas configurações
+  const [sortMode, setSortMode] = useState<PhotoSortMode>(() => {
+    return (gallery.photo_sort_order as PhotoSortMode) || 'capture_asc';
+  });
+
+  useEffect(() => {
+    if (gallery.photo_sort_order) {
+      setSortMode(gallery.photo_sort_order as PhotoSortMode);
+    }
+  }, [gallery.photo_sort_order]);
+
+  // Paginação e carregamento progressivo suave para galerias gigantes (1.000+ fotos)
+  const [visibleCount, setVisibleCount] = useState<number>(48);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  // Fotos filtradas por subgaleria e ordenadas
+  const sortedAndFilteredPhotos = useMemo(() => {
+    const base = activeSubgallery === 'all'
+      ? photos
+      : photos.filter((p) => p.subgallery_name === activeSubgallery);
+    return sortGalleryPhotos(base, sortMode);
+  }, [photos, activeSubgallery, sortMode]);
+
+  useEffect(() => {
+    setVisibleCount(48);
+  }, [activeSubgallery, sortMode]);
+
+  useEffect(() => {
+    const currentRef = loadMoreRef.current;
+    if (!currentRef) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => prev + 48);
+        }
+      },
+      { rootMargin: '600px' }
+    );
+
+    observer.observe(currentRef);
+    return () => observer.disconnect();
+  }, [sortedAndFilteredPhotos.length, activeSubgallery, visibleCount, sortMode]);
 
   // Social promo modal ao baixar fotos
   const [showSocialPromo, setShowSocialPromo] = useState(false);
@@ -147,8 +199,26 @@ export function PublicGalleryView({
     }
   };
 
+  const handleDownloadPinSuccess = async () => {
+    setIsDownloadPinAuthorized(true);
+    sessionStorage.setItem(`gallery_download_pin_${gallery.id}`, 'authorized');
+    setShowDownloadPinModal(false);
+    if (pendingDownloadAction) {
+      const act = pendingDownloadAction;
+      setPendingDownloadAction(null);
+      await act();
+    }
+  };
+
   const handleDownloadSinglePhoto = async (photo: GalleryPhoto, highRes: boolean) => {
     if (gallery.enable_downloads === false) return;
+
+    // Se exige senha/PIN de download e ainda não foi autorizado
+    if (gallery.require_download_pin && gallery.download_pin && !isDownloadPinAuthorized) {
+      setPendingDownloadAction(() => () => handleDownloadSinglePhoto(photo, highRes));
+      setShowDownloadPinModal(true);
+      return;
+    }
 
     // Se exige modal de liberação e é download em baixa res / marca d'água
     if (!highRes && gallery.enable_usage_policy_modal && !hasAcceptedUsagePolicy) {
@@ -187,6 +257,7 @@ export function PublicGalleryView({
             position: gallery.watermark_position || 'bottom-right',
             opacity: gallery.watermark_opacity ?? 0.7,
             scale: gallery.watermark_scale ?? 0.18,
+            rotation: (gallery as any).watermark_rotation ?? 0,
             text: gallery.watermark_text || photographer.nome_profissional || '© Direitos Reservados',
             logoUrl: gallery.watermark_logo_url || '',
           });
@@ -217,6 +288,15 @@ export function PublicGalleryView({
   };
 
   const handleDownloadZip = async () => {
+    if (gallery.enable_downloads === false) return;
+
+    // Se exige senha/PIN de download e ainda não foi autorizado
+    if (gallery.require_download_pin && gallery.download_pin && !isDownloadPinAuthorized) {
+      setPendingDownloadAction(() => () => handleDownloadZip());
+      setShowDownloadPinModal(true);
+      return;
+    }
+
     if (gallery.enable_social_promo && gallery.photographer_instagram) {
       setShowSocialPromo(true);
     }
@@ -295,6 +375,21 @@ export function PublicGalleryView({
           alert('Sua escolha foi aprovada e enviada com sucesso ao fotógrafo! 🎉');
         }}
       />
+
+      {/* Modal de Senha / PIN de Download */}
+      {gallery.require_download_pin && gallery.download_pin && (
+        <GalleryDownloadPinModal
+          isOpen={showDownloadPinModal}
+          onClose={() => {
+            setShowDownloadPinModal(false);
+            setPendingDownloadAction(null);
+          }}
+          expectedPin={gallery.download_pin}
+          onSuccess={handleDownloadPinSuccess}
+          galleryTitle={gallery.title}
+          photographerName={photographer.nome_profissional}
+        />
+      )}
 
       {isAuthorized && (
         <>
@@ -428,73 +523,159 @@ export function PublicGalleryView({
                       <p className="text-slate-600 text-base font-semibold">Galeria sem fotos disponíveis no momento.</p>
                     </div>
                   ) : (
-                    <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5">
-                      {(activeSubgallery === 'all'
-                        ? photos
-                        : photos.filter((p) => p.subgallery_name === activeSubgallery)
-                      ).map((photo, index) => {
-                        const isSelected = selectedPhotoIds.includes(photo.id);
-                        return (
-                          <div
-                            key={photo.id}
-                            onClick={() => setLightboxIndex(index)}
-                            className={`break-inside-avoid relative group rounded-none overflow-hidden cursor-pointer bg-slate-100 border transition-all duration-300 shadow-sm hover:shadow-xl ${
-                              isSelected ? 'ring-4 ring-emerald-500 border-emerald-500' : 'border-slate-200/70 hover:border-slate-400'
+                    <>
+                      {/* Barra de Ordenação de Fotos */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
+                        <span className="text-xs font-semibold text-slate-500">
+                          {sortedAndFilteredPhotos.length} fotos disponíveis
+                        </span>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setSortMode('capture_asc')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              sortMode === 'capture_asc'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                           >
-                      <SmartGalleryImage
-                        photo={photo}
-                        src={photo.supabase_web_path || photo.supabase_thumb_path}
-                        alt={photo.file_name || `Foto ${index + 1}`}
-                        className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Hora da Captura (Cerimônia ➔ Festa)</span>
+                          </button>
 
-                      {/* Camada de Marca d'Água Anti-Print no Preview da Galeria */}
-                      {gallery.watermark_enabled && (
-                        <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center p-3 z-10 overflow-hidden">
-                          {gallery.watermark_logo_url ? (
-                            <img
-                              src={gallery.watermark_logo_url}
-                              alt="Marca d'água"
-                              className="max-w-[70%] max-h-[70%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
-                            />
-                          ) : (
-                            <div className="rotate-[-25deg] text-center text-white/35 font-extrabold text-xs sm:text-sm tracking-widest uppercase border border-white/20 px-3 py-1.5 rounded-xl bg-black/10 backdrop-blur-[1px] shadow-sm pointer-events-none">
-                              © {gallery.watermark_text || photographer?.nome_profissional || 'DIREITOS RESERVADOS'}
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSortMode('capture_desc')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              sortMode === 'capture_desc'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            <Clock className="w-3.5 h-3.5 rotate-180" />
+                            <span>Mais Recente Primeiro</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSortMode('name_asc')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              sortMode === 'name_asc'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            <ArrowDownAZ className="w-3.5 h-3.5" />
+                            <span>Nome (A-Z)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
+                        {sortedAndFilteredPhotos
+                          .slice(0, visibleCount)
+                          .map((photo, index) => {
+                            const isSelected = selectedPhotoIds.includes(photo.id);
+                            return (
+                              <div
+                                key={photo.id}
+                                onClick={() => setLightboxIndex(index)}
+                                className={`aspect-square relative group rounded-none overflow-hidden cursor-pointer bg-slate-100 border transition-all duration-300 shadow-sm hover:shadow-xl ${
+                                  isSelected ? 'ring-4 ring-emerald-500 border-emerald-500' : 'border-slate-200/70 hover:border-slate-400'
+                                }`}
+                              >
+                                <SmartGalleryImage
+                                  photo={photo}
+                                  preferThumbnail={true}
+                                  alt={photo.file_name || `Foto ${index + 1}`}
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                />
+
+                                {/* Camada de Marca d'Água Anti-Print no Preview da Galeria */}
+                                {gallery.watermark_enabled && (() => {
+                                  const pos = gallery.watermark_position || 'bottom-right';
+                                  const alignMap: Record<string, string> = {
+                                    'top-left':      'items-start justify-start',
+                                    'top-center':    'items-start justify-center',
+                                    'top-right':     'items-start justify-end',
+                                    'center-left':   'items-center justify-start',
+                                    'center':        'items-center justify-center',
+                                    'center-right':  'items-center justify-end',
+                                    'bottom-left':   'items-end justify-start',
+                                    'bottom-center': 'items-end justify-center',
+                                    'bottom-right':  'items-end justify-end',
+                                  };
+                                  const align = alignMap[pos] ?? 'items-end justify-end';
+                                  const rotation = (gallery as any).watermark_rotation ?? 0;
+                                  return (
+                                    <div className={`absolute inset-0 pointer-events-none select-none flex ${align} p-3 z-10 overflow-hidden`}>
+                                      {gallery.watermark_logo_url ? (
+                                        <img
+                                          src={gallery.watermark_logo_url}
+                                          alt="Marca d'água"
+                                          style={{ transform: `rotate(${rotation}deg)` }}
+                                          className="max-w-[70%] max-h-[70%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
+                                        />
+                                      ) : (
+                                        <div
+                                          style={{ transform: `rotate(${rotation}deg)` }}
+                                          className="text-center text-white/35 font-extrabold text-xs sm:text-sm tracking-widest uppercase border border-white/20 px-3 py-1.5 rounded-xl bg-black/10 backdrop-blur-[1px] shadow-sm pointer-events-none"
+                                        >
+                                          © {gallery.watermark_text || photographer?.nome_profissional || 'DIREITOS RESERVADOS'}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* Badge de Seleção no topo da foto */}
+                                <button
+                                  onClick={(e) => toggleSelectPhoto(photo.id, e)}
+                                  className={`absolute top-3 right-3 z-20 p-2 rounded-full transition-all shadow-lg ${
+                                    isSelected
+                                      ? 'bg-emerald-500 text-slate-950 scale-110'
+                                      : 'bg-black/50 hover:bg-black/80 text-white backdrop-blur-md'
+                                  }`}
+                                  title={isSelected ? 'Remover da Seleção' : 'Selecionar Foto'}
+                                >
+                                  {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : <Heart className="w-4 h-4" />}
+                                </button>
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-4 flex items-end justify-between">
+                                  <span className="text-xs text-white font-semibold truncate">{photo.file_name}</span>
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownloadSinglePhoto(photo, false);
+                                    }}
+                                    className="p-2 rounded-xl bg-white/20 backdrop-blur-md text-white hover:bg-white/40 transition-colors"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+
+                      {/* Sentinela de Rolagem Infinita e Indicador */}
+                      {visibleCount <
+                        (activeSubgallery === 'all'
+                          ? photos.length
+                          : photos.filter((p) => p.subgallery_name === activeSubgallery).length) && (
+                        <div ref={loadMoreRef} className="py-12 text-center flex flex-col items-center justify-center space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setVisibleCount((prev) => prev + 48)}
+                            className="px-6 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-sm flex items-center space-x-2 cursor-pointer"
+                          >
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                            <span>Carregando mais fotos...</span>
+                          </button>
                         </div>
                       )}
-
-                      {/* Badge de Seleção no topo da foto */}
-                      <button
-                        onClick={(e) => toggleSelectPhoto(photo.id, e)}
-                        className={`absolute top-3 right-3 z-20 p-2 rounded-full transition-all shadow-lg ${
-                          isSelected
-                            ? 'bg-emerald-500 text-slate-950 scale-110'
-                            : 'bg-black/50 hover:bg-black/80 text-white backdrop-blur-md'
-                        }`}
-                        title={isSelected ? 'Remover da Seleção' : 'Selecionar Foto'}
-                      >
-                        {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : <Heart className="w-4 h-4" />}
-                      </button>
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-4 flex items-end justify-between">
-                        <span className="text-xs text-white font-semibold truncate">{photo.file_name}</span>
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadSinglePhoto(photo, false);
-                          }}
-                          className="p-2 rounded-xl bg-white/20 backdrop-blur-md text-white hover:bg-white/40 transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    </>
+                  )}
           </>
         );
       })()}
@@ -679,6 +860,8 @@ export function PublicGalleryView({
             watermarkEnabled={gallery.watermark_enabled}
             watermarkText={gallery.watermark_text || photographer?.nome_profissional}
             watermarkLogoUrl={gallery.watermark_logo_url}
+            watermarkPosition={gallery.watermark_position || 'bottom-right'}
+            watermarkRotation={(gallery as any).watermark_rotation ?? 0}
           />
         </>
       )}

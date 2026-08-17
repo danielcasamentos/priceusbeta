@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { Image as ImageIcon, RefreshCw } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Image as ImageIcon } from 'lucide-react';
 import { GalleryPhoto } from '../../types/gallery';
+
+const loadedImagesCache = new Set<string>();
 
 interface SmartGalleryImageProps {
   photo?: GalleryPhoto;
@@ -9,6 +11,7 @@ interface SmartGalleryImageProps {
   className?: string;
   loading?: 'lazy' | 'eager';
   objectFit?: 'cover' | 'contain';
+  preferThumbnail?: boolean;
 }
 
 export function SmartGalleryImage({
@@ -18,123 +21,115 @@ export function SmartGalleryImage({
   className = 'w-full h-full object-cover',
   loading = 'lazy',
   objectFit = 'cover',
+  preferThumbnail = true,
 }: SmartGalleryImageProps) {
-  // Construir lista de URLs candidatas em ordem de prioridade
-  const getCandidateUrls = (): string[] => {
+  // Construir lista estável de URLs candidatas em ordem de velocidade/prioridade
+  const candidateUrls = useMemo(() => {
     const urls: string[] = [];
-    
-    if (photo) {
-      if (photo.supabase_thumb_path) {
-        urls.push(photo.supabase_thumb_path);
-      }
-      if (photo.supabase_web_path && !urls.includes(photo.supabase_web_path)) {
-        urls.push(photo.supabase_web_path);
-      }
-      if (photo.google_drive_file_id && photo.google_drive_file_id !== 'LOCAL_ONLY') {
-        const driveUrl = `https://drive.google.com/uc?export=view&id=${photo.google_drive_file_id}`;
-        if (!urls.includes(driveUrl)) {
-          urls.push(driveUrl);
-        }
-      }
-    }
-    
+
     if (src && !urls.includes(src)) {
       urls.push(src);
     }
-    
+
+    if (photo) {
+      // Extrair file ID do Google Drive de várias fontes
+      let driveId = photo.google_drive_file_id && photo.google_drive_file_id !== 'LOCAL_ONLY' ? photo.google_drive_file_id : null;
+      if (!driveId && photo.supabase_web_path?.includes('googleusercontent.com/d/')) {
+        driveId = photo.supabase_web_path.split('/d/')[1]?.split('=')[0]?.split('?')[0] || null;
+      }
+      if (!driveId && photo.supabase_thumb_path?.includes('googleusercontent.com/d/')) {
+        driveId = photo.supabase_thumb_path.split('/d/')[1]?.split('=')[0]?.split('?')[0] || null;
+      }
+
+      if (driveId) {
+        const driveCdnThumb = `https://lh3.googleusercontent.com/d/${driveId}=w800`;
+        const driveThumbnailApi = `https://drive.google.com/thumbnail?id=${driveId}&sz=w800`;
+        const driveCdnWeb = `https://lh3.googleusercontent.com/d/${driveId}=w1600`;
+        const driveUcView = `https://drive.google.com/uc?export=view&id=${driveId}`;
+        const driveDocsView = `https://docs.google.com/uc?id=${driveId}`;
+
+        if (preferThumbnail) {
+          if (!urls.includes(driveCdnThumb)) urls.push(driveCdnThumb);
+          if (!urls.includes(driveThumbnailApi)) urls.push(driveThumbnailApi);
+          if (!urls.includes(driveCdnWeb)) urls.push(driveCdnWeb);
+          if (!urls.includes(driveUcView)) urls.push(driveUcView);
+          if (!urls.includes(driveDocsView)) urls.push(driveDocsView);
+        } else {
+          if (!urls.includes(driveCdnWeb)) urls.push(driveCdnWeb);
+          if (!urls.includes(driveCdnThumb)) urls.push(driveCdnThumb);
+          if (!urls.includes(driveThumbnailApi)) urls.push(driveThumbnailApi);
+          if (!urls.includes(driveUcView)) urls.push(driveUcView);
+        }
+      }
+
+      if (photo.supabase_thumb_path && !urls.includes(photo.supabase_thumb_path)) {
+        urls.push(photo.supabase_thumb_path);
+      }
+
+      if (photo.supabase_web_path && !urls.includes(photo.supabase_web_path)) {
+        urls.push(photo.supabase_web_path);
+      }
+    }
+
     return urls;
-  };
+  }, [photo?.id, photo?.supabase_thumb_path, photo?.supabase_web_path, photo?.google_drive_file_id, src, preferThumbnail]);
 
-  const candidates = getCandidateUrls();
-  const [candidateIndex, setCandidateIndex] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const currentUrl = candidateUrls[currentIndex] || '';
+  const isCached = currentUrl ? loadedImagesCache.has(currentUrl) : false;
+
+  const [isLoaded, setIsLoaded] = useState(isCached);
   const [isError, setIsError] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState<string>(candidates[0] || '');
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Recalcular quando photo ou src mudarem
-  useEffect(() => {
-    const newCandidates = getCandidateUrls();
-    setCandidateIndex(0);
-    setRetryCount(0);
-    setIsLoading(true);
+  // Resetar estado quando os candidatos da foto mudarem
+  React.useEffect(() => {
+    setCurrentIndex(0);
     setIsError(false);
-    setCurrentSrc(newCandidates[0] || '');
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [photo?.id, photo?.supabase_thumb_path, photo?.supabase_web_path, src]);
+    setIsLoaded(currentUrl ? loadedImagesCache.has(currentUrl) : false);
+  }, [candidateUrls]);
 
   const handleError = () => {
-    const nextIndex = candidateIndex + 1;
-
-    // Se ainda houver URLs candidatas no lote (ex: tentar web_path se thumb falhar)
-    if (nextIndex < candidates.length) {
-      setCandidateIndex(nextIndex);
-      setCurrentSrc(candidates[nextIndex]);
-      setIsLoading(true);
-      return;
+    if (currentIndex + 1 < candidateUrls.length) {
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      setIsError(true);
     }
-
-    // Se todas as URLs do lote falharam (imagem ainda processando na nuvem), retenta com cache buster
-    if (retryCount < 5) {
-      const delayMs = Math.min((retryCount + 1) * 2000, 8000); // 2s, 4s, 6s, 8s, 8s
-      setIsLoading(true);
-      
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        setRetryCount((prev) => prev + 1);
-        setCandidateIndex(0);
-        const firstUrl = candidates[0];
-        if (firstUrl) {
-          const cacheBuster = firstUrl.includes('?') ? `&_t=${Date.now()}` : `?_t=${Date.now()}`;
-          setCurrentSrc(firstUrl + cacheBuster);
-        }
-      }, delayMs);
-      return;
-    }
-
-    // Excedeu retentativas
-    setIsLoading(false);
-    setIsError(true);
   };
 
   const handleLoad = () => {
-    setIsLoading(false);
+    if (currentUrl) loadedImagesCache.add(currentUrl);
+    setIsLoaded(true);
     setIsError(false);
   };
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-slate-950 flex items-center justify-center">
-      {/* Skeleton / Placeholder de carregamento */}
-      {isLoading && (
-        <div className="absolute inset-0 z-10 bg-slate-900/90 flex flex-col items-center justify-center p-2 text-slate-500 animate-pulse">
-          <RefreshCw className="w-5 h-5 animate-spin text-slate-400 mb-1" />
-          <span className="text-[10px] font-medium text-slate-400">Processando foto...</span>
+      {/* Skeleton suave de baixa prioridade enquanto carrega */}
+      {!isLoaded && !isError && (
+        <div className="absolute inset-0 z-10 bg-slate-900/60 flex items-center justify-center pointer-events-none">
+          <div className="w-4 h-4 rounded-full border-2 border-slate-700 border-t-slate-400 animate-spin" />
         </div>
       )}
 
-      {/* Placeholder de Erro definitivo (sem ícone quebrado do navegador) */}
-      {isError && !isLoading && (
-        <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-3 text-center text-slate-500 border border-slate-800">
-          <ImageIcon className="w-6 h-6 text-slate-600 mb-1" />
-          <span className="text-[10px] text-slate-400 font-semibold">Processando imagem</span>
-          <span className="text-[9px] text-slate-600">Aguardando sync</span>
+      {/* Placeholder em caso de erro definitivo */}
+      {isError && (
+        <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-2 text-center text-slate-500 border border-slate-800">
+          <ImageIcon className="w-5 h-5 text-slate-700 mb-1" />
+          <span className="text-[9px] text-slate-500">Imagem indisponível</span>
         </div>
       )}
 
-      {/* Imagem Real */}
-      {currentSrc && (
+      {/* Imagem Nativa com Decodificação Assíncrona */}
+      {currentUrl && !isError && (
         <img
-          src={currentSrc}
+          src={currentUrl}
           alt={alt}
           loading={loading}
+          decoding="async"
           onLoad={handleLoad}
           onError={handleError}
-          className={`${className} transition-opacity duration-300 ${
-            isLoading ? 'opacity-0' : 'opacity-100'
+          className={`${className} transition-opacity duration-200 ${
+            isLoaded ? 'opacity-100' : 'opacity-0'
           }`}
           style={{ objectFit }}
         />

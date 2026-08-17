@@ -49,6 +49,22 @@ import { computeHammingDistance } from '../../services/imageAnalysisEngine';
 import { writeXmpSidecarToDirectoryHandle, syncAllXmpSidecarsToFolder, downloadXmpZipPackage } from '../../services/xmpExportService';
 import { FaceGridInspector } from './FaceGridInspector';
 
+export interface HslChannelSettings {
+  hue: number;        // -100 a +100
+  saturation: number; // -100 a +100
+  luminance: number;  // -100 a +100
+}
+
+export interface ToneCurveChannel {
+  points: Array<{ x: number; y: number }>;
+}
+
+export interface ColorGradingWheel {
+  hue: number;        // 0 a 360 graus
+  saturation: number; // 0 a 100%
+  luminance: number;  // -100 a +100
+}
+
 export interface PhotoEditSettings {
   exposure: number; // -5.00 a +5.00 EV
   contrast: number; // -100 a +100
@@ -60,14 +76,45 @@ export interface PhotoEditSettings {
   tint: number; // -150 a +150
   vibrance: number; // -100 a +100
   saturation: number; // -100 a +100
+  clarity?: number; // -100 a +100
+  dehaze?: number; // -100 a +100
   sharpness: number; // 0 a 100
-  presetIntensity: number; // 0 a 100 (% do preset aplicado)
+  presetIntensity: number; // 0 a 200 (% do preset aplicado)
   autoStraighten?: boolean; // Endireitar fotos inclinadas/tortas com IA
   autoRetouch?: boolean; // Suavização e retoque de pele inteligente
   presetName?: string;
+  isBlackAndWhite?: boolean;
   zoomScale?: number; // 1.0x a 3.0x zoom de corte
   cropOffsetX?: number; // deslocamento X de enquadramento
   cropOffsetY?: number; // deslocamento Y de enquadramento
+  
+  // HSL Mixer de 8 Cores Individuais
+  hsl?: {
+    red: HslChannelSettings;
+    orange: HslChannelSettings; // TOM DE PELE
+    yellow: HslChannelSettings;
+    green: HslChannelSettings;
+    aqua: HslChannelSettings;
+    blue: HslChannelSettings;
+    purple: HslChannelSettings;
+    magenta: HslChannelSettings;
+  };
+
+  // Curvas de Tons RGB
+  toneCurves?: {
+    rgb: ToneCurveChannel;
+    red: ToneCurveChannel;
+    green: ToneCurveChannel;
+    blue: ToneCurveChannel;
+  };
+
+  // Color Grading
+  colorGrading?: {
+    shadows: ColorGradingWheel;
+    midtones: ColorGradingWheel;
+    highlights: ColorGradingWheel;
+    balance: number;
+  };
 }
 
 export interface CullingPhoto {
@@ -221,6 +268,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   const [totalFilesCount, setTotalFilesCount] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
   const [currentFileName, setCurrentFileName] = useState('');
+  // Refs para atualizar progresso sem disparar re-renders dentro do loop de import
+  const importProgressRef = useRef({ count: 0, file: '', pct: 0 });
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'ai_pick' | 'approved' | 'discarded'>('all');
   const [starFilter, setStarFilter] = useState<0 | 1 | 2 | 3 | 4 | 5>(0); // 0 = sem filtro de estrela
   const [sceneFilter, setSceneFilter] = useState<string>('all'); // 'all' ou nome de subpasta
@@ -445,6 +494,49 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   // Armazena referência ao File nativo sem copiar bytes
   // ─────────────────────────────────────────────────────────────────────────
   const fileRegistryRef = useRef<Map<string, File>>(new Map());
+  const pendingUpdatesRef = useRef<Map<string, Partial<CullingPhoto>>>(new Map());
+  const flushTimerRef = useRef<any>(null);
+  // LRU cache de preview URLs na memória — evita acumular GBs de base64 no heap do React
+  // Mantemos no máximo 200 previews em memória; os demais vivem apenas no IndexedDB
+  const previewUrlCacheRef = useRef<Map<string, string>>(new Map());
+  const MAX_PREVIEW_CACHE = 200;
+
+  const setPreviewCache = (photoId: string, url: string) => {
+    const cache = previewUrlCacheRef.current;
+    if (cache.has(photoId)) {
+      // Atualiza LRU: remove e reinserere para mover para o "fim" (mais recente)
+      cache.delete(photoId);
+    } else if (cache.size >= MAX_PREVIEW_CACHE) {
+      // Evict o mais antigo (primeiro item no Map)
+      const oldestKey = cache.keys().next().value;
+      cache.delete(oldestKey);
+    }
+    cache.set(photoId, url);
+  };
+
+  const scheduleBatchUpdate = (photoId: string, updates: Partial<CullingPhoto>) => {
+    // Se a atualização inclui previewUrl, guarda no LRU cache em vez do estado React
+    if (updates.previewUrl) {
+      setPreviewCache(photoId, updates.previewUrl);
+    }
+    const current = pendingUpdatesRef.current.get(photoId) || {};
+    pendingUpdatesRef.current.set(photoId, { ...current, ...updates });
+
+    if (!flushTimerRef.current) {
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null;
+        if (pendingUpdatesRef.current.size === 0) return;
+        const batch = new Map(pendingUpdatesRef.current);
+        pendingUpdatesRef.current.clear();
+        setPhotos((prev) =>
+          prev.map((p) => {
+            const up = batch.get(p.id);
+            return up ? { ...p, ...up } : p;
+          })
+        );
+      }, 150);
+    }
+  };
 
   /** Registra um arquivo no registry após import (chamado internamente em processFileList) */
   const registerFile = (photoId: string, file: File) => {
@@ -458,9 +550,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     if (projId) {
       const ssdData = await getThumbnailFromSSD(projId, photoId);
       if (ssdData) {
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === photoId ? { ...p, previewUrl: ssdData } : p))
-        );
+        scheduleBatchUpdate(photoId, { previewUrl: ssdData });
         return;
       }
     }
@@ -486,40 +576,37 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             img.src = result.previewUrl;
           });
           realMetrics = await analyzePhotoQuality(img, img.width || 400, img.height || 400);
+          img.src = '';
         } catch {}
 
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === photoId ? {
-            ...p,
-            previewUrl: result.previewUrl,
-            sharpnessScore: realMetrics ? realMetrics.sharpnessScore : p.sharpnessScore,
-            isBlurry: realMetrics ? realMetrics.isBlurry : p.isBlurry,
-            eyesClosed: realMetrics ? realMetrics.eyesClosed : p.eyesClosed,
-            isBestTake: realMetrics ? realMetrics.isBestTake : p.isBestTake,
-            starRating: realMetrics && p.starRating === 0 ? realMetrics.starRating : p.starRating,
-            selected: realMetrics ? realMetrics.isBestTake : p.selected,
-            isDiscarded: realMetrics ? (realMetrics.isBlurry || realMetrics.eyesClosed) : p.isDiscarded,
-            // Aproveita o EXIF real quando disponível
-            cameraModel: result.cameraModel || p.cameraModel,
-            lensModel: result.lensModel || p.lensModel,
-            iso: result.iso || p.iso,
-            aperture: result.aperture || p.aperture,
-            shutterSpeed: result.shutterSpeed || p.shutterSpeed,
-            focalLength: result.focalLength || p.focalLength,
-            rotation: result.orientationDegrees || p.rotation,
-          } : p))
-        );
+        scheduleBatchUpdate(photoId, {
+          previewUrl: result.previewUrl,
+          sharpnessScore: realMetrics ? realMetrics.sharpnessScore : undefined,
+          isBlurry: realMetrics ? realMetrics.isBlurry : undefined,
+          eyesClosed: realMetrics ? realMetrics.eyesClosed : undefined,
+          isBestTake: realMetrics ? realMetrics.isBestTake : undefined,
+          starRating: realMetrics ? realMetrics.starRating : undefined,
+          selected: realMetrics ? realMetrics.isBestTake : undefined,
+          isDiscarded: realMetrics ? (realMetrics.isBlurry || realMetrics.eyesClosed) : undefined,
+          cameraModel: result.cameraModel,
+          lensModel: result.lensModel,
+          iso: result.iso,
+          aperture: result.aperture,
+          shutterSpeed: result.shutterSpeed,
+          focalLength: result.focalLength,
+          rotation: result.orientationDegrees,
+        });
       }
     } catch { }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
   // IntersectionObserver: carrega preview RAW apenas quando o card entra na tela
-  // Fila persistente com concorrência máxima de 4 — sem descartar requisiçÕes
+  // Fila persistente com concorrência máxima de 2 — ultraleve na memória
   // ─────────────────────────────────────────────────────────────────────────
   const loadingInProgress = useRef(new Set<string>());
   const pendingQueue = useRef<string[]>([]);
-  const MAX_CONCURRENT = 4;
+  const MAX_CONCURRENT = 2;
 
   const drainQueue = () => {
     while (loadingInProgress.current.size < MAX_CONCURRENT && pendingQueue.current.length > 0) {
@@ -859,10 +946,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       });
     }
 
-
     const targetStep = Math.max(2, Math.round(100 / targetSelectionRatio));
-    // Commit em lotes de 50 – zero leituras de disco na thread principal
-    const BATCH_SIZE = 50;
+    // Lotes de 30 fotos — equilibrio entre throughput e responsividade
+    const BATCH_SIZE = 30;
+    // Acumula todas as fotos processadas; commita no estado UMA vez ao final
+    const allProcessedPhotos: CullingPhoto[] = [];
 
     for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
       if (cancelImportRef.current) break;
@@ -878,16 +966,9 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         const ext = file.name.split('.').pop()?.toUpperCase() || 'RAW';
         const isRaw = isRawFile(file);
 
-        // ─── ZERO leitura de bytes: só metadados do objeto File ──────────────
         const photoId = `cull_${activeProjectIdRef.current || activeProjectId}_${i}_${file.name}`;
-        const sharpnessScore = Math.floor(68 + Math.random() * 30);
-        const isBlurry = sharpnessScore < sharpnessThreshold;
-        const blinkChance = expressionRigor === 'strict' ? 0.05 : expressionRigor === 'moderate' ? 0.12 : 0.20;
-        const eyesClosed = Math.random() < blinkChance;
         const sceneGroup = scanned.subfolderName || `Fotos Gerais`;
-        const isBestTake = !isBlurry && !eyesClosed && (i % targetStep === 0 || sharpnessScore > 86);
 
-        // Registra o File para lazy loading posterior — zero leitura aqui
         registerFile(photoId, file);
 
         batchPhotos.push({
@@ -897,14 +978,14 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           format: ext,
           isRaw,
           rotation: 0,
-          sharpnessScore,
-          isBlurry,
-          eyesClosed,
-          isBestTake,
+          sharpnessScore: 0,
+          isBlurry: false,
+          eyesClosed: false,
+          isBestTake: false,
           sceneGroup,
-          selected: isBestTake,
-          isDiscarded: isBlurry || eyesClosed,
-          starRating: isBestTake ? 4 : 0,
+          selected: false,
+          isDiscarded: false,
+          starRating: 0,
           colorLabel: 'none',
           cameraModel: '',
           lensModel: '',
@@ -919,23 +1000,30 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             exposure: trainedPresetName ? 0.2 : 0,
           },
         });
-
-        setProcessedCount(i + 1);
-        setProgress(Math.floor(((i + 1) / total) * 100));
-        setCurrentFileName(file.name);
       }
 
       // Pipeline de IA (presets, P&B, etc.) — roda só com metadados, sem I/O
       const fullyEditedBatch = await processAiEditingPipeline(batchPhotos, userPresetPref);
+      allProcessedPhotos.push(...fullyEditedBatch);
 
-      // Commit lote ao estado e cede o event loop para o browser respirar
+      // Atualiza progresso UMA vez por lote (não por foto) — zero re-renders desnecessários
+      const lastInBatch = batchEnd - 1;
+      setProcessedCount(batchEnd);
+      setProgress(Math.floor((batchEnd / total) * 100));
+      setCurrentFileName(validItems[lastInBatch]?.file.name || '');
+
+      // Yield obrigatório: cede a thread principal para o browser pintar e respirar
+      await new Promise<void>((resolve) => setTimeout(resolve, 16));
+    }
+
+    // Commit único de todas as fotos no estado — O(n) em vez de O(n²)
+    if (!cancelImportRef.current) {
       setPhotos((prev) => {
+        if (prev.length === 0) return allProcessedPhotos;
         const existingIds = new Set(prev.map((p) => p.id));
-        return [...prev, ...fullyEditedBatch.filter((p) => !existingIds.has(p.id))];
+        const newPhotos = allProcessedPhotos.filter((p) => !existingIds.has(p.id));
+        return newPhotos.length > 0 ? [...prev, ...newPhotos] : prev;
       });
-
-      // Yield obrigatório entre lotes para manter a UI responsiva
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
 
     addAiLogEntry({
@@ -1309,6 +1397,23 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     }
   };
 
+  // Disparo com 1 clique do Adobe Lightroom Classic diretamente na tela de Importação
+  const handleLaunchLightroomImport = async () => {
+    if (photos.length === 0) return;
+    setLearningNotice('💾 Gravando arquivos .XMP e abrindo o Adobe Lightroom Classic...');
+    if (currentDirHandleRef.current) {
+      await syncAllXmpSidecarsToFolder(currentDirHandleRef.current, photos, true);
+    }
+    const folderPath = currentDirHandleRef.current?.name;
+    const launched = await platformAdapter.launchLightroom(folderPath);
+    if (launched) {
+      setLearningNotice('🚀 Adobe Lightroom Classic aberto com a tela de Importação pronta!');
+    } else {
+      setLearningNotice('✅ Arquivos .XMP gravados com sucesso na pasta!');
+    }
+    setTimeout(() => setLearningNotice(null), 5000);
+  };
+
   // Aspect Ratio do Corte na Revelação
   const [selectedCropRatio, setSelectedCropRatio] = useState<string>('4:5');
 
@@ -1493,7 +1598,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white shadow-xl">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
-            <img src="/logo-priceus.png" alt="PriceU$" className="h-8 w-auto object-contain" />
+            <img src="./logo-priceus.png" alt="PriceU$" className="h-8 w-auto object-contain" />
             <span className="text-xs font-black tracking-wider text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-lg">CULLING IA</span>
           </div>
           <div className="flex items-center gap-3">
@@ -2050,16 +2155,26 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               <div className="flex items-center gap-3 flex-wrap">
                 <button
                   type="button"
+                  onClick={handleLaunchLightroomImport}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer"
+                  title="Grava os arquivos .XMP e abre o Adobe Lightroom Classic diretamente na tela de Importação"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>🚀 Abrir no Lightroom Classic ({approvedCount})</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => {
                     const approved = photos.filter((p) => p.selected && !p.isDiscarded);
                     if (approved.length === 0) { alert('Nenhuma foto aprovada para exportar.'); return; }
                     setIsExportModalOpen(true);
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
                   title="Abrir modal para copiar lista de fotos aprovadas e exportar para o Lightroom Classic"
                 >
-                  <Copy className="w-4 h-4" />
-                  <span>📋 Exportar Seleção p/ Lightroom ({approvedCount})</span>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar Nomes</span>
                 </button>
 
                 <button

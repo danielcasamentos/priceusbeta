@@ -832,11 +832,19 @@ function provider.processRenderedPhotos( functionContext, exportContext )
                                 '"subgallery_name":"' .. jsonEscape( subgalleryName ) .. '",' ..
                                 '"display_order":' .. count .. '}'
 
-              LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
+              local dbResp, dbHeaders = LrHttp.post( SUPABASE_URL .. "/rest/v1/gallery_photos", photoJson, {
                 { field = "apikey", value = SUPABASE_ANON },
                 { field = "Authorization", value = "Bearer " .. token },
                 { field = "Content-Type", value = "application/json" },
+                { field = "Prefer", value = "return=representation" },
               })
+
+              if dbResp and dbResp ~= '' and not dbResp:match( '"error"' ) and not dbResp:match( '"code"' ) then
+                logMsg( "✓ Foto registrada no banco PriceU$: " .. filename )
+              else
+                logMsg( "⚠ Aviso ao registrar no banco PriceU$ (" .. filename .. "): " .. tostring(dbResp) )
+              end
+
               rendition:recordPublishedPhotoId( fileId )
               rendition:recordPublishedPhotoUrl( driveUrl )
             else

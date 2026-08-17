@@ -1125,7 +1125,7 @@ export function InteractiveTutorialsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="/Logo Price Us Dark.png"
+              src="./Logo Price Us Dark.png"
               alt="Price Us"
               className="h-10 w-auto"
             />

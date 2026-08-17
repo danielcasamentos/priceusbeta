@@ -7,6 +7,7 @@ export interface WatermarkOptions {
   position?: WatermarkPosition;
   opacity?: number; // 0.1 to 1.0 (default 0.7)
   scale?: number; // 0.05 to 0.5 (default 0.18)
+  rotation?: number; // graus (default 0 = horizontal)
 }
 
 /**
@@ -23,6 +24,7 @@ export async function applyWatermarkToImage(
   const scale = options.scale ?? 0.18;
   const text = options.text || '';
   const logoUrl = options.logoUrl || '';
+  const rotation = (options.rotation ?? 0) * (Math.PI / 180); // converter graus para radianos
 
   // 1. Carregar a imagem base
   const baseImg = await loadImage(imageSource);
@@ -60,15 +62,22 @@ export async function applyWatermarkToImage(
 
       ctx.save();
       ctx.globalAlpha = opacity;
-      ctx.drawImage(logoImg, x, y, drawWidth, drawHeight);
+      // Aplicar rotação centrada no ponto da marca d'água
+      if (rotation !== 0) {
+        ctx.translate(x + drawWidth / 2, y + drawHeight / 2);
+        ctx.rotate(rotation);
+        ctx.drawImage(logoImg, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      } else {
+        ctx.drawImage(logoImg, x, y, drawWidth, drawHeight);
+      }
       ctx.restore();
     } catch (e) {
       console.warn('[WatermarkService] Erro ao carregar logo PNG, utilizando fallback de texto:', e);
-      drawTextWatermark(ctx, text, position, opacity, canvas.width, canvas.height, margin);
+      drawTextWatermark(ctx, text, position, opacity, rotation, canvas.width, canvas.height, margin);
     }
   } else {
     // 3. Marca d'água de TEXTO
-    drawTextWatermark(ctx, text, position, opacity, canvas.width, canvas.height, margin);
+    drawTextWatermark(ctx, text, position, opacity, rotation, canvas.width, canvas.height, margin);
   }
 
   return new Promise<Blob>((resolve, reject) => {
@@ -88,6 +97,7 @@ function drawTextWatermark(
   text: string,
   position: WatermarkPosition,
   opacity: number,
+  rotation: number,
   canvasWidth: number,
   canvasHeight: number,
   margin: number
@@ -103,6 +113,15 @@ function drawTextWatermark(
   const textHeight = fontSize;
 
   const { x, y } = getCoordinatesForPosition(position, canvasWidth, canvasHeight, textWidth, textHeight, margin);
+
+  ctx.globalAlpha = opacity;
+
+  // Aplicar rotação centralizada no texto
+  if (rotation !== 0) {
+    ctx.translate(x + textWidth / 2, y - textHeight / 2);
+    ctx.rotate(rotation);
+    ctx.translate(-(x + textWidth / 2), -(y - textHeight / 2));
+  }
 
   ctx.globalAlpha = opacity;
 

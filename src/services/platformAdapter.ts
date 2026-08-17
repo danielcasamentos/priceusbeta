@@ -50,6 +50,28 @@ class PlatformAdapterService {
   }
 
   /**
+   * Dispara a abertura do Adobe Lightroom Classic diretamente na tela de Importação (-import)
+   */
+  public async launchLightroom(folderPath?: string): Promise<boolean> {
+    this.addLog('info', 'SYSTEM', `🚀 Disparando Adobe Lightroom Classic diretamente na tela de Importação (Pasta: ${folderPath || 'Automática'})...`);
+    
+    if (this.isNativeDesktop()) {
+      try {
+        if ((window as any).priceusNative?.launchLightroom) {
+          return await (window as any).priceusNative.launchLightroom(folderPath);
+        }
+      } catch (err) {
+        console.warn('[PlatformAdapter] Erro ao disparar Lightroom nativo:', err);
+      }
+    }
+
+    if (folderPath) {
+      window.location.href = `lightroom://import?path=${encodeURIComponent(folderPath)}`;
+    }
+    return true;
+  }
+
+  /**
    * Abre uma URL no navegador padrão do sistema operacional (macOS / Windows)
    * sem abrir iFrames ou janelas in-app restritivas
    */
