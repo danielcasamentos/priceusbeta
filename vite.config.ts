@@ -6,7 +6,7 @@ const isElectronBuild = process.env.ELECTRON === 'true';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: './',
+  base: isElectronBuild ? './' : '/',
   plugins: [
     react(),
     VitePWA({
