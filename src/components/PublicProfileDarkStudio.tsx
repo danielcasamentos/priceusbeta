@@ -95,7 +95,12 @@ export function PublicProfileDarkStudio({ profile, templates, reviews, averageRa
       {/* ── NAV ── */}
       <nav style={{ background: 'rgba(7,16,31,.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,.07)', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src="./Logo Price Us.png" alt="PriceUs" style={{ height: 30 }} />
+          <img
+            src="/Logo Price Us.png"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo-priceus.png'; }}
+            alt="PriceUs"
+            style={{ height: 30 }}
+          />
         </Link>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
           Portfólio Profissional

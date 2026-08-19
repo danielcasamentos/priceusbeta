@@ -88,52 +88,8 @@ function resizeCanvas(
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, width, height);
 
-    // Aplicar Marca d'Água se houver
-    if (watermarkText && watermarkText.trim().length > 0) {
-      ctx.save();
-      const fontSize = Math.max(16, Math.round(width / 24));
-      ctx.font = `bold ${fontSize}px sans-serif`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.lineWidth = 2;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      // Sem rotação — texto horizontal centralizado
-      ctx.translate(width / 2, height / 2);
-
-      ctx.strokeText(watermarkText, 0, 0);
-      ctx.fillText(watermarkText, 0, 0);
-      ctx.restore();
-    }
-
-    // Marca d'água de Divulgação Social no Instagram (canto inferior direito)
-    if (socialInstagramHandle && socialInstagramHandle.trim().length > 0) {
-      ctx.save();
-      const handle = socialInstagramHandle.trim().startsWith('@') ? socialInstagramHandle.trim() : `@${socialInstagramHandle.trim()}`;
-      const promoText = `📸 Foto por ${handle}`;
-      const fontSize = Math.max(14, Math.round(width / 48));
-      ctx.font = `500 ${fontSize}px sans-serif`;
-      const padding = fontSize * 0.8;
-      const textMetrics = ctx.measureText(promoText);
-      const bgWidth = textMetrics.width + padding * 2;
-      const bgHeight = fontSize * 1.8;
-      const x = width - bgWidth - padding;
-      const y = height - bgHeight - padding;
-
-      // Fundo escuro semi-transparente arredondado
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x, y, bgWidth, bgHeight, fontSize * 0.4) : ctx.rect(x, y, bgWidth, bgHeight);
-      ctx.fill();
-
-      // Texto branco com destaque para o Instagram
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(promoText, x + padding, y + bgHeight / 2);
-      ctx.restore();
-    }
+    // As fotos web e thumbnails são processadas limpas em alta qualidade.
+    // A marca d'água é aplicada dinamicamente no Grid, no Lightbox e no Download conforme as preferências salvas do fotógrafo.
 
     // Converter para WebP
     canvas.toBlob(

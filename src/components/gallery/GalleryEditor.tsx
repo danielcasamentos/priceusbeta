@@ -34,8 +34,16 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [progressiveDiscounts, setProgressiveDiscounts] = useState<{ min_photos: number; max_photos: number; price_per_photo: number }[]>([]);
   const [status, setStatus] = useState<'draft' | 'active' | 'archived'>('active');
 
-  const [leadsList, setLeadsList] = useState<{ id: string; nome_cliente?: string; client_name?: string; email_cliente?: string; tipo_evento?: string; status?: string }[]>([]);
-  const [leadSearch, setLeadSearch] = useState('');
+  const [convertedClients, setConvertedClients] = useState<{
+    id: string;
+    nome_cliente: string;
+    email_cliente?: string;
+    tipo_evento?: string;
+    status: string;
+    template_id?: string;
+    template_nome: string;
+  }[]>([]);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [enableSales, setEnableSales] = useState(true);
   const [enableDownloads, setEnableDownloads] = useState(true);
@@ -161,10 +169,10 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
     }
   }, [gallery, isOpen]);
 
-  // Carregar lista de todos os clientes/leads do fotógrafo para vinculação de workflow
+  // Carregar lista de clientes convertidos do fotógrafo (por template e ordem alfabética)
   useEffect(() => {
     if (!isOpen) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
 
       // Buscar instagram no perfil
@@ -182,31 +190,86 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
           }
         });
 
-      // Buscar todos os leads e clientes cadastrados no workflow
-      supabase
-        .from('leads')
-        .select('id, nome_cliente, email_cliente, tipo_evento, status')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('Erro ao carregar lista de clientes para galeria:', error);
-          } else {
-            setLeadsList(data || []);
-          }
-        });
-    });
-  }, [isOpen]);
+      try {
+        // 1. Buscar templates do fotógrafo para mapear os nomes
+        const { data: templatesData } = await supabase
+          .from('templates')
+          .select('id, nome_template, titulo_template')
+          .eq('user_id', user.id);
 
-  const filteredLeadsList = leadsList.filter((lead) => {
-    if (!leadSearch.trim()) return true;
-    const q = leadSearch.toLowerCase().trim();
-    const name = (lead.nome_cliente || lead.client_name || '').toLowerCase();
-    const email = (lead.email_cliente || '').toLowerCase();
-    const eventType = (lead.tipo_evento || '').toLowerCase();
-    const statusVal = (lead.status || '').toLowerCase();
-    return name.includes(q) || email.includes(q) || eventType.includes(q) || statusVal.includes(q);
+        const templateNameMap = new Map<string, string>();
+        (templatesData || []).forEach((t) => {
+          const name = t.nome_template || t.titulo_template || 'Template';
+          templateNameMap.set(t.id, name);
+        });
+
+        // 2. Buscar apenas leads CONVERTIDOS ou FINALIZADOS (clientes fechados)
+        let leadsQuery = supabase
+          .from('leads')
+          .select('id, nome_cliente, email_cliente, tipo_evento, status, template_id, created_at')
+          .eq('user_id', user.id);
+
+        if (gallery?.client_id) {
+          leadsQuery = leadsQuery.or(`status.in.(convertido,finalizado),id.eq.${gallery.client_id}`);
+        } else {
+          leadsQuery = leadsQuery.in('status', ['convertido', 'finalizado']);
+        }
+
+        const { data: leadsData, error: leadsErr } = await leadsQuery;
+
+        if (leadsErr) {
+          console.error('Erro ao carregar clientes convertidos para galeria:', leadsErr);
+        } else {
+          const list = (leadsData || []).map((l: any) => ({
+            id: l.id,
+            nome_cliente: (l.nome_cliente || 'Cliente sem nome').trim(),
+            email_cliente: l.email_cliente || undefined,
+            tipo_evento: l.tipo_evento || undefined,
+            status: l.status || 'convertido',
+            template_id: l.template_id || undefined,
+            template_nome: l.template_id && templateNameMap.has(l.template_id)
+              ? templateNameMap.get(l.template_id)!
+              : 'Sem Template / Direto',
+          }));
+
+          // Ordenação Alfabética A-Z por nome do cliente
+          list.sort((a, b) => a.nome_cliente.localeCompare(b.nome_cliente, 'pt-BR', { sensitivity: 'base' }));
+          setConvertedClients(list);
+        }
+      } catch (e) {
+        console.error('Erro ao buscar clientes convertidos:', e);
+      }
+    });
+  }, [isOpen, gallery?.client_id]);
+
+  // Filtragem dos clientes por busca de texto
+  const filteredClients = convertedClients.filter((client) => {
+    if (!clientSearchQuery.trim()) return true;
+    const q = clientSearchQuery.toLowerCase().trim();
+    return (
+      client.nome_cliente.toLowerCase().includes(q) ||
+      (client.email_cliente && client.email_cliente.toLowerCase().includes(q)) ||
+      (client.tipo_evento && client.tipo_evento.toLowerCase().includes(q)) ||
+      client.template_nome.toLowerCase().includes(q)
+    );
   });
+
+  // Agrupamento dos clientes por Template (com templates em ordem alfabética)
+  const groupedClientsByTemplate = (() => {
+    const groups: Record<string, typeof convertedClients> = {};
+    filteredClients.forEach((client) => {
+      const key = client.template_nome;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(client);
+    });
+
+    return Object.keys(groups)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+      .reduce((acc, key) => {
+        acc[key] = groups[key];
+        return acc;
+      }, {} as Record<string, typeof convertedClients>);
+  })();
 
   if (!isOpen) return null;
 
@@ -298,7 +361,18 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <form
+          onSubmit={handleSubmit}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck="false"
+          data-form-type="other"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-bwignore="true"
+          className="p-6 space-y-6 max-h-[80vh] overflow-y-auto"
+        >
           {/* Informações Básicas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -309,6 +383,8 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
               <input
                 type="text"
                 required
+                autoComplete="off"
+                data-lpignore="true"
                 placeholder="Ex: Casamento de João e Maria"
                 value={title}
                 onChange={(e) => {
@@ -329,6 +405,8 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
               </label>
               <input
                 type="date"
+                autoComplete="off"
+                data-lpignore="true"
                 value={eventDate}
                 onChange={(e) => setEventDate(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
@@ -468,6 +546,8 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                   <label className="text-[11px] font-medium text-slate-300">Seu perfil do Instagram:</label>
                   <input
                     type="text"
+                    autoComplete="off"
+                    data-lpignore="true"
                     placeholder="Ex: @danielazevedo.foto"
                     value={photographerInstagram}
                     onChange={(e) => setPhotographerInstagram(e.target.value)}
@@ -505,6 +585,8 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
               </label>
               <input
                 type="text"
+                autoComplete="off"
+                data-lpignore="true"
                 placeholder="casamento-joao-e-maria"
                 value={slug}
                 onChange={(e) => {
@@ -525,26 +607,55 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center space-x-1">
-                  <User className="w-4 h-4 text-blue-400" />
-                  <span>Vincular Cliente (Workflow)</span>
+                  <User className="w-4 h-4 text-emerald-400" />
+                  <span>Vincular Cliente Convertido (Workflow)</span>
                 </label>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  {filteredClients.length} {filteredClients.length === 1 ? 'cliente' : 'clientes'}
+                </span>
+              </div>
+
+              {/* Campo de Pesquisa Rápida de Clientes */}
+              <div className="relative">
+                <input
+                  type="text"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  placeholder="🔍 Pesquisar cliente por nome, template, e-mail..."
+                  value={clientSearchQuery}
+                  onChange={(e) => setClientSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                {clientSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setClientSearchQuery('')}
+                    className="p-1 text-slate-400 hover:text-white absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
               >
                 <option value="">Sem cliente vinculado</option>
-                {filteredLeadsList.map((lead) => {
-                  const name = lead.nome_cliente || lead.client_name || `Cliente #${lead.id.substring(0, 6)}`;
-                  const detail = lead.tipo_evento ? ` (${lead.tipo_evento})` : '';
-                  return (
-                    <option key={lead.id} value={lead.id}>
-                      {name}{detail}
-                    </option>
-                  );
-                })}
+                {Object.entries(groupedClientsByTemplate).map(([templateName, clients]) => (
+                  <optgroup key={templateName} label={`📁 Template: ${templateName} (${clients.length})`}>
+                    {clients.map((c) => {
+                      const detail = c.tipo_evento ? ` — ${c.tipo_evento}` : '';
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.nome_cliente}{detail}
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                ))}
               </select>
             </div>
           </div>
@@ -632,6 +743,12 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
             {!removePassword && (
               <input
                 type="password"
+                name="gallery_protection_key_custom"
+                autoComplete="new-password"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
                 placeholder={gallery?.password_hash ? 'Nova senha (deixe em branco para manter)' : 'Defina uma senha de acesso'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -704,6 +821,12 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
+                      name="gallery_download_pin_custom"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       placeholder="Ex: 1234 ou noivos2026"
                       value={downloadPin}
                       onChange={(e) => setDownloadPin(e.target.value)}

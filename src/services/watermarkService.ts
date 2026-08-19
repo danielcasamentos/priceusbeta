@@ -47,14 +47,15 @@ export async function applyWatermarkToImage(
     try {
       const logoImg = await loadImage(logoUrl);
       const logoAspect = (logoImg.naturalWidth || logoImg.width) / (logoImg.naturalHeight || logoImg.height);
+      const minDimension = Math.min(canvas.width, canvas.height);
 
-      // Calcular tamanho proporcional da marca d'água
-      let drawWidth = canvas.width * scale;
+      // Calcular tamanho proporcional adaptável a paisagem e retrato
+      let drawWidth = minDimension * (scale * 2.2);
       let drawHeight = drawWidth / logoAspect;
 
-      // Garantir que não estoure em telas pequenas
-      if (drawHeight > canvas.height * 0.3) {
-        drawHeight = canvas.height * 0.3;
+      // Garantir limites
+      if (drawHeight > minDimension * 0.4) {
+        drawHeight = minDimension * 0.4;
         drawWidth = drawHeight * logoAspect;
       }
 
@@ -73,11 +74,11 @@ export async function applyWatermarkToImage(
       ctx.restore();
     } catch (e) {
       console.warn('[WatermarkService] Erro ao carregar logo PNG, utilizando fallback de texto:', e);
-      drawTextWatermark(ctx, text, position, opacity, rotation, canvas.width, canvas.height, margin);
+      drawTextWatermark(ctx, text, position, opacity, scale, rotation, canvas.width, canvas.height, margin);
     }
   } else {
     // 3. Marca d'água de TEXTO
-    drawTextWatermark(ctx, text, position, opacity, rotation, canvas.width, canvas.height, margin);
+    drawTextWatermark(ctx, text, position, opacity, scale, rotation, canvas.width, canvas.height, margin);
   }
 
   return new Promise<Blob>((resolve, reject) => {
@@ -97,6 +98,7 @@ function drawTextWatermark(
   text: string,
   position: WatermarkPosition,
   opacity: number,
+  scale: number,
   rotation: number,
   canvasWidth: number,
   canvasHeight: number,
@@ -104,9 +106,10 @@ function drawTextWatermark(
 ) {
   if (!text || !text.trim()) return;
 
-  const fontSize = Math.max(16, Math.round(canvasWidth * 0.03));
+  const minDimension = Math.min(canvasWidth, canvasHeight);
+  const fontSize = Math.max(14, Math.round(minDimension * (scale * 0.6 + 0.015)));
   ctx.save();
-  ctx.font = `600 ${fontSize}px sans-serif`;
+  ctx.font = `bold ${fontSize}px sans-serif`;
 
   const metrics = ctx.measureText(text);
   const textWidth = metrics.width;
@@ -123,18 +126,32 @@ function drawTextWatermark(
     ctx.translate(-(x + textWidth / 2), -(y - textHeight / 2));
   }
 
-  ctx.globalAlpha = opacity;
+  // Desenhar fundo escuro arredondado semi-transparente de contraste atrás do texto
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  const paddingH = fontSize * 0.5;
+  const paddingV = fontSize * 0.35;
+  const bgX = x - paddingH;
+  const bgY = y - textHeight - paddingV * 0.2;
+  const bgW = textWidth + paddingH * 2;
+  const bgH = textHeight + paddingV * 2;
 
-  // Desenhar fundo semi-transparente de contraste atrás do texto
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  const paddingH = fontSize * 0.4;
-  const paddingV = fontSize * 0.25;
-  ctx.fillRect(x - paddingH, y - textHeight + paddingV, textWidth + paddingH * 2, textHeight + paddingV * 2);
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(bgX, bgY, bgW, bgH, fontSize * 0.35);
+  } else {
+    ctx.rect(bgX, bgY, bgW, bgH);
+  }
+  ctx.fill();
+
+  // Borda sutil
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
   // Desenhar texto branco com sombra suave
   ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  ctx.shadowBlur = 4;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(text, x, y);
 

@@ -34,6 +34,8 @@ import { GalleriesManager } from '../components/gallery/GalleriesManager';
 import { AICullingManager } from '../components/gallery/AICullingManager';
 import { DevSupportLogDrawer } from '../components/DevSupportLogDrawer';
 import { platformAdapter } from '../services/platformAdapter';
+import logoPriceUsLight from '../assets/logo-priceus.png';
+import logoPriceUsDark from '../assets/logo-priceus-dark.png';
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -204,12 +206,12 @@ export function DashboardPage() {
           {/* PriceUs Logo no centro exato da barra superior (também arrastável) */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none">
             <img
-              src="./Logo Price Us Dark.png"
+              src={logoPriceUsDark}
               alt="Price Us"
               className="h-[40px] sm:h-[50px] w-auto hidden dark:block pointer-events-auto object-contain"
             />
             <img
-              src="./logo-priceus.png"
+              src={logoPriceUsLight}
               alt="Price Us"
               className="h-[40px] sm:h-[50px] w-auto dark:hidden block pointer-events-auto object-contain"
             />

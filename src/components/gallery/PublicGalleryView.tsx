@@ -103,6 +103,22 @@ export function PublicGalleryView({
     return sessionStorage.getItem(`gallery_policy_accepted_${gallery.id}`) === 'true';
   });
 
+  // Outras Galerias Públicas do Fotógrafo para "Ver Mais Trabalhos"
+  const [relatedGalleries, setRelatedGalleries] = useState<Gallery[]>([]);
+
+  useEffect(() => {
+    if (gallery?.user_id) {
+      GalleryService.getUserGalleries(gallery.user_id)
+        .then((all) => {
+          const others = all.filter(
+            (g) => g.id !== gallery.id && g.is_public_portfolio && g.status === 'active'
+          );
+          setRelatedGalleries(others.slice(0, 4));
+        })
+        .catch((err) => console.warn('Erro ao carregar outras galerias públicas:', err));
+    }
+  }, [gallery.user_id, gallery.id]);
+
   // LGPD Consentimento e Política de Privacidade
   const [hasAcceptedLgpd, setHasAcceptedLgpd] = useState<boolean>(() => {
     return localStorage.getItem(`priceus_lgpd_consent_${gallery.id}`) === 'true';
@@ -394,79 +410,94 @@ export function PublicGalleryView({
       {isAuthorized && (
         <>
           {/* Header de Capa & Branding do Fotógrafo */}
-          <div className="relative w-full h-[45vh] sm:h-[55vh] overflow-hidden bg-slate-900">
-            {gallery.cover_photo_url ? (
-              <img
-                src={gallery.cover_photo_url}
-                alt={gallery.title}
-                className="w-full h-full object-cover brightness-[0.7] filter contrast-105 transition-transform duration-700 hover:scale-105"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
-            )}
+          {(() => {
+            const activeCoverUrl = gallery.cover_photo_url || photos[0]?.supabase_web_path || photos[0]?.supabase_thumb_path;
+            const profileUrl = photographer.slug ? `/${photographer.slug}` : '/dashboard/perfil';
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+            return (
+              <div className="relative w-full h-[45vh] sm:h-[55vh] overflow-hidden bg-slate-900">
+                {activeCoverUrl ? (
+                  <img
+                    src={activeCoverUrl}
+                    alt={gallery.title}
+                    className="w-full h-full object-cover brightness-[0.65] filter contrast-105 transition-transform duration-700 hover:scale-105"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
+                )}
 
-            <div className="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto p-6 sm:p-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-              <div className="space-y-3">
-                {/* Branding do Fotógrafo */}
-                <div className="flex items-center space-x-3">
-                  {photographer.profile_image_url ? (
-                    <img
-                      src={photographer.profile_image_url}
-                      alt={photographer.nome_profissional || 'Fotógrafo'}
-                      className="w-11 h-11 rounded-full border-2 border-white/40 object-cover shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full bg-white text-slate-900 flex items-center justify-center font-bold text-sm shadow-lg">
-                      <Camera className="w-5 h-5 text-slate-900" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+
+                <div className="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto p-6 sm:p-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+                  <div className="space-y-3">
+                    {/* Branding do Fotógrafo com link direto para o perfil público */}
+                    <div className="flex items-center space-x-3">
+                      <a
+                        href={profileUrl}
+                        className="block transition-transform hover:scale-105 active:scale-95"
+                        title="Ver perfil do fotógrafo"
+                      >
+                        {photographer.profile_image_url ? (
+                          <img
+                            src={photographer.profile_image_url}
+                            alt={photographer.nome_profissional || 'Fotógrafo'}
+                            className="w-12 h-12 rounded-full border-2 border-white/60 object-cover shadow-xl"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-white text-slate-900 flex items-center justify-center font-bold text-sm shadow-xl">
+                            <Camera className="w-5 h-5 text-slate-900" />
+                          </div>
+                        )}
+                      </a>
+
+                      <div>
+                        <p className="text-[11px] uppercase tracking-widest text-slate-300 font-semibold">Fotografia por</p>
+                        <a
+                          href={profileUrl}
+                          className="text-base font-black text-white hover:text-emerald-400 transition-colors flex items-center gap-1 group"
+                        >
+                          <span>{photographer.nome_profissional || 'Fotógrafo PriceU$'}</span>
+                          <span className="text-xs text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">➔</span>
+                        </a>
+                      </div>
                     </div>
-                  )}
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-slate-300 font-semibold">Fotografia por</p>
-                    <a
-                      href={`/${photographer.slug || ''}`}
-                      className="text-sm font-bold text-white hover:text-emerald-400 transition-colors"
+
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md">
+                      {gallery.title}
+                    </h1>
+
+                    {gallery.event_date && (
+                      <p className="text-xs sm:text-sm text-slate-200 flex items-center space-x-2 font-medium">
+                        <Calendar className="w-4 h-4 text-emerald-400" />
+                        <span>{new Date(gallery.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Botão Baixar Fotos em Lote (ZIP) */}
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={handleDownloadZip}
+                      disabled={downloadingZip || photos.length === 0}
+                      className="px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-sm shadow-2xl transition-all flex items-center space-x-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                     >
-                      {photographer.nome_profissional || 'Fotógrafo PriceU$'}
-                    </a>
+                      {downloadingZip ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                          <span>Gerando ZIP ({zipProgress}%)...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 text-slate-950" />
+                          <span>Baixar Galeria Completa (ZIP)</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md">
-                  {gallery.title}
-                </h1>
-
-                {gallery.event_date && (
-                  <p className="text-xs sm:text-sm text-slate-200 flex items-center space-x-2 font-medium">
-                    <Calendar className="w-4 h-4 text-emerald-400" />
-                    <span>{new Date(gallery.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                  </p>
-                )}
               </div>
-
-              {/* Botão Baixar Fotos em Lote (ZIP) */}
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleDownloadZip}
-                  disabled={downloadingZip || photos.length === 0}
-                  className="px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-sm shadow-2xl transition-all flex items-center space-x-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  {downloadingZip ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                      <span>Gerando ZIP ({zipProgress}%)...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 text-slate-950" />
-                      <span>Baixar Galeria Completa (ZIP)</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Grid Masonry de Fotos com Fundo Branco Limpo, Abas de Subgalerias (Ensaio/Casamento) e Proofing */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-white">
@@ -486,7 +517,7 @@ export function PublicGalleryView({
                     <div className="flex items-center justify-center gap-2 mb-10 overflow-x-auto pb-2 scrollbar-none">
                       <button
                         onClick={() => setActiveSubgallery('all')}
-                        className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                        className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
                           activeSubgallery === 'all'
                             ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105'
                             : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -503,7 +534,7 @@ export function PublicGalleryView({
                           <button
                             key={subName}
                             onClick={() => setActiveSubgallery(subName)}
-                            className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                            className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
                               isActive
                                 ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/30 scale-105'
                                 : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -524,52 +555,20 @@ export function PublicGalleryView({
                     </div>
                   ) : (
                     <>
-                      {/* Barra de Ordenação de Fotos */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
-                        <span className="text-xs font-semibold text-slate-500">
-                          {sortedAndFilteredPhotos.length} fotos disponíveis
+                      {/* Cabeçalho da Lista de Fotos (limpo, sem botões de ordenação internos para o cliente) */}
+                      <div className="flex items-center justify-between gap-3 mb-6 pb-3 border-b border-slate-100">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          {sortedAndFilteredPhotos.length} fotos na galeria
                         </span>
-
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => setSortMode('capture_asc')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer ${
-                              sortMode === 'capture_asc'
-                                ? 'bg-slate-900 text-white shadow-sm'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }`}
-                          >
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>Hora da Captura (Cerimônia ➔ Festa)</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setSortMode('capture_desc')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer ${
-                              sortMode === 'capture_desc'
-                                ? 'bg-slate-900 text-white shadow-sm'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }`}
-                          >
-                            <Clock className="w-3.5 h-3.5 rotate-180" />
-                            <span>Mais Recente Primeiro</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setSortMode('name_asc')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer ${
-                              sortMode === 'name_asc'
-                                ? 'bg-slate-900 text-white shadow-sm'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }`}
-                          >
-                            <ArrowDownAZ className="w-3.5 h-3.5" />
-                            <span>Nome (A-Z)</span>
-                          </button>
-                        </div>
+                        {gallery.photo_sort_order && (
+                          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                            {gallery.photo_sort_order === 'capture_desc'
+                              ? 'Mais recentes primeiro'
+                              : gallery.photo_sort_order === 'name_asc'
+                              ? 'Ordem alfabética'
+                              : 'Ordem cronológica'}
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
@@ -608,19 +607,30 @@ export function PublicGalleryView({
                                   };
                                   const align = alignMap[pos] ?? 'items-end justify-end';
                                   const rotation = (gallery as any).watermark_rotation ?? 0;
+                                  const op = gallery.watermark_opacity !== null && gallery.watermark_opacity !== undefined ? gallery.watermark_opacity : 0.7;
+                                  const sc = gallery.watermark_scale !== null && gallery.watermark_scale !== undefined ? gallery.watermark_scale : 0.18;
                                   return (
-                                    <div className={`absolute inset-0 pointer-events-none select-none flex ${align} p-3 z-10 overflow-hidden`}>
-                                      {gallery.watermark_logo_url ? (
+                                    <div className={`absolute inset-0 pointer-events-none select-none flex ${align} p-2.5 sm:p-3.5 z-10 overflow-hidden`}>
+                                      {gallery.watermark_logo_url && gallery.watermark_type === 'image' ? (
                                         <img
                                           src={gallery.watermark_logo_url}
                                           alt="Marca d'água"
-                                          style={{ transform: `rotate(${rotation}deg)` }}
-                                          className="max-w-[70%] max-h-[70%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
+                                          style={{
+                                            transform: `rotate(${rotation}deg)`,
+                                            opacity: op,
+                                            maxWidth: `${Math.min(65, Math.max(10, sc * 100))}%`,
+                                            maxHeight: `${Math.min(65, Math.max(10, sc * 100))}%`,
+                                          }}
+                                          className="object-contain filter drop-shadow-md pointer-events-none"
                                         />
                                       ) : (
                                         <div
-                                          style={{ transform: `rotate(${rotation}deg)` }}
-                                          className="text-center text-white/35 font-extrabold text-xs sm:text-sm tracking-widest uppercase border border-white/20 px-3 py-1.5 rounded-xl bg-black/10 backdrop-blur-[1px] shadow-sm pointer-events-none"
+                                          style={{
+                                            transform: `rotate(${rotation}deg)`,
+                                            opacity: op,
+                                            fontSize: `clamp(10px, ${Math.max(10, sc * 70)}px, 18px)`,
+                                          }}
+                                          className="text-center text-white font-extrabold tracking-wider uppercase border border-white/30 px-2.5 py-1 rounded-lg bg-black/40 backdrop-blur-[1px] shadow-md pointer-events-none whitespace-nowrap"
                                         >
                                           © {gallery.watermark_text || photographer?.nome_profissional || 'DIREITOS RESERVADOS'}
                                         </div>
@@ -675,6 +685,73 @@ export function PublicGalleryView({
                         </div>
                       )}
                     </>
+                  )}
+
+                  {/* Seção Mais Trabalhos do Fotógrafo */}
+                  {relatedGalleries.length > 0 && (
+                    <section className="mt-20 pt-12 border-t border-slate-200">
+                      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-emerald-600 font-bold mb-1">
+                            Portfólio & Outras Histórias
+                          </p>
+                          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                            Mais Trabalhos de {photographer.nome_profissional || 'Nosso Estúdio'}
+                          </h2>
+                        </div>
+
+                        {photographer.slug && (
+                          <a
+                            href={`/${photographer.slug}`}
+                            className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 hover:text-emerald-600 transition-colors group"
+                          >
+                            <span>Ver Todo o Portfólio</span>
+                            <span className="transition-transform group-hover:translate-x-1">➔</span>
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {relatedGalleries.map((item) => {
+                          const itemCover = item.cover_photo_url;
+                          const galleryUrl = photographer.slug ? `/${photographer.slug}/g/${item.slug}` : `/g/${item.slug}`;
+                          return (
+                            <a
+                              key={item.id}
+                              href={galleryUrl}
+                              className="group block rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                            >
+                              <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
+                                {itemCover ? (
+                                  <img
+                                    src={itemCover}
+                                    alt={item.title}
+                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center text-slate-500">
+                                    <Camera className="w-8 h-8 opacity-40" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+
+                              <div className="p-4">
+                                <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-emerald-600 transition-colors">
+                                  {item.title}
+                                </h3>
+                                {item.event_date && (
+                                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>{new Date(item.event_date).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </section>
                   )}
           </>
         );
@@ -858,9 +935,12 @@ export function PublicGalleryView({
             allowHighResDownload={gallery.allow_high_res_download}
             onDownloadPhoto={handleDownloadSinglePhoto}
             watermarkEnabled={gallery.watermark_enabled}
+            watermarkType={gallery.watermark_type || 'text'}
             watermarkText={gallery.watermark_text || photographer?.nome_profissional}
             watermarkLogoUrl={gallery.watermark_logo_url}
             watermarkPosition={gallery.watermark_position || 'bottom-right'}
+            watermarkOpacity={gallery.watermark_opacity}
+            watermarkScale={gallery.watermark_scale}
             watermarkRotation={(gallery as any).watermark_rotation ?? 0}
           />
         </>

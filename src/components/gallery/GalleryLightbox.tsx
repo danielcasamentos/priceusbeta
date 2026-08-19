@@ -13,9 +13,12 @@ interface GalleryLightboxProps {
   allowHighResDownload?: boolean;
   onDownloadPhoto?: (photo: GalleryPhoto, highRes: boolean) => void;
   watermarkEnabled?: boolean;
+  watermarkType?: 'text' | 'image' | null;
   watermarkText?: string | null;
   watermarkLogoUrl?: string | null;
   watermarkPosition?: string | null;
+  watermarkOpacity?: number | null;
+  watermarkScale?: number | null;
   watermarkRotation?: number | null;
 }
 
@@ -29,9 +32,12 @@ export function GalleryLightbox({
   allowHighResDownload = true,
   onDownloadPhoto,
   watermarkEnabled = false,
+  watermarkType = 'text',
   watermarkText,
   watermarkLogoUrl,
   watermarkPosition = 'bottom-right',
+  watermarkOpacity = 0.7,
+  watermarkScale = 0.18,
   watermarkRotation = 0,
 }: GalleryLightboxProps) {
   const currentPhoto = photos[currentIndex];
@@ -128,18 +134,18 @@ export function GalleryLightbox({
       )}
 
       {/* Imagem lightbox */}
-      <div className="max-w-7xl max-h-[85vh] p-4 flex flex-col items-center justify-center relative">
-        <div className="relative overflow-hidden rounded-lg max-h-[78vh] flex items-center justify-center">
+      <div className="max-w-7xl max-h-[85vh] p-2 sm:p-4 flex flex-col items-center justify-center relative">
+        <div className="relative inline-flex items-center justify-center overflow-hidden rounded-lg max-h-[78vh] max-w-full">
           <SmartGalleryImage
             photo={currentPhoto}
             src={currentPhoto.supabase_web_path || currentPhoto.supabase_thumb_path}
             preferThumbnail={false}
             alt={currentPhoto.file_name || 'Foto em tela cheia'}
-            className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl"
+            className="max-w-full max-h-[78vh] w-auto h-auto object-contain rounded-lg shadow-2xl block"
             objectFit="contain"
           />
 
-          {/* Marca d'água no Lightbox */}
+          {/* Marca d'água no Lightbox adaptada a Paisagem e Retrato */}
           {watermarkEnabled && (() => {
             const pos = watermarkPosition || 'bottom-right';
             const alignMap: Record<string, string> = {
@@ -155,20 +161,31 @@ export function GalleryLightbox({
             };
             const align = alignMap[pos] ?? 'items-end justify-end';
             const rot = watermarkRotation ?? 0;
+            const op = watermarkOpacity !== null && watermarkOpacity !== undefined ? watermarkOpacity : 0.7;
+            const sc = watermarkScale !== null && watermarkScale !== undefined ? watermarkScale : 0.18;
 
             return (
-              <div className={`absolute inset-0 pointer-events-none select-none flex ${align} p-6 z-10 overflow-hidden`}>
-                {watermarkLogoUrl ? (
+              <div className={`absolute inset-0 pointer-events-none select-none flex ${align} p-4 sm:p-6 z-10 overflow-hidden`}>
+                {watermarkLogoUrl && watermarkType === 'image' ? (
                   <img
                     src={watermarkLogoUrl}
                     alt="Marca d'água"
-                    style={{ transform: `rotate(${rot}deg)` }}
-                    className="max-w-[65%] max-h-[65%] object-contain opacity-40 filter drop-shadow-md pointer-events-none"
+                    style={{
+                      transform: `rotate(${rot}deg)`,
+                      opacity: op,
+                      maxWidth: `${Math.min(60, Math.max(10, sc * 100))}%`,
+                      maxHeight: `${Math.min(60, Math.max(10, sc * 100))}%`,
+                    }}
+                    className="object-contain filter drop-shadow-md pointer-events-none"
                   />
                 ) : (
                   <div
-                    style={{ transform: `rotate(${rot}deg)` }}
-                    className="text-center text-white/40 font-extrabold text-sm sm:text-base md:text-lg tracking-widest uppercase border border-white/20 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-[1px] shadow-sm pointer-events-none"
+                    style={{
+                      transform: `rotate(${rot}deg)`,
+                      opacity: op,
+                      fontSize: `clamp(11px, ${Math.max(11, sc * 90)}px, 24px)`,
+                    }}
+                    className="text-center text-white font-extrabold tracking-widest uppercase border border-white/30 px-3.5 py-1.5 rounded-xl bg-black/40 backdrop-blur-[2px] shadow-lg pointer-events-none whitespace-nowrap"
                   >
                     © {watermarkText || 'DIREITOS RESERVADOS'}
                   </div>

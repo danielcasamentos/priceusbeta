@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { LoginForm } from '../components/auth/LoginForm';
 import { SignupForm } from '../components/auth/SignupForm';
 import { AppInstallBanner } from '../components/AppInstallBanner';
+import logoPriceUsLight from '../assets/logo-priceus.png';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       navigate('/dashboard/meu-dia');
     }
@@ -24,9 +25,9 @@ export function LoginPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <img
-          src="./logo-priceus.png"
+          src={logoPriceUsLight}
           alt="Price Us"
-          className="h-16 w-auto mx-auto mb-8"
+          className="h-16 w-auto mx-auto mb-8 object-contain"
         />
         <div className="bg-white p-8 rounded-lg shadow-md">
           <div className="text-center mb-6">
