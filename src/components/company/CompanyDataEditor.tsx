@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Building2, Save, AlertCircle, CheckCircle, PenTool, CreditCard, Tag, Plus, Edit2, Trash2, Loader2, Check, X } from 'lucide-react';
 import { MaskedInput } from '../MaskedInput';
 import { ContractCanvas } from '../ContractCanvas';
+import { InstagramConnectionCard } from '../instagram/InstagramConnectionCard';
 
 interface BusinessSettings {
   person_type: 'fisica' | 'juridica';
@@ -264,6 +265,9 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
           <p className={`text-sm ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>{message.text}</p>
         </div>
       )}
+
+      {/* 📸 Integração Oficial com o Instagram Graph API */}
+      <InstagramConnectionCard />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="md:col-span-2">

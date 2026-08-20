@@ -257,3 +257,114 @@ export function generateCuratedPosts(
 
   return [post1, post2, post3, post4, post5];
 }
+
+export interface ArtCopyPreset {
+  id: string;
+  category: string;
+  headline: string;
+  subtitle: string;
+  cta: string;
+}
+
+export async function generateArtCopyOptions(
+  projectTitle = '',
+  keywords = ''
+): Promise<ArtCopyPreset[]> {
+  const groqKey = import.meta.env.VITE_GROQ_API_KEY;
+  if (groqKey && groqKey.startsWith('gsk_')) {
+    try {
+      const prompt = `Você é um copywriter de elite para estúdios de fotografia e casamento.
+Gere 4 opções elegantes e de altíssima conversão de títulos (Headlines), subtítulos e CTAs para artes de Instagram (Feed e Stories).
+Tema do ensaio / projeto: "${projectTitle}".
+Palavras-chave ou foco: "${keywords || 'Casamento, ensaio de casal, agenda aberta, emoção'}".
+
+Responda ESTRITAMENTE em formato JSON com o seguinte schema:
+[
+  {
+    "id": "1",
+    "category": "✨ Agenda Aberta",
+    "headline": "AGENDA 2026 ABERTA",
+    "subtitle": "Garanta a cobertura inesquecível do seu grande dia com datas exclusivas.",
+    "cta": "🔗 LINK NA BIO PARA ORÇAMENTOS"
+  },
+  {
+    "id": "2",
+    "category": "💍 Histórias Reais",
+    "headline": "HISTÓRIAS REAIS",
+    "subtitle": "A beleza dos momentos espontâneos e a emoção de eternizar o seu amor.",
+    "cta": "💬 MANDE UM DIRECT"
+  },
+  {
+    "id": "3",
+    "category": "🖤 Editorial Fine Art",
+    "headline": "ESTÉTICA & EMOÇÃO",
+    "subtitle": "Fotografia com alma, luz natural e direção acolhedora para o seu momento.",
+    "cta": "👉 RESERVE SUA DATA"
+  },
+  {
+    "id": "4",
+    "category": "🎁 Condição Especial",
+    "headline": "CONDIÇÃO EXCLUSIVA",
+    "subtitle": "Feche seu contrato com condição especial e ganhe um presente inesquecível.",
+    "cta": "✨ SAIBA MAIS NO LINK"
+  }
+]`;
+
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+        }),
+      });
+
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content?.trim();
+      if (content) {
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      }
+    } catch (e) {
+      console.warn('Groq art copy generation fallback:', e);
+    }
+  }
+
+  // Fallback padrão de alta conversão
+  return [
+    {
+      id: 'default_1',
+      category: '✨ Agenda Aberta',
+      headline: 'AGENDA 2026 ABERTA',
+      subtitle: `Garanta a memória do seu dia especial com registros inesquecíveis. ${projectTitle ? `(${projectTitle})` : ''}`,
+      cta: '🔗 LINK NA BIO PARA ORÇAMENTOS',
+    },
+    {
+      id: 'default_2',
+      category: '💍 Histórias Reais',
+      headline: 'HISTÓRIAS REAIS',
+      subtitle: 'A beleza dos momentos espontâneos e a emoção de eternizar o seu amor.',
+      cta: '💬 MANDE UM DIRECT',
+    },
+    {
+      id: 'default_3',
+      category: '🖤 Editorial Fine Art',
+      headline: 'ESTÉTICA & EMOÇÃO',
+      subtitle: 'Fotografia com alma, luz natural e direção acolhedora para o seu grande momento.',
+      cta: '👉 RESERVE SUA DATA',
+    },
+    {
+      id: 'default_4',
+      category: '🎁 Condição Especial',
+      headline: 'CONDIÇÃO EXCLUSIVA',
+      subtitle: 'Feche seu contrato com condição especial e ganhe um presente inesquecível.',
+      cta: '✨ SAIBA MAIS NO LINK',
+    },
+  ];
+}
