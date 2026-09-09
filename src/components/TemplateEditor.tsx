@@ -83,6 +83,12 @@ interface Template {
   ocultar_data_criacao?: boolean;
   dias_semana_bloqueados?: number[];
   limitar_parcelas_pelo_evento?: boolean;
+  // Template Alternativo / Resgate de Leads (Monte seu Pacote)
+  template_alternativo_id?: string | null;
+  template_alternativo_ativo?: boolean;
+  template_alternativo_titulo?: string;
+  template_alternativo_subtitulo?: string;
+  template_alternativo_botao_texto?: string;
   // Upsell
   upsell_ativo?: boolean;
   upsell_template_id?: string | null;
@@ -264,7 +270,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   const [copiedLink, setCopiedLink] = useState(false);
 
   // ── Upsell states ──────────────────────────────────────────────────────────
-  const [allUserTemplates, setAllUserTemplates] = useState<{ id: string; nome_template: string }[]>([]);
+  const [allUserTemplates, setAllUserTemplates] = useState<{ id: string; nome_template: string; slug_template?: string }[]>([]);
   const [upsellSourceProducts, setUpsellSourceProducts] = useState<Produto[]>([]);
   const [loadingUpsellProducts, setLoadingUpsellProducts] = useState(false);
   const [upsellSaveStatus, setUpsellSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -346,7 +352,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       if (templateData?.user_id) {
         const { data: templatesData } = await supabase
           .from('templates')
-          .select('id, nome_template')
+          .select('id, nome_template, slug_template')
           .eq('user_id', templateData.user_id)
           .order('nome_template');
         setAllUserTemplates(templatesData || []);
@@ -2154,6 +2160,112 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </p>
                     </div>
                   </label>
+                </div>
+
+                {/* 🔄 Template Alternativo / Resgate de Leads ("Monte seu Pacote") */}
+                <div className="border border-indigo-200 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                        <Share2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900 dark:text-white text-base">
+                          🔄 Página de Orçamento Alternativa ("Monte seu Pacote" / Resgate de Leads)
+                        </h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
+                          Vincule outra página de orçamento (ex: onde o cliente monta os itens do jeito dele). Quando o cliente estiver prestes a sair sem finalizar, o sistema oferece a opção de personalizar com os dados já preenchidos (nome, telefone, data, cidade) preservados automaticamente.
+                        </p>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={template?.template_alternativo_ativo || false}
+                          onChange={(e) => handleUpdateTemplateConfig('template_alternativo_ativo', e.target.checked)}
+                        />
+                        <div className={`w-11 h-6 rounded-full transition-colors ${
+                          template?.template_alternativo_ativo ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-700'
+                        }`} />
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                          template?.template_alternativo_ativo ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </div>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        {template?.template_alternativo_ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {template?.template_alternativo_ativo && (
+                    <div className="pt-3 border-t border-indigo-100 dark:border-indigo-900/40 space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                          Selecionar Template Alternativo de Destino *
+                        </label>
+                        <select
+                          value={template?.template_alternativo_id || ''}
+                          onChange={(e) => handleUpdateTemplateConfig('template_alternativo_id', e.target.value || null)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                        >
+                          <option value="">-- Escolha um orçamento (ex: Monte seu Pacote) --</option>
+                          {allUserTemplates
+                            .filter((t) => t.id !== templateId)
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.nome_template}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Título da Chamada (Modal / Banner)
+                          </label>
+                          <input
+                            type="text"
+                            value={template?.template_alternativo_titulo ?? ''}
+                            onChange={(e) => setTemplate((prev: any) => ({ ...prev, template_alternativo_titulo: e.target.value }))}
+                            onBlur={() => handleUpdateTemplateConfig('template_alternativo_titulo', template?.template_alternativo_titulo || '')}
+                            placeholder="Ex: Prefere montar um pacote personalizado?"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Texto do Botão
+                          </label>
+                          <input
+                            type="text"
+                            value={template?.template_alternativo_botao_texto ?? ''}
+                            onChange={(e) => setTemplate((prev: any) => ({ ...prev, template_alternativo_botao_texto: e.target.value }))}
+                            onBlur={() => handleUpdateTemplateConfig('template_alternativo_botao_texto', template?.template_alternativo_botao_texto || '')}
+                            placeholder="Ex: Montar Pacote Sob Medida"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Subtítulo / Descrição da Oferta
+                        </label>
+                        <input
+                          type="text"
+                          value={template?.template_alternativo_subtitulo ?? ''}
+                          onChange={(e) => setTemplate((prev: any) => ({ ...prev, template_alternativo_subtitulo: e.target.value }))}
+                          onBlur={() => handleUpdateTemplateConfig('template_alternativo_subtitulo', template?.template_alternativo_subtitulo || '')}
+                          placeholder="Ex: Escolha exatamente os serviços e produtos que deseja para seu evento."
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white rounded-lg text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Ativo / Pausado Settings */}

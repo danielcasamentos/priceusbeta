@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Re-
 import { EditLeadQuoteModal } from './EditLeadQuoteModal';
 import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users, Loader2 } from 'lucide-react';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users, Loader2, Search, Filter, Calendar, MapPin, Phone, X, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
@@ -115,6 +115,14 @@ export function LeadsManager({ userId }: { userId: string }) {
   const planLimits = usePlanLimits();
   const { solicitarAvaliacao } = useReviewRequest();
 
+  // Estados para Filtros Avançados de Leads
+  const [searchName, setSearchName] = useState('');
+  const [filterLeadDate, setFilterLeadDate] = useState(''); // Data de criação do lead (YYYY-MM-DD)
+  const [filterEventDate, setFilterEventDate] = useState(''); // Data do evento (YYYY-MM-DD)
+  const [filterCity, setFilterCity] = useState('all');
+  const [filterHasContact, setFilterHasContact] = useState<'all' | 'with_contact' | 'without_contact' | 'with_phone' | 'with_email'>('all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
   // Aba principal: 'leads' | 'producao' | 'finalizados'
   const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
   const location = useLocation();
@@ -145,13 +153,12 @@ export function LeadsManager({ userId }: { userId: string }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'producao') {
-      setMainTab('producao');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
     if (params.get('new') === 'true') {
       setShowNewLeadModal(true);
-      window.history.replaceState({}, '', window.location.pathname);
+      const newParams = new URLSearchParams(window.location.search);
+      newParams.delete('new');
+      const searchStr = newParams.toString() ? `?${newParams.toString()}` : '';
+      window.history.replaceState({}, '', `${window.location.pathname}${searchStr}`);
     }
   }, []);
 
@@ -1104,11 +1111,72 @@ export function LeadsManager({ userId }: { userId: string }) {
     }
   }, [selectedIds, loadLeads]);
 
-  // Leads filtrados somente por template (base para os stats)
+  // Cidades disponíveis para filtro
+  const availableCities = useMemo(() => {
+    const citySet = new Set<string>();
+    leads.forEach(l => {
+      const cityName = cities[l.cidade_evento || '']?.nome || l.cidade_evento;
+      if (cityName && cityName.trim()) {
+        citySet.add(cityName.trim());
+      }
+    });
+    return Array.from(citySet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [leads, cities]);
+
+  // Função centralizada para validar se um lead bate com todos os critérios de filtro
+  const matchLeadFilters = useCallback((lead: Lead, ignoreFilterStatus = false, ignoreTemplate = false) => {
+    // Template
+    if (!ignoreTemplate && filterTemplate !== 'all' && lead.template_id !== filterTemplate) {
+      return false;
+    }
+    // Status
+    if (!ignoreFilterStatus && filter !== 'all' && lead.status !== filter) {
+      return false;
+    }
+    // Nome / Termo de busca (nome, email ou telefone)
+    if (searchName.trim()) {
+      const q = searchName.toLowerCase().trim();
+      const matchName = lead.nome_cliente?.toLowerCase().includes(q);
+      const matchEmail = lead.email_cliente?.toLowerCase().includes(q);
+      const matchPhone = lead.telefone_cliente?.includes(q);
+      if (!matchName && !matchEmail && !matchPhone) return false;
+    }
+    // Data do Lead (data_orcamento / criação)
+    if (filterLeadDate) {
+      if (!lead.data_orcamento) return false;
+      const leadDateStr = new Date(lead.data_orcamento).toISOString().split('T')[0];
+      if (leadDateStr !== filterLeadDate) return false;
+    }
+    // Data do Evento
+    if (filterEventDate) {
+      if (!lead.data_evento) return false;
+      if (!lead.data_evento.startsWith(filterEventDate)) return false;
+    }
+    // Cidade
+    if (filterCity !== 'all') {
+      const cityName = cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || '';
+      if (!cityName.toLowerCase().includes(filterCity.toLowerCase()) && lead.cidade_evento !== filterCity) {
+        return false;
+      }
+    }
+    // Com Contato
+    if (filterHasContact === 'with_contact') {
+      if (!lead.telefone_cliente?.trim() && !lead.email_cliente?.trim()) return false;
+    } else if (filterHasContact === 'without_contact') {
+      if (lead.telefone_cliente?.trim() || lead.email_cliente?.trim()) return false;
+    } else if (filterHasContact === 'with_phone') {
+      if (!lead.telefone_cliente?.trim()) return false;
+    } else if (filterHasContact === 'with_email') {
+      if (!lead.email_cliente?.trim()) return false;
+    }
+
+    return true;
+  }, [filterTemplate, filter, searchName, filterLeadDate, filterEventDate, filterCity, filterHasContact, cities]);
+
+  // Leads filtrados somente por template e buscas (base para os stats de status)
   const templateFilteredLeads = useMemo(() => {
-    if (filterTemplate === 'all') return leads;
-    return leads.filter(lead => lead.template_id === filterTemplate);
-  }, [leads, filterTemplate]);
+    return leads.filter(lead => matchLeadFilters(lead, true, false));
+  }, [leads, matchLeadFilters]);
 
   // Lista de templates que possuem leads, com contadores
   const templateTabs = useMemo(() => {
@@ -1125,10 +1193,38 @@ export function LeadsManager({ userId }: { userId: string }) {
   }, [leads, templates]);
 
   const filteredLeads = useMemo(() => {
-    let result = filterTemplate === 'all' ? leads : leads.filter(lead => lead.template_id === filterTemplate);
-    if (filter !== 'all') result = result.filter(lead => lead.status === filter);
-    return result;
-  }, [leads, filter, filterTemplate]);
+    return leads.filter(lead => matchLeadFilters(lead, false, false));
+  }, [leads, matchLeadFilters]);
+
+  const hasActiveFilters = Boolean(
+    searchName.trim() ||
+    filterLeadDate ||
+    filterEventDate ||
+    filterCity !== 'all' ||
+    filterHasContact !== 'all' ||
+    filterTemplate !== 'all' ||
+    filter !== 'all'
+  );
+
+  const activeFiltersCount = [
+    Boolean(searchName.trim()),
+    Boolean(filterLeadDate),
+    Boolean(filterEventDate),
+    filterCity !== 'all',
+    filterHasContact !== 'all',
+    filterTemplate !== 'all',
+    filter !== 'all',
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setSearchName('');
+    setFilterLeadDate('');
+    setFilterEventDate('');
+    setFilterCity('all');
+    setFilterHasContact('all');
+    setFilterTemplate('all');
+    setFilter('all');
+  };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -1493,11 +1589,218 @@ export function LeadsManager({ userId }: { userId: string }) {
         </div>
       </div>
 
+      {/* ── Barra de Busca e Filtros Avançados ─────────────────────── */}
+      <div className="bg-white dark:bg-[#0a1628] rounded-xl p-4 border border-gray-200 dark:border-white/[0.08] shadow-sm space-y-4">
+        {/* Linha Superior: Campo de Busca Rápida + Ações */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Input de Busca Principal */}
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              placeholder="Pesquisar por nome do lead, e-mail ou telefone..."
+              className="w-full pl-9 pr-9 py-2.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+            />
+            {searchName && (
+              <button
+                onClick={() => setSearchName('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                title="Limpar busca"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Botões de Ação e Filtro */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Toggle Filtros Avançados */}
+            <button
+              onClick={() => setShowAdvancedFilters(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
+                showAdvancedFilters || activeFiltersCount > 0
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                  : 'bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Filtros</span>
+              {activeFiltersCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-black">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* Limpar Todos os Filtros */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                title="Limpar todos os filtros"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Limpar</span>
+              </button>
+            )}
+
+            <div className="h-6 w-px bg-gray-200 dark:bg-white/10 hidden sm:block" />
+
+            {/* Botão Importar Código */}
+            <button
+              onClick={() => setShowImportJsonModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10 rounded-lg font-semibold text-xs transition-all shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span className="hidden md:inline">Importar Código</span>
+            </button>
+            
+            {/* Botão Novo Lead */}
+            <button
+              id="btn-novo-lead"
+              onClick={() => setShowNewLeadModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg font-semibold text-xs transition-all shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Novo Lead
+            </button>
+
+            {/* Alternador Grid / Lista */}
+            <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-white/10 p-1 rounded-lg">
+              <button 
+                onClick={() => setLeadsViewMode('grid')}
+                className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="Visualização em Grade"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => setLeadsViewMode('list')}
+                className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="Visualização em Lista"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Painel Expansível de Filtros Avançados */}
+        {showAdvancedFilters && (
+          <div className="pt-3 border-t border-gray-100 dark:border-white/10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-in fade-in duration-200">
+            {/* 1. Data do Lead */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-blue-500" /> Data do Lead
+              </label>
+              <input
+                type="date"
+                value={filterLeadDate}
+                onChange={(e) => setFilterLeadDate(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* 2. Data do Evento */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-purple-500" /> Data do Evento
+              </label>
+              <input
+                type="date"
+                value={filterEventDate}
+                onChange={(e) => setFilterEventDate(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* 3. Template */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <ClipboardList className="w-3 h-3 text-indigo-500" /> Template
+              </label>
+              <select
+                value={filterTemplate}
+                onChange={(e) => setFilterTemplate(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">Todos os Templates</option>
+                {Object.values(templates).map(t => (
+                  <option key={t.id} value={t.id}>{t.nome_template}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. Cidade */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-emerald-500" /> Cidade
+              </label>
+              <select
+                value={filterCity}
+                onChange={(e) => setFilterCity(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">Todas as Cidades</option>
+                {availableCities.map(city => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 5. Status */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <CheckSquare className="w-3 h-3 text-amber-500" /> Status
+              </label>
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">Todos os Status</option>
+                <option value="novo">🆕 Novo</option>
+                <option value="contatado">💬 Contatado</option>
+                <option value="em_negociacao">🤝 Em Negociação</option>
+                <option value="fazer_followup">📞 Fazer Follow-up</option>
+                <option value="convertido">✅ Convertido</option>
+                <option value="perdido">❌ Perdido</option>
+                <option value="abandonado">⏸️ Abandonado</option>
+              </select>
+            </div>
+
+            {/* 6. Com Contato */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Phone className="w-3 h-3 text-teal-500" /> Contato
+              </label>
+              <select
+                value={filterHasContact}
+                onChange={(e) => setFilterHasContact(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">Todos (Com ou Sem)</option>
+                <option value="with_contact">✅ Com qualquer contato</option>
+                <option value="with_phone">📱 Com WhatsApp/Telefone</option>
+                <option value="with_email">✉️ Com E-mail</option>
+                <option value="without_contact">🚫 Sem Contato</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ── Tabs de Template ─────────────────────────────────────── */}
       {templateTabs.length > 1 && (
         <div className="flex flex-wrap gap-2 pb-1 border-b border-gray-200 dark:border-[rgba(255,255,255,0.1)]">
           <button
-            onClick={() => { setFilterTemplate('all'); setFilter('all'); }}
+            onClick={() => { setFilterTemplate('all'); }}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
               filterTemplate === 'all'
                 ? 'bg-blue-600 text-white shadow-sm'
@@ -1512,7 +1815,7 @@ export function LeadsManager({ userId }: { userId: string }) {
           {templateTabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => { setFilterTemplate(tab.id); setFilter('all'); }}
+              onClick={() => { setFilterTemplate(tab.id); }}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                 filterTemplate === tab.id
                   ? 'bg-indigo-600 text-white shadow-sm'
@@ -1528,11 +1831,11 @@ export function LeadsManager({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* ── Filtros de Status ─────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
+      {/* ── Filtros de Status Rápidos ─────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 items-center">
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors ${
             filter === 'all'
               ? 'bg-blue-600 text-white'
               : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.7)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)]'
@@ -1544,7 +1847,7 @@ export function LeadsManager({ userId }: { userId: string }) {
           <button
             key={status}
             onClick={() => setFilter(status)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors ${
               filter === status
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 dark:bg-[rgba(255,255,255,0.05)] text-gray-700 dark:text-[rgba(255,255,255,0.7)] hover:bg-gray-200 dark:hover:bg-[rgba(255,255,255,0.1)]'
@@ -1558,7 +1861,7 @@ export function LeadsManager({ userId }: { userId: string }) {
           <button
             onClick={() => setDeleteConfirmMultiple(true)}
             disabled={isDeleting}
-            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-500 transition-colors disabled:bg-red-300 dark:disabled:bg-[rgba(239,68,68,0.5)]"
+            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-500 transition-colors disabled:bg-red-300 dark:disabled:bg-[rgba(239,68,68,0.5)] text-xs font-bold"
           >
             {isDeleting ? (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1568,44 +1871,12 @@ export function LeadsManager({ userId }: { userId: string }) {
             Excluir ({selectedIds.length})
           </button>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          {/* Botão Importar Código */}
-          <button
-            onClick={() => setShowImportJsonModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-150 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-250 border dark:border-white/5 rounded-lg font-semibold text-sm transition-all shadow-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Importar Código
-          </button>
-          
-          {/* Botão Novo Lead */}
-          <button
-            id="btn-novo-lead"
-            onClick={() => setShowNewLeadModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg font-semibold text-sm transition-all shadow-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-            Novo Lead
-          </button>
-        </div>
-        <div className="flex items-center gap-1 bg-gray-200 dark:bg-[#07101f] p-1 rounded-lg">
-          <button 
-            onClick={() => setLeadsViewMode('grid')}
-            className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'grid' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-            title="Visualização em Grade"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => setLeadsViewMode('list')}
-            className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'list' ? 'bg-white dark:bg-[#1a2b42] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-            title="Visualização em Lista"
-          >
-            <List className="w-4 h-4" />
-          </button>
-        </div>
+
+        {hasActiveFilters && (
+          <div className="ml-auto text-xs text-gray-500 dark:text-gray-400 font-medium">
+            Exibindo <strong className="text-blue-600 dark:text-blue-400">{filteredLeads.length}</strong> de {leads.length} leads
+          </div>
+        )}
       </div>
 
       {/* Lista de Leads */}

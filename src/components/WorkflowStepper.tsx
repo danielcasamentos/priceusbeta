@@ -38,9 +38,62 @@ export function formatDuration(minutes: number | null | undefined): string {
   return `${m}m`;
 }
 
+/** Calcula a soma total de minutos de uma lista de etapas */
+export function calculateTotalMinutes(etapas: { duracao_minutos?: number | null }[]): number {
+  return (etapas || []).reduce((sum, e) => sum + (Number(e.duracao_minutos) || 0), 0);
+}
+
+/** Formata a duração total de forma limpa (ex: "19h" ou "4h 30m" ou "30m") */
+export function formatTotalDuration(minutes: number): string {
+  if (!minutes || minutes <= 0) return '0h';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+const DURATION_PRESETS = [
+  { label: '30m', minutes: 30 },
+  { label: '1h', minutes: 60 },
+  { label: '2h', minutes: 120 },
+  { label: '4h', minutes: 240 },
+  { label: '8h', minutes: 480 },
+];
+
+function QuickDurationChips({ 
+  currentMinutes, 
+  onSelect 
+}: { 
+  currentMinutes?: number | null; 
+  onSelect: (min: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-1">
+      {DURATION_PRESETS.map(p => {
+        const isSelected = currentMinutes === p.minutes;
+        return (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => onSelect(p.minutes)}
+            className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${
+              isSelected
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20'
+            }`}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 import {
   Plus, Trash2, Save, ChevronDown, ChevronUp,
-  Pause, Check, FolderOpen, X, Loader2, CalendarClock
+  Pause, Check, FolderOpen, X, Loader2, CalendarClock, Clock
 } from 'lucide-react';
 import { WorkflowStep, WorkflowTemplate, WorkflowTemplateStep, SlaResult } from '../types/workflow';
 import { useWorkflowSla, calcularSlaEtapa } from '../hooks/useWorkflowSla';
@@ -264,7 +317,7 @@ function ManageTemplatesModal({
   };
 
   const handleAddStep = () => {
-    setEditEtapas([...editEtapas, { label: 'Nova etapa', description: '', duracao_minutos: null, horario_inicio: null, ambiente: 'externo' }]);
+    setEditEtapas([...editEtapas, { label: 'Nova etapa', description: '', duracao_minutos: 60, horario_inicio: null, ambiente: 'externo' }]);
   };
 
   const handleRemoveStep = (index: number) => {
@@ -367,7 +420,7 @@ function ManageTemplatesModal({
         <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Gerenciar Modelos de Workflows</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Renomeie, edite etapas ou remova modelos personalizados.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Configure as etapas e a quantidade de horas estimadas por serviço em cada modelo.</p>
           </div>
           <button 
             type="button"
@@ -402,6 +455,7 @@ function ManageTemplatesModal({
               ) : (
                 templates.map((t) => {
                   const isSelected = selectedTemplate?.id === t.id;
+                  const totalMin = calculateTotalMinutes(t.etapas);
                   return (
                     <div 
                       key={t.id}
@@ -414,8 +468,10 @@ function ManageTemplatesModal({
                     >
                       <div className="flex-1 min-w-0 pr-2">
                         <div className="text-sm truncate font-medium">{t.nome}</div>
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500">
-                          {t.etapas.length} {t.etapas.length === 1 ? 'etapa' : 'etapas'}
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1.5 mt-0.5">
+                          <span>{t.etapas.length} {t.etapas.length === 1 ? 'etapa' : 'etapas'}</span>
+                          <span>•</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">⏱️ {formatTotalDuration(totalMin)}</span>
                         </div>
                       </div>
                       <button
@@ -442,7 +498,7 @@ function ManageTemplatesModal({
                 </div>
                 <h4 className="text-base font-bold text-gray-900 dark:text-white mb-1">Selecione um Modelo</h4>
                 <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
-                  Escolha um modelo de workflow na lista lateral para editar suas etapas, renomeá-lo ou excluí-lo.
+                  Escolha um modelo de workflow na lista lateral para editar suas etapas, ajustar as horas estimadas por serviço ou renomeá-lo.
                 </p>
               </div>
             ) : (
@@ -469,6 +525,9 @@ function ManageTemplatesModal({
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Etapas do Fluxo ({editEtapas.length})
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        ⏱️ Total Estimado: {formatTotalDuration(calculateTotalMinutes(editEtapas))}
                       </span>
                     </div>
 
@@ -515,7 +574,7 @@ function ManageTemplatesModal({
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                   <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                    Nome da Etapa
+                                    Nome da Etapa / Serviço
                                   </span>
                                   <input
                                     type="text"
@@ -527,7 +586,7 @@ function ManageTemplatesModal({
                                 </div>
                                 <div className="space-y-1">
                                   <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                    Descrição
+                                    Descrição do que fazer
                                   </span>
                                   <input
                                     type="text"
@@ -539,7 +598,7 @@ function ManageTemplatesModal({
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-3 gap-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                   <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                                     Horário de Início
@@ -552,15 +611,21 @@ function ManageTemplatesModal({
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                    Duração
-                                  </span>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                      Duração Estimada
+                                    </span>
+                                  </div>
                                   <input
                                     type="text"
                                     value={step.duracao_minutos ? formatDuration(step.duracao_minutos) : ''}
                                     onChange={(e) => handleStepChange(idx, 'duracao_minutos', parseDurationString(e.target.value))}
-                                    placeholder="Ex: 1:30 ou 90m"
-                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Ex: 1h ou 2:30"
+                                    className="w-full border border-gray-200 dark:border-white/10 bg-white dark:bg-[#07101f] text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                                  />
+                                  <QuickDurationChips
+                                    currentMinutes={step.duracao_minutos}
+                                    onSelect={(min) => handleStepChange(idx, 'duracao_minutos', min)}
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -597,7 +662,7 @@ function ManageTemplatesModal({
                     <button
                       type="button"
                       onClick={handleAddStep}
-                      className="w-full py-2 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
+                      className="w-full py-2.5 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
                     >
                       <Plus className="w-4 h-4" /> Adicionar Etapa ao Modelo
                     </button>
@@ -671,37 +736,68 @@ const SYSTEM_DEFAULT_TEMPLATES: WorkflowTemplate[] = [
     updated_at: new Date().toISOString(),
     etapas: [
       { label: 'Reunião de Alinhamento', description: 'Briefing final, alinhamento de horários e entrega do roteiro.', duracao_minutos: 60, ambiente: 'interno' },
-      { label: 'Ensaio Pré-Casamento', description: 'Sessão de fotos pré-wedding em local externo acordado.', duracao_minutos: 120, ambiente: 'externo' },
-      { label: 'Fotografar Casamento', description: 'Cobertura completa do making of, cerimônia e recepção.', duracao_minutos: 480, ambiente: 'externo' },
-      { label: 'Tratamento & Seleção', description: 'Fazer o backup, curadoria e tratamento de cor das fotos.', duracao_minutos: 240, ambiente: 'interno' },
-      { label: 'Entrega da Galeria Online', description: 'Envio do link da galeria digital finalizada para o casal.', duracao_minutos: 60, ambiente: 'interno' },
-      { label: 'Diagramação & Envio do Álbum', description: 'Montagem do layout do álbum e envio para a encadernadora.', duracao_minutos: 180, ambiente: 'interno' },
+      { label: 'Ensaio Pré-Wedding', description: 'Sessão de fotos pré-wedding em local externo acordado.', duracao_minutos: 120, ambiente: 'externo' },
+      { label: 'Cobertura Fotográfica do Casamento', description: 'Making of, cerimônia oficial e recepção completa.', duracao_minutos: 480, ambiente: 'externo' },
+      { label: 'Backup & Curadoria de Fotos', description: 'Transferência de cartões, triagem e seleção de fotos.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Tratamento & Edição Fina', description: 'Correção de cor, corte e retoque das fotos aprovadas.', duracao_minutos: 240, ambiente: 'interno' },
+      { label: 'Diagramação do Álbum', description: 'Montagem do layout e envio para aprovação dos noivos.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Entrega da Galeria Online', description: 'Envio do link com acesso exclusivo e fotos em alta resolução.', duracao_minutos: 60, ambiente: 'interno' },
     ],
   },
   {
     id: 'sys-session',
     user_id: 'system',
-    nome: '📸 [Padrão] Ensaio Fotográfico',
+    nome: '📸 [Padrão] Ensaio Fotográfico / Gestante / 15 Anos',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     etapas: [
-      { label: 'Planejamento do Ensaio', description: 'Definir locação, roupas e referências visuais com o cliente.', duracao_minutos: 30, ambiente: 'interno' },
-      { label: 'Sessão de Fotos', description: 'Execução do ensaio fotográfico (estúdio ou externa).', duracao_minutos: 120, ambiente: 'externo' },
-      { label: 'Curadoria & Edição', description: 'Criação do backup, seleção e pós-processamento das imagens.', duracao_minutos: 120, ambiente: 'interno' },
-      { label: 'Entrega Final', description: 'Envio dos arquivos tratados em alta resolução para download.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Briefing & Planejamento', description: 'Definir locação, roupas e referências visuais com o cliente.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Sessão Fotográfica', description: 'Execução do ensaio fotográfico (estúdio ou externa).', duracao_minutos: 120, ambiente: 'externo' },
+      { label: 'Curadoria & Backup', description: 'Criação do backup, seleção e triagem das fotos.', duracao_minutos: 60, ambiente: 'interno' },
+      { label: 'Tratamento & Retoque', description: 'Tratamento de cor e retoque das imagens selecionadas.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Entrega da Galeria Online', description: 'Envio do link para download das fotos em alta resolução.', duracao_minutos: 30, ambiente: 'interno' },
     ],
   },
   {
     id: 'sys-event',
     user_id: 'system',
-    nome: '🎉 [Padrão] Evento / Aniversário',
+    nome: '🎉 [Padrão] Evento Social / Aniversário / Corporativo',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     etapas: [
-      { label: 'Ajuste de Cronograma', description: 'Verificar com a assessoria os horários e momentos chave.', duracao_minutos: 30, ambiente: 'interno' },
-      { label: 'Cobertura do Evento', description: 'Fotografia de protocolo, decoração e momentos dinâmicos da festa.', duracao_minutos: 240, ambiente: 'externo' },
-      { label: 'Edição das Imagens', description: 'Tratamento básico e organização em galeria digital.', duracao_minutos: 120, ambiente: 'interno' },
-      { label: 'Envio ao Cliente', description: 'Link para download e compartilhamento dos arquivos.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Alinhamento de Cronograma', description: 'Verificar com a assessoria os horários e momentos chave.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Cobertura Fotográfica do Evento', description: 'Fotografia de protocolo, decoração e momentos da festa.', duracao_minutos: 240, ambiente: 'externo' },
+      { label: 'Backup & Triagem', description: 'Download dos cartões e seleção das fotos do evento.', duracao_minutos: 60, ambiente: 'interno' },
+      { label: 'Edição & Ajuste de Cores', description: 'Tratamento de cor e alinhamento em lote das fotos.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Envio dos Arquivos Finais', description: 'Link para download e compartilhamento dos arquivos.', duracao_minutos: 30, ambiente: 'interno' },
+    ],
+  },
+  {
+    id: 'sys-newborn',
+    user_id: 'system',
+    nome: '👶 [Padrão] Parto / Newborn / Bebê',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    etapas: [
+      { label: 'Planejamento & Instruções aos Pais', description: 'Recomendações prévias para temperatura e rotina do bebê.', duracao_minutos: 30, ambiente: 'interno' },
+      { label: 'Sessão Newborn / Parto', description: 'Realização da sessão com segurança e ritmo do bebê.', duracao_minutos: 180, ambiente: 'externo' },
+      { label: 'Backup & Triagem', description: 'Segurança dos arquivos e seleção das melhores fotos.', duracao_minutos: 60, ambiente: 'interno' },
+      { label: 'Tratamento Especializado de Pele', description: 'Retoque minucioso de pele e harmonização de tons.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Entrega da Galeria Digital', description: 'Envio do link protegido para a família.', duracao_minutos: 30, ambiente: 'interno' },
+    ],
+  },
+  {
+    id: 'sys-video',
+    user_id: 'system',
+    nome: '🎬 [Padrão] Produção de Vídeo / Institucional',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    etapas: [
+      { label: 'Roteiro & Alinhamento', description: 'Definição de roteiro, storyboard e cronograma de gravação.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Gravação & Captação de Cenas', description: 'Captação presencial de áudio e vídeo com iluminação.', duracao_minutos: 240, ambiente: 'externo' },
+      { label: 'Decupagem & Montagem', description: 'Corte, sincronização de áudio e montagem da narrativa.', duracao_minutos: 180, ambiente: 'interno' },
+      { label: 'Color Grading & Mixagem de Áudio', description: 'Correção de cor, sonorização e trilha sonora licenciada.', duracao_minutos: 120, ambiente: 'interno' },
+      { label: 'Exportação & Entrega Final', description: 'Renderização em 4K/FullHD e envio para o cliente.', duracao_minutos: 60, ambiente: 'interno' },
     ],
   },
 ];
@@ -867,7 +963,7 @@ export function WorkflowStepper({
       description: '',
       deadline: '',
       status: 'pendente',
-      duracao_minutos: null,
+      duracao_minutos: 60,
       horario_inicio: null,
       ambiente: 'externo',
     };
@@ -900,7 +996,7 @@ export function WorkflowStepper({
         description: '',
         deadline: '',
         status: 'pendente',
-        duracao_minutos: null,
+        duracao_minutos: 60,
         horario_inicio: null,
         ambiente: 'externo',
       }];
@@ -944,7 +1040,7 @@ export function WorkflowStepper({
       description: e.description,
       deadline: '',
       status: 'pendente',
-      duracao_minutos: e.duracao_minutos || null,
+      duracao_minutos: e.duracao_minutos || 60,
       horario_inicio: e.horario_inicio || null,
       ambiente: e.ambiente || 'externo',
     }));
@@ -975,6 +1071,9 @@ export function WorkflowStepper({
     await supabase.from('workflow_templates').delete().eq('id', id);
     setTemplates(prev => prev.filter(t => t.id !== id));
   };
+
+  const totalWorkflowMinutes = calculateTotalMinutes(workflow);
+  const pendingWorkflowMinutes = calculateTotalMinutes(workflow.filter(s => s.status !== 'concluido'));
 
   // ── Workflow vazio ─────────────────────────────────────
   if (workflow.length === 0 && !expanded) {
@@ -1062,14 +1161,14 @@ export function WorkflowStepper({
               onClick={() => {
                 setShowStartChoice(false);
                 setExpanded(true);
-                updateWorkflow([{ id: uuidv4(), label: 'Nova etapa', description: 'Descreva a tarefa...', deadline: '', status: 'pendente', duracao_minutos: null, horario_inicio: null, ambiente: 'externo' }]);
+                updateWorkflow([{ id: uuidv4(), label: 'Nova etapa', description: 'Descreva a tarefa...', deadline: '', status: 'pendente', duracao_minutos: 60, horario_inicio: null, ambiente: 'externo' }]);
               }}
               className="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-start gap-2.5 transition-colors"
             >
               <span className="text-sm mt-0.5">📝</span>
               <div>
                 <div className="font-bold">Começar Vazio / Personalizado</div>
-                <div className="text-[10px] text-gray-400 font-normal mt-0.5">Inicie do zero com uma única etapa personalizada.</div>
+                <div className="text-[10px] text-gray-400 font-normal mt-0.5">Inicie do zero com uma única etapa personalizada (1h padrão).</div>
               </div>
             </button>
           </div>,
@@ -1109,6 +1208,11 @@ export function WorkflowStepper({
               Workflow de Produção
             </span>
             <div className="flex items-center gap-2">
+              {totalWorkflowMinutes > 0 && (
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                  ⏱️ {formatTotalDuration(totalWorkflowMinutes)}
+                </span>
+              )}
               {saving && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
               <ChevronDown className="w-4 h-4 text-gray-400" />
             </div>
@@ -1137,9 +1241,16 @@ export function WorkflowStepper({
         onClick={() => setExpanded(false)}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            Workflow — {leadName}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              Workflow — {leadName}
+            </span>
+            {totalWorkflowMinutes > 0 && (
+              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                ⏱️ {formatTotalDuration(totalWorkflowMinutes)} ({formatTotalDuration(pendingWorkflowMinutes)} pendentes)
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {saving && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
             <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -1202,7 +1313,7 @@ export function WorkflowStepper({
                   </div>
 
                   {/* Informações de Agendamento/Prazo */}
-                  <div className="flex items-center gap-x-4 gap-y-1.5 mt-1.5 flex-wrap text-xs">
+                  <div className="flex items-start gap-x-4 gap-y-2 mt-2 flex-wrap text-xs">
                     {/* Deadline */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 dark:text-gray-500">📅</span>
@@ -1210,7 +1321,7 @@ export function WorkflowStepper({
                         value={step.deadline}
                         onSave={(val) => updateStep(step.id, { deadline: val })}
                         type="date"
-                        className="text-gray-600 dark:text-gray-400"
+                        className="text-gray-600 dark:text-gray-400 font-medium"
                         placeholder="Prazo"
                       />
                     </div>
@@ -1222,19 +1333,25 @@ export function WorkflowStepper({
                         type="time"
                         value={step.horario_inicio || ''}
                         onChange={(e) => updateStep(step.id, { horario_inicio: e.target.value || null })}
-                        className="bg-transparent border-none p-0 text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/20 rounded max-w-[70px]"
+                        className="bg-transparent border-none p-0 text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/20 rounded max-w-[70px] font-medium"
                       />
                     </div>
 
-                    {/* Duração */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 dark:text-gray-500">⏱️</span>
-                      <input
-                        type="text"
-                        value={step.duracao_minutos ? formatDuration(step.duracao_minutos) : ''}
-                        onChange={(e) => updateStep(step.id, { duracao_minutos: parseDurationString(e.target.value) })}
-                        placeholder="Duração (ex: 2h)"
-                        className="bg-transparent border-none p-0 text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/20 rounded max-w-[85px] placeholder-gray-400 dark:placeholder-gray-600"
+                    {/* Duração com chips rápidos */}
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400 dark:text-gray-500">⏱️</span>
+                        <input
+                          type="text"
+                          value={step.duracao_minutos ? formatDuration(step.duracao_minutos) : ''}
+                          onChange={(e) => updateStep(step.id, { duracao_minutos: parseDurationString(e.target.value) })}
+                          placeholder="Duração (ex: 2h)"
+                          className="bg-transparent border-none p-0 text-gray-700 dark:text-gray-300 outline-none focus:ring-1 focus:ring-blue-500/20 rounded max-w-[85px] placeholder-gray-400 dark:placeholder-gray-600 font-semibold"
+                        />
+                      </div>
+                      <QuickDurationChips
+                        currentMinutes={step.duracao_minutos}
+                        onSelect={(min) => updateStep(step.id, { duracao_minutos: min })}
                       />
                     </div>
 
@@ -1379,26 +1496,31 @@ function TemplateMenu({
         </div>
       ) : (
         <ul className="max-h-52 overflow-y-auto">
-          {templates.map((t) => (
-            <li key={t.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-white/5 group transition-colors">
-              <button
-                onClick={() => onApply(t)}
-                className="flex-1 text-left text-sm text-gray-800 dark:text-gray-200 truncate"
-              >
-                {t.nome}
-                <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">
-                  ({t.etapas.length} etapas)
-                </span>
-              </button>
-              <button
-                onClick={() => onDelete(t.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
-                title="Excluir modelo"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </li>
-          ))}
+          {templates.map((t) => {
+            const totalMin = calculateTotalMinutes(t.etapas);
+            return (
+              <li key={t.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-white/5 group transition-colors">
+                <button
+                  onClick={() => onApply(t)}
+                  className="flex-1 text-left text-sm text-gray-800 dark:text-gray-200 truncate"
+                >
+                  <div className="font-medium">{t.nome}</div>
+                  <div className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1.5 mt-0.5">
+                    <span>{t.etapas.length} {t.etapas.length === 1 ? 'etapa' : 'etapas'}</span>
+                    <span>•</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">⏱️ {formatTotalDuration(totalMin)}</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => onDelete(t.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                  title="Excluir modelo"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       {onManageTemplates && (

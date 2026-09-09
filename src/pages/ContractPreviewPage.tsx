@@ -17,7 +17,6 @@ const contractPrintStyles = `
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
     font-family: 'Helvetica', 'Arial', sans-serif;
     font-size: 12pt;
-    /* 🔥 CORREÇÃO: Garante que o texto quebre corretamente dentro do contêiner */
     word-wrap: break-word;
     line-height: 1.5;
     color: #000;
@@ -27,7 +26,8 @@ const contractPrintStyles = `
   @media print {
     body * { visibility: hidden; }
     .printable-area, .printable-area * { visibility: visible; }
-    .printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+    .printable-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: white !important; }
+    .no-print, .no-print * { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
   }
   .contract-preview-container h1, .contract-preview-container h2, .contract-preview-container h3 {
     text-align: center;
@@ -64,11 +64,11 @@ interface Contract {
   user_id: string;
   token: string;
   lead_data_json: any;
-  payment_details_json?: any; // Adicionado para detalhes do pagamento
+  payment_details_json?: any;
   client_data_json: any;
   user_data_json: any;
   user_signature_base64: string;
-  signature_base64?: string; // Assinatura do cliente, agora vem da página anterior
+  signature_base64?: string;
   status: 'pending' | 'preview' | 'signed' | 'expired';
   pdf_url?: string;
   expires_at: string;
@@ -85,7 +85,7 @@ const cleanDocument = (value: string) => value.replace(/\D/g, '');
 export function ContractPreviewPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const location = useLocation(); // 🔥 NOVO: Para receber dados da página anterior
+  const location = useLocation();
   const [contract, setContract] = useState<Contract | null>(null);
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({});
@@ -94,54 +94,44 @@ export function ContractPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const contractPreviewRef = useRef<HTMLDivElement>(null);
+  const autoPrintedRef = useRef(false);
 
-  // 🔥 NOVO: Pega os dados do cliente do estado da navegação
-  const clientDataFromState = location.state?.clientData as ClientData | undefined;
-  const clientSignatureFromState = location.state?.clientSignature as string | undefined;
-  const clientIpFromState = location.state?.clientIp as string | undefined;
+  // Estados reativos para dados do cliente e assinatura
+  const [clientData, setClientData] = useState<ClientData | null>(location.state?.clientData || null);
+  const [clientSignature, setClientSignature] = useState<string | null>(location.state?.clientSignature || null);
+  const [clientIp, setClientIp] = useState<string | null>(location.state?.clientIp || null);
 
-  // 🔥 NOVO: Verifica se a página foi aberta com a intenção de imprimir
-  const shouldPrint = location.state?.action === 'print';
+  // Verifica intenção de impressão via state ou query param (?print=true)
+  const shouldPrint = location.state?.action === 'print' || new URLSearchParams(location.search).get('print') === 'true';
 
   useEffect(() => {
-    // 🔥 LÓGICA ALTERADA: Agora a página é mais inteligente.
-    // Se os dados do cliente vierem do estado da navegação (fluxo do cliente), usa eles.
-    // Se não, busca os dados do contrato assinado no banco (fluxo do profissional).
-    if (clientDataFromState && clientSignatureFromState) {
-      console.log('✅ [Preview] Dados do cliente encontrados no estado da navegação. Usando-os.');
-      if (shouldPrint) {
-        setTimeout(() => window.print(), 500);
-      }
-    } else {
-      // Se não há dados no estado, significa que o profissional está visualizando.
-      // A função `loadContractForPreview` agora também buscará os dados do cliente.
-      console.log('⚠️ [Preview] Dados do cliente não encontrados no estado. Tentando carregar do banco de dados...');
-      // A impressão será acionada dentro de `loadContractForPreview` após os dados serem carregados.
-    }
-
-    // A validação de erro foi movida para dentro de `loadContractForPreview`
-    // para lidar com ambos os cenários.
     loadContractForPreview();
   }, [token]);
 
+  // Aciona impressão automática após conteúdo renderizado
   useEffect(() => {
-    if (template && contract && businessSettings && clientDataFromState) {
-      const leadData: LeadData = contract.lead_data_json || {};
+    if (!loading && processedContent && shouldPrint && !autoPrintedRef.current) {
+      autoPrintedRef.current = true;
+      const timer = setTimeout(() => {
+        window.print();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, processedContent, shouldPrint]);
 
-      console.log('🔄 [Preview Page] Gerando conteúdo do contrato com dados em memória:');
-      console.log('Lead Data:', leadData);
-      console.log('Client Data:', clientDataFromState);
-      console.log('Business Settings:', businessSettings);
+  useEffect(() => {
+    if (template && contract && businessSettings && clientData) {
+      const leadData: LeadData = contract.lead_data_json || {};
 
       const processed = replaceContractVariables(
         contract.content_override || template.content_text,
         businessSettings,
-        clientDataFromState,
+        clientData,
         leadData
       );
       setProcessedContent(processed);
     }
-  }, [template, contract, businessSettings, clientDataFromState]);
+  }, [template, contract, businessSettings, clientData]);
 
   const loadContractForPreview = async () => {
     if (!token) {
@@ -164,22 +154,13 @@ export function ContractPreviewPage() {
 
       const { contract: contractData, template: templateData, business_settings: businessData } = contractBundle;
 
-      // 🔥 NOVA LÓGICA: Se os dados do cliente não vieram do estado,
-      // preenchemos com os dados do contrato assinado que veio do banco.
-      if (!clientDataFromState && contractData.status === 'signed') {
-        console.log('✅ [Preview] Carregando dados do cliente a partir do contrato assinado no banco.');
-        // Simula o `location.state` com os dados do banco para o resto da página funcionar.
-        location.state = {
-          ...location.state,
-          clientData: contractData.client_data_json,
-          clientSignature: contractData.signature_base64,
-          clientIp: contractData.client_ip,
-        };
-        if (shouldPrint) {
-          setTimeout(() => window.print(), 500);
-        }
-      } else if (!clientDataFromState && contractData.status !== 'signed') {
-        setError('Este contrato ainda não foi assinado, portanto não há dados de cliente para exibir.');
+      // Se os dados do cliente não vieram do state (ex: acesso direto ou pós-assinatura), busca do contrato no banco
+      if (!clientData && contractData.client_data_json) {
+        setClientData(contractData.client_data_json);
+        setClientSignature(contractData.signature_base64 || null);
+        setClientIp(contractData.client_ip || null);
+      } else if (!clientData && contractData.status !== 'signed') {
+        setError('Este contrato ainda não foi preenchido. Por favor, acesse o link de assinatura.');
       }
 
       setContract(contractData);
@@ -189,9 +170,6 @@ export function ContractPreviewPage() {
       console.error('Erro ao carregar dados para preview:', err);
       setError('Ocorreu um erro ao carregar os dados do contrato.');
     } finally {
-      // Não validar aqui: quando os dados vêm do banco (contrato assinado),
-      // location.state é mutado dentro do try e o useEffect cuida do resto.
-      // Erros reais já foram tratados nos blocos if/else-if acima.
       setLoading(false);
     }
   };
@@ -407,45 +385,60 @@ export function ContractPreviewPage() {
   };
 
   const handleApproveAndFinalize = async () => {
-    if (!contract || !clientDataFromState || !clientSignatureFromState) {
+    if (!contract || !clientData || !clientSignature) {
       setError('Faltam dados essenciais para finalizar o contrato.');
       return;
     }
 
     setGenerating(true);
     try {
-      // 🔥 NOVA LÓGICA SIMPLIFICADA
-      // 1. Apenas atualiza o banco de dados. A geração do PDF agora é responsabilidade do cliente.
+      // 1. Atualiza o status do contrato no banco
       const { data: updatedContract, error: updateError } = await supabase.from('contracts').update({
-        client_data_json: clientDataFromState,
-        signature_base64: clientSignatureFromState,
-        client_ip: clientIpFromState,
-        pdf_url: null, // Não salvamos mais a URL do PDF aqui
+        client_data_json: clientData,
+        signature_base64: clientSignature,
+        client_ip: clientIp,
+        pdf_url: null,
         status: 'signed',
         signed_at: new Date().toISOString(),
       }).eq('id', contract.id).select().single();
 
       if (updateError) throw updateError;
 
-      // 2. 🔥 CHAMA A FUNÇÃO PARA CRIAR TRANSAÇÕES FINANCEIRAS
-      // Faz isso em segundo plano para não atrasar o usuário.
-      if (updatedContract) {
-        createFinancialTransactions(updatedContract);
-        // 🔔 Envia Notificação Nativa no Mac + Sistema quando o contrato for assinado
-        const clientName = clientDataFromState.nome_completo || 'Cliente';
-        NotificationService.sendNotification({
-          userId: updatedContract.user_id,
-          title: '📝 Contrato Assinado!',
-          message: `O contrato do evento de ${clientName} foi assinado digitalmente com sucesso.`,
-          type: 'payment',
-          link: '/dashboard/contracts',
-          relatedId: updatedContract.id,
-        }).catch(() => null);
-      }
+      const targetContract = updatedContract || {
+        ...contract,
+        client_data_json: clientData,
+        signature_base64: clientSignature,
+        client_ip: clientIp,
+        status: 'signed',
+        signed_at: new Date().toISOString(),
+      };
 
-      console.log('✅ [DB] Contrato finalizado no banco de dados.');
+      // 2. Cria as transações financeiras em background
+      createFinancialTransactions(targetContract).catch((err) => {
+        console.warn('⚠️ Erro ao criar transações financeiras:', err);
+      });
+
+      // 3. Dispara notificações para o profissional
+      const clientName = clientData.nome_completo || 'Cliente';
+      
+      // Tentativa 1: RPC segura (Security Definer)
+      supabase.rpc('notify_public_contract_signed', {
+        p_token: token,
+        p_client_name: clientName,
+      }).catch(() => null);
+
+      // Tentativa 2: NotificationService padrão
+      NotificationService.sendNotification({
+        userId: targetContract.user_id,
+        title: '📝 Contrato Assinado!',
+        message: `O contrato do evento de ${clientName} foi assinado digitalmente com sucesso.`,
+        type: 'payment',
+        link: '/dashboard/contracts',
+        relatedId: targetContract.id,
+      }).catch(() => null);
+
+      console.log('✅ [DB] Contrato finalizado no banco de dados com sucesso.');
       navigate(`/contrato/${token}/completo`);
-      // A página /completo agora instruirá o usuário a imprimir/salvar.
 
     } catch (err: any) {
       console.error('❌ [Finalize] Erro fatal durante o processo de finalização:', err);
@@ -456,49 +449,77 @@ export function ContractPreviewPage() {
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center min-h-screen"> <Loader2 className="animate-spin h-10 w-10" /> </div>;
+    return <div className="flex justify-center items-center min-h-screen"> <Loader2 className="animate-spin h-10 w-10 text-blue-600" /> </div>;
   }
 
   if (error) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-red-50 text-red-800 p-4">
-        <FileWarning className="h-16 w-16 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Erro no Contrato</h2>
+        <FileWarning className="h-16 w-16 mb-4 text-red-600" />
+        <h2 className="text-2xl font-bold mb-2">Atenção</h2>
         <p className="text-center max-w-md">{error}</p>
       </div>
     );
   }
 
+  const isAlreadySigned = contract?.status === 'signed';
+
   return (
-    // 🔥 NOVO: Adiciona uma classe 'printable-area' para controlar a impressão
     <div className={`bg-gray-100 py-10 printable-area ${shouldPrint ? 'bg-white' : ''}`}>
       <style>{contractPrintStyles}</style>
 
-      {/* 🔥 NOVO: Oculta os botões se a intenção for apenas imprimir */}
-      <div className="max-w-5xl mx-auto">
-        <div className="bg-white shadow-lg p-8 rounded-lg mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Eye className="w-8 h-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-center">Revise e Aprove seu Contrato</h1>
-          </div>
-          <p className="text-center text-gray-600 mb-6">
-            Confira todos os dados e a formatação do contrato abaixo. Este é o documento final. Se tudo estiver correto, aprove para gerar o PDF oficial e concluir a assinatura.
-          </p>
-          {!shouldPrint && (
-            <div className="flex justify-center">
-              <button
-                onClick={handleApproveAndFinalize} // A função agora faz tudo
-                disabled={generating}
-                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {generating ? <Loader2 className="animate-spin" /> : <CheckCircle />}
-                {generating ? 'Finalizando...' : 'Aprovar e Finalizar'}
-              </button>
+      {/* Painel de Controle Superior (Ocultado durante impressão via classe no-print) */}
+      <div className="max-w-5xl mx-auto no-print">
+        <div className="bg-white shadow-lg p-6 sm:p-8 rounded-lg mb-8 border border-gray-200">
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              {isAlreadySigned ? (
+                <div className="p-2 bg-green-100 rounded-full text-green-600">
+                  <CheckCircle className="w-7 h-7" />
+                </div>
+              ) : (
+                <div className="p-2 bg-blue-100 rounded-full text-blue-600">
+                  <Eye className="w-7 h-7" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  {isAlreadySigned ? 'Contrato Assinado Digitalmente' : 'Revise e Aprove seu Contrato'}
+                </h1>
+                <p className="text-sm text-gray-500">
+                  {isAlreadySigned
+                    ? 'Este documento possui validade jurídica e registro digital de assinatura.'
+                    : 'Confira todos os dados abaixo antes de confirmar sua assinatura definitiva.'}
+                </p>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* O container que será impresso em PDF (movido para dentro do div principal) */}
+            <div className="flex items-center gap-3">
+              {isAlreadySigned ? (
+                <button
+                  onClick={() => window.print()}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold text-base hover:bg-green-700 transition-colors flex items-center gap-2 shadow-md cursor-pointer"
+                >
+                  <Eye className="w-5 h-5" />
+                  Imprimir / Salvar em PDF
+                </button>
+              ) : (
+                <button
+                  onClick={handleApproveAndFinalize}
+                  disabled={generating}
+                  className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-base sm:text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  {generating ? <Loader2 className="animate-spin w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                  {generating ? 'Finalizando...' : 'Aprovar e Finalizar'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Container que será impresso ou salvo em PDF */}
+      <div className="max-w-5xl mx-auto">
         <div ref={contractPreviewRef} className="contract-preview-container mx-auto">
           <div dangerouslySetInnerHTML={{ __html: processedContent }} />
 
@@ -509,39 +530,46 @@ export function ContractPreviewPage() {
                 <img src={contract.user_signature_base64} alt="Assinatura do Contratado" className="mx-auto h-20"/>
               )}
               <div className="signature-line"></div>
-              <p className="text-sm">{contract?.user_data_json?.business_name || 'Contratado'}</p>
-              <p className="text-sm">
+              <p className="text-sm font-semibold">{contract?.user_data_json?.business_name || 'Contratado'}</p>
+              <p className="text-sm text-gray-600">
                 {contract?.user_data_json?.person_type === 'fisica' ? `CPF: ${contract?.user_data_json?.cpf}` : `CNPJ: ${contract?.user_data_json?.cnpj}`}
               </p>
             </div>
             <div>
-              {clientSignatureFromState && (
-                <img src={clientSignatureFromState} alt="Assinatura do Contratante" className="mx-auto h-20"/>
+              {clientSignature && (
+                <img src={clientSignature} alt="Assinatura do Contratante" className="mx-auto h-20"/>
               )}
               <div className="signature-line"></div>
-              <p className="text-sm">{clientDataFromState?.nome_completo || 'Contratante'}</p>
-              <p className="text-sm">{(clientDataFromState?.cpf || clientDataFromState?.documento) ? (cleanDocument(clientDataFromState?.cpf || clientDataFromState?.documento as string).length === 11 ? `CPF: ${clientDataFromState?.cpf || clientDataFromState?.documento}` : `CNPJ: ${clientDataFromState?.cpf || clientDataFromState?.documento}`) : 'Documento'}</p>
+              <p className="text-sm font-semibold">{clientData?.nome_completo || 'Contratante'}</p>
+              <p className="text-sm text-gray-600">
+                {(clientData?.cpf || clientData?.documento) ? (
+                  cleanDocument((clientData?.cpf || clientData?.documento) as string).length === 11 
+                    ? `CPF: ${clientData?.cpf || clientData?.documento}` 
+                    : `CNPJ: ${clientData?.cpf || clientData?.documento}`
+                ) : 'Documento'}
+              </p>
             </div>
           </div>
 
-          {/* 🔥 NOVO: Carimbo de Autenticação Digital (idêntico ao do ContractViewerModal) */}
+          {/* Carimbo de Autenticação Digital */}
           {contract && (
-            <div style={{ marginTop: '60pt', paddingTop: '20pt', borderTop: '1px dashed #ccc', fontSize: '9pt', color: '#555', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', alignItems: 'center' }}>
+            <div style={{ marginTop: '50pt', paddingTop: '20pt', borderTop: '1px dashed #ccc', fontSize: '9pt', color: '#555', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', alignItems: 'center' }}>
               <div>
-                <h4 style={{ fontWeight: 'bold', marginBottom: '15pt', fontSize: '11pt' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: '8px' }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                  <span>Carimbo de Autenticação Digital</span>
+                <h4 style={{ fontWeight: 'bold', marginBottom: '12pt', fontSize: '11pt', color: '#222' }}>
+                  <span>🛡️ Carimbo de Autenticação Digital</span>
                 </h4>
                 <p><strong>ID do Contrato:</strong> <span style={{ fontFamily: 'monospace' }}>{contract.id}</span></p>
                 <p><strong>Data e Hora da Assinatura:</strong> {format(new Date(), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })}</p>
-                <p><strong>Endereço IP do Assinante:</strong> {clientIpFromState || 'Não registrado'}</p>
+                <p><strong>Endereço IP do Assinante:</strong> {clientIp || 'Registrado eletronicamente'}</p>
                 <p>
-                  <strong>Assinado por:</strong> {clientDataFromState?.nome_completo || 'Contratante'}
-{(clientDataFromState?.cpf || clientDataFromState?.documento) && ` (${
-  cleanDocument(clientDataFromState?.cpf || clientDataFromState?.documento as string).length === 11 ? 'CPF' : 'CNPJ'
-}: ${clientDataFromState?.cpf || clientDataFromState?.documento})`}
+                  <strong>Assinado por:</strong> {clientData?.nome_completo || 'Contratante'}
+                  {(clientData?.cpf || clientData?.documento) && ` (${
+                    cleanDocument((clientData?.cpf || clientData?.documento) as string).length === 11 ? 'CPF' : 'CNPJ'
+                  }: ${clientData?.cpf || clientData?.documento})`}
                 </p>
-                <p style={{ marginTop: '10pt', fontStyle: 'italic' }}>Este documento foi assinado eletronicamente através da plataforma PriceUs.</p>
+                <p style={{ marginTop: '8pt', fontStyle: 'italic', fontSize: '8pt' }}>
+                  Este documento foi assinado eletronicamente através da plataforma PriceUs com validade legal nos termos da MP 2.200-2/2001.
+                </p>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <QRCodeCanvas
@@ -552,7 +580,7 @@ export function ContractPreviewPage() {
                   level={"L"}
                   includeMargin={true}
                 />
-                <p style={{ marginTop: '5px', fontSize: '8pt' }}>Verifique a autenticidade</p>
+                <p style={{ marginTop: '5px', fontSize: '8pt', color: '#666' }}>Verifique a autenticidade</p>
               </div>
             </div>
           )}

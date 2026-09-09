@@ -16,7 +16,6 @@ import {
   Sun,
   Moon,
   Crown,
-  ClipboardList,
   Bot,
   Images,
   Sparkles,
@@ -50,7 +49,8 @@ export function Sidebar({
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
-    empresa: true
+    empresa: true,
+    leads: true,
   });
   const { isDark, toggleTheme } = useTheme();
   
@@ -63,9 +63,18 @@ export function Sidebar({
       items: [
         { id: 'meu-dia', label: 'Meu Dia', icon: Sun, section: 'vendas' },
         { id: 'templates', label: 'Meus Templates', icon: FileText, section: 'vendas' },
-        { id: 'leads', label: 'Leads', icon: LayoutDashboard, section: 'vendas' },
+        {
+          id: 'leads',
+          label: 'Leads',
+          icon: LayoutDashboard,
+          section: 'vendas',
+          subItems: [
+            { id: 'leads-todos', label: '👥 Orçamentos & Leads' },
+            { id: 'leads-producao', label: '🎬 Em Produção' },
+            { id: 'leads-finalizados', label: '🏁 Finalizados' },
+          ]
+        },
         { id: 'whatsapp-ia', label: 'IA de Vendas (WhatsApp)', icon: Bot, section: 'vendas' },
-        { id: 'workflow', label: 'Workflow', icon: ClipboardList, section: 'vendas' },
         { id: 'entregas', label: 'Galerias Online', icon: Images, section: 'vendas' },
         { id: 'ai-culling', label: 'AI Culling & Seleção', icon: Sparkles, section: 'vendas' },
         { id: 'contratos', label: 'Contratos', icon: FileSignature, section: 'vendas' },
@@ -111,6 +120,9 @@ export function Sidebar({
   const isCurrentPage = (itemId: string) => {
     if (itemId === 'empresa') {
       return currentPage === 'empresa' || currentPage.startsWith('empresa-');
+    }
+    if (itemId === 'leads') {
+      return currentPage === 'leads' || currentPage.startsWith('leads-');
     }
     return currentPage === itemId;
   };

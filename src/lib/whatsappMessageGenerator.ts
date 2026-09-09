@@ -184,14 +184,15 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     productsText += (productsText ? '\n' : '') + upsellText;
   }
 
-  // 3. CALCULAR DETALHES DE PAGAMENTO
-  const { entradaText, parcelasText } = calculatePaymentDetails(
+  // 3. CALCULAR DETALHES DE PAGAMENTO INTELIGENTES
+  const { entradaText, parcelasText, resumoPagamento } = calculatePaymentDetails(
     paymentMethod,
-    priceBreakdown.total
+    priceBreakdown.total,
+    eventDate
   );
 
   // 4. FORMATAR DATA DA ÚLTIMA PARCELA
-  const lastInstallmentDateFormatted = lastInstallmentDate // Corrigido: Esta variável não estava sendo usada
+  const lastInstallmentDateFormatted = lastInstallmentDate
     ? formatDate(lastInstallmentDate)
     : '';
 
@@ -235,7 +236,8 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     '{{UPSELL_TOTAL_VALUE}}': formatCurrency(priceBreakdown.valorUpsell ?? 0),
 
     // Forma de pagamento
-    '{{PAYMENT_METHOD}}': paymentMethod?.nome || '',
+    '{{PAYMENT_METHOD}}': paymentMethod?.nome ? `${paymentMethod.nome} (${resumoPagamento})` : '',
+    '{{PAYMENT_SUMMARY}}': resumoPagamento,
     '{{DOWN_PAYMENT}}': entradaText ? `💳 *Entrada:* ${entradaText}` : '',
     '{{INSTALLMENTS}}': parcelasText ? `💳 *Parcelamento:* ${parcelasText}` : '',
     '{{INSTALLMENTS_COUNT}}': paymentMethod?.max_parcelas?.toString() || '',
@@ -409,39 +411,75 @@ function buildProductsList(
 }
 
 /**
- * Calcula detalhes de entrada e parcelas
+ * Calcula detalhes de entrada e parcelas inteligentes com base na data do evento e valores reais
  */
 function calculatePaymentDetails(
   paymentMethod: PaymentMethod | undefined,
-  total: number
-): { entradaText: string; parcelasText: string } {
+  total: number,
+  eventDate?: string
+): { entradaText: string; parcelasText: string; resumoPagamento: string } {
   if (!paymentMethod) {
-    return { entradaText: '', parcelasText: '' };
+    return { entradaText: '', parcelasText: '', resumoPagamento: '' };
   }
 
   let entradaText = '';
   let parcelasText = '';
+  let valorEntrada = 0;
 
-  // Calcular entrada
+  // 1. Calcular valor e texto de entrada
   if (paymentMethod.entrada_tipo === 'percentual') {
-    const entradaValor = (total * paymentMethod.entrada_valor) / 100;
-    entradaText = `${paymentMethod.entrada_valor}% (${formatCurrency(entradaValor)})`;
+    valorEntrada = (total * (paymentMethod.entrada_valor || 0)) / 100;
+    if (valorEntrada > 0) {
+      entradaText = `${formatCurrency(valorEntrada)} (${paymentMethod.entrada_valor}% de entrada)`;
+    }
   } else {
-    entradaText = formatCurrency(paymentMethod.entrada_valor);
+    valorEntrada = paymentMethod.entrada_valor || 0;
+    if (valorEntrada > 0) {
+      entradaText = `${formatCurrency(valorEntrada)} de entrada`;
+    }
   }
 
-  // Calcular parcelas
-  if (paymentMethod.max_parcelas > 1) {
-    const valorEntrada =
-      paymentMethod.entrada_tipo === 'percentual'
-        ? (total * paymentMethod.entrada_valor) / 100
-        : paymentMethod.entrada_valor;
-    const saldoRestante = total - valorEntrada;
-    const valorParcela = saldoRestante / paymentMethod.max_parcelas;
-    parcelasText = `${paymentMethod.max_parcelas}x de ${formatCurrency(valorParcela)}`;
+  const saldoRestante = Math.max(0, total - valorEntrada);
+  const parcelasCount = paymentMethod.max_parcelas || 1;
+
+  // 2. Formatar data do evento em mês/ano se existir
+  let eventoMesAno = '';
+  if (eventDate) {
+    try {
+      const [y, m] = eventDate.split('-');
+      if (y && m) {
+        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        eventoMesAno = `${meses[parseInt(m, 10) - 1]}/${y}`;
+      }
+    } catch {
+      eventoMesAno = '';
+    }
   }
 
-  return { entradaText, parcelasText };
+  // 3. Calcular parcelamento
+  if (parcelasCount > 1 && saldoRestante > 0.01) {
+    const valorParcela = saldoRestante / parcelasCount;
+    const sufixoEvento = eventoMesAno ? ` (ajustado até ${eventoMesAno})` : '';
+    parcelasText = `${parcelasCount}x de ${formatCurrency(valorParcela)}${sufixoEvento}`;
+  } else if (parcelasCount === 1 && saldoRestante > 0.01) {
+    parcelasText = `1x de ${formatCurrency(saldoRestante)}`;
+  } else {
+    parcelasText = 'À vista';
+  }
+
+  // 4. Resumo inteligente da forma de pagamento
+  let resumoPagamento = paymentMethod.nome || 'Forma de Pagamento';
+  if (valorEntrada > 0 && parcelasCount > 1 && saldoRestante > 0.01) {
+    const valorParcela = saldoRestante / parcelasCount;
+    resumoPagamento = `Entrada de ${formatCurrency(valorEntrada)} + ${parcelasCount}x de ${formatCurrency(valorParcela)}`;
+  } else if (valorEntrada > 0 && saldoRestante <= 0.01) {
+    resumoPagamento = `Pagamento à vista de ${formatCurrency(total)}`;
+  } else if (parcelasCount > 1) {
+    const valorParcela = saldoRestante / parcelasCount;
+    resumoPagamento = `${parcelasCount}x de ${formatCurrency(valorParcela)}`;
+  }
+
+  return { entradaText, parcelasText, resumoPagamento };
 }
 
 /**

@@ -179,6 +179,10 @@ export function QuotePage() {
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
+  // 🔄 Template Alternativo / Exit-Intent Offer ("Monte seu Pacote")
+  const [alternativeTemplate, setAlternativeTemplate] = useState<{ id: string; nome_template: string; slug_template?: string } | null>(null);
+  const [showAlternativeModal, setShowAlternativeModal] = useState(false);
+
   // 📅 Sistema de Verificação de Disponibilidade
   const [disponibilidade, setDisponibilidade] = useState<AvailabilityResult | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState<string>('');
@@ -392,6 +396,69 @@ export function QuotePage() {
 
     loadEditLeadData();
   }, [template, loading, cidades, estados]);
+
+  // Pre-popular dados do cliente caso venha de outro orçamento via query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nomeParam = params.get('nome') || params.get('nome_cliente');
+    const emailParam = params.get('email') || params.get('email_cliente');
+    const telParam = params.get('tel') || params.get('telefone') || params.get('telefone_cliente');
+    const dataParam = params.get('data') || params.get('data_evento');
+    const cidadeParam = params.get('cidade') || params.get('cidade_evento');
+
+    if (nomeParam || emailParam || telParam) {
+      setFormData(prev => ({
+        ...prev,
+        nome_cliente: nomeParam || prev.nome_cliente,
+        email_cliente: emailParam || prev.email_cliente,
+        telefone_cliente: telParam || prev.telefone_cliente,
+      }));
+    }
+
+    if (dataParam) {
+      setDataEvento(dataParam);
+    }
+
+    if (cidadeParam) {
+      setCidadeSelecionada(cidadeParam);
+    }
+  }, []);
+
+  const getAlternativeQuoteUrl = () => {
+    if (!alternativeTemplate || !profile) return '#';
+    const baseSlug = profile.slug_usuario;
+    const targetSlug = alternativeTemplate.slug_template || alternativeTemplate.id;
+    const baseUrl = baseSlug ? `/orcamento/${baseSlug}/${targetSlug}` : `/orcamento/${targetSlug}`;
+    
+    const params = new URLSearchParams();
+    if (formData.nome_cliente) params.set('nome', formData.nome_cliente);
+    if (formData.email_cliente) params.set('email', formData.email_cliente);
+    if (formData.telefone_cliente) params.set('tel', formData.telefone_cliente);
+    if (dataEvento) params.set('data', dataEvento);
+    if (cidadeSelecionada) params.set('cidade', cidadeSelecionada);
+
+    const qs = params.toString();
+    return qs ? `${baseUrl}?${qs}` : baseUrl;
+  };
+
+  // 🚪 Exit Intent Listener para Resgate de Leads / Monte seu Pacote
+  useEffect(() => {
+    if (!template?.template_alternativo_ativo || !alternativeTemplate || hasSubmitted) return;
+
+    const sessionKey = `dismissed_alt_modal_${template.id}`;
+    if (sessionStorage.getItem(sessionKey)) return;
+
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 15 && !showAlternativeModal && !showSummaryModal) {
+        setShowAlternativeModal(true);
+      }
+    };
+
+    document.addEventListener('mouseleave', handleMouseLeave);
+    return () => {
+      document.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, [template, alternativeTemplate, hasSubmitted, showAlternativeModal, showSummaryModal]);
 
 
 
@@ -622,6 +689,180 @@ export function QuotePage() {
     return baseStyles;
   }, [template, template?.tema_personalizado]);
 
+  const renderAlternativeExitModal = () => {
+    if (!showAlternativeModal || !alternativeTemplate || !template?.template_alternativo_ativo) return null;
+
+    const altUrl = getAlternativeQuoteUrl();
+    const titulo = template.template_alternativo_titulo || '✨ Prefere montar um pacote personalizado?';
+    const subtitulo = template.template_alternativo_subtitulo || 'Você pode escolher exatamente os itens e serviços que deseja para seu evento no seu próprio ritmo.';
+    const botaoTexto = template.template_alternativo_botao_texto || 'Montar Pacote Sob Medida';
+
+    const handleDismiss = () => {
+      setShowAlternativeModal(false);
+      if (template?.id) {
+        sessionStorage.setItem(`dismissed_alt_modal_${template.id}`, 'true');
+      }
+    };
+
+    return (
+      <div 
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '16px'
+        }}
+      >
+        <div 
+          style={{
+            position: 'relative',
+            maxWidth: '520px',
+            width: '100%',
+            backgroundColor: '#07101f',
+            borderRadius: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(99, 102, 241, 0.2)',
+            padding: '32px 24px',
+            textAlign: 'center',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Close button */}
+          <button
+            onClick={handleDismiss}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'rgba(255, 255, 255, 0.7)',
+              cursor: 'pointer'
+            }}
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Badge Icon */}
+          <div 
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              margin: '0 auto 20px',
+              boxShadow: '0 10px 25px rgba(99, 102, 241, 0.4)'
+            }}
+          >
+            <ShoppingCart className="w-8 h-8" />
+          </div>
+
+          <h3 
+            style={{
+              fontSize: '22px',
+              fontWeight: 800,
+              color: '#ffffff',
+              marginBottom: '10px',
+              lineHeight: 1.3
+            }}
+          >
+            {titulo}
+          </h3>
+
+          <p 
+            style={{
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.75)',
+              lineHeight: 1.6,
+              marginBottom: '24px',
+              maxWidth: '420px',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }}
+          >
+            {subtitulo}
+          </p>
+
+          <div 
+            style={{
+              display: 'flex',
+              gap: '12px',
+              flexDirection: 'row',
+              flexWrap: 'wrap'
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleDismiss}
+              style={{
+                flex: '1 1 120px',
+                padding: '14px 20px',
+                borderRadius: '14px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: 'rgba(255, 255, 255, 0.85)',
+                fontWeight: 600,
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              Continuar Neste
+            </button>
+            <a
+              href={altUrl}
+              style={{
+                flex: '2 1 180px',
+                padding: '14px 24px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                border: 'none',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                textDecoration: 'none',
+                boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35)',
+                cursor: 'pointer'
+              }}
+            >
+              <span>{botaoTexto}</span>
+              <Send className="w-4 h-4" />
+            </a>
+          </div>
+
+          <p 
+            style={{
+              fontSize: '11px',
+              color: 'rgba(255, 255, 255, 0.45)',
+              marginTop: '16px'
+            }}
+          >
+            ✓ Seus dados já preenchidos serão transferidos automaticamente.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   const wrapWithFonts = (children: React.ReactNode) => {
     let customStyleBlock = '';
     if (template?.tema_personalizado) {
@@ -733,6 +974,7 @@ export function QuotePage() {
           ${customStyleBlock}
         `}</style>
         {children}
+        {renderAlternativeExitModal()}
       </div>
     );
   };
@@ -1082,6 +1324,22 @@ export function QuotePage() {
       // Deduplicação do upsell
       const mainNames = processedProdutos.map((p: any) => p.nome.toLowerCase().trim());
       const filteredUpsell = processedUpsell.filter((p: any) => !mainNames.includes(p.nome.toLowerCase().trim()));
+
+      // 🔄 Buscar template alternativo vinculado se ativo
+      let altTemplateData: any = null;
+      if (templateData.template_alternativo_ativo && templateData.template_alternativo_id) {
+        try {
+          const { data: altRes } = await supabase
+            .from('templates')
+            .select('id, nome_template, slug_template')
+            .eq('id', templateData.template_alternativo_id)
+            .maybeSingle();
+          altTemplateData = altRes;
+        } catch (altErr) {
+          console.warn('[QuotePage] Erro ao carregar template alternativo:', altErr);
+        }
+      }
+      setAlternativeTemplate(altTemplateData);
 
       setTemplate(templateData);
       setProfile(profileData);
@@ -3989,7 +4247,7 @@ export function QuotePage() {
                           ? 'border-amber-400 bg-amber-50/10 shadow-[0_4px_12px_rgba(245,158,11,0.06)]'
                           : 'border-gray-200 hover:border-gray-300 active:border-gray-400'
                       }`}
-                      style={{
+                                style={{
                         ...inlineStyles.productCard,
                         ...(selectedFormaPagamento === forma.id
                           ? {
@@ -4016,7 +4274,7 @@ export function QuotePage() {
                         style={{ accentColor: inlineStyles.accentColor }}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <div className="flex items-center justify-between">
                           <div className={`font-semibold text-base ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>{forma.nome}</div>
                           {forma.is_default && (
                             <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider whitespace-nowrap">
@@ -4024,22 +4282,46 @@ export function QuotePage() {
                             </span>
                           )}
                         </div>
-                        <div className={`text-sm ${tema.cores.textoSecundario} leading-relaxed`} style={{ color: inlineStyles.textColorSecondary }}>
-                          <div>
-                            {forma.entrada_tipo === 'percentual'
-                              ? `Entrada de ${forma.entrada_valor}%`
-                              : `Entrada de ${formatCurrency(forma.entrada_valor)}`}
-                          </div>
-                          {(() => {
-                            const maxParcelasCalculado = getDynamicMaxParcelas(forma);
-                            return maxParcelasCalculado > 0 && (
-                              <div className="mt-0.5">+ {maxParcelasCalculado}x parcela{maxParcelasCalculado > 1 ? 's' : ''}</div>
-                            );
-                          })()}
-                          {forma.acrescimo > 0 && (
-                            <div className="text-orange-600 mt-0.5" style={{ color: '#ea580c' }}>(+{forma.acrescimo}% acréscimo)</div>
-                          )}
-                        </div>
+                        {(() => {
+                          const total = calculateTotal();
+                          const maxParcelasCalculado = getDynamicMaxParcelas(forma);
+                          const valorEntrada = forma.entrada_tipo === 'percentual'
+                            ? (total * (forma.entrada_valor || 0)) / 100
+                            : (forma.entrada_valor || 0);
+                          const saldoRestante = Math.max(0, total - valorEntrada);
+                          const valorParcela = maxParcelasCalculado > 0 ? saldoRestante / maxParcelasCalculado : 0;
+                          const wasLimitedByDate = maxParcelasCalculado < forma.max_parcelas && Boolean(template?.limitar_parcelas_pelo_evento && dataEvento);
+
+                          return (
+                            <div className={`text-sm ${tema.cores.textoSecundario} leading-relaxed mt-1`} style={{ color: inlineStyles.textColorSecondary }}>
+                              {valorEntrada > 0 && maxParcelasCalculado > 0 && saldoRestante > 0.01 ? (
+                                <div className="font-medium text-xs sm:text-sm">
+                                  <span>Entrada de <strong>{formatCurrency(valorEntrada)}</strong></span>
+                                  <span className="mx-1">+</span>
+                                  <span><strong>{maxParcelasCalculado}x</strong> de <strong>{formatCurrency(valorParcela)}</strong></span>
+                                </div>
+                              ) : maxParcelasCalculado > 1 && saldoRestante > 0.01 ? (
+                                <div className="font-medium text-xs sm:text-sm">
+                                  <strong>{maxParcelasCalculado}x</strong> de <strong>{formatCurrency(valorParcela)}</strong>
+                                </div>
+                              ) : (
+                                <div className="font-medium text-xs sm:text-sm">
+                                  Pagamento à vista de <strong>{formatCurrency(total)}</strong>
+                                </div>
+                              )}
+
+                              {wasLimitedByDate && (
+                                <div className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-1 flex items-center gap-1">
+                                  <span>📅 Ajustado para {maxParcelasCalculado}x até o mês do evento</span>
+                                </div>
+                              )}
+
+                              {forma.acrescimo > 0 && (
+                                <div className="text-orange-600 mt-0.5 text-xs font-semibold" style={{ color: '#ea580c' }}>(+{forma.acrescimo}% acréscimo)</div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </label>
                   ))}
@@ -4056,10 +4338,18 @@ export function QuotePage() {
                   const saldoRestante = Math.max(0, total - valorEntrada);
                   const maxParcelasCalculado = getDynamicMaxParcelas(formaPagamento);
                   const valorParcela = maxParcelasCalculado > 0 ? saldoRestante / maxParcelasCalculado : 0;
+                  const wasLimitedByDate = maxParcelasCalculado < formaPagamento.max_parcelas && Boolean(template?.limitar_parcelas_pelo_evento && dataEvento);
 
                   return (
                     <div className="mt-4 bg-blue-50 rounded-lg p-4 sm:p-5 space-y-3" style={inlineStyles.totalSection}>
-                      <h4 className={`font-semibold text-base ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>💳 Detalhes do Parcelamento</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className={`font-semibold text-base ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>💳 Detalhes do Pagamento Escolhido</h4>
+                        {wasLimitedByDate && (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                            Ajustado para o Evento
+                          </span>
+                        )}
+                      </div>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         <div className="bg-white rounded-lg p-3" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)' }}>
@@ -4069,23 +4359,30 @@ export function QuotePage() {
                           </div>
                           {formaPagamento.entrada_tipo === 'percentual' && (
                             <div className="text-xs text-gray-500 mt-1" style={{ color: inlineStyles.textColorSecondary }}>
-                              ({formaPagamento.entrada_valor}% do total)
+                              ({formaPagamento.entrada_valor}% do valor total)
                             </div>
                           )}
                         </div>
 
                         {maxParcelasCalculado > 0 && saldoRestante > 0.01 && (
                           <div className="bg-white rounded-lg p-3" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)' }}>
-                            <div className={`${tema.cores.textoSecundario} text-xs mb-1`} style={{ color: inlineStyles.textColorSecondary }}>Parcelas:</div>
+                            <div className={`${tema.cores.textoSecundario} text-xs mb-1`} style={{ color: inlineStyles.textColorSecondary }}>Parcelas Mensais:</div>
                             <div className="font-bold text-blue-600 text-lg" style={{ color: inlineStyles.accentColor }}>
                               {maxParcelasCalculado}x de {formatCurrency(valorParcela)}
                             </div>
                             <div className="text-xs text-gray-500 mt-1" style={{ color: inlineStyles.textColorSecondary }}>
-                              Saldo restante
+                              {wasLimitedByDate ? `Calculado até o evento em ${dataEvento.split('-').reverse().join('/')}` : 'Saldo restante parcelado'}
                             </div>
                           </div>
                         )}
                       </div>
+
+                      {wasLimitedByDate && (
+                        <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-2.5 text-xs text-amber-800 flex items-center gap-2">
+                          <span>💡</span>
+                          <span>O parcelamento foi calculado de acordo com a antecedência até a data do seu evento, garantindo a quitação antes da entrega final.</span>
+                        </div>
+                      )}
 
                       {formaPagamento.acrescimo !== 0 && (
                         <div className="bg-white rounded-lg p-3 text-sm" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)' }}>
@@ -4290,14 +4587,26 @@ export function QuotePage() {
                                   <span className="font-medium">Forma de Pagamento:</span>
                                   <span className="font-semibold text-blue-600" style={{ color: inlineStyles.accentColor }}>{formaPagamento.nome}</span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                  <span>Entrada:</span>
-                                  <span className="font-semibold">{formatCurrency(valorEntrada)}</span>
-                                </div>
-                                {maxParcelasCalculado > 0 && saldoRestante > 0.01 && (
+                                {valorEntrada > 0 && (
                                   <div className="flex justify-between items-center">
-                                    <span>Parcelas:</span>
+                                    <span>Entrada:</span>
+                                    <span className="font-semibold">{formatCurrency(valorEntrada)}</span>
+                                  </div>
+                                )}
+                                {maxParcelasCalculado > 0 && saldoRestante > 0.01 ? (
+                                  <div className="flex justify-between items-center">
+                                    <span>Parcelamento:</span>
                                     <span className="font-semibold">{maxParcelasCalculado}x de {formatCurrency(valorParcela)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-between items-center">
+                                    <span>Pagamento:</span>
+                                    <span className="font-semibold">À vista</span>
+                                  </div>
+                                )}
+                                {maxParcelasCalculado < formaPagamento.max_parcelas && template?.limitar_parcelas_pelo_evento && dataEvento && (
+                                  <div className="text-[11px] text-amber-600 font-medium pt-1">
+                                    📅 Parcelas calculadas até a data do evento
                                   </div>
                                 )}
                               </div>

@@ -65,7 +65,7 @@ export function PrivacyPolicyPage() {
             </ul>
           </section>
 
-          <section className="space-y-4 border-t border-slate-800 pt-6">
+          <section id="google-api-disclosure" className="space-y-4 border-t border-slate-800 pt-6">
             <h2 className="text-xl font-bold text-white flex items-center space-x-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
               <span>3. Uso de Dados das APIs do Google (Google OAuth, Drive e Calendar)</span>

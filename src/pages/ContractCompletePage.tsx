@@ -38,7 +38,7 @@ export function ContractCompletePage() {
     }
   }, [token, retryCount]);
 
-  // 🔥 LÓGICA ALTERADA: Apenas verifica se o contrato está assinado.
+  // 🔥 LÓGICA: Carrega os dados do contrato assinado usando a RPC pública segura
   const loadContractUrl = async () => {
     if (!token) return;
 
@@ -46,25 +46,35 @@ export function ContractCompletePage() {
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('contracts')
-        .select('id, status, client_data_json, signature_base64') // Pega os dados necessários para a página de impressão
-        .eq('token', token)
-        .single();
+      // 1. Tenta buscar via RPC segura (Security Definer)
+      const { data: bundle, error: rpcError } = await supabase
+        .rpc('get_public_contract_data', { p_token: token })
+        .single() as any;
 
-      if (fetchError) throw fetchError;
+      let contract = bundle?.contract;
 
-      if (data?.status !== 'signed') {
+      // Fallback para select direto caso necessário
+      if (!contract || rpcError) {
+        const { data: directData, error: directError } = await supabase
+          .from('contracts')
+          .select('id, status, client_data_json, signature_base64, client_ip')
+          .eq('token', token)
+          .single();
+        if (directError && !contract) throw directError || rpcError;
+        contract = directData;
+      }
+
+      if (contract?.status !== 'signed') {
         if (retryCount < 5) {
           console.warn(`[CompletePage] Contrato não está pronto. Tentativa ${retryCount + 1}/5...`);
-          setTimeout(() => setRetryCount(prev => prev + 1), 2000); // Espera 2s e tenta de novo
+          setTimeout(() => setRetryCount(prev => prev + 1), 1500);
           return;
         } else {
           throw new Error('O contrato ainda não foi finalizado. Tente novamente em alguns instantes.');
         }
       }
 
-      setContractData(data);
+      setContractData(contract);
 
     } catch (err) {
       console.error('Erro ao carregar contrato completo:', err);
@@ -74,13 +84,14 @@ export function ContractCompletePage() {
     }
   };
 
-  // 🔥 NOVA FUNÇÃO: Navega para a página de preview com a intenção de imprimir.
+  // 🔥 Navega para a página de visualização/impressão com os dados
   const handlePrint = () => {
-    navigate(`/contrato/${token}/preview`, {
+    navigate(`/contrato/${token}/preview?print=true`, {
       state: {
-        clientData: contractData.client_data_json,
-        clientSignature: contractData.signature_base64,
-        action: 'print', // Sinaliza para a página de preview acionar a impressão
+        clientData: contractData?.client_data_json,
+        clientSignature: contractData?.signature_base64,
+        clientIp: contractData?.client_ip,
+        action: 'print',
       },
     });
   };

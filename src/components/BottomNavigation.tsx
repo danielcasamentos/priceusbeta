@@ -1,4 +1,4 @@
-import { useState, useId } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -18,7 +18,13 @@ import {
   Star,
   Video,
   HelpCircle,
-  X
+  X,
+  SlidersHorizontal,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  Check,
+  Plus
 } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { useSubscription } from '../hooks/useSubscription';
@@ -28,14 +34,35 @@ interface BottomNavigationProps {
   onPageChange: (page: string) => void;
 }
 
-// 5 Itens Principais da Barra Inferior Mobile
-const primaryNavItems = [
-  { id: 'meu-dia', label: 'Meu Dia', icon: Sun },
-  { id: 'leads', label: 'Leads', icon: LayoutDashboard, hasSubmenu: true },
-  { id: 'entregas', label: 'Galerias', icon: Images },
-  { id: 'whatsapp-ia', label: 'Zap IA', icon: Bot },
-  { id: 'more', label: 'Mais', icon: LayoutGrid },
+export interface NavItemConfig {
+  id: string;
+  label: string;
+  icon: any;
+  hasSubmenu?: boolean;
+  badge?: string;
+  highlight?: boolean;
+  description?: string;
+}
+
+// Catálogo completo de todas as 13 ferramentas disponíveis no PriceU$
+export const ALL_NAV_ITEMS: NavItemConfig[] = [
+  { id: 'meu-dia', label: 'Meu Dia', icon: Sun, description: 'Rotina, tarefas e foco do dia' },
+  { id: 'leads', label: 'Leads', icon: LayoutDashboard, hasSubmenu: true, description: 'CRM, orçamentos e atendimentos' },
+  { id: 'entregas', label: 'Galerias', icon: Images, description: 'Entregas, clientes e aprovações' },
+  { id: 'whatsapp-ia', label: 'Zap IA', icon: Bot, badge: 'Copilot', highlight: true, description: 'Atendente e vendas por WhatsApp' },
+  { id: 'ai-culling', label: 'AI Culling', icon: Sparkles, badge: 'IA Pro', highlight: true, description: 'Curadoria e seleção de fotos' },
+  { id: 'templates', label: 'Orçamentos', icon: FileText, description: 'Templates de orçamentos e propostas' },
+  { id: 'contratos', label: 'Contratos', icon: FileSignature, description: 'Assinatura digital e minutas' },
+  { id: 'empresa', label: 'Finanças', icon: Building, description: 'Fluxo de caixa, relatórios e despesas' },
+  { id: 'agenda', label: 'Agenda', icon: Calendar, description: 'Eventos, ensaios e compromissos' },
+  { id: 'avaliacoes', label: 'Avaliações', icon: Star, description: 'Feedbacks e depoimentos de clientes' },
+  { id: 'profile', label: 'Meu Perfil', icon: UserCircle, description: 'Portfólio público e configurações' },
+  { id: 'videos', label: 'Tutoriais', icon: Video, description: 'Aulas em vídeo e guias' },
+  { id: 'ajuda', label: 'Suporte', icon: HelpCircle, description: 'FAQ e central de ajuda' },
 ];
+
+const DEFAULT_PRIMARY_IDS = ['meu-dia', 'leads', 'entregas', 'whatsapp-ia'];
+const STORAGE_KEY = 'priceus_mobile_bottom_nav_v1';
 
 // Sub-itens do menu Leads
 const leadsSubItems = [
@@ -44,26 +71,69 @@ const leadsSubItems = [
   { id: 'leads-finalizados', label: 'Finalizados', icon: CheckCircle2 },
 ];
 
-// Itens da Folha / Sheet "Mais Ferramentas"
-const moreSheetItems = [
-  { id: 'ai-culling', label: 'AI Culling & Curadoria', icon: Sparkles, badge: 'IA Pro', highlight: true },
-  { id: 'templates', label: 'Meus Templates', icon: FileText },
-  { id: 'workflow', label: 'Workflow', icon: ClipboardList },
-  { id: 'contratos', label: 'Contratos', icon: FileSignature },
-  { id: 'empresa', label: 'Empresa & Finanças', icon: Building },
-  { id: 'agenda', label: 'Agenda', icon: Calendar },
-  { id: 'avaliacoes', label: 'Avaliações', icon: Star },
-  { id: 'profile', label: 'Meu Perfil', icon: UserCircle },
-  { id: 'videos', label: 'Vídeos & Aulas', icon: Video },
-  { id: 'ajuda', label: 'Suporte & Ajuda', icon: HelpCircle },
+// Presets Prontos
+const NAV_PRESETS = [
+  {
+    name: '🌟 Padrão PriceU$',
+    desc: 'Meu Dia, Leads, Galerias, Zap IA',
+    ids: ['meu-dia', 'leads', 'entregas', 'whatsapp-ia'],
+  },
+  {
+    name: '💼 Comercial & Vendas',
+    desc: 'Meu Dia, Leads, Orçamentos, Contratos',
+    ids: ['meu-dia', 'leads', 'templates', 'contratos'],
+  },
+  {
+    name: '📸 Produção & Fotos',
+    desc: 'Meu Dia, Galerias, AI Culling, Agenda',
+    ids: ['meu-dia', 'entregas', 'ai-culling', 'agenda'],
+  },
+  {
+    name: '💰 Gestão Financeira',
+    desc: 'Meu Dia, Finanças, Contratos, Leads',
+    ids: ['meu-dia', 'empresa', 'contratos', 'leads'],
+  },
 ];
 
 export function BottomNavigation({ currentPage, onPageChange }: BottomNavigationProps) {
   const [expandedMenu, setExpandedMenu] = useState<'leads' | 'more' | null>(null);
+  const [isCustomizing, setIsCustomizing] = useState(false);
+  const [primaryIds, setPrimaryIds] = useState<string[]>(DEFAULT_PRIMARY_IDS);
+  const [tempPrimaryIds, setTempPrimaryIds] = useState<string[]>(DEFAULT_PRIMARY_IDS);
+
   const planLimits = usePlanLimits();
   const { isActive } = useSubscription();
 
   const showBanner = !isActive && !planLimits.loading && !planLimits.isPrivileged;
+
+  // Carrega configuração personalizada do localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 3 && parsed.length <= 4) {
+          const validIds = parsed.filter((id) => ALL_NAV_ITEMS.some((item) => item.id === id));
+          if (validIds.length === parsed.length) {
+            setPrimaryIds(validIds);
+            setTempPrimaryIds(validIds);
+            return;
+          }
+        }
+      }
+    } catch {
+      // Fallback para padrão
+    }
+  }, []);
+
+  // Itens Principais Dinâmicos + Botão "Mais" Fixo
+  const primaryNavItems: NavItemConfig[] = [
+    ...primaryIds.map((id) => ALL_NAV_ITEMS.find((item) => item.id === id) || ALL_NAV_ITEMS[0]),
+    { id: 'more', label: 'Mais', icon: LayoutGrid },
+  ];
+
+  // Itens da Folha / Sheet "Mais Ferramentas" (todas que não estão na barra principal)
+  const moreSheetItems = ALL_NAV_ITEMS.filter((item) => !primaryIds.includes(item.id));
 
   // Verifica se a página atual pertence ao grupo do botão "Mais"
   const isMorePageActive = moreSheetItems.some((item) => {
@@ -76,6 +146,9 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
   const isCurrentPage = (itemId: string): boolean => {
     if (itemId === 'leads') {
       return currentPage === 'leads' || currentPage.startsWith('leads-');
+    }
+    if (itemId === 'empresa') {
+      return currentPage === 'empresa' || currentPage.startsWith('empresa-');
     }
     if (itemId === 'more') {
       return isMorePageActive;
@@ -123,18 +196,69 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
     setExpandedMenu(null);
   };
 
+  // Funções do Modal de Customização
+  const openCustomizer = () => {
+    setTempPrimaryIds([...primaryIds]);
+    setIsCustomizing(true);
+    setExpandedMenu(null);
+  };
+
+  const moveSlot = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= tempPrimaryIds.length) return;
+    const newIds = [...tempPrimaryIds];
+    const temp = newIds[index];
+    newIds[index] = newIds[targetIndex];
+    newIds[targetIndex] = temp;
+    setTempPrimaryIds(newIds);
+  };
+
+  const toggleItemPin = (id: string) => {
+    if (tempPrimaryIds.includes(id)) {
+      if (tempPrimaryIds.length <= 3) {
+        alert('Mantenha pelo menos 3 menus favoritos na sua barra.');
+        return;
+      }
+      setTempPrimaryIds(tempPrimaryIds.filter((item) => item !== id));
+    } else {
+      if (tempPrimaryIds.length >= 4) {
+        // Substitui o último item
+        const newIds = [...tempPrimaryIds.slice(0, 3), id];
+        setTempPrimaryIds(newIds);
+      } else {
+        setTempPrimaryIds([...tempPrimaryIds, id]);
+      }
+    }
+  };
+
+  const saveCustomization = () => {
+    setPrimaryIds(tempPrimaryIds);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tempPrimaryIds));
+    setIsCustomizing(false);
+  };
+
+  const resetToDefault = () => {
+    setTempPrimaryIds(DEFAULT_PRIMARY_IDS);
+    setPrimaryIds(DEFAULT_PRIMARY_IDS);
+    localStorage.removeItem(STORAGE_KEY);
+    setIsCustomizing(false);
+  };
+
   return (
     <>
       {/* Backdrop para fechar submenus ao tocar fora */}
-      {expandedMenu && (
+      {(expandedMenu || isCustomizing) && (
         <div
-          onClick={() => setExpandedMenu(null)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => {
+            setExpandedMenu(null);
+            if (!isCustomizing) setIsCustomizing(false);
+          }}
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
         />
       )}
 
       {/* Menu Inferior Fixo com design Liquid Glass Flutuante */}
-      <nav className="fixed bottom-3 left-3 right-3 bg-[#032416]/90 border border-emerald-500/30 shadow-[0_12px_40px_rgba(0,0,0,0.6)] z-50 rounded-2xl safe-area-pb backdrop-blur-xl">
+      <nav className="fixed bottom-3 left-3 right-3 bg-[#032416]/95 border border-emerald-500/30 shadow-[0_12px_40px_rgba(0,0,0,0.7)] z-50 rounded-2xl safe-area-pb backdrop-blur-xl">
         <div className="flex justify-around items-center h-16 px-1">
           {primaryNavItems.map((item) => {
             const isActive = isCurrentPage(item.id);
@@ -164,7 +288,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
                     <span className="absolute -top-1.5 -right-2.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
                   )}
                 </div>
-                <span className="text-[10px] mt-1 font-medium truncate max-w-[48px] leading-tight tracking-tight">
+                <span className="text-[10px] mt-1 font-medium truncate max-w-[52px] leading-tight tracking-tight text-center">
                   {item.label}
                 </span>
                 {isActive && (
@@ -219,7 +343,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
 
         {/* Bottom Sheet Completo do Botão "Mais" */}
         {expandedMenu === 'more' && (
-          <div className="absolute left-0 right-0 bottom-20 bg-[#022215]/98 backdrop-blur-2xl rounded-3xl border border-emerald-500/30 overflow-hidden shadow-2xl z-50 p-4 space-y-3 animate-in slide-in-from-bottom-4 duration-200 max-h-[78vh] overflow-y-auto">
+          <div className="absolute left-0 right-0 bottom-20 bg-[#022215]/98 backdrop-blur-2xl rounded-3xl border border-emerald-500/30 overflow-hidden shadow-2xl z-50 p-4 space-y-3 animate-in slide-in-from-bottom-4 duration-200 max-h-[82vh] overflow-y-auto">
             {/* Header do Sheet */}
             <div className="flex items-center justify-between pb-2.5 border-b border-emerald-500/20">
               <div className="flex items-center gap-2">
@@ -228,19 +352,30 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-white">Todas as Ferramentas</h4>
-                  <p className="text-[10px] text-emerald-200/60">Acesso rápido aos recursos do PriceU$</p>
+                  <p className="text-[10px] text-emerald-200/60">Acesso rápido e organização da barra</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setExpandedMenu(null)}
-                className="p-1.5 rounded-full text-emerald-300/60 hover:text-emerald-100 hover:bg-emerald-500/20 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Botão de Organizar Barra */}
+                <button
+                  type="button"
+                  onClick={openCustomizer}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 transition-colors"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Organizar Barra</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpandedMenu(null)}
+                  className="p-1.5 rounded-full text-emerald-300/60 hover:text-emerald-100 hover:bg-emerald-500/20 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Grid 2x2 / 3 colunas de Acesso Rápido */}
+            {/* Grid 2 Colunas com as demais ferramentas */}
             <div className="grid grid-cols-2 gap-2">
               {moreSheetItems.map((item) => {
                 const isActive = item.id === 'empresa'
@@ -286,6 +421,172 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
           </div>
         )}
       </nav>
+
+      {/* 🎛️ MODAL / SHEET DE PERSONALIZAÇÃO DA BARRA INFERIOR MOBILE */}
+      {isCustomizing && (
+        <div className="fixed inset-x-3 bottom-4 top-12 z-50 bg-[#021b11]/98 border border-emerald-500/40 rounded-3xl shadow-2xl p-4 sm:p-6 backdrop-blur-2xl flex flex-col max-w-lg mx-auto animate-in slide-in-from-bottom-5 duration-300">
+          {/* Header do Customizador */}
+          <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <SlidersHorizontal className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Personalizar Menus do Celular</h3>
+                <p className="text-xs text-emerald-200/60">Escolha e ordene os 4 atalhos favoritos da sua barra</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCustomizing(false)}
+              className="p-1.5 rounded-full text-emerald-300/70 hover:text-white hover:bg-emerald-500/20"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Conteúdo com Scroll */}
+          <div className="flex-1 overflow-y-auto py-3 space-y-4 pr-1">
+            {/* Presets Rápidos */}
+            <div>
+              <label className="text-[11px] font-bold text-emerald-400/80 uppercase tracking-wider block mb-2">
+                ⚡ Perfis Prontos (1 Toque)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {NAV_PRESETS.map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => setTempPrimaryIds([...preset.ids])}
+                    className="p-2.5 rounded-xl border border-emerald-500/20 bg-emerald-950/30 text-left hover:border-emerald-400 hover:bg-emerald-900/30 transition-all text-xs"
+                  >
+                    <div className="font-bold text-white text-[11px]">{preset.name}</div>
+                    <div className="text-[9px] text-emerald-300/60 truncate mt-0.5">{preset.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Slots Atuais na Barra (4 Atalhos) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                  📌 Seus 4 Menus Fixos na Barra
+                </label>
+                <span className="text-[10px] text-emerald-300/60">Use ⬆️ ⬇️ para reordenar</span>
+              </div>
+
+              <div className="space-y-2">
+                {tempPrimaryIds.map((id, index) => {
+                  const item = ALL_NAV_ITEMS.find((i) => i.id === id) || ALL_NAV_ITEMS[0];
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-emerald-900/40 border border-emerald-500/30 shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-5 h-5 rounded-full bg-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center justify-center border border-emerald-400/30">
+                          {index + 1}
+                        </span>
+                        <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">
+                          <item.icon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-white text-xs">{item.label}</div>
+                          <div className="text-[10px] text-emerald-200/60">{item.description}</div>
+                        </div>
+                      </div>
+
+                      {/* Controles de Ordem */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveSlot(index, 'up')}
+                          disabled={index === 0}
+                          className="p-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/20 text-emerald-300 disabled:opacity-30 hover:bg-emerald-500/20 transition"
+                          title="Mover para esquerda"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSlot(index, 'down')}
+                          disabled={index === tempPrimaryIds.length - 1}
+                          className="p-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/20 text-emerald-300 disabled:opacity-30 hover:bg-emerald-500/20 transition"
+                          title="Mover para direita"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Biblioteca de Todas as Ferramentas (Clique para fixar/trocar) */}
+            <div>
+              <label className="text-[11px] font-bold text-emerald-400/80 uppercase tracking-wider block mb-2">
+                🧰 Catálogo de Ferramentas (Toque para fixar na barra)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {ALL_NAV_ITEMS.map((item) => {
+                  const isPinned = tempPrimaryIds.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleItemPin(item.id)}
+                      className={`p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-2 ${
+                        isPinned
+                          ? 'bg-emerald-500/25 border-emerald-400 text-white shadow-md shadow-emerald-950/40'
+                          : 'bg-emerald-950/30 border-emerald-500/15 text-emerald-200/70 hover:border-emerald-500/40 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${isPinned ? 'bg-emerald-400 text-slate-950' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                          <item.icon className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-xs font-semibold truncate">{item.label}</span>
+                      </div>
+                      <div className="shrink-0">
+                        {isPinned ? (
+                          <div className="w-4 h-4 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        ) : (
+                          <Plus className="w-3.5 h-3.5 text-emerald-400/40" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer com Botões de Ação */}
+          <div className="pt-3 border-t border-emerald-500/20 flex items-center justify-between gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={resetToDefault}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/15 text-xs font-semibold transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restaurar Padrão</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={saveCustomization}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/30 transition active:scale-95 cursor-pointer"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" />
+              <span>Salvar e Aplicar</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Faixa Animada (Upgrade) acima do bottom menu */}
       {showBanner && (

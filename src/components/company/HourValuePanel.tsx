@@ -251,7 +251,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
       // 1. Pending/active workflows (leads with status = 'convertido')
       const { data: leadsWorkflow } = await supabase
         .from('leads')
-        .select('workflow')
+        .select('workflow, orcamento_detalhe')
         .eq('user_id', userId)
         .eq('status', 'convertido');
 
@@ -259,11 +259,39 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
       if (leadsWorkflow) {
         leadsWorkflow.forEach(lead => {
           const steps = Array.isArray(lead.workflow) ? lead.workflow : [];
-          steps.forEach((step: any) => {
-            if (step.status !== 'concluido' && step.duracao_minutos) {
-              workflowMinutes += Number(step.duracao_minutos);
+          let leadMinutes = 0;
+
+          if (steps.length > 0) {
+            steps.forEach((step: any) => {
+              if (step.status !== 'concluido') {
+                // Se a etapa tiver duração definida, usa ela; se for 0 ou null, assume 60m padrão
+                const dur = Number(step.duracao_minutos);
+                leadMinutes += (!isNaN(dur) && dur > 0) ? dur : 60;
+              }
+            });
+          } else {
+            // Se o lead ainda não tiver etapas instanciadas, calcula a partir dos produtos contratados
+            const detail = lead.orcamento_detalhe || {};
+            const produtos = Array.isArray(detail.produtos) ? detail.produtos : [];
+            const selected = detail.selectedProdutos || {};
+            let hasProd = false;
+
+            produtos.forEach((p: any) => {
+              const qty = Number(selected[p.id] || 0);
+              if (qty > 0) {
+                const duration = Number(p.duracao_minutos || p.duracao || 0);
+                leadMinutes += (duration > 0 ? duration : 120) * qty;
+                hasProd = true;
+              }
+            });
+
+            if (!hasProd) {
+              // Média padrão saudável por projeto ativo (4 horas de processo)
+              leadMinutes = 240;
             }
-          });
+          }
+
+          workflowMinutes += leadMinutes;
         });
       }
       setDynamicHorasWorkflow(workflowMinutes / 60);
@@ -278,9 +306,8 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
       let tasksMinutes = 0;
       if (tasks) {
         tasks.forEach(t => {
-          if (t.duracao_minutos) {
-            tasksMinutes += Number(t.duracao_minutos);
-          }
+          const dur = Number(t.duracao_minutos);
+          tasksMinutes += (!isNaN(dur) && dur > 0) ? dur : 30;
         });
       }
       setDynamicHorasTasks(tasksMinutes / 60);
@@ -311,7 +338,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
             const qty = Number(selected[p.id] || 0);
             if (qty > 0) {
               const duration = Number(p.duracao_minutos || p.duracao || 0);
-              closedMinutes += duration * qty;
+              closedMinutes += (duration > 0 ? duration : 120) * qty;
               hasSelected = true;
             }
           });
@@ -320,7 +347,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
           if (!hasSelected && produtos.length > 0) {
             produtos.forEach((p: any) => {
               const duration = Number(p.duracao_minutos || p.duracao || 0);
-              closedMinutes += duration;
+              closedMinutes += duration > 0 ? duration : 120;
             });
           }
 
@@ -329,7 +356,7 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
           upsells.forEach((p: any) => {
             const qty = Number(p.quantidade || p.qty || 1);
             const duration = Number(p.duracao_minutos || p.duracao || 0);
-            closedMinutes += duration * qty;
+            closedMinutes += (duration > 0 ? duration : 60) * qty;
           });
         });
       }
@@ -599,6 +626,14 @@ export function HourValuePanel({ userId, mediaDespesasMensal, mediaReceitasMensa
                     <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
                       {totalDynamicHours.toFixed(1)}h / mês (~{(totalDynamicHours / SEMANAS_MES).toFixed(1)}h/sem)
                     </span>
+                  </div>
+
+                  {/* Banner explicativo de precisão e segurança contra prejuízo */}
+                  <div className="mt-2 p-3 bg-blue-50/80 dark:bg-blue-900/20 border border-blue-200/80 dark:border-blue-800/40 rounded-xl flex items-start gap-2.5">
+                    <span className="text-base flex-shrink-0">💡</span>
+                    <div className="text-[11px] leading-relaxed text-blue-900 dark:text-blue-200">
+                      <strong className="font-semibold">Dica de Precisão:</strong> Para que o modo dinâmico reflita com 100% de exatidão o seu custo por hora, lembre-se de configurar a duração estimada de cada etapa nos seus <strong className="underline decoration-blue-400">Modelos de Workflow</strong> e preencher os horários nas etapas dos clientes. Caso não preencha, o PriceU$ aplica automaticamente médias inteligentes de segurança para que você nunca precifique no prejuízo!
+                    </div>
                   </div>
                 </div>
               )}

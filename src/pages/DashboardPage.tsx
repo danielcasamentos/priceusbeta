@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useTrialStatus } from '../hooks/useTrialStatus';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { TrialBanner } from '../components/TrialBanner';
 import { FreePlanBanner } from '../components/FreePlanBanner';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -12,7 +12,7 @@ import { TemplatesManager } from '../components/TemplatesManager';
 import { ProfileEditorWithThemeSelector } from '../components/ProfileEditorWithThemeSelector';
 import { HelpCenter } from '../components/HelpCenter';
 import { VideoGallery } from '../components/VideoGallery';
-import { LogOut, Menu, Terminal, Download } from 'lucide-react';
+import { LogOut, Menu, Terminal, Download, ShieldCheck, ExternalLink } from 'lucide-react';
 import { ContractsManager } from '../components/ContractsManager';
 import { AgendaManager } from '../components/AgendaManager';
 import { TemplatesContracts } from '../components/TemplatesContracts';
@@ -112,22 +112,40 @@ export function DashboardPage() {
     }
   }, [urlPage, rawUrlPage]);
 
+  const location = useLocation();
+
   // A verificação do usuário deve vir DEPOIS de todos os hooks.
   if (!user) {
     return null; // ou um componente de loading
   }
 
   const handlePageChange = (page: string) => {
-    if (page === 'workflow') {
+    if (page === 'workflow' || page === 'leads-producao') {
       setCurrentPage('leads');
       setEditingTemplateId(null);
       navigate('/dashboard/leads?tab=producao');
+    } else if (page === 'leads-finalizados') {
+      setCurrentPage('leads');
+      setEditingTemplateId(null);
+      navigate('/dashboard/leads?tab=finalizados');
+    } else if (page === 'leads-todos') {
+      setCurrentPage('leads');
+      setEditingTemplateId(null);
+      navigate('/dashboard/leads?tab=leads');
     } else {
       setCurrentPage(page);
       setEditingTemplateId(null);
       navigate(`/dashboard/${page}`);
     }
   };
+
+  const activeSidebarPage = currentPage === 'leads'
+    ? (new URLSearchParams(location.search).get('tab') === 'producao'
+        ? 'leads-producao'
+        : new URLSearchParams(location.search).get('tab') === 'finalizados'
+          ? 'leads-finalizados'
+          : 'leads-todos')
+    : currentPage;
 
   const getPageTitle = () => {
     switch (currentPage) {
@@ -284,7 +302,7 @@ export function DashboardPage() {
       <DevSupportLogDrawer isOpen={isLogDrawerOpen} onClose={() => setIsLogDrawerOpen(false)} />
 
       <Sidebar
-        currentPage={currentPage}
+        currentPage={activeSidebarPage}
         onPageChange={handlePageChange}
         userEmail={user.email}
         userName={userName}
@@ -299,7 +317,7 @@ export function DashboardPage() {
         {/* Sidebar desktop - só aparece em desktop */}
         {!isMobile && (
           <Sidebar
-            currentPage={currentPage}
+            currentPage={activeSidebarPage}
             onPageChange={handlePageChange}
             userEmail={user.email}
             userName={userName}
@@ -411,9 +429,52 @@ export function DashboardPage() {
         onClose={() => setIsLogDrawerOpen(false)} 
       />
 
-      <footer className={`bg-white dark:bg-[#0a1628] border-t border-gray-200 dark:border-[rgba(255,255,255,.07)] ${isMobile ? 'hidden' : ''}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-gray-500 dark:text-[rgba(255,255,255,.3)]">
-          <p>© 2025 Price Us. Sistema de Orçamentos Inteligente.</p>
+      <footer className="bg-white dark:bg-[#0a1628] border-t border-gray-200 dark:border-[rgba(255,255,255,.07)] py-6 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500 dark:text-[rgba(255,255,255,.4)]">
+          <div className="flex items-center gap-2 text-center md:text-left">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">PriceU$</span>
+            <span>•</span>
+            <span>© {new Date().getFullYear()} Todos os direitos reservados.</span>
+          </div>
+
+          {/* Links de Políticas e Termos para Aprovação do Google */}
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs">
+            <Link
+              to="/politica-de-privacidade"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors flex items-center gap-1 font-medium"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              Política de Privacidade
+            </Link>
+
+            <Link
+              to="/termos-de-servico"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors font-medium"
+            >
+              Termos de Serviço
+            </Link>
+
+            <Link
+              to="/politica-de-privacidade#google-api-disclosure"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:underline transition-colors font-medium flex items-center gap-1"
+            >
+              <span>Uso de Dados das APIs do Google</span>
+              <ExternalLink className="w-3 h-3 opacity-70" />
+            </Link>
+
+            <button
+              onClick={() => handlePageChange('ajuda')}
+              className="hover:text-gray-800 dark:hover:text-gray-200 hover:underline transition-colors font-medium"
+            >
+              Ajuda e Suporte
+            </button>
+          </div>
         </div>
       </footer>
     </div> // Esta div fecha o <div className="min-h-screen bg-gray-50">

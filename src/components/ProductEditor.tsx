@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2 } from 'lucide-react';
+import { Upload, Trash2, CheckCircle, AlertCircle, Loader2, Copy, Share2, Sparkles } from 'lucide-react';
 import { ImageUploadService } from '../services/imageUploadService';
 import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
 import { FormattedDescription } from './ui/FormattedDescription';
+import { AIProductDescriptionModal } from './AIProductDescriptionModal';
 
 interface Product {
   id?: string;
@@ -89,6 +90,7 @@ export function ProductEditor({
     return product.duracao_minutos % 60 === 0 ? 'hours' : 'minutes';
   });
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [showAiModal, setShowAiModal] = useState(false);
 
   const [uploadingSlots, setUploadingSlots] = useState<number[]>([]);
   const [slotProgress, setSlotProgress] = useState<Record<number, number>>({});
@@ -525,7 +527,7 @@ export function ProductEditor({
     }
   };
 
-  const insertFormatting = (before: string, after: string) => {
+  const insertFormatting = (before: string, after: string = '', defaultPlaceholder: string = '') => {
     const textarea = document.getElementById('product-resumo-textarea') as HTMLTextAreaElement;
     if (!textarea) return;
 
@@ -533,7 +535,8 @@ export function ProductEditor({
     const end = textarea.selectionEnd;
     const text = product.resumo || '';
     const selected = text.substring(start, end);
-    const replacement = before + selected + after;
+    const contentToWrap = selected || defaultPlaceholder;
+    const replacement = before + contentToWrap + after;
     
     const newVal = text.substring(0, start) + replacement + text.substring(end);
     onChange('resumo', newVal);
@@ -541,9 +544,17 @@ export function ProductEditor({
     // Reposition cursor
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+      if (selected) {
+        textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+      } else if (defaultPlaceholder) {
+        textarea.setSelectionRange(start + before.length, start + before.length + defaultPlaceholder.length);
+      } else {
+        textarea.setSelectionRange(start + replacement.length, start + replacement.length);
+      }
     }, 0);
   };
+
+  const quickEmojis = ['📸', '⏰', '📦', '🎁', '✨', '👰', '💍', '🎬', '📍', '🥂'];
 
   return (
     <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-white shadow-sm">
@@ -563,14 +574,14 @@ export function ProductEditor({
 
       {/* Descrição */}
       <div>
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex gap-2">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('edit')}
               className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
                 activeTab === 'edit'
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200 shadow-xs'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
               }`}
             >
@@ -581,61 +592,149 @@ export function ProductEditor({
               onClick={() => setActiveTab('preview')}
               className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
                 activeTab === 'preview'
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200 shadow-xs'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
               }`}
             >
               Visualizar
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAiModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-xs transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              title="Otimizar descrição com Inteligência Artificial (3 abordagens de vendas)"
+            >
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+              <span>Otimizar com IA</span>
+            </button>
           </div>
-          <span className="text-[10px] text-gray-400">Suporta formatação estilo Markdown</span>
+          <span className="text-[11px] text-gray-400 font-medium">Barra estilo Word com Preview</span>
         </div>
 
         {activeTab === 'edit' ? (
           <div>
-            {/* Barra de Formatação */}
-            <div className="flex gap-1.5 p-1.5 bg-gray-50 border border-b-0 border-gray-300 rounded-t-lg">
-              <button
-                type="button"
-                onClick={() => insertFormatting('**', '**')}
-                className="p-1 px-2.5 text-xs font-bold text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
-                title="Negrito"
-              >
-                B
-              </button>
-              <button
-                type="button"
-                onClick={() => insertFormatting('- ', '')}
-                className="p-1 px-2 text-xs text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
-                title="Lista de Tópicos"
-              >
-                • Lista
-              </button>
-              <button
-                type="button"
-                onClick={() => insertFormatting('# ', '')}
-                className="p-1 px-2 text-xs font-semibold text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
-                title="Título"
-              >
-                H1
-              </button>
-              <button
-                type="button"
-                onClick={() => insertFormatting('\n---\n', '')}
-                className="p-1 px-2 text-xs text-gray-650 hover:bg-gray-200 rounded border border-gray-200"
-                title="Linha Divisória"
-              >
-                Divisor
-              </button>
+            {/* Barra de Formatação Estilo Word */}
+            <div className="flex flex-wrap items-center gap-1 p-1.5 bg-gray-50 border border-b-0 border-gray-300 rounded-t-lg select-none">
+              {/* Grupo: Texto / Ênfase */}
+              <div className="flex items-center gap-0.5 border-r border-gray-200 pr-1 mr-0.5">
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('**', '**', 'negrito')}
+                  className="p-1 px-2 text-xs font-bold text-gray-700 hover:bg-gray-200 hover:text-gray-900 rounded transition-colors"
+                  title="Negrito (**texto**)"
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('*', '*', 'itálico')}
+                  className="p-1 px-2 text-xs italic font-serif text-gray-700 hover:bg-gray-200 hover:text-gray-900 rounded transition-colors"
+                  title="Itálico (*texto*)"
+                >
+                  I
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('==', '==', 'destaque')}
+                  className="p-1 px-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition-colors"
+                  title="Marca-texto (==texto==)"
+                >
+                  <span className="bg-yellow-200 px-1 rounded text-[10px]">ABC</span>
+                </button>
+              </div>
+
+              {/* Grupo: Títulos */}
+              <div className="flex items-center gap-0.5 border-r border-gray-200 pr-1 mr-0.5">
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n# ', '\n', 'TÍTULO DA SEÇÃO')}
+                  className="p-1 px-1.5 text-xs font-bold text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                  title="Título Principal (# Seção)"
+                >
+                  H1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n## ', '\n', 'Subtítulo')}
+                  className="p-1 px-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                  title="Subtítulo (## Subseção)"
+                >
+                  H2
+                </button>
+              </div>
+
+              {/* Grupo: Listas & Checklists */}
+              <div className="flex items-center gap-0.5 border-r border-gray-200 pr-1 mr-0.5">
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n- ', '', 'Item da lista')}
+                  className="p-1 px-1.5 text-xs text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                  title="Lista com marcadores (- item)"
+                >
+                  • Lista
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n1. ', '', 'Primeiro passo')}
+                  className="p-1 px-1.5 text-xs text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                  title="Lista numerada (1. item)"
+                >
+                  1. Num
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n✓ ', '', 'Incluso no pacote')}
+                  className="p-1 px-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                  title="Checklist com Visto (✓ item)"
+                >
+                  ✓ Check
+                </button>
+              </div>
+
+              {/* Grupo: Caixas de Destaque e Divisor */}
+              <div className="flex items-center gap-0.5 border-r border-gray-200 pr-1 mr-0.5">
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n💡 ', '', 'Dica importante para o cliente')}
+                  className="p-1 px-1.5 text-xs text-amber-700 hover:bg-amber-50 rounded transition-colors"
+                  title="Caixa Destaque / Dica (💡 aviso)"
+                >
+                  💡 Destaque
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertFormatting('\n---\n', '')}
+                  className="p-1 px-1.5 text-xs text-gray-650 hover:bg-gray-200 rounded transition-colors"
+                  title="Linha Divisória (---)"
+                >
+                  ⎯ Linha
+                </button>
+              </div>
+
+              {/* Quick Emojis */}
+              <div className="flex items-center gap-0.5 ml-auto">
+                {quickEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => insertFormatting(emoji + ' ', '')}
+                    className="p-1 text-xs hover:bg-gray-200 rounded transition-transform hover:scale-110 active:scale-95"
+                    title={`Inserir ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <textarea
               id="product-resumo-textarea"
               value={product.resumo}
               onChange={(e) => onChange('resumo', e.target.value)}
-              placeholder="Ex:&#10;# PRÉ-CASAMENTO&#10;- Ensaio de 2 horas&#10;---&#10;# O CASAMENTO&#10;- Cobertura completa"
+              placeholder="Ex:&#10;# O QUE ESTÁ INCLUSO&#10;✓ Ensaio de 2 horas com iluminação premium&#10;✓ Todas as fotos tratadas em alta resolução&#10;---&#10;💡 Bônus: Mini-ensaio com os padrinhos gratuito!"
               rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-b-lg rounded-t-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[160px]"
+              className="w-full px-3 py-2 border border-gray-300 rounded-b-lg rounded-t-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[160px] font-sans"
             />
           </div>
         ) : (
@@ -1302,6 +1401,19 @@ export function ProductEditor({
           Remover
         </button>
       </div>
+
+      {/* Modal de Otimização de Descrição com IA */}
+      <AIProductDescriptionModal
+        isOpen={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        productName={product.nome}
+        currentDescription={product.resumo}
+        price={product.valor}
+        unit={product.unidade}
+        onApplyDescription={(newText) => {
+          onChange('resumo', newText);
+        }}
+      />
     </div>
   );
 }
