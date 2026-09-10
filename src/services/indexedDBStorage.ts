@@ -236,3 +236,63 @@ export async function getProjectsFromIndexedDB(userId: string): Promise<any[] | 
     return null;
   }
 }
+
+/**
+ * Salva e sincroniza de forma atômica e robusta o estado atual de seleção/estrelas das fotos de um projeto no IndexedDB SSD.
+ */
+export async function syncProjectStateToDisk(projectId: string, photos: any[]): Promise<void> {
+  if (!projectId || !Array.isArray(photos)) return;
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_METADATA, 'readwrite');
+    const store = tx.objectStore(STORE_METADATA);
+    const key = `project_state_${projectId}`;
+
+    const sanitizedPhotos = photos.map((p) => {
+      // Omite strings gigantes de dataURL base64 da tabela de metadados para máxima performance (já ficam em STORE_THUMBNAILS)
+      const previewUrl = p.previewUrl && typeof p.previewUrl === 'string' && p.previewUrl.startsWith('data:') ? '' : p.previewUrl;
+      return {
+        ...p,
+        previewUrl,
+      };
+    });
+
+    store.put({
+      projectId: key,
+      actualProjectId: projectId,
+      photos: sanitizedPhotos,
+      updatedAt: Date.now(),
+    });
+    platformAdapter.addLog('info', 'STORAGE', `[IndexedDB SSD] Estado de ${photos.length} fotos sincronizado com sucesso para projeto ${projectId}`);
+  } catch (err) {
+    console.warn('[IndexedDB Storage] Erro ao sincronizar estado do projeto no SSD:', err);
+  }
+}
+
+/**
+ * Recupera o estado persistido das fotos de um projeto do IndexedDB SSD
+ */
+export async function getProjectStateFromDisk(projectId: string): Promise<any[] | null> {
+  if (!projectId) return null;
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_METADATA, 'readonly');
+    const store = tx.objectStore(STORE_METADATA);
+    const key = `project_state_${projectId}`;
+
+    return new Promise((resolve) => {
+      const request = store.get(key);
+      request.onsuccess = () => {
+        if (request.result && request.result.photos && Array.isArray(request.result.photos)) {
+          resolve(request.result.photos);
+        } else {
+          resolve(null);
+        }
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    console.warn('[IndexedDB Storage] Erro ao recuperar estado do projeto do SSD:', err);
+    return null;
+  }
+}

@@ -339,6 +339,8 @@ export function QuotePromocional(props: QuotePromocionalProps) {
               <div>
                 <input
                   id="promo-nome"
+                  name="nome_cliente"
+                  autoComplete="name"
                   type="text"
                   placeholder="Nome Completo *"
                   value={formData.nome_cliente}
@@ -350,6 +352,9 @@ export function QuotePromocional(props: QuotePromocionalProps) {
               <div>
                 <input
                   id="promo-email"
+                  name="email_cliente"
+                  autoComplete="email"
+                  inputMode="email"
                   type="email"
                   placeholder="E-mail *"
                   value={formData.email_cliente}
@@ -363,6 +368,9 @@ export function QuotePromocional(props: QuotePromocionalProps) {
               <div>
                 <input
                   id="promo-telefone"
+                  name="telefone_cliente"
+                  autoComplete="tel"
+                  inputMode="tel"
                   type="tel"
                   placeholder="WhatsApp (Ex: 11999999999) *"
                   value={formData.telefone_cliente}

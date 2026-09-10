@@ -106,13 +106,13 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
           <div className="rv-card" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(245,158,11,.1)', borderRadius: 16, padding: '24px' }}>
             <h3 style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 16 }}>🥂 Seus Dados</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
-              <input id="rv-nome" type="text" placeholder="Nome Completo *" value={formData.nome_cliente} onChange={(e) => props.setFormData({ ...formData, nome_cliente: e.target.value })} className="rv-input" required />
+              <input id="rv-nome" name="nome_cliente" autoComplete="name" type="text" placeholder="Nome Completo *" value={formData.nome_cliente} onChange={(e) => props.setFormData({ ...formData, nome_cliente: e.target.value })} className="rv-input" required />
               <div>
-                <input id="email-cliente" type="email" placeholder="E-mail *" value={formData.email_cliente} onChange={(e) => props.setFormData({ ...formData, email_cliente: e.target.value })} className="rv-input" style={fieldErrors?.email ? { borderColor: '#ef4444' } : {}} required />
+                <input id="email-cliente" name="email_cliente" autoComplete="email" inputMode="email" type="email" placeholder="E-mail *" value={formData.email_cliente} onChange={(e) => props.setFormData({ ...formData, email_cliente: e.target.value })} className="rv-input" style={fieldErrors?.email ? { borderColor: '#ef4444' } : {}} required />
                 {fieldErrors?.email && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', fontWeight: 600 }}>{fieldErrors.email}</p>}
               </div>
               <div>
-                <input id="telefone-cliente" type="tel" placeholder="WhatsApp (Ex: 11999999999) *" value={formData.telefone_cliente} onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })} className="rv-input" style={fieldErrors?.telefone ? { borderColor: '#ef4444' } : {}} required />
+                <input id="telefone-cliente" name="telefone_cliente" autoComplete="tel" inputMode="tel" type="tel" placeholder="WhatsApp (Ex: 11999999999) *" value={formData.telefone_cliente} onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })} className="rv-input" style={fieldErrors?.telefone ? { borderColor: '#ef4444' } : {}} required />
                 {fieldErrors?.telefone && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', fontWeight: 600 }}>{fieldErrors.telefone}</p>}
               </div>
             </div>

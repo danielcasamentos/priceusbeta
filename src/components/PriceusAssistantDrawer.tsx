@@ -9,6 +9,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { callPriHelpAssistant } from '../services/priHelpAssistantService';
+import { useAuth } from '../hooks/useAuth';
 
 interface Message {
   id: string;
@@ -19,13 +20,14 @@ interface Message {
 }
 
 const PRI_KNOWLEDGE_SUGGESTIONS = [
+  { label: 'Pri, o que tenho agendado nos próximos dias?', actionId: 'agenda' },
   { label: 'Pri, como configurar a Secretária Virtual do WhatsApp?', actionId: 'whatsapp' },
   { label: 'Pri, como criar um Template de Proposta Interativa?', actionId: 'templates' },
   { label: 'Pri, como cadastrar Taxas de Deslocamento por Cidade?', actionId: 'pricing' },
-  { label: 'Pri, como funcionam os Contratos com Assinatura Digital?', actionId: 'contracts' }
 ];
 
 export function PriceusAssistantDrawer() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +37,7 @@ export function PriceusAssistantDrawer() {
     {
       id: '1',
       sender: 'ai',
-      text: 'Olá! Sou a **Pri** 💖, sua assistente oficial de suporte e ajuda do Priceus!\n\nEstou aqui para te ajudar a configurar seu estúdio, cadastrar produtos, criar templates de propostas, ajustar taxas de deslocamento e ativar sua secretária de WhatsApp.\n\nComo posso te ajudar hoje?',
+      text: 'Olá! Sou a **Pri** 💖, sua assistente oficial de suporte e inteligência do Priceus!\n\nTenho acesso em tempo real à sua **Agenda de Eventos**, **Financeiro**, **Contratos**, **Templates** e configurações do estúdio.\n\nComo posso te ajudar hoje?',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       suggestedActions: PRI_KNOWLEDGE_SUGGESTIONS
     }
@@ -60,8 +62,8 @@ export function PriceusAssistantDrawer() {
     if (!textToSend) setInput('');
     setIsLoading(true);
 
-    // Chamada à API da Pri (Assistente de Ajuda ao Usuário do Priceus)
-    callPriHelpAssistant(query)
+    // Chamada à API da Pri (Assistente de Ajuda e Consulta de Dados do Usuário)
+    callPriHelpAssistant(query, user?.id)
       .then((res) => {
         setMessages((prev) => [
           ...prev,

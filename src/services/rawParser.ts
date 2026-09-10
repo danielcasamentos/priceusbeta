@@ -126,9 +126,30 @@ function parseExifFromBytes(bytes: Uint8Array, ext: string) {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let tiff = -1, le = true;
 
-    for (let i = 0; i < Math.min(bytes.length - 8, 32768); i++) {
-      if (bytes[i]===0x49&&bytes[i+1]===0x49&&bytes[i+2]===0x2A&&bytes[i+3]===0x00) { tiff=i; le=true; break; }
-      if (bytes[i]===0x4D&&bytes[i+1]===0x4D&&bytes[i+2]===0x00&&bytes[i+3]===0x2A) { tiff=i; le=false; break; }
+    // 1. Verifica marcador EXIF APP1 em arquivos JPEG (0xFF 0xE1)
+    for (let i = 0; i < Math.min(bytes.length - 16, 65536); i++) {
+      if (bytes[i] === 0xFF && bytes[i + 1] === 0xE1) {
+        if (
+          bytes[i + 4] === 0x45 && // 'E'
+          bytes[i + 5] === 0x78 && // 'x'
+          bytes[i + 6] === 0x69 && // 'i'
+          bytes[i + 7] === 0x66 && // 'f'
+          bytes[i + 8] === 0x00 &&
+          bytes[i + 9] === 0x00
+        ) {
+          tiff = i + 10;
+          le = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
+          break;
+        }
+      }
+    }
+
+    // 2. Fallback para cabeçalho TIFF direto de arquivos RAW (0x4949 ou 0x4D4D)
+    if (tiff === -1) {
+      for (let i = 0; i < Math.min(bytes.length - 8, 32768); i++) {
+        if (bytes[i]===0x49&&bytes[i+1]===0x49&&bytes[i+2]===0x2A&&bytes[i+3]===0x00) { tiff=i; le=true; break; }
+        if (bytes[i]===0x4D&&bytes[i+1]===0x4D&&bytes[i+2]===0x00&&bytes[i+3]===0x2A) { tiff=i; le=false; break; }
+      }
     }
 
     if (tiff !== -1) {

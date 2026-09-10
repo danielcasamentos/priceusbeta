@@ -332,7 +332,17 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         .eq('template_id', templateId)
         .order('ordem');
 
-      setTemplate(templateData);
+      const customObj = templateData?.tema_personalizado || {};
+      const mergedTemplate = templateData ? {
+        ...templateData,
+        template_alternativo_ativo: templateData.template_alternativo_ativo ?? customObj.template_alternativo_ativo ?? false,
+        template_alternativo_id: templateData.template_alternativo_id ?? customObj.template_alternativo_id ?? null,
+        template_alternativo_titulo: templateData.template_alternativo_titulo ?? customObj.template_alternativo_titulo ?? '',
+        template_alternativo_subtitulo: templateData.template_alternativo_subtitulo ?? customObj.template_alternativo_subtitulo ?? '',
+        template_alternativo_botao_texto: templateData.template_alternativo_botao_texto ?? customObj.template_alternativo_botao_texto ?? '',
+      } : null;
+
+      setTemplate(mergedTemplate);
       setProdutos(produtosData || []);
       setFormasPagamento(pagamentosData || []);
       setCamposExtras(camposData || []);
@@ -766,7 +776,38 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         .update({ [field]: value })
         .eq('id', templateId);
 
-      if (error) throw error;
+      if (error) {
+        // Se a coluna não existir no schema do banco (PGRST204), salvar como fallback no JSON 'tema_personalizado'
+        if ((error as any).code === 'PGRST204') {
+          console.warn(`[TemplateEditor] Coluna '${field}' não encontrada no banco. Salvando no JSON 'tema_personalizado'...`);
+          const currentTemaCustom = template?.tema_personalizado || {};
+          const updatedCustom = {
+            ...currentTemaCustom,
+            [field]: value,
+          };
+          const { error: customErr } = await supabase
+            .from('templates')
+            .update({ tema_personalizado: updatedCustom })
+            .eq('id', templateId);
+
+          if (customErr) throw customErr;
+
+          setTemplate(prev => prev ? {
+            ...prev,
+            [field]: value,
+            tema_personalizado: updatedCustom
+          } : null);
+
+          setConfigSaveStatus({
+            saving: false,
+            message: 'Salvo com sucesso!',
+            type: 'success',
+          });
+          setTimeout(() => setConfigSaveStatus({ saving: false, message: null, type: null }), 3000);
+          return;
+        }
+        throw error;
+      }
 
       setTemplate(prev => prev ? { ...prev, [field]: value } : null);
       setConfigSaveStatus({

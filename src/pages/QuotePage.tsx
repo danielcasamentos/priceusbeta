@@ -1003,6 +1003,19 @@ export function QuotePage() {
     try {
       // Salva o objeto como uma string JSON
       secureLocalStorage.setItem(storageKey, JSON.stringify(quoteStateToSave));
+
+      // Salva dados pessoais do cliente em chave universal para preenchimento automático em qualquer link
+      if (formData.nome_cliente || formData.email_cliente || formData.telefone_cliente) {
+        localStorage.setItem(
+          'priceus_saved_client_profile',
+          JSON.stringify({
+            nome_cliente: formData.nome_cliente,
+            email_cliente: formData.email_cliente,
+            telefone_cliente: formData.telefone_cliente,
+            cidadeSelecionada: cidadeSelecionada || '',
+          })
+        );
+      }
     } catch (error) {
       console.error('Falha ao salvar orçamento no localStorage:', error);
     }
@@ -1326,13 +1339,23 @@ export function QuotePage() {
       const filteredUpsell = processedUpsell.filter((p: any) => !mainNames.includes(p.nome.toLowerCase().trim()));
 
       // 🔄 Buscar template alternativo vinculado se ativo
+      const customThemeConfig = templateData.tema_personalizado || {};
+      const isAltAtivo = templateData.template_alternativo_ativo ?? customThemeConfig.template_alternativo_ativo ?? false;
+      const altId = templateData.template_alternativo_id ?? customThemeConfig.template_alternativo_id ?? null;
+      
+      templateData.template_alternativo_ativo = isAltAtivo;
+      templateData.template_alternativo_id = altId;
+      templateData.template_alternativo_titulo = templateData.template_alternativo_titulo ?? customThemeConfig.template_alternativo_titulo ?? '';
+      templateData.template_alternativo_subtitulo = templateData.template_alternativo_subtitulo ?? customThemeConfig.template_alternativo_subtitulo ?? '';
+      templateData.template_alternativo_botao_texto = templateData.template_alternativo_botao_texto ?? customThemeConfig.template_alternativo_botao_texto ?? '';
+
       let altTemplateData: any = null;
-      if (templateData.template_alternativo_ativo && templateData.template_alternativo_id) {
+      if (isAltAtivo && altId) {
         try {
           const { data: altRes } = await supabase
             .from('templates')
             .select('id, nome_template, slug_template')
-            .eq('id', templateData.template_alternativo_id)
+            .eq('id', altId)
             .maybeSingle();
           altTemplateData = altRes;
         } catch (altErr) {
@@ -1380,9 +1403,10 @@ export function QuotePage() {
       }
 
       let loadedFromStorage = false;
-      if (storageKey) {
+      const activeStorageKey = templateData?.id ? `priceus-quote-${templateData.id}` : storageKey;
+      if (activeStorageKey) {
         try {
-          const savedQuote = secureLocalStorage.getItem(storageKey);
+          const savedQuote = secureLocalStorage.getItem(activeStorageKey);
           if (savedQuote) {
             console.log('✅ [QuotePage] Orçamento encontrado no localStorage. Carregando...');
             const parsedState = JSON.parse(savedQuote);
@@ -1407,6 +1431,22 @@ export function QuotePage() {
           console.error('Falha ao carregar orçamento do localStorage:', e);
         }
       }
+
+      // Preenchimento automático complementar pelo perfil salvo do cliente no navegador
+      try {
+        const savedProfile = localStorage.getItem('priceus_saved_client_profile');
+        if (savedProfile) {
+          const parsed = JSON.parse(savedProfile);
+          setFormData((prev) => ({
+            nome_cliente: prev.nome_cliente || parsed.nome_cliente || '',
+            email_cliente: prev.email_cliente || parsed.email_cliente || '',
+            telefone_cliente: prev.telefone_cliente || parsed.telefone_cliente || '',
+          }));
+          if (parsed.cidadeSelecionada && !cidadeSelecionada) {
+            setCidadeSelecionada(parsed.cidadeSelecionada);
+          }
+        }
+      } catch (e) {}
 
       if (!loadedFromStorage) {
         const initialSelected: Record<string, number> = {};
@@ -2332,11 +2372,8 @@ export function QuotePage() {
 
           console.log('✅ [setTimeout] Lead salvo com sucesso:', leadData);
 
-          // Limpa o orçamento do navegador APENAS se o lead foi salvo com sucesso.
-          if (storageKey) {
-            secureLocalStorage.removeItem(storageKey);
-            console.log('✅ [setTimeout] Orçamento salvo no navegador foi limpo.');
-          }
+          // Mantém os dados preenchidos e a seleção salvos no navegador para caso o cliente retorne ao link
+          console.log('✅ [setTimeout] Dados do cliente mantidos salvos no navegador para visitas futuras.');
 
           const leadId = leadData.id;
 
@@ -3684,6 +3721,7 @@ export function QuotePage() {
                   type="text"
                   id="nome-cliente"
                   name="nome_cliente"
+                  autoComplete="name"
                   value={formData.nome_cliente}
                   onChange={(e) =>
                     setFormData({ ...formData, nome_cliente: e.target.value })
@@ -3703,6 +3741,8 @@ export function QuotePage() {
                   type="email"
                   id="email-cliente"
                   name="email_cliente"
+                  autoComplete="email"
+                  inputMode="email"
                   value={formData.email_cliente}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -3734,6 +3774,8 @@ export function QuotePage() {
                   type="tel"
                   id="telefone-cliente"
                   name="telefone_cliente"
+                  autoComplete="tel"
+                  inputMode="tel"
                   value={formData.telefone_cliente}
                   onChange={(e) => {
                     const val = e.target.value;

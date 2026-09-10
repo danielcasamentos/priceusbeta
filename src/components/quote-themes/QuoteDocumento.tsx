@@ -124,6 +124,7 @@ export function QuoteDocumento(props: any) {
                   type="text"
                   id="nome-cliente"
                   name="nome_cliente"
+                  autoComplete="name"
                   value={formData.nome_cliente}
                   onChange={(e) =>
                     setFormData({ ...formData, nome_cliente: e.target.value })
@@ -141,6 +142,8 @@ export function QuoteDocumento(props: any) {
                   type="email"
                   id="email-cliente"
                   name="email_cliente"
+                  autoComplete="email"
+                  inputMode="email"
                   value={formData.email_cliente}
                   onChange={(e) =>
                     setFormData({ ...formData, email_cliente: e.target.value })
@@ -158,6 +161,8 @@ export function QuoteDocumento(props: any) {
                   type="tel"
                   id="telefone-cliente"
                   name="telefone_cliente"
+                  autoComplete="tel"
+                  inputMode="tel"
                   value={formData.telefone_cliente}
                   onChange={(e) =>
                     setFormData({ ...formData, telefone_cliente: e.target.value })

@@ -266,8 +266,8 @@ export function CompanyDataEditor({ userId }: CompanyDataEditorProps) {
         </div>
       )}
 
-      {/* 📸 Integração Oficial com o Instagram Graph API */}
-      <InstagramConnectionCard />
+      {/* 📸 Integração Oficial com o Instagram Graph API (temporariamente oculta) */}
+      {/* <InstagramConnectionCard /> */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="md:col-span-2">

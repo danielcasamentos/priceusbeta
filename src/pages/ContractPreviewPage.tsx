@@ -206,8 +206,8 @@ export function ContractPreviewPage() {
           forma_pagamento: 'Não especificado',
           contract_id: signedContract.id,
           is_installment: false,
-          installment_number: 1,
-          total_installments: 1,
+          installment_number: null,
+          total_installments: null,
           documento_fiscal: docFiscal,
         }],
       });
@@ -239,12 +239,13 @@ export function ContractPreviewPage() {
       // Se não há entrada configurada ou a entrada cobre o total → pagamento único
       const valorUnico = entradaValor > 0 ? entradaValor : totalValue;
       const valorRestante = totalValue - valorUnico;
+      const hasTwoInstallments = maxParcelas === 1 && valorRestante > 0.01;
 
       transactionsToInsert.push({
         user_id: signedContract.user_id,
         tipo: 'receita',
         origem: 'contrato',
-        descricao: maxParcelas <= 0
+        descricao: !hasTwoInstallments
           ? `Pagamento à vista - Contrato ${clientName}`
           : `Entrada - Contrato ${clientName}`,
         valor: valorUnico,
@@ -252,14 +253,14 @@ export function ContractPreviewPage() {
         status: 'pendente',
         forma_pagamento: nomePagamento,
         contract_id: signedContract.id,
-        is_installment: false,
-        installment_number: 1,
-        total_installments: 1,
+        is_installment: hasTwoInstallments,
+        installment_number: hasTwoInstallments ? 1 : null,
+        total_installments: hasTwoInstallments ? 2 : null,
         documento_fiscal: docFiscal,
       });
 
       // Se havia entrada menor que o total e max_parcelas = 1, adicionar o restante
-      if (maxParcelas === 1 && valorRestante > 0.01) {
+      if (hasTwoInstallments) {
         const dataRestante = new Date(today);
         dataRestante.setMonth(dataRestante.getMonth() + 1);
         transactionsToInsert.push({

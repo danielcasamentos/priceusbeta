@@ -369,23 +369,6 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
     // Carregar todas as fotos da galeria (superando a trava de 1000 linhas do PostgREST)
     const initialPhotos = await GalleryService.getAllPhotosForGallery(gallery.id);
     setGalleryPhotos(initialPhotos);
-
-    // 🛡️ AUTO-HEALER INVISÍVEL EM BACKGROUND:
-    // Se a galeria estiver com 0 fotos no banco, sincroniza automaticamente do Google Drive em background
-    const token = googleAccessToken || localStorage.getItem('priceus_google_drive_token');
-    if (token && initialPhotos.length === 0) {
-      console.log(`[Auto-Healer 🛡️] Galeria vazia detectada. Importando fotos do Google Drive em background...`);
-      GalleryService.syncPhotosFromDriveFolder(gallery, token).then(async (res) => {
-        if (res.addedCount > 0) {
-          console.log(`[Auto-Healer 🛡️] ⚡ Detectadas e importadas +${res.addedCount} fotos do Google Drive!`);
-          const refreshed = await GalleryService.getAllPhotosForGallery(gallery.id);
-          setGalleryPhotos(refreshed);
-          loadData();
-        }
-      }).catch((err) => {
-        console.warn('[Auto-Healer 🛡️] Aviso de verificação Drive:', err?.message || err);
-      });
-    }
   };
 
   const handleUploadBatch = async (files: File[]) => {

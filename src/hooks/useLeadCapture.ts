@@ -163,8 +163,54 @@ export function useLeadCapture() {
         body: payload,
       });
 
+      let leadResult = null;
       if (invokeError) {
-        throw invokeError;
+        console.warn('⚠️ Edge function create-lead falhou ou foi bloqueada, executando fallback direto via Supabase client...', invokeError);
+        const leadRow = {
+          template_id: data.templateId,
+          user_id: data.userId,
+          nome_cliente: payload.formData.nome_cliente,
+          email_cliente: payload.formData.email_cliente,
+          telefone_cliente: payload.formData.telefone_cliente,
+          dados_formulario: payload.formData,
+          orcamento_detalhe: payload.orcamentoDetalhe,
+          valor_total: payload.valorTotal,
+          status: 'novo',
+          session_id: sessionId,
+          url_origem: window.location.href,
+          user_agent: navigator.userAgent,
+          tempo_preenchimento_segundos: tempoPreenchimento,
+          data_evento: payload.formData.data_evento,
+          cidade_evento: payload.formData.cidade_evento,
+          tipo_evento: payload.formData.tipo_evento,
+        };
+
+        const { data: directLead, error: directErr } = await supabase
+          .from('leads')
+          .insert(leadRow)
+          .select()
+          .maybeSingle();
+
+        if (directErr) {
+          throw directErr;
+        }
+
+        leadResult = directLead;
+
+        try {
+          await supabase.from('notifications').insert({
+            user_id: data.userId,
+            title: 'Novo Lead Recebido',
+            message: `Você recebeu um novo lead de ${payload.formData.nome_cliente || 'um cliente'}!`,
+            type: 'info',
+            related_id: directLead?.id || null,
+            link: '/dashboard/leads',
+          });
+        } catch (notifErr) {
+          console.warn('Aviso ao inserir notificação direta:', notifErr);
+        }
+      } else {
+        leadResult = lead;
       }
 
       lastSaveRef.current = ''; // Reseta para permitir novas capturas
@@ -177,9 +223,53 @@ export function useLeadCapture() {
       // Reset da flag após conclusão bem-sucedida
       isFinalSubmitRef.current = false;
       
-      return { lead, error: null };
+      return { lead: leadResult, error: null };
     } catch (error) {
-      console.error('❌ Erro crítico ao salvar lead final:', error);
+      console.error('❌ Erro crítico ao salvar lead final via Edge Function, tentando último recurso direto:', error);
+      
+      try {
+        const leadRow = {
+          template_id: data.templateId,
+          user_id: data.userId,
+          nome_cliente: data.formData?.nome_cliente || data.formData?.nomeCliente || '',
+          email_cliente: data.formData?.email_cliente || data.formData?.emailCliente || '',
+          telefone_cliente: data.formData?.telefone_cliente || data.formData?.telefoneCliente || '',
+          dados_formulario: data.formData,
+          orcamento_detalhe: data.orcamentoDetalhe,
+          valor_total: data.valorTotal,
+          status: 'novo',
+          session_id: sessionId,
+          url_origem: window.location.href,
+          user_agent: navigator.userAgent,
+          tempo_preenchimento_segundos: Math.floor((Date.now() - startTime) / 1000),
+          data_evento: data.formData?.data_evento || data.formData?.dataEvento || null,
+          cidade_evento: data.formData?.cidade_evento || data.formData?.cidadeEvento || null,
+          tipo_evento: data.formData?.tipo_evento || data.formData?.tipoEvento || null,
+        };
+
+        const { data: emergencyLead } = await supabase
+          .from('leads')
+          .insert(leadRow)
+          .select()
+          .maybeSingle();
+
+        try {
+          await supabase.from('notifications').insert({
+            user_id: data.userId,
+            title: 'Novo Lead Recebido',
+            message: `Você recebeu um novo lead de ${leadRow.nome_cliente || 'um cliente'}!`,
+            type: 'info',
+            related_id: emergencyLead?.id || null,
+            link: '/dashboard/leads',
+          });
+        } catch {}
+
+        isFinalSubmitRef.current = false;
+        return { lead: emergencyLead, error: null };
+      } catch (fallbackErr) {
+        console.error('❌ Falha total ao salvar lead:', fallbackErr);
+      }
+
       // Reset da flag em caso de erro também
       isFinalSubmitRef.current = false;
       // Retorna o erro explicitamente

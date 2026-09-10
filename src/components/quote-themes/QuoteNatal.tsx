@@ -168,14 +168,14 @@ export function QuoteNatal(props: QuoteNatalProps) {
             <h3 style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 16 }}>🎄 Seus Dados</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
               <div>
-                <input id="nt-nome" type="text" placeholder="Nome Completo *" value={formData.nome_cliente} onChange={(e) => props.setFormData({ ...formData, nome_cliente: e.target.value })} className="nt-input" required />
+                <input id="nt-nome" name="nome_cliente" autoComplete="name" type="text" placeholder="Nome Completo *" value={formData.nome_cliente} onChange={(e) => props.setFormData({ ...formData, nome_cliente: e.target.value })} className="nt-input" required />
               </div>
               <div>
-                <input id="email-cliente" type="email" placeholder="E-mail *" value={formData.email_cliente} onChange={(e) => props.setFormData({ ...formData, email_cliente: e.target.value })} className="nt-input" style={fieldErrors?.email ? { borderColor: '#ef4444', boxShadow: '0 0 0 3px rgba(239,68,68,0.1)' } : {}} required />
+                <input id="email-cliente" name="email_cliente" autoComplete="email" inputMode="email" type="email" placeholder="E-mail *" value={formData.email_cliente} onChange={(e) => props.setFormData({ ...formData, email_cliente: e.target.value })} className="nt-input" style={fieldErrors?.email ? { borderColor: '#ef4444', boxShadow: '0 0 0 3px rgba(239,68,68,0.1)' } : {}} required />
                 {fieldErrors?.email && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', fontWeight: 600 }}>{fieldErrors.email}</p>}
               </div>
               <div>
-                <input id="telefone-cliente" type="tel" placeholder="WhatsApp (Ex: 11999999999) *" value={formData.telefone_cliente} onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })} className="nt-input" style={fieldErrors?.telefone ? { borderColor: '#ef4444', boxShadow: '0 0 0 3px rgba(239,68,68,0.1)' } : {}} required />
+                <input id="telefone-cliente" name="telefone_cliente" autoComplete="tel" inputMode="tel" type="tel" placeholder="WhatsApp (Ex: 11999999999) *" value={formData.telefone_cliente} onChange={(e) => props.setFormData({ ...formData, telefone_cliente: e.target.value })} className="nt-input" style={fieldErrors?.telefone ? { borderColor: '#ef4444', boxShadow: '0 0 0 3px rgba(239,68,68,0.1)' } : {}} required />
                 {fieldErrors?.telefone && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', fontWeight: 600 }}>{fieldErrors.telefone}</p>}
               </div>
             </div>

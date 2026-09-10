@@ -30,6 +30,9 @@ import {
   AlertTriangle,
   FileCode,
   Download,
+  Trophy,
+  Eye,
+  ZoomIn,
 } from 'lucide-react';
 import { CullingPhoto } from './AICullingManager';
 import { GalleryService } from '../../services/galleryService';
@@ -1041,3 +1044,275 @@ export function CullingLightroomExportModal({
     </div>
   );
 }
+
+export interface CompareBurstModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  photos: CullingPhoto[];
+  onToggleSelect: (photoId: string) => void;
+  onSetRating: (photoId: string, rating: 0 | 1 | 2 | 3 | 4 | 5) => void;
+  onToggleDiscard: (photoId: string) => void;
+  onSetBestTake: (photoId: string) => void;
+}
+
+export function CompareBurstModal({
+  isOpen,
+  onClose,
+  photos,
+  onToggleSelect,
+  onSetRating,
+  onToggleDiscard,
+  onSetBestTake,
+}: CompareBurstModalProps) {
+  const [zoomScale, setZoomScale] = useState(1.0);
+
+  if (!isOpen || photos.length === 0) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-7xl max-h-[95vh] overflow-hidden shadow-2xl text-white flex flex-col">
+        {/* Header */}
+        <div className="p-4 px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-black">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-white">Comparador A/B de Sequência & Séries</h3>
+                <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono text-[11px] font-bold border border-purple-500/30">
+                  {photos.length} Fotos Semelhantes
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Compare nitidez, abertura dos olhos e enquadramento lado a lado para eleger a foto perfeita.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Synchronized Zoom Control */}
+            <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-bold text-slate-300">
+              <ZoomIn className="w-4 h-4 text-purple-400" />
+              <span>Zoom Sincronizado:</span>
+              <input
+                type="range"
+                min="1"
+                max="3.5"
+                step="0.25"
+                value={zoomScale}
+                onChange={(e) => setZoomScale(parseFloat(e.target.value))}
+                className="w-24 accent-purple-500 cursor-pointer"
+              />
+              <span className="font-mono text-purple-300 min-w-[36px]">{zoomScale.toFixed(1)}x</span>
+              {zoomScale > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setZoomScale(1.0)}
+                  className="text-[10px] text-slate-400 hover:text-white underline ml-1"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+              title="Fechar (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Comparison Grid */}
+        <div className="flex-1 p-6 overflow-y-auto bg-slate-950/60">
+          <div
+            className={`grid gap-4 h-full ${
+              photos.length === 2
+                ? 'grid-cols-1 md:grid-cols-2'
+                : photos.length === 3
+                ? 'grid-cols-1 md:grid-cols-3'
+                : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
+            }`}
+          >
+            {photos.map((photo) => {
+              const isBest = photo.isBestTake;
+              const isSelected = photo.selected && !photo.isDiscarded;
+              const isDiscarded = photo.isDiscarded;
+
+              return (
+                <div
+                  key={photo.id}
+                  className={`flex flex-col bg-slate-900 rounded-2xl border transition overflow-hidden shadow-xl ${
+                    isBest
+                      ? 'border-amber-400/80 ring-2 ring-amber-400/30 shadow-amber-900/20'
+                      : isSelected
+                      ? 'border-purple-500 ring-1 ring-purple-500/30'
+                      : isDiscarded
+                      ? 'border-rose-900/60 opacity-60'
+                      : 'border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {/* Photo Header / Badges */}
+                  <div className="p-2.5 px-3 bg-slate-950/80 border-b border-slate-800/80 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 truncate max-w-[60%]">
+                      {isBest && <Trophy className="w-4 h-4 text-amber-400 shrink-0" />}
+                      <span className="font-bold text-white truncate text-xs">{photo.fileName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono text-[10px] font-bold">
+                        ⭐ {photo.qualityScore?.overallScore || 0}/100
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Photo Canvas / Preview with Zoom */}
+                  <div className="relative flex-1 min-h-[260px] max-h-[420px] bg-black/60 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={photo.previewUrl}
+                      alt={photo.fileName}
+                      className="w-full h-full object-contain select-none transition-transform duration-100"
+                      style={{
+                        transform: `scale(${zoomScale})`,
+                        transformOrigin: 'center center',
+                      }}
+                    />
+
+                    {/* Champion Badge Overlay */}
+                    {isBest && (
+                      <div className="absolute top-2 left-2 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md text-slate-950 font-black text-[11px] flex items-center gap-1 shadow-lg shadow-amber-500/30">
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>MELHOR DA SÉRIE</span>
+                      </div>
+                    )}
+
+                    {/* Discard Overlay Badge */}
+                    {isDiscarded && (
+                      <div className="absolute inset-0 bg-rose-950/70 backdrop-blur-xs flex items-center justify-center pointer-events-none">
+                        <span className="px-3 py-1.5 rounded-xl bg-rose-600 text-white font-extrabold text-xs shadow-lg">
+                          DESCONSIDERADA / DUPLICADA
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quality Metrics Bar */}
+                  <div className="p-2.5 px-3 bg-slate-950/90 border-t border-slate-800/80 grid grid-cols-3 gap-1 text-center font-mono text-[10px]">
+                    <div className="bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                      <span className="text-slate-500 block text-[9px]">NITIDEZ</span>
+                      <span className="font-bold text-emerald-400">{photo.qualityScore?.sharpness || 0}%</span>
+                    </div>
+                    <div className="bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                      <span className="text-slate-500 block text-[9px]">OLHOS</span>
+                      <span
+                        className={`font-bold ${
+                          photo.qualityScore?.eyeState === 'closed'
+                            ? 'text-rose-400'
+                            : photo.qualityScore?.eyeState === 'half-open'
+                            ? 'text-amber-400'
+                            : 'text-blue-400'
+                        }`}
+                      >
+                        {photo.qualityScore?.eyeState === 'closed'
+                          ? 'Fechados'
+                          : photo.qualityScore?.eyeState === 'half-open'
+                          ? 'Semi'
+                          : 'Abertos'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                      <span className="text-slate-500 block text-[9px]">EXPOSIÇÃO</span>
+                      <span className="font-bold text-purple-300">{photo.qualityScore?.exposure || 0}%</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="p-3 bg-slate-900 space-y-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => onSetBestTake(photo.id)}
+                      className={`w-full py-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition ${
+                        isBest
+                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/30'
+                          : 'bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 border border-slate-700/60'
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>{isBest ? '🏆 Campeã Eleita' : 'Eleger como Campeã'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onToggleSelect(photo.id)}
+                        className={`flex-1 py-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition ${
+                          isSelected
+                            ? 'bg-purple-600 text-white shadow-purple-600/30'
+                            : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isSelected ? 'Aprovada' : 'Aprovar'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onToggleDiscard(photo.id)}
+                        className={`flex-1 py-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition ${
+                          isDiscarded
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-slate-950 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-slate-800'
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{isDiscarded ? 'Descartada' : 'Descartar'}</span>
+                      </button>
+                    </div>
+
+                    {/* Star Rating */}
+                    <div className="flex justify-center items-center gap-1 pt-1">
+                      {([1, 2, 3, 4, 5] as const).map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => onSetRating(photo.id, photo.starRating === star ? 0 : star)}
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition ${
+                            photo.starRating >= star
+                              ? 'text-amber-400 bg-amber-400/10'
+                              : 'text-slate-600 hover:text-slate-400'
+                          }`}
+                        >
+                          <Star className={`w-3.5 h-3.5 ${photo.starRating >= star ? 'fill-amber-400' : ''}`} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-3.5 px-6 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center gap-4">
+            <span>💡 <strong>Dica:</strong> Apenas uma foto por série precisa ser a campeã. Descarte as duplicadas para poupar tempo.</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30"
+          >
+            Concluir Comparação (Esc)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

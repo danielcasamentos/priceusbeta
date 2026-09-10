@@ -73,64 +73,28 @@ export class GoogleDriveAdapter implements StorageAdapter {
     if (existingFolderId) return existingFolderId;
 
     try {
-      // 1. Procurar diretamente se existe uma pasta com o nome exato da galeria em qualquer lugar do Drive
-      const galleryFolderName = galleryTitle.replace(/[^\w\s-]/gi, '_');
-      const searchExactQuery = encodeURIComponent(
-        `mimeType = 'application/vnd.google-apps.folder' and (name = '${galleryTitle}' or name = '${galleryFolderName}') and trashed = false`
-      );
-      let searchResp = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${searchExactQuery}&fields=files(id,name,parents)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
-        { headers: this.headers }
-      );
-
-      if (searchResp.status === 401) {
-        const refreshed = await this.refreshAccessToken();
-        if (refreshed) {
-          searchResp = await fetch(
-            `https://www.googleapis.com/drive/v3/files?q=${searchExactQuery}&fields=files(id,name,parents)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
-            { headers: this.headers }
-          );
-        }
-      }
-
-      if (searchResp.ok) {
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-          // Se tiver múltiplos, dar preferência ao que não se chama PriceUS_Galerias
-          const match = searchData.files.find((f: any) => f.name.toLowerCase() !== 'priceus_galerias') || searchData.files[0];
-          console.log(`[GoogleDriveAdapter] 🎯 Pasta da galeria encontrada no Drive: "${match.name}" (ID: ${match.id})`);
-          return match.id;
-        }
-      }
-
-      // 2. Se não encontrou, verificar ou criar a pasta raiz 'PriceUS_Galerias'
+      // 1. Garantir pasta raiz 'PriceUS_Galerias'
       const rootSearchQuery = encodeURIComponent("name = 'PriceUS_Galerias' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
       let rootResponse = await fetch(
         `https://www.googleapis.com/drive/v3/files?q=${rootSearchQuery}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
         { headers: this.headers }
       );
 
+      if (rootResponse.status === 401) {
+        const refreshed = await this.refreshAccessToken();
+        if (refreshed) {
+          rootResponse = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=${rootSearchQuery}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+            { headers: this.headers }
+          );
+        }
+      }
+
       let rootFolderId: string;
       const rootData = await rootResponse.json();
 
       if (rootData.files && rootData.files.length > 0) {
         rootFolderId = rootData.files[0].id;
-
-        // Verificar se dentro de PriceUS_Galerias existe a pasta da galeria
-        const childQuery = encodeURIComponent(
-          `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and (name = '${galleryTitle}' or name = '${galleryFolderName}') and trashed = false`
-        );
-        const childResp = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=${childQuery}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
-          { headers: this.headers }
-        );
-        if (childResp.ok) {
-          const childData = await childResp.json();
-          if (childData.files && childData.files.length > 0) {
-            console.log(`[GoogleDriveAdapter] 🎯 Subpasta encontrada dentro de PriceUS_Galerias: "${childData.files[0].name}" (ID: ${childData.files[0].id})`);
-            return childData.files[0].id;
-          }
-        }
       } else {
         // Criar pasta raiz PriceUS_Galerias
         const createRootResp = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
@@ -148,7 +112,9 @@ export class GoogleDriveAdapter implements StorageAdapter {
         rootFolderId = createdRoot.id;
       }
 
-      // 3. Criar subpasta para a galeria específica dentro de PriceUS_Galerias
+      const galleryFolderName = galleryTitle.replace(/[^\w\s-]/gi, '_');
+
+      // 2. Criar subpasta dedicada e exclusiva para esta galeria dentro de PriceUS_Galerias
       const createGalleryFolderResp = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
         method: 'POST',
         headers: {
@@ -163,7 +129,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
       });
 
       const galleryFolderData = await createGalleryFolderResp.json();
-      console.log(`[GoogleDriveAdapter] 📁 Nova subpasta criada para "${galleryTitle}":`, galleryFolderData.id);
+      console.log(`[GoogleDriveAdapter] 📁 Nova subpasta exclusiva criada para "${galleryTitle}":`, galleryFolderData.id);
       return galleryFolderData.id || null;
     } catch (err) {
       console.error('[GoogleDriveAdapter] Erro ao buscar/criar pasta no Drive:', err);

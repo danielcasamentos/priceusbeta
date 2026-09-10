@@ -1329,58 +1329,10 @@ export class GalleryService {
 
     if (!folderId) throw new Error('Pasta do Google Drive não encontrada');
 
-    // 1. Listar todos os arquivos existentes na pasta do Google Drive
-    let driveFiles = await adapter.listFilesInFolder(folderId);
+    // 1. Listar apenas os arquivos existentes na pasta exclusiva desta galeria no Google Drive
+    const driveFiles = await adapter.listFilesInFolder(folderId);
 
-    // Se não encontrou arquivos na pasta registrada, tentar encontrar a pasta pelo título da galeria ou buscar todas as pastas
-    if (driveFiles.length === 0) {
-      console.log(`[Auto-Healer 🛡️] 0 fotos encontradas na pasta ${folderId}. Buscando pasta pelo nome "${gallery.title}"...`);
-      const fallbackFolderId = await adapter.ensureGalleryFolder(gallery.title, null);
-      if (fallbackFolderId && fallbackFolderId !== folderId) {
-        folderId = fallbackFolderId;
-        await supabase.from('galleries').update({ google_drive_folder_id: folderId }).eq('id', gallery.id);
-        driveFiles = await adapter.listFilesInFolder(folderId);
-      }
-    }
-
-    // Se AINDA assim retornou 0, fazer busca global por pastas no Drive do usuário
-    if (driveFiles.length === 0) {
-      console.log(`[Auto-Healer 🛡️] Buscando todas as pastas do Google Drive para localizar as fotos da galeria...`);
-      try {
-        const token = localStorage.getItem('priceus_google_drive_token') || googleAccessToken;
-        const allFoldersResp = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.folder%27+and+trashed%3Dfalse&fields=files(id%2Cname%2Cparents)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (allFoldersResp.ok) {
-          const folderListData = await allFoldersResp.json();
-          console.log('[Auto-Healer 🛡️] Pastas detectadas no Google Drive:', folderListData.files?.map((f: any) => `${f.name} (${f.id})`));
-          
-          // Procurar qualquer pasta cujo nome contenha palavras-chave do título da galeria
-          const keywords = gallery.title.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-          const candidateFolders = (folderListData.files || []).filter((f: any) => {
-            const lower = f.name.toLowerCase();
-            return keywords.some((k) => lower.includes(k));
-          });
-
-          for (const cand of candidateFolders) {
-            console.log(`[Auto-Healer 🛡️] Testando pasta candidata: "${cand.name}" (${cand.id})...`);
-            const candFiles = await adapter.listFilesInFolder(cand.id);
-            if (candFiles.length > 0) {
-              console.log(`[Auto-Healer 🛡️] 🎯 Encontradas ${candFiles.length} fotos na pasta "${cand.name}"! Vinculando galeria a esta pasta...`);
-              folderId = cand.id;
-              driveFiles = candFiles;
-              await supabase.from('galleries').update({ google_drive_folder_id: folderId }).eq('id', gallery.id);
-              break;
-            }
-          }
-        }
-      } catch (globalErr) {
-        console.warn('[Auto-Healer 🛡️] Erro na busca global de pastas:', globalErr);
-      }
-    }
-
-    console.log(`[Auto-Healer 🛡️] Arquivos de foto escaneados no Google Drive (pasta ${folderId}): ${driveFiles.length}`);
+    console.log(`[GalleryService] Arquivos de foto escaneados no Google Drive (pasta ${folderId}): ${driveFiles.length}`);
 
     if (driveFiles.length === 0) {
       return { addedCount: 0, totalInDrive: 0 };

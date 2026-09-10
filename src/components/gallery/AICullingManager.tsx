@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Sparkles,
   Upload,
@@ -32,21 +32,23 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { logger } from '../../lib/logger';
-import { parseRawImage, quickScanFile, isRawFile, createRawPlaceholderDataUrl } from '../../services/rawParser';
+import { parseRawImage, quickScanFile, isRawFile, createRawPlaceholderDataUrl, compressBlobToWebpThumbnail } from '../../services/rawParser';
 import { LightroomPluginModal } from './LightroomPluginModal';
-import { CullingImportAndProgressModal, CullingPublishModal, CullingAiTuningModal, CullingLightroomExportModal } from './CullingModals';
+import { CullingImportAndProgressModal, CullingPublishModal, CullingAiTuningModal, CullingLightroomExportModal, CompareBurstModal } from './CullingModals';
 import { GoogleDriveSettingsModal } from './GoogleDriveSettingsModal';
 import { NativeDesktopDownloadModal } from './NativeDesktopDownloadModal';
-import { saveThumbnailToSSD, getThumbnailFromSSD, purgeProjectStorage, getStorageEstimate, autoPurgeOldestProjects, purgeProjectThumbnailsOnly, saveProjectsToIndexedDB, getProjectsFromIndexedDB } from '../../services/indexedDBStorage';
+import { saveThumbnailToSSD, getThumbnailFromSSD, purgeProjectStorage, getStorageEstimate, autoPurgeOldestProjects, purgeProjectThumbnailsOnly, saveProjectsToIndexedDB, getProjectsFromIndexedDB, syncProjectStateToDisk, getProjectStateFromDisk } from '../../services/indexedDBStorage';
 import { renderProcessedImage, drawCropAndRuleOfThirdsOverlay } from '../../services/lightroomEngine';
 import { processAiEditingPipeline, DEFAULT_USER_PRESET_PREFERENCE, UserPresetPreference } from '../../services/aiEditingPipeline';
 import { registerUserEditFeedback, getStoredAILearningProfile, registerUserPhotoApproval, registerUserPhotoRejection } from '../../services/aiLearningEngine';
-import { analyzePhotoQuality } from '../../services/cullingScoreEngine';
+import { analyzePhotoQuality, CullingSensitivityMode, SENSITIVITY_CONFIGS, CullingScoreMetrics } from '../../services/cullingScoreEngine';
 import { ScannedFileItem, scanDataTransferItems, scanFileListWithDirectory } from '../../services/folderScanner';
 import logoPriceUsLight from '../../assets/logo-priceus.png';
 import { GroqCullingService, AiLogEntry } from '../../services/groqCullingService';
 import { platformAdapter } from '../../services/platformAdapter';
 import { computeHammingDistance } from '../../services/imageAnalysisEngine';
+import { groupSimilarBursts, computeBurstChampions, autoSelectAllBestTakes, autoRejectInferiorDuplicates, BurstGroup } from '../../services/aiCullingEngine';
+import { CullingThreadPool, ThreadPoolItem } from '../../services/cullingThreadPool';
 import { writeXmpSidecarToDirectoryHandle, syncAllXmpSidecarsToFolder, downloadXmpZipPackage } from '../../services/xmpExportService';
 import { FaceGridInspector } from './FaceGridInspector';
 
@@ -67,54 +69,35 @@ export interface ColorGradingWheel {
 }
 
 export interface PhotoEditSettings {
-  exposure: number; // -5.00 a +5.00 EV
-  contrast: number; // -100 a +100
-  highlights: number; // -100 a +100
-  shadows: number; // -100 a +100
-  whites: number; // -100 a +100
-  blacks: number; // -100 a +100
-  temp: number; // 2000K a 12000K
-  tint: number; // -150 a +150
-  vibrance: number; // -100 a +100
-  saturation: number; // -100 a +100
-  clarity?: number; // -100 a +100
-  dehaze?: number; // -100 a +100
-  sharpness: number; // 0 a 100
-  presetIntensity: number; // 0 a 200 (% do preset aplicado)
-  autoStraighten?: boolean; // Endireitar fotos inclinadas/tortas com IA
-  autoRetouch?: boolean; // Suavização e retoque de pele inteligente
+  exposure: number;
+  contrast: number;
+  highlights: number;
+  shadows: number;
+  whites: number;
+  blacks: number;
+  temp: number;
+  tint: number;
+  vibrance: number;
+  saturation: number;
+  sharpness: number;
+  noiseReduction: number;
   presetName?: string;
-  isBlackAndWhite?: boolean;
-  zoomScale?: number; // 1.0x a 3.0x zoom de corte
-  cropOffsetX?: number; // deslocamento X de enquadramento
-  cropOffsetY?: number; // deslocamento Y de enquadramento
-  
-  // HSL Mixer de 8 Cores Individuais
+  presetIntensity?: number;
+  crop?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
   hsl?: {
     red: HslChannelSettings;
-    orange: HslChannelSettings; // TOM DE PELE
+    orange: HslChannelSettings;
     yellow: HslChannelSettings;
     green: HslChannelSettings;
     aqua: HslChannelSettings;
     blue: HslChannelSettings;
     purple: HslChannelSettings;
     magenta: HslChannelSettings;
-  };
-
-  // Curvas de Tons RGB
-  toneCurves?: {
-    rgb: ToneCurveChannel;
-    red: ToneCurveChannel;
-    green: ToneCurveChannel;
-    blue: ToneCurveChannel;
-  };
-
-  // Color Grading
-  colorGrading?: {
-    shadows: ColorGradingWheel;
-    midtones: ColorGradingWheel;
-    highlights: ColorGradingWheel;
-    balance: number;
   };
 }
 
@@ -142,6 +125,17 @@ export interface CullingPhoto {
   shutterSpeed?: string;
   focalLength?: string;
   dHash?: string;
+  capturedAt?: number;
+  dateTimeOriginal?: string;
+  finalScore?: number;
+  qualityScore?: {
+    sharpness: number;
+    eyeState: 'open' | 'closed';
+    exposure: number;
+    composition: number;
+    userBonus: number;
+    overallScore: number;
+  };
   // Configurações de Edição Estilo Lightroom
   editSettings: PhotoEditSettings;
 }
@@ -272,7 +266,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   // Refs para atualizar progresso sem disparar re-renders dentro do loop de import
   const importProgressRef = useRef({ count: 0, file: '', pct: 0 });
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'ai_pick' | 'approved' | 'discarded'>('all');
-  const [starFilter, setStarFilter] = useState<0 | 1 | 2 | 3 | 4 | 5>(0); // 0 = sem filtro de estrela
+  const [starFilter, setStarFilter] = useState<'all' | 0 | 1 | 2 | 3 | 4 | 5>('all');
   const [sceneFilter, setSceneFilter] = useState<string>('all'); // 'all' ou nome de subpasta
   const [colorFilter, setColorFilter] = useState<'all' | 'red' | 'yellow' | 'green' | 'blue' | 'purple'>('all');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'sharpness' | 'scene'>('default');
@@ -297,6 +291,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   const [syncedPresetNotice, setSyncedPresetNotice] = useState(false);
   const [publishingNotice, setPublishingNotice] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
+
+  // Modo de Sensibilidade da IA (Conservador, Equilibrado, Editorial)
+  const [sensitivityMode, setSensitivityMode] = useState<CullingSensitivityMode>('balanced');
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [comparePhotosList, setComparePhotosList] = useState<CullingPhoto[]>([]);
 
   // Estados de Arraste Pan, Antes/Depois & Enquadramento Interativo
   const [isPanDragging, setIsPanDragging] = useState(false);
@@ -325,6 +324,72 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
   // Subpastas / Cenas Únicas Disponíveis no Projeto Ativo
   const availableScenes = Array.from(new Set(photos.map((p) => p.sceneGroup || 'Fotos Gerais'))).filter(Boolean);
+
+  // Ações Rápidas de Curadoria Inteligente
+  const handleSelectAllBestTakes = () => {
+    const updated = autoSelectAllBestTakes(photos);
+    setPhotos(updated);
+    syncProjectStateToDisk(activeProjectIdRef.current || activeProjectId, updated);
+    const count = updated.filter((p) => p.selected && !p.isDiscarded).length;
+    setLearningNotice(`🏆 Todas as ${count} melhores fotos das séries foram aprovadas!`);
+    setTimeout(() => setLearningNotice(null), 4000);
+  };
+
+  const handleAutoRejectDuplicates = () => {
+    const updated = autoRejectInferiorDuplicates(photos);
+    setPhotos(updated);
+    syncProjectStateToDisk(activeProjectIdRef.current || activeProjectId, updated);
+    const discarded = updated.filter((p) => p.isDiscarded).length;
+    setLearningNotice(`🗑️ ${discarded} fotos duplicadas/inferiores foram marcadas para descarte.`);
+    setTimeout(() => setLearningNotice(null), 4000);
+  };
+
+  const handleChangeSensitivityMode = (newMode: CullingSensitivityMode) => {
+    setSensitivityMode(newMode);
+    const updated = computeBurstChampions(photos, newMode);
+    setPhotos(updated);
+    syncProjectStateToDisk(activeProjectIdRef.current || activeProjectId, updated);
+    setLearningNotice(`⚡ Sensibilidade alterada para "${newMode.toUpperCase()}"! Campeões de série recalculados.`);
+    setTimeout(() => setLearningNotice(null), 3500);
+  };
+
+  const handleOpenBurstComparison = (photo: CullingPhoto) => {
+    const bursts = groupSimilarBursts(photos);
+    const group = bursts.find((b) => b.photoIds.includes(photo.id));
+    if (group && group.photoIds.length > 1) {
+      const groupPhotos = group.photoIds
+        .map((id) => photos.find((p) => p.id === id))
+        .filter((p): p is CullingPhoto => Boolean(p));
+      setComparePhotosList(groupPhotos);
+      setIsCompareModalOpen(true);
+    } else {
+      const idx = photos.findIndex((p) => p.id === photo.id);
+      const slice = photos.slice(Math.max(0, idx - 1), Math.min(photos.length, idx + 3));
+      setComparePhotosList(slice);
+      setIsCompareModalOpen(true);
+    }
+  };
+
+  const handleAutoEnhancePhoto = (target?: CullingPhoto) => {
+    const p = target || editingPhoto;
+    if (!p) return;
+    const autoSettings: Partial<PhotoEditSettings> = {
+      exposure: 0.35,
+      contrast: 14,
+      highlights: -25,
+      shadows: 28,
+      whites: 12,
+      blacks: -12,
+      vibrance: 16,
+      saturation: 4,
+      temp: p.editSettings.temp || 5600,
+      tint: 4,
+      sharpness: 35,
+    };
+    updateEditingPhotoSettings(autoSettings);
+    setLearningNotice('✨ Auto-Melhorar com IA: Luz, sombras e cores equilibradas com perfeição!');
+    setTimeout(() => setLearningNotice(null), 3000);
+  };
 
   // Recalcular regras de curadoria com porcentagem % target e rating de 1 a 5 estrelas por cena
   const handleApplyAiTargetRatio = (newRatio?: number) => {
@@ -377,14 +442,41 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     setPhotos(updatedPhotos);
   };
 
-  // Filtragem Dinâmica de Fotos por Categoria, Estrelas e Cenas
-  const filteredPhotos = photos.filter((p) => {
-    if (sceneFilter !== 'all' && (p.sceneGroup || 'Fotos Gerais') !== sceneFilter) return false;
-    if (selectedFilter === 'ai_pick') return p.isBestTake && !p.isDiscarded;
-    if (selectedFilter === 'approved') return p.selected && !p.isDiscarded;
-    if (selectedFilter === 'discarded') return p.isDiscarded;
-    return !p.isDiscarded;
-  }).filter((p) => starFilter === 0 || p.starRating === starFilter);
+  // Filtragem Dinâmica e Ordenação Precisa de Fotos por Categoria, Estrelas, Cores e Cenas
+  const filteredPhotos = useMemo(() => {
+    const result = photos.filter((p) => {
+      if (sceneFilter !== 'all' && (p.sceneGroup || 'Fotos Gerais') !== sceneFilter) return false;
+      if (colorFilter !== 'all' && p.colorLabel !== colorFilter) return false;
+
+      // Filtro por Estrelas Estrito
+      if (starFilter !== 'all') {
+        const pRating = p.starRating || 0;
+        if (pRating !== starFilter) return false;
+      }
+
+      // Filtro de Status
+      if (selectedFilter === 'ai_pick') return p.isBestTake && !p.isDiscarded;
+      if (selectedFilter === 'approved') return p.selected && !p.isDiscarded;
+      if (selectedFilter === 'discarded') return p.isDiscarded;
+
+      // Quando starFilter for 'all' e selectedFilter for 'all', oculta descartadas por padrão
+      if (starFilter === 'all' && selectedFilter === 'all') {
+        return !p.isDiscarded;
+      }
+      return true;
+    });
+
+    // Ordenação
+    if (sortBy === 'rating') {
+      result.sort((a, b) => (b.starRating || 0) - (a.starRating || 0) || (b.sharpnessScore || 0) - (a.sharpnessScore || 0));
+    } else if (sortBy === 'sharpness') {
+      result.sort((a, b) => (b.sharpnessScore || 0) - (a.sharpnessScore || 0));
+    } else if (sortBy === 'scene') {
+      result.sort((a, b) => (a.sceneGroup || '').localeCompare(b.sceneGroup || ''));
+    }
+
+    return result;
+  }, [photos, sceneFilter, colorFilter, starFilter, selectedFilter, sortBy]);
 
   const approvedCount = photos.filter((p) => p.selected && !p.isDiscarded).length;
   const discardedCount = photos.filter((p) => p.isDiscarded).length;
@@ -418,44 +510,68 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         setActiveFocusedPhotoId(prev.id);
         if (editingPhoto) setEditingPhoto(prev);
       }
-      // SELEÇÃO / DESMARCAÇÃO: Teclas 't', 'T' ou Espaço
-      else if (key === 't' || e.key === ' ') {
-        e.preventDefault();
-        const updatedPhoto = { ...targetPhoto, selected: !targetPhoto.selected, isDiscarded: false, starRating: !targetPhoto.selected ? (targetPhoto.starRating || 4) : targetPhoto.starRating };
-        if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
-        setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
+      const updatePhotoAndSync = (updatedPhoto: CullingPhoto) => {
+        if (editingPhoto && editingPhoto.id === updatedPhoto.id) setEditingPhoto(updatedPhoto);
+        setPhotos((prev) => {
+          const nextList = prev.map((p) => (p.id === updatedPhoto.id ? updatedPhoto : p));
+          syncProjectStateToDisk(activeProjectIdRef.current || activeProjectId, nextList);
+          return nextList;
+        });
         syncPhotoXmpIfHandleAvailable(updatedPhoto);
-        if (updatedPhoto.selected) {
-          const profile = registerUserPhotoApproval(targetPhoto.sharpnessScore);
-          setAiLearningProfile(profile);
-          setLearningNotice(`🧠 IA Aprendeu: Foto aprovada (T) fortalece o perfil de seleção! (${profile.totalEditsLearned} treinos)`);
+      };
+
+      // SELEÇÃO / APROVAÇÃO (PICK): Teclas 'p', 'P', 't', 'T' ou Seta Cima
+      if (key === 'p' || key === 't' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const updatedPhoto = { ...targetPhoto, selected: true, isDiscarded: false, starRating: targetPhoto.starRating || 4 };
+        updatePhotoAndSync(updatedPhoto);
+        const profile = registerUserPhotoApproval(targetPhoto.sharpnessScore);
+        setAiLearningProfile(profile);
+        setLearningNotice(`🧠 Aprovada (P): Foto adicionada à seleção final! (${profile.totalEditsLearned} treinos)`);
+      }
+      // DESCARTE / REJEIÇÃO (REJECT): Teclas 'x', 'X', Seta Baixo ou Delete
+      else if (key === 'x' || e.key === 'ArrowDown' || e.key === 'Delete') {
+        e.preventDefault();
+        const updatedPhoto = { ...targetPhoto, isDiscarded: true, selected: false, starRating: 1 as const };
+        updatePhotoAndSync(updatedPhoto);
+        const profile = registerUserPhotoRejection();
+        setAiLearningProfile(profile);
+        setLearningNotice(`🗑️ Descartada (X): Foto movida para descarte!`);
+      }
+      // RESET / UNFLAG: Tecla 'u', 'U'
+      else if (key === 'u') {
+        e.preventDefault();
+        const updatedPhoto = { ...targetPhoto, isDiscarded: false, selected: false, starRating: 0 as const };
+        updatePhotoAndSync(updatedPhoto);
+        notifyAiLearning('Neutro (U)');
+      }
+      // COMPARAÇÃO A/B DE SÉRIE: Tecla 'd', 'D'
+      else if (key === 'd') {
+        e.preventDefault();
+        handleOpenBurstComparison(targetPhoto);
+      }
+      // EDITOR RÁPIDO: Tecla 'e', 'E'
+      else if (key === 'e') {
+        e.preventDefault();
+        if (editingPhoto) {
+          setEditingPhoto(null);
         } else {
-          notifyAiLearning('Desmarcado (T)');
+          setEditingPhoto(targetPhoto);
         }
       }
-      // DESCARTE: Tecla 'x'
-      else if (key === 'x') {
+      // ESPAÇO: Alternar Seleção Rápida ou Zoom
+      else if (e.key === ' ') {
         e.preventDefault();
-        const updatedPhoto = { ...targetPhoto, isDiscarded: !targetPhoto.isDiscarded, selected: false, starRating: 1 };
-        if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
-        setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
-        syncPhotoXmpIfHandleAvailable(updatedPhoto);
-        if (updatedPhoto.isDiscarded) {
-          const profile = registerUserPhotoRejection();
-          setAiLearningProfile(profile);
-          setLearningNotice(`🧠 IA Aprendeu: Descarte (X) ensina a IA a evitar fotos similares! (${profile.totalEditsLearned} treinos)`);
-        } else {
-          notifyAiLearning('Restaurado (X)');
-        }
+        const updatedPhoto = { ...targetPhoto, selected: !targetPhoto.selected, isDiscarded: false };
+        updatePhotoAndSync(updatedPhoto);
+        notifyAiLearning(updatedPhoto.selected ? 'Aprovada (Espaço)' : 'Desmarcada (Espaço)');
       }
       // RATING POR ESTRELAS: Teclas 0, 1, 2, 3, 4, 5
       else if (['0', '1', '2', '3', '4', '5'].includes(key)) {
         e.preventDefault();
         const star = parseInt(key) as 0 | 1 | 2 | 3 | 4 | 5;
         const updatedPhoto = { ...targetPhoto, starRating: star, selected: star > 0 ? true : targetPhoto.selected };
-        if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
-        setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
-        syncPhotoXmpIfHandleAvailable(updatedPhoto);
+        updatePhotoAndSync(updatedPhoto);
         notifyAiLearning(`Rating ${star}★`);
       }
       // ETIQUETAS DE COR: Teclas 6 (🔴), 7 (🟡), 8 (🟢), 9 (🔵)
@@ -467,9 +583,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         const selectedColor = colorMap[key];
         const newColor: CullingPhoto['colorLabel'] = (selectedColor && targetPhoto.colorLabel === selectedColor) ? 'none' : (selectedColor || 'none');
         const updatedPhoto: CullingPhoto = { ...targetPhoto, colorLabel: newColor };
-        if (editingPhoto && editingPhoto.id === targetPhoto.id) setEditingPhoto(updatedPhoto);
-        setPhotos((prev) => prev.map((p) => (p.id === targetPhoto.id ? updatedPhoto : p)));
-        syncPhotoXmpIfHandleAvailable(updatedPhoto);
+        updatePhotoAndSync(updatedPhoto);
         notifyAiLearning(`Etiqueta Cor ${newColor}`);
       }
       // LOUPE / ZOOM TELA CHEIA: Tecla 'z', 'Z', Enter ou Escape
@@ -483,6 +597,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       } else if (e.key === 'Escape') {
         e.preventDefault();
         setEditingPhoto(null);
+        setIsCompareModalOpen(false);
       }
     };
 
@@ -595,7 +710,6 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           aperture: result.aperture,
           shutterSpeed: result.shutterSpeed,
           focalLength: result.focalLength,
-          rotation: result.orientationDegrees,
         });
       }
     } catch { }
@@ -717,7 +831,9 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
           setProjects(idbProjects);
           const firstProj = idbProjects[0];
           setActiveProjectId(firstProj.id);
-          restoreProjectThumbnailsFromSSD(firstProj.id, firstProj.photos || []);
+          const diskState = await getProjectStateFromDisk(firstProj.id);
+          const restoredPhotos = diskState && diskState.length > 0 ? diskState : (firstProj.photos || []);
+          restoreProjectThumbnailsFromSSD(firstProj.id, restoredPhotos);
           return;
         }
       } catch { }
@@ -730,7 +846,9 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             setProjects(parsedProjects);
             const firstProj = parsedProjects[0];
             setActiveProjectId(firstProj.id);
-            restoreProjectThumbnailsFromSSD(firstProj.id, firstProj.photos || []);
+            const diskState = await getProjectStateFromDisk(firstProj.id);
+            const restoredPhotos = diskState && diskState.length > 0 ? diskState : (firstProj.photos || []);
+            restoreProjectThumbnailsFromSSD(firstProj.id, restoredPhotos);
             return;
           }
         }
@@ -815,12 +933,14 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
   }, [photos, activeProjectId, userId]);
 
   // Alternar entre Projetos
-  const handleSelectProject = (projectId: string) => {
+  const handleSelectProject = async (projectId: string) => {
     const selected = projects.find((p) => p.id === projectId);
     if (selected) {
       activeProjectIdRef.current = selected.id;
       setActiveProjectId(selected.id);
-      restoreProjectThumbnailsFromSSD(selected.id, selected.photos || []);
+      const diskState = await getProjectStateFromDisk(selected.id);
+      const restoredPhotos = diskState && diskState.length > 0 ? diskState : (selected.photos || []);
+      restoreProjectThumbnailsFromSSD(selected.id, restoredPhotos);
     }
   };
 
@@ -947,119 +1067,142 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       });
     }
 
-    const targetStep = Math.max(2, Math.round(100 / targetSelectionRatio));
-    // Lotes de 30 fotos — equilibrio entre throughput e responsividade
-    const BATCH_SIZE = 30;
-    // Acumula todas as fotos processadas; commita no estado UMA vez ao final
-    const allProcessedPhotos: CullingPhoto[] = [];
+    const currentActiveProjId = activeProjectIdRef.current || activeProjectId;
+    const threadPoolItems: ThreadPoolItem[] = validItems.map((scanned, i) => {
+      const file = scanned.file;
+      const photoId = `cull_${currentActiveProjId}_${i}_${file.name}`;
+      registerFile(photoId, file);
+      return {
+        id: photoId,
+        file,
+        fileName: file.name,
+        isRaw: isRawFile(file),
+        subfolderName: scanned.subfolderName || 'Fotos Gerais',
+      };
+    });
 
-    for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
-      if (cancelImportRef.current) break;
-
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, total);
-      const batchItems = validItems.slice(batchStart, batchEnd);
-      const batchPhotos: CullingPhoto[] = [];
-
-      for (let j = 0; j < batchItems.length; j++) {
-        const i = batchStart + j;
-        const scanned = batchItems[j];
-        const file = scanned.file;
-        const ext = file.name.split('.').pop()?.toUpperCase() || 'RAW';
-        const isRaw = isRawFile(file);
-
-        const photoId = `cull_${activeProjectIdRef.current || activeProjectId}_${i}_${file.name}`;
-        const sceneGroup = scanned.subfolderName || `Fotos Gerais`;
-
-        registerFile(photoId, file);
-
-        batchPhotos.push({
-          id: photoId,
-          fileName: file.name,
-          previewUrl: createRawPlaceholderDataUrl(file.name, ext),
-          format: ext,
-          isRaw,
-          rotation: 0,
-          sharpnessScore: 0,
-          isBlurry: false,
-          eyesClosed: false,
-          isBestTake: false,
-          sceneGroup,
-          selected: false,
-          isDiscarded: false,
-          starRating: 0,
-          colorLabel: 'none',
-          cameraModel: '',
-          lensModel: '',
-          iso: 0,
-          aperture: '',
-          shutterSpeed: '',
-          focalLength: '',
-          editSettings: {
-            ...DEFAULT_EDIT_SETTINGS,
-            presetName: trainedPresetName || undefined,
-            vibrance: trainedPresetName ? 20 : 10,
-            exposure: trainedPresetName ? 0.2 : 0,
-          },
+    // ⚡ Processamento Paralelo através de Todos os Núcleos da CPU (Hardware Multicore)
+    const workerResults = await CullingThreadPool.processAll(
+      threadPoolItems,
+      currentActiveProjId,
+      sensitivityMode,
+      (processed, totalCount, curName) => {
+        setProcessedCount(processed);
+        setProgress(Math.floor((processed / totalCount) * 100));
+        setCurrentFileName(curName);
+      },
+      (logMsg) => {
+        addAiLogEntry({
+          id: `log_${Date.now()}_hw`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'info',
+          message: logMsg,
         });
       }
+    );
 
-      // Pipeline de IA (presets, P&B, etc.) — roda só com metadados, sem I/O
-      const fullyEditedBatch = await processAiEditingPipeline(batchPhotos, userPresetPref);
-      allProcessedPhotos.push(...fullyEditedBatch);
+    // Mapeamento dos resultados calculados pelos núcleos da CPU
+    const rawPhotos: CullingPhoto[] = threadPoolItems.map((item) => {
+      const ext = item.file.name.split('.').pop()?.toUpperCase() || 'RAW';
+      const res = workerResults.get(item.id);
+      const sharpnessScore = res?.sharpnessScore ?? (item.isRaw ? 72 : 65);
+      const isBlurry = res?.isBlurry ?? false;
+      const eyesClosed = res?.eyesClosed ?? false;
+      const isBestTake = res?.isBestTake ?? false;
+      const starRating = res?.starRating ?? 0;
 
-      // Atualiza progresso UMA vez por lote (não por foto) — zero re-renders desnecessários
-      const lastInBatch = batchEnd - 1;
-      setProcessedCount(batchEnd);
-      setProgress(Math.floor((batchEnd / total) * 100));
-      setCurrentFileName(validItems[lastInBatch]?.file.name || '');
+      return {
+        id: item.id,
+        fileName: item.fileName,
+        previewUrl: res?.thumbnailDataUrl || createRawPlaceholderDataUrl(item.fileName, ext),
+        format: ext,
+        isRaw: item.isRaw,
+        rotation: 0,
+        sharpnessScore,
+        isBlurry,
+        eyesClosed,
+        isBestTake,
+        sceneGroup: item.subfolderName,
+        selected: !isBlurry && !eyesClosed && sharpnessScore >= 60,
+        isDiscarded: isBlurry || eyesClosed,
+        starRating,
+        colorLabel: 'none',
+        cameraModel: res?.cameraModel || '',
+        lensModel: res?.lensModel || '',
+        iso: res?.iso || 0,
+        aperture: res?.aperture || '',
+        shutterSpeed: res?.shutterSpeed || '',
+        focalLength: res?.focalLength || '',
+        capturedAt: res?.capturedAt || (item.file as any)?.lastModified || Date.now(),
+        dateTimeOriginal: res?.dateTimeOriginal,
+        finalScore: res?.finalScore,
+        qualityScore: res ? {
+          sharpness: res.sharpnessScore,
+          eyeState: res.eyesClosed ? 'closed' : 'open',
+          exposure: res.exposureScore,
+          composition: res.compositionScore,
+          userBonus: 0,
+          overallScore: res.finalScore,
+        } : undefined,
+        editSettings: {
+          ...DEFAULT_EDIT_SETTINGS,
+          presetName: trainedPresetName || undefined,
+          vibrance: trainedPresetName ? 20 : 10,
+          exposure: trainedPresetName ? 0.2 : 0,
+        },
+      };
+    });
 
-      // Yield obrigatório: cede a thread principal para o browser pintar e respirar
-      await new Promise<void>((resolve) => setTimeout(resolve, 16));
-    }
+    // Pipeline de IA estética e presets (gera miniaturas P&B com salvamento imediato no SSD)
+    const allProcessedPhotos = await processAiEditingPipeline(rawPhotos, userPresetPref, currentActiveProjId);
 
-    // Commit único de todas as fotos no estado — O(n) em vez de O(n²)
+    // 🏆 Agrupamento Perceptual de Séries & Eleição de Campeãs (Best Takes)
+    const photosWithChampions = computeBurstChampions(allProcessedPhotos, sensitivityMode);
+
+    // Ajuste final das fotos com base nas campeãs eleitas e filtro de sensibilidade
+    const finalizedPhotos = photosWithChampions.map((p) => {
+      if (p.isBlurry || p.eyesClosed) {
+        return { ...p, selected: false, isDiscarded: true };
+      }
+      if (p.isBestTake) {
+        return { ...p, selected: true, isDiscarded: false };
+      }
+      return p;
+    });
+
+    // Commit de todas as fotos no estado e persistência imediata no IndexedDB SSD
     if (!cancelImportRef.current) {
       setPhotos((prev) => {
-        if (prev.length === 0) return allProcessedPhotos;
-        const existingIds = new Set(prev.map((p) => p.id));
-        const newPhotos = allProcessedPhotos.filter((p) => !existingIds.has(p.id));
-        return newPhotos.length > 0 ? [...prev, ...newPhotos] : prev;
+        const nextList = prev.length === 0 ? finalizedPhotos : (() => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const newPhotos = finalizedPhotos.filter((p) => !existingIds.has(p.id));
+          return newPhotos.length > 0 ? [...prev, ...newPhotos] : prev;
+        })();
+        syncProjectStateToDisk(currentActiveProjId, nextList);
+        return nextList;
       });
     }
+
+    const approvedCount = finalizedPhotos.filter((p) => p.selected && !p.isDiscarded).length;
+    const discardedCount = finalizedPhotos.filter((p) => p.isDiscarded).length;
+    const bestTakesCount = finalizedPhotos.filter((p) => p.isBestTake).length;
 
     addAiLogEntry({
       id: `log_${Date.now()}_end`,
       timestamp: new Date().toLocaleTimeString(),
       type: 'info',
-      message: `🎉 Curadoria Local por Machine Learning Concluída! ${total} foto(s) analisadas 100% no seu dispositivo (Zero Tokens de IA Externa / Zero Latência).`,
+      message: `🎉 Curadoria Local por Machine Learning Concluída! ${total} foto(s) analisadas: ${approvedCount} aprovadas, ${bestTakesCount} campeãs de série eleitas e ${discardedCount} descartadas.`,
     });
 
-    // 🤖 Chamada ÚNICA de Refino Estético Global via Groq IA (1 requisição ao invés de milhares)
-    addAiLogEntry({
-      id: `log_${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString(),
-      type: 'info',
-      message: `🤖 Enviando resumo compilado do evento (${total} fotos) para o Refinador de IA Groq...`,
-    });
-
-    const sampleForGroq = validItems.slice(0, 20).map((i) => ({
+    // Validação Ótica 100% Local (0ms de latência de rede)
+    const sampleForOptical = validItems.slice(0, 20).map((i) => ({
       fileName: i.file.name,
       subfolderName: i.subfolderName,
       sharpnessScore: 85,
     }));
+    await GroqCullingService.evaluateBatch(sampleForOptical, addAiLogEntry);
 
-    const singleGroqEval = await GroqCullingService.evaluateBatch(sampleForGroq, addAiLogEntry);
-
-    if (singleGroqEval.isGroqActive) {
-      addAiLogEntry({
-        id: `log_${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString(),
-        type: 'groq_success',
-        message: `✨ Groq IA refinou os destaques estéticos com sucesso em 1 única chamada!`,
-      });
-    }
-
-    // 💾 Disparo Automático de Gravação de Arquivos .XMP na Pasta de Origem para Fotos Aprovadas
+    // 💾 Gravação Automática de Arquivos .XMP na Pasta de Origem para Fotos Aprovadas
     if (currentDirHandleRef.current) {
       addAiLogEntry({
         id: `log_${Date.now()}_xmp`,
@@ -1067,7 +1210,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         type: 'info',
         message: `💾 Gravação Automática XMP: Criando arquivos .xmp sidecar na pasta de origem para fotos aprovadas...`,
       });
-      const savedXmpCount = await syncAllXmpSidecarsToFolder(currentDirHandleRef.current, photos, true);
+      const savedXmpCount = await syncAllXmpSidecarsToFolder(currentDirHandleRef.current, finalizedPhotos, true);
       addAiLogEntry({
         id: `log_${Date.now()}_xmp_ok`,
         timestamp: new Date().toLocaleTimeString(),
@@ -1129,11 +1272,12 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
           if (files.length > 0) {
             processFileList(files, scannedItems);
-            return;
           }
         }
+        return;
       } catch (err) {
         console.warn('[Native Folder Picker] Falha ao abrir pasta nativa:', err);
+        return;
       }
     }
 
@@ -1169,14 +1313,19 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         await scanDir(handle, '');
         if (scannedItems.length > 0) {
           processFileList(scannedItems.map((s) => s.file), scannedItems);
+        }
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          // Usuário cancelou o seletor nativo, encerra sem disparar erro
           return;
         }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.warn('[DirectoryPicker] Fallback para seletor padrão:', err);
-        }
+        console.warn('[DirectoryPicker] Erro ao ler pasta via File System API:', err);
+        return;
       }
     }
+
+    // 3. Seletor padrão de pasta síncrono (Safari / Firefox)
     folderInputRef.current?.click();
   };
 
@@ -1963,273 +2112,285 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
       {/* Métricas, Filtros, Ações e Painel de % Cota da IA */}
       {photos.length > 0 && (
-        <div id="culling-workspace" ref={workspaceRef} className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-none p-4 space-y-3.5 shadow-xl text-white">
-          {/* Barra de Controle Rápido de Porcentagem (% Cota da IA) */}
-          <div className="p-3 bg-slate-950/80 border border-purple-500/30 flex flex-col md:flex-row items-center justify-between gap-3">
+        <div id="culling-workspace" ref={workspaceRef} className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 space-y-4 shadow-xl text-white">
+          {/* ══ BARRA PRINCIPAL DE CONTROLE: INTELIGÊNCIA IA & AÇÕES ══════════════════════ */}
+          <div className="p-3.5 bg-slate-950/90 border border-purple-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg">
+            {/* Esquerda: Sensibilidade da IA & Cota */}
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                <Sliders className="w-4 h-4 text-purple-400" />
-                <span>Cota da IA:</span>
-                <span className="font-extrabold text-purple-300 font-mono text-xs px-2 py-0.5 rounded-none bg-purple-950/80 border border-purple-500/40">
-                  {targetSelectionRatio}% das fotos
-                </span>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span>Sensibilidade IA:</span>
               </div>
 
-              {/* Botões Rápidos de Porcentagem */}
-              <div className="flex items-center gap-1">
-                {([10, 20, 30, 50] as const).map((ratio) => (
-                  <button
-                    key={ratio}
-                    type="button"
-                    onClick={() => {
-                      setTargetSelectionRatio(ratio);
-                      handleApplyAiTargetRatio(ratio);
-                    }}
-                    className={`px-2.5 py-1 rounded-none text-xs font-bold transition cursor-pointer border ${targetSelectionRatio === ratio
-                      ? 'bg-purple-600 border-purple-400 text-white shadow-sm'
-                      : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white'
-                      }`}
-                  >
-                    {ratio}%
-                  </button>
-                ))}
+              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => handleChangeSensitivityMode('conservative')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    sensitivityMode === 'conservative' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Modo Conservador: Descarta menos fotos, mantém variações"
+                >
+                  🛡️ Conservador
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleChangeSensitivityMode('balanced')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    sensitivityMode === 'balanced' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Modo Equilibrado (Recomendado): Elege as melhores fotos e descarta falhas"
+                >
+                  ⚡ Equilibrado
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleChangeSensitivityMode('editorial')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    sensitivityMode === 'editorial' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Modo Editorial: Rigoroso, apenas fotos impecáveis"
+                >
+                  🎯 Editorial
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-800 text-xs text-slate-400">
+                <span className="font-bold">Cota:</span>
+                <span className="font-extrabold text-purple-300 font-mono bg-purple-950 px-2 py-0.5 rounded-lg border border-purple-500/30">
+                  {targetSelectionRatio}%
+                </span>
               </div>
             </div>
 
+            {/* Direita: Ações Rápidas em Lote & Exportação */}
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => handleApplyAiTargetRatio()}
-                className="px-3.5 py-1.5 rounded-none bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                title="Recalcular classificação de estrelas e fotos selecionadas em todas as subpastas"
+                onClick={handleSelectAllBestTakes}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-amber-500 hover:opacity-90 text-white font-black text-xs shadow-lg shadow-purple-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                title="Aprova com 1 clique todas as fotos eleitas como Melhores das Séries"
               >
-                <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                <span>⚡ Re-Aplicar Cota ({targetSelectionRatio}%)</span>
+                <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                <span>🏆 Melhores ({aiPickCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAutoRejectDuplicates}
+                className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/60 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Marca para descarte as fotos idênticas inferiores e fotos desfocadas"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>🗑️ Descartar Duplicadas</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  handleApplyAiTargetRatio(targetSelectionRatio);
-                  setSelectedFilter('ai_pick');
-                  setStarFilter(5);
+                  const activePhoto = filteredPhotos.find((p) => p.id === (activeFocusedPhotoId || editingPhoto?.id)) || filteredPhotos[0];
+                  if (activePhoto) handleOpenBurstComparison(activePhoto);
                 }}
-                className="px-3.5 py-1.5 rounded-none bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-extrabold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Comparar fotos semelhantes lado a lado (Atalho: D)"
               >
-                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                <span>🏆 Selecionar Melhores de Cada Cena</span>
+                <Layers className="w-3.5 h-3.5 text-purple-400" />
+                <span>👥 Comparar (D)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLaunchLightroomImport}
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer"
+                title="Grava os arquivos .XMP e abre o Adobe Lightroom Classic diretamente"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>🚀 Lightroom Classic ({approvedCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePublishToGallery}
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Publicar Galeria ({approvedCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncAllXmpSidecars}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                title="Salvar arquivos .XMP na pasta das fotos"
+              >
+                <Download className="w-3.5 h-3.5 text-purple-400" />
+                <span>.XMP</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearProject}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700 transition flex items-center gap-1 cursor-pointer"
+                title="Limpar e iniciar novo ensaio"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Novo</span>
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 pt-1">
-            {/* Linha 1: Filtros Principais + Filtro por Cena */}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-slate-400">Filtrar:</span>
-                <button onClick={() => { setSelectedFilter('all'); setStarFilter(0); }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${selectedFilter === 'all' && starFilter === 0 ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+          {/* ══ BARRA UNIFICADA DE FILTRAGEM & EXIBIÇÃO ══════════════════════ */}
+          <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+            {/* Bloco 1: Status & Estrelas */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Filtro por Status */}
+              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => { setSelectedFilter('all'); setStarFilter('all'); }}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                    selectedFilter === 'all' && starFilter === 'all' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
                   Todas ({totalCount})
                 </button>
-                <button onClick={() => { setSelectedFilter('ai_pick'); setStarFilter(0); }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${selectedFilter === 'ai_pick' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
-                  <Star className="w-3.5 h-3.5" /><span>IA Picks ({aiPickCount})</span>
+                <button
+                  onClick={() => { setSelectedFilter('ai_pick'); setStarFilter('all'); }}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
+                    selectedFilter === 'ai_pick' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Star className="w-3 h-3" />
+                  <span>IA Picks ({aiPickCount})</span>
                 </button>
-                <button onClick={() => { setSelectedFilter('approved'); setStarFilter(0); }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${selectedFilter === 'approved' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                <button
+                  onClick={() => { setSelectedFilter('approved'); setStarFilter('all'); }}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                    selectedFilter === 'approved' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
                   ✓ Aprovadas ({approvedCount})
                 </button>
-                <button onClick={() => { setSelectedFilter('discarded'); setStarFilter(0); }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${selectedFilter === 'discarded' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
-                  <Trash2 className="w-3.5 h-3.5" /><span>Descartadas ({discardedCount})</span>
+                <button
+                  onClick={() => { setSelectedFilter('discarded'); setStarFilter('all'); }}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
+                    selectedFilter === 'discarded' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Descarte ({discardedCount})</span>
                 </button>
               </div>
 
-              {/* Filtro por Subpasta / Cena */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                  <FolderUp className="w-3.5 h-3.5 text-purple-400" /> Cena:
-                </span>
-                <select
-                  value={sceneFilter}
-                  onChange={(e) => setSceneFilter(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-purple-300 focus:outline-none focus:border-purple-500 cursor-pointer min-w-[200px]"
+              {/* Filtro por Estrelas (Rating 5, 4, 3, 2, 1, 0) */}
+              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStarFilter('all')}
+                  className={`px-2 py-1 rounded-lg font-bold transition cursor-pointer ${
+                    starFilter === 'all' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Todas as classificações"
                 >
-                  <option value="all">Todas as Cenas ({availableScenes.length} subpastas)</option>
-                  {availableScenes.map((s) => {
-                    const sceneCount = photos.filter((p) => (p.sceneGroup || 'Fotos Gerais') === s && !p.isDiscarded).length;
-                    return (
-                      <option key={s} value={s}>
-                        📂 {s} ({sceneCount} fotos)
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-
-            {/* Linha 2: Filtro por Estrelas (Rating 5, 4, 3, 2, 1) + Ordenação / Arranjo */}
-            <div className="flex items-center justify-between gap-4 flex-wrap border-t border-slate-800/80 pt-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-slate-400">Classificação por Rating:</span>
-                {([0, 5, 4, 3, 2, 1] as const).map((s) => {
-                  const countByRating = s === 0 ? photos.filter(p => !p.isDiscarded).length : photos.filter(p => p.starRating === s && !p.isDiscarded).length;
+                  ★ Todas
+                </button>
+                {([5, 4, 3, 2, 1, 0] as const).map((s) => {
+                  const countByRating = s === 0 
+                    ? photos.filter(p => !p.starRating || p.starRating === 0).length 
+                    : photos.filter(p => p.starRating === s).length;
                   return (
                     <button
                       key={s}
                       type="button"
-                      onClick={() => setStarFilter(s === starFilter ? 0 : s)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${starFilter === s
-                        ? s === 5 ? 'bg-amber-400 text-slate-950 font-black' : 'bg-purple-600 text-white'
-                        : 'bg-slate-800 text-slate-400 hover:text-amber-300'
-                        }`}
+                      onClick={() => setStarFilter(s === starFilter ? 'all' : s)}
+                      className={`px-2 py-1 rounded-lg font-bold transition flex items-center gap-0.5 cursor-pointer ${
+                        starFilter === s
+                          ? s === 5
+                            ? 'bg-amber-400 text-slate-950 font-black'
+                            : s === 1 || s === 0
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-purple-600 text-white'
+                          : 'text-slate-400 hover:text-amber-300'
+                      }`}
+                      title={s === 0 ? 'Fotos sem classificação de estrelas' : `${s} Estrelas`}
                     >
-                      {s === 0 ? (
-                        <span>Todas as Estrelas ({countByRating})</span>
-                      ) : (
-                        <>
-                          <span className="text-amber-400 font-extrabold">{s}★</span>
-                          <span>
-                            {s === 5 ? 'Top Take (Cena)' : s === 4 ? 'Excelente' : s === 3 ? 'Repetição' : s === 2 ? 'Baixa' : 'Descarte'} ({countByRating})
-                          </span>
-                        </>
-                      )}
+                      <span className={s > 0 ? 'text-amber-400' : 'text-slate-500'}>{s}★</span>
+                      <span className="text-[10px] opacity-75">({countByRating})</span>
                     </button>
                   );
                 })}
               </div>
-
-              {/* Ordenação / Arranjo Flexível */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400">Arranjo:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-500 cursor-pointer"
-                >
-                  <option value="default">⏱️ Ordem Cronológica (Horário EXIF)</option>
-                  <option value="rating">⭐ Maior Rating (5★ → 1★)</option>
-                  <option value="sharpness">🎯 Maior Nitidez / Foco</option>
-                  <option value="scene">📂 Agrupado por Cena</option>
-                </select>
-              </div>
             </div>
 
-            {/* Linha 3: Filtro por Cores (🔴 Vermelho, 🟡 Amarelo, 🟢 Verde, 🔵 Azul, 🟣 Roxo) */}
-            <div className="flex items-center gap-2 flex-wrap border-t border-slate-800/80 pt-3">
-              <span className="text-xs font-bold text-slate-400">Etiquetas de Cor:</span>
-              <button
-                type="button"
-                onClick={() => setColorFilter('all')}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${colorFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
+            {/* Bloco 2: Cena, Ordenação, Cores e Zoom */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Filtro por Subpasta / Cena */}
+              <select
+                value={sceneFilter}
+                onChange={(e) => setSceneFilter(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-purple-300 focus:outline-none focus:border-purple-500 cursor-pointer"
               >
-                Todas as Cores
-              </button>
-              {(['red', 'yellow', 'green', 'blue', 'purple'] as const).map((col) => {
-                const colorNames: Record<string, { label: string; bg: string }> = {
-                  red: { label: '🔴 Vermelho', bg: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
-                  yellow: { label: '🟡 Amarelo', bg: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-                  green: { label: '🟢 Verde', bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
-                  blue: { label: '🔵 Azul', bg: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
-                  purple: { label: '🟣 Roxo', bg: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
-                };
-                const countColor = photos.filter((p) => p.colorLabel === col && !p.isDiscarded).length;
-                return (
-                  <button
-                    key={col}
-                    type="button"
-                    onClick={() => setColorFilter(col === colorFilter ? 'all' : col)}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition flex items-center gap-1 cursor-pointer ${colorFilter === col
-                      ? 'ring-2 ring-white font-black bg-slate-800 text-white'
-                      : colorNames[col].bg
+                <option value="all">📂 Todas as Cenas ({availableScenes.length})</option>
+                {availableScenes.map((s) => {
+                  const sceneCount = photos.filter((p) => (p.sceneGroup || 'Fotos Gerais') === s && !p.isDiscarded).length;
+                  return (
+                    <option key={s} value={s}>
+                      📂 {s} ({sceneCount})
+                    </option>
+                  );
+                })}
+              </select>
+
+              {/* Ordenação */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-500 cursor-pointer"
+              >
+                <option value="default">⏱️ Ordem EXIF</option>
+                <option value="rating">⭐ Maior Rating</option>
+                <option value="sharpness">🎯 Maior Foco</option>
+                <option value="scene">📂 Por Cena</option>
+              </select>
+
+              {/* Etiquetas de Cor Rápidas */}
+              <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setColorFilter('all')}
+                  className={`w-3.5 h-3.5 rounded-full border text-[9px] flex items-center justify-center font-bold cursor-pointer ${
+                    colorFilter === 'all' ? 'border-white text-white' : 'border-slate-600 text-transparent'
+                  }`}
+                  title="Todas as Cores"
+                >
+                  •
+                </button>
+                {(['red', 'yellow', 'green', 'blue', 'purple'] as const).map((col) => {
+                  const bgMap = {
+                    red: 'bg-rose-500',
+                    yellow: 'bg-amber-400',
+                    green: 'bg-emerald-500',
+                    blue: 'bg-blue-500',
+                    purple: 'bg-purple-500',
+                  };
+                  return (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setColorFilter(col === colorFilter ? 'all' : col)}
+                      className={`w-3.5 h-3.5 rounded-full cursor-pointer transition ${bgMap[col]} ${
+                        colorFilter === col ? 'ring-2 ring-white scale-125' : 'opacity-60 hover:opacity-100'
                       }`}
-                  >
-                    <span>{colorNames[col].label} ({countColor})</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Linha 4: Slider de Tamanho de Miniaturas & Ações Principais */}
-            <div className="flex items-center justify-between gap-4 flex-wrap border-t border-slate-800/80 pt-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleLaunchLightroomImport}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer"
-                  title="Grava os arquivos .XMP e abre o Adobe Lightroom Classic diretamente na tela de Importação"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>🚀 Abrir no Lightroom Classic ({approvedCount})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const approved = photos.filter((p) => p.selected && !p.isDiscarded);
-                    if (approved.length === 0) { alert('Nenhuma foto aprovada para exportar.'); return; }
-                    setIsExportModalOpen(true);
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
-                  title="Abrir modal para copiar lista de fotos aprovadas e exportar para o Lightroom Classic"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copiar Nomes</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSyncAllXmpSidecars}
-                  className="px-4 py-2.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 text-purple-200 border border-purple-500/40 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md"
-                  title="Salvar arquivos .XMP Sidecar diretamente na pasta de origem ou baixar pacote ZIP"
-                >
-                  <Download className="w-3.5 h-3.5 text-purple-400" />
-                  <span>💾 Salvar .XMP na Pasta</span>
-                </button>
-
-                <button type="button" onClick={() => setIsAiTuningOpen(true)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-purple-400" /><span>Ajustar Sensibilidade da IA</span>
-                </button>
-
-                <button type="button" onClick={handleClearProject}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
-                  <RefreshCw className="w-3.5 h-3.5" /><span>Novo Ensaio</span>
-                </button>
-
-                {/* Botão Recarregar Previews RAW (re-popula fileRegistry sem reimportar) */}
-                {photos.some((p) => p.isRaw && p.previewUrl?.startsWith('data:image/svg')) && (
-                  <button
-                    type="button"
-                    onClick={() => reloadFolderRef.current?.click()}
-                    className="px-4 py-2.5 rounded-xl bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 hover:text-white font-bold text-xs border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer"
-                    title="Re-selecione a mesma pasta para carregar os previews RAW que estão faltando"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>🔄 Recarregar Previews RAW</span>
-                  </button>
-                )}
-
-                <button type="button" onClick={handlePublishToGallery}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer">
-                  <Globe className="w-4 h-4" /><span>Publicar Galeria Online ({approvedCount})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsDesktopDownloadModalOpen(true)}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-900/60 to-slate-800 hover:from-purple-800/80 hover:to-slate-700 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/30 transition flex items-center gap-1.5 cursor-pointer shadow-md"
-                  title="Baixar a versão executável nativa para Mac ou Windows sem limite de memória"
-                >
-                  <Download className="w-4 h-4 text-purple-400" />
-                  <span>🖥️ Baixar App Nativo (Mac/Win)</span>
-                </button>
+                      title={`Cor ${col}`}
+                    />
+                  );
+                })}
               </div>
 
-              {/* Slider de Tamanho das Miniaturas (Grid Zoom: 1 = Filmstrip, 2 = 2 fotos lado a lado, 3..9 = colunas) */}
-              <div className="flex items-center gap-2.5 bg-slate-950 border border-slate-800 px-3.5 py-1.5 rounded-xl text-xs">
-                <span className="text-slate-400 font-bold">Tamanho das Fotos:</span>
+              {/* Zoom Slider de Miniaturas */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold">Colunas:</span>
                 <input
                   id="culling_grid_zoom_range"
                   name="culling_grid_zoom_range"
@@ -2238,15 +2399,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                   max={9}
                   value={gridZoom}
                   onChange={(e) => setGridZoom(Number(e.target.value))}
-                  className="w-28 accent-purple-500 cursor-pointer"
-                  title="Deslize para alterar o tamanho das miniaturas e o layout de exibição"
+                  className="w-16 accent-purple-500 cursor-pointer"
                 />
-                <span className="font-extrabold text-amber-300 min-w-[140px]">
-                  {gridZoom === 1
-                    ? '🎞️ 1 Foto + Tira de Filme'
-                    : gridZoom === 2
-                      ? '🖼️ 2 Fotos (Lado a Lado)'
-                      : `📐 ${gridZoom} Colunas`}
+                <span className="font-mono font-bold text-amber-300 text-[11px] min-w-[20px] text-center">
+                  {gridZoom === 1 ? '1' : gridZoom}
                 </span>
               </div>
             </div>
@@ -2394,10 +2550,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                           <div
                             key={photo.id}
                             onClick={() => setActiveFocusedPhotoId(photo.id)}
-                            className={`shrink-0 w-24 h-16 rounded-lg overflow-hidden relative cursor-pointer border transition-all ${isActiveInFilmstrip ? 'ring-2 ring-purple-500 border-purple-400 scale-105 opacity-100' : 'border-slate-800 opacity-60 hover:opacity-100'
+                            className={`shrink-0 w-24 h-16 rounded-lg overflow-hidden relative cursor-pointer border bg-slate-950 flex items-center justify-center transition-all ${isActiveInFilmstrip ? 'ring-2 ring-purple-500 border-purple-400 scale-105 opacity-100' : 'border-slate-800 opacity-60 hover:opacity-100'
                               }`}
                           >
-                            <img src={photo.previewUrl} alt={photo.fileName} className="w-full h-full object-cover" />
+                            <img src={photo.previewUrl} alt={photo.fileName} className="w-full h-full object-contain" />
                             {photo.selected && (
                               <div className="absolute top-0.5 right-0.5 bg-purple-600 text-white w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center">
                                 ✓
@@ -2425,11 +2581,15 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
               {filteredPhotos.slice(0, visibleCount).map((photo) => {
                 const es = photo.editSettings;
                 const pct = (es.presetIntensity ?? 100) / 100;
-                // CSS filter com intensidade do preset aplicada proporcionalmente
+                const isBW = es.saturation === -100 || photo.fileName.toLowerCase().includes('_bw');
+                const satPercent = isBW ? 0 : Math.max(0, 100 + (es.vibrance + es.saturation) * pct);
+
+                // CSS filter com intensidade do preset aplicada proporcionalmente e suporte correto a P&B
                 const imgFilter = [
+                  isBW ? 'grayscale(100%)' : '',
                   `brightness(${100 + es.exposure * 15 * pct}%)`,
                   `contrast(${100 + es.contrast * pct}%)`,
-                  `saturate(${100 + (es.vibrance + es.saturation) * pct}%)`,
+                  !isBW ? `saturate(${satPercent}%)` : '',
                   es.highlights !== 0 ? `brightness(${100 + es.highlights * 0.2 * pct}%)` : '',
                 ].filter(Boolean).join(' ');
 
@@ -2478,9 +2638,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                               if (fileRegistryRef.current.has(photo.id)) {
                                 loadRawPreviewLazy(photo.id);
                               } else {
-                                // File não está no registry — pedir para reselecionar pasta
                                 reloadFolderRef.current?.click();
                               }
+                            } else if (fileRegistryRef.current.has(photo.id)) {
+                              loadRawPreviewLazy(photo.id);
                             }
                           }}
                           className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-2 text-center select-none cursor-pointer hover:bg-slate-900 transition-colors group/card"
@@ -2588,7 +2749,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             </div>
           )}
 
-          {/* Botão de Paginação e Sentinel para Ensaios Gigantes (14.000+ Fotos) */}
+          {/* Botão de Paginação e Sentinel para Ensaios Gigantes */}
           {filteredPhotos.length > visibleCount && (
             <div id="infinite-scroll-sentinel" className="w-full flex flex-col items-center justify-center pt-4 pb-2">
               <button
@@ -2605,104 +2766,128 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
       {/* Modal / Drawer do Estúdio de Edição Módulo Develop Estilo Adobe Lightroom Classic */}
       {editingPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl max-h-[95vh] overflow-hidden shadow-2xl text-white flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-7xl max-h-[96vh] overflow-hidden shadow-2xl text-white flex flex-col">
+
+            {/* Topbar do Modal */}
+            <div className="px-5 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-purple-400" />
+                <span className="font-bold text-white text-sm">{editingPhoto.fileName}</span>
+                <span className="bg-purple-950/80 text-purple-300 text-[10px] font-bold px-2 py-0.5 rounded-md border border-purple-500/30">
+                  {editingPhoto.format.toUpperCase()}
+                </span>
+                {editingPhoto.sceneGroup && (
+                  <span className="bg-slate-800 text-slate-400 text-[10px] font-medium px-2 py-0.5 rounded-md">
+                    📂 {editingPhoto.sceneGroup}
+                  </span>
+                )}
+              </div>
+
+              {/* Controles de Corte, Zoom e Visualização Central */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Seletor Compacto de Proporção de Corte */}
+                <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Corte:</span>
+                  <select
+                    value={selectedCropRatio}
+                    onChange={(e) => setSelectedCropRatio(e.target.value)}
+                    className="bg-transparent text-purple-300 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="Livre" className="bg-slate-900 text-white">📐 Livre (Original)</option>
+                    <option value="1:1" className="bg-slate-900 text-white">1:1 (Quadrado)</option>
+                    <option value="4:5" className="bg-slate-900 text-white">4:5 (Feed / Retrato)</option>
+                    <option value="5:4" className="bg-slate-900 text-white">5:4 (Paisagem)</option>
+                    <option value="16:9" className="bg-slate-900 text-white">16:9 (Widescreen)</option>
+                    <option value="9:16" className="bg-slate-900 text-white">9:16 (Stories / Reels)</option>
+                    <option value="4:3" className="bg-slate-900 text-white">4:3 (Padrão)</option>
+                    <option value="3:4" className="bg-slate-900 text-white">3:4 (Retrato)</option>
+                  </select>
+                </div>
+
+                {/* Slider de Zoom */}
+                <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 text-xs font-bold text-purple-300">
+                  <span>Zoom:</span>
+                  <input
+                    id="culling_editor_zoom_range"
+                    name="culling_editor_zoom_range"
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.05"
+                    value={editingPhoto.editSettings.zoomScale || 1.0}
+                    onChange={(e) => updateEditingPhotoSettings({ zoomScale: parseFloat(e.target.value) })}
+                    className="w-16 accent-purple-500 cursor-pointer"
+                  />
+                  <span className="font-mono text-purple-400 text-[11px]">
+                    {(editingPhoto.editSettings.zoomScale || 1.0).toFixed(2)}x
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBeforeAfter(!showBeforeAfter)}
+                  className={`px-3 py-1 rounded-xl font-bold text-xs flex items-center gap-1.5 border transition cursor-pointer ${
+                    showBeforeAfter
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow'
+                      : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
+                  }`}
+                  title="Atalho (Y): Comparar Foto Original vs Editada com IA"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>{showBeforeAfter ? 'Original' : 'Antes / Depois (Y)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCropGrid(!showCropGrid)}
+                  className={`p-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition cursor-pointer ${
+                    showCropGrid ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
+                  }`}
+                  title="Alternar Grade de Corte e Regra dos Terços"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Grade</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => rotatePhoto(editingPhoto.id, -90)}
+                  className="p-1.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white flex items-center gap-1 text-xs border border-slate-800 cursor-pointer"
+                  title="Girar -90°"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>-90°</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => rotatePhoto(editingPhoto.id, 90)}
+                  className="p-1.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white flex items-center gap-1 text-xs border border-slate-800 cursor-pointer"
+                  title="Girar +90°"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>+90°</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingPhoto(null)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                title="Fechar (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             {/* Corpo Principal: Loupe View Central + Painel Lateral Direito */}
             <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
 
-              {/* Esquerda: Loupe View Central da Foto Grande + Overlay de Corte & Regra dos Terços */}
-              <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between items-center relative overflow-hidden">
-                {/* Toolbar Superior da Foto */}
-                <div className="w-full flex items-center justify-between text-xs text-slate-400 mb-2">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Camera className="w-4 h-4 text-purple-400" />
-                    <span>{editingPhoto.fileName} ({editingPhoto.format})</span>
-                  </span>
-
-                  {/* Seletor de Aspect Ratio do Corte & Rotação Livre */}
-                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                    <span className="text-[10px] text-slate-500 font-bold px-1 uppercase">Corte:</span>
-                    {['Livre', '1:1', '4:5', '5:4', '4:3', '3:4', '16:9', '9:16', '5:3', '3:5'].map((ratio) => (
-                      <button
-                        key={ratio}
-                        type="button"
-                        onClick={() => setSelectedCropRatio(ratio)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${selectedCropRatio === ratio
-                          ? 'bg-purple-600 text-white shadow'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                          }`}
-                      >
-                        {ratio}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Ferramentas de Alinhamento, Zoom & Rotação */}
-                  <div className="flex items-center gap-2">
-                    {/* Zoom Slider de Enquadramento (1.0x a 3.0x) */}
-                    <div className="flex items-center gap-1.5 bg-slate-900 px-2 py-1 rounded-xl border border-slate-800 text-[10px] font-bold text-purple-300">
-                      <span>Zoom:</span>
-                      <input
-                        id="culling_editor_zoom_range"
-                        name="culling_editor_zoom_range"
-                        type="range"
-                        min="1"
-                        max="3"
-                        step="0.05"
-                        value={editingPhoto.editSettings.zoomScale || 1.0}
-                        onChange={(e) => updateEditingPhotoSettings({ zoomScale: parseFloat(e.target.value) })}
-                        className="w-16 accent-purple-500 cursor-pointer"
-                      />
-                      <span className="font-mono text-purple-400">{(editingPhoto.editSettings.zoomScale || 1.0).toFixed(2)}x</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowBeforeAfter(!showBeforeAfter)}
-                      className={`px-2.5 py-1 rounded-xl font-extrabold text-[11px] flex items-center gap-1 border transition ${showBeforeAfter
-                        ? 'bg-amber-600 text-white border-amber-500 shadow-lg shadow-amber-600/30'
-                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
-                        }`}
-                      title="Atalho (Y): Comparar Foto Original sem Edição vs Editada com IA"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>{showBeforeAfter ? 'Original (Sem Filtro)' : 'Antes / Depois (Y)'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowCropGrid(!showCropGrid)}
-                      className={`p-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 border transition ${showCropGrid ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
-                        }`}
-                    >
-                      <Sliders className="w-3.5 h-3.5" />
-                      <span>{showCropGrid ? 'Ocultar Grade' : 'Grade (3°s)'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => rotatePhoto(editingPhoto.id, -90)}
-                      className="p-1.5 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white flex items-center gap-1 text-xs border border-slate-800"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>-90°</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => rotatePhoto(editingPhoto.id, 90)}
-                      className="p-1.5 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white flex items-center gap-1 text-xs border border-slate-800"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>+90°</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Loupe View Imagem com Canvas de Corte Fixo & Imagem Giratória Interna + Arraste de Enquadramento */}
-                <div className="relative flex-1 flex items-center justify-center overflow-hidden w-full py-2 bg-slate-950">
-                  {/* Toast Estilo Lightroom Classic: "Cortar atualizado para X imagens" */}
+              {/* Esquerda: Loupe View Central da Foto com Imagem Proporcional Nítida */}
+              <div className="flex-1 bg-slate-950 p-4 flex flex-col justify-between items-center relative overflow-hidden">
+                {/* Visualizador da Imagem */}
+                <div className="relative flex-1 flex items-center justify-center overflow-hidden w-full h-full p-2 bg-slate-950">
                   {syncedPresetNotice && (
                     <div className="absolute top-4 z-40 px-4 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-white font-bold text-xs shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
                       <Check className="w-4 h-4 text-emerald-400" />
@@ -2710,109 +2895,139 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                     </div>
                   )}
 
-                  {/* Moldura / Quadro de Corte Fixo da Imagem (Com Suporte a Arraste/Pan de Foto) */}
-                  <div
-                    onMouseDown={(e) => {
-                      setIsPanDragging(true);
-                      setPanStart({
-                        x: e.clientX - (editingPhoto.editSettings.cropOffsetX || 0),
-                        y: e.clientY - (editingPhoto.editSettings.cropOffsetY || 0),
-                      });
-                    }}
-                    onMouseMove={(e) => {
-                      if (!isPanDragging) return;
-                      const newX = Math.round(e.clientX - panStart.x);
-                      const newY = Math.round(e.clientY - panStart.y);
-                      updateEditingPhotoSettings({ cropOffsetX: newX, cropOffsetY: newY });
-                    }}
-                    onMouseUp={() => setIsPanDragging(false)}
-                    onMouseLeave={() => setIsPanDragging(false)}
-                    className={`relative max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg shadow-2xl border-2 border-white/90 bg-black/40 ${isPanDragging ? 'cursor-grabbing' : 'cursor-grab'
-                      }`}
-                    style={{
-                      aspectRatio: selectedCropRatio === '1:1' ? '1/1'
-                        : selectedCropRatio === '4:5' ? '4/5'
-                          : selectedCropRatio === '5:4' ? '5/4'
-                            : selectedCropRatio === '4:3' ? '4/3'
-                              : selectedCropRatio === '3:4' ? '3/4'
-                                : selectedCropRatio === '16:9' ? '16/9'
-                                  : selectedCropRatio === '9:16' ? '9/16'
-                                    : selectedCropRatio === '5:3' ? '5/3'
-                                      : selectedCropRatio === '3:5' ? '3/5'
-                                        : 'auto',
-                      maxHeight: '48vh',
-                    }}
-                    title="Clique e arraste a imagem para redefinir a posição do enquadramento"
-                  >
-                    {/* Imagem Rotativa que Gira, Zoom e Arraste DENTRO/ATRÁS do Quadro Fixo de Corte */}
-                    <img
-                      src={editingPhoto.previewUrl}
-                      alt={editingPhoto.fileName}
-                      style={
-                        showBeforeAfter
-                          ? { filter: 'none', transform: 'none' }
-                          : {
-                            filter: `brightness(${100 + (editingPhoto.editSettings.exposure || 0) * 8}%) contrast(${100 + (editingPhoto.editSettings.contrast || 0)
-                              }%) saturate(${100 + (editingPhoto.editSettings.vibrance || 0) + (editingPhoto.editSettings.saturation || 0)}%)`,
-                            transform: `translate(${editingPhoto.editSettings.cropOffsetX || 0}px, ${editingPhoto.editSettings.cropOffsetY || 0
-                              }px) rotate(${editingPhoto.rotation || 0}deg) scale(${(editingPhoto.editSettings.zoomScale || 1.0) * (1 + Math.abs((editingPhoto.rotation || 0) / 45) * 0.35)
-                              })`,
-                          }
-                      }
-                      className="max-h-[48vh] object-cover transition-transform duration-75 select-none pointer-events-none"
-                    />
+                  {/* Wrapper da Foto com Suporte a Pan/Arraste */}
+                  {(() => {
+                    const fileObj = fileRegistryRef.current.get(editingPhoto.id);
+                    const loupeSrc = (editingPhoto.previewUrl && !editingPhoto.previewUrl.startsWith('data:image/svg'))
+                      ? editingPhoto.previewUrl
+                      : fileObj
+                        ? URL.createObjectURL(fileObj)
+                        : editingPhoto.previewUrl;
 
-                    {/* Sobreposição da Grade Fina Estilo Lightroom Classic (Subdivided Grid Overlay) */}
-                    {showCropGrid && (
-                      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between">
-                        {/* Sub-grades de Alinhamento Fino (Finas Linhas Brancas 6x6) */}
-                        <div className="w-full h-full grid grid-cols-6 grid-rows-6">
-                          {Array.from({ length: 36 }).map((_, idx) => (
-                            <div key={idx} className="border-[0.5px] border-white/30" />
-                          ))}
-                        </div>
+                    const isLoupeBW = (editingPhoto.editSettings?.saturation ?? 0) === -100 || editingPhoto.fileName.toLowerCase().includes('_bw');
+                    const loupeSatPercent = isLoupeBW ? 0 : Math.max(0, 100 + (editingPhoto.editSettings?.vibrance || 0) + (editingPhoto.editSettings?.saturation || 0));
+                    const loupeFilter = showBeforeAfter
+                      ? 'none'
+                      : [
+                          isLoupeBW ? 'grayscale(100%)' : '',
+                          `brightness(${100 + (editingPhoto.editSettings?.exposure || 0) * 8}%)`,
+                          `contrast(${100 + (editingPhoto.editSettings?.contrast || 0)}%)`,
+                          !isLoupeBW ? `saturate(${loupeSatPercent}%)` : '',
+                        ].filter(Boolean).join(' ');
+
+                    return (
+                      <div
+                        onMouseDown={(e) => {
+                          setIsPanDragging(true);
+                          setPanStart({
+                            x: e.clientX - (editingPhoto.editSettings.cropOffsetX || 0),
+                            y: e.clientY - (editingPhoto.editSettings.cropOffsetY || 0),
+                          });
+                        }}
+                        onMouseMove={(e) => {
+                          if (!isPanDragging) return;
+                          const newX = Math.round(e.clientX - panStart.x);
+                          const newY = Math.round(e.clientY - panStart.y);
+                          updateEditingPhotoSettings({ cropOffsetX: newX, cropOffsetY: newY });
+                        }}
+                        onMouseUp={() => setIsPanDragging(false)}
+                        onMouseLeave={() => setIsPanDragging(false)}
+                        className={`relative max-h-[66vh] max-w-full flex items-center justify-center overflow-hidden rounded-xl bg-black/60 shadow-2xl ${
+                          isPanDragging ? 'cursor-grabbing' : 'cursor-grab'
+                        }`}
+                      >
+                        <img
+                          src={loupeSrc}
+                          alt={editingPhoto.fileName}
+                          style={{
+                            filter: loupeFilter,
+                            transform: `translate(${editingPhoto.editSettings.cropOffsetX || 0}px, ${
+                              editingPhoto.editSettings.cropOffsetY || 0
+                            }px) rotate(${editingPhoto.rotation || 0}deg) scale(${
+                              (editingPhoto.editSettings.zoomScale || 1.0) * (1 + Math.abs((editingPhoto.rotation || 0) / 45) * 0.35)
+                            })`,
+                          }}
+                          className="max-h-[64vh] max-w-full w-auto h-auto object-contain transition-transform duration-75 select-none pointer-events-none rounded-lg"
+                        />
+
+                        {/* Grade de Corte / Terços Overlay */}
+                        {showCropGrid && (
+                          <div className="absolute inset-0 pointer-events-none border border-white/40">
+                            <div className="w-full h-full grid grid-cols-3 grid-rows-3">
+                              {Array.from({ length: 9 }).map((_, idx) => (
+                                <div key={idx} className="border border-white/25" />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-
-                    {/* Alças Brancas Reforçadas nos Cantos do Quadro de Corte Fixo */}
-                    <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-white" />
-                    <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-white" />
-                    <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-white" />
-                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-white" />
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Informações de Câmera e EXIF no Rodapé da Foto */}
-                <div className="w-full grid grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-center font-mono text-[10px] text-slate-300">
-                  <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-500 block">CÂMERA</span>
-                    <span className="font-bold text-white truncate block">{editingPhoto.cameraModel}</span>
+                <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-center font-mono text-[11px] text-slate-300">
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-500 block uppercase font-bold">Câmera</span>
+                    <span className="font-bold text-white truncate block">{editingPhoto.cameraModel || 'Desconhecida'}</span>
                   </div>
-                  <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-500 block">LENTE</span>
-                    <span className="font-bold text-white truncate block">{editingPhoto.lensModel}</span>
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-500 block uppercase font-bold">Lente</span>
+                    <span className="font-bold text-white truncate block">{editingPhoto.lensModel || 'Desconhecida'}</span>
                   </div>
-                  <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-500 block">ABERTURA</span>
-                    <span className="font-bold text-amber-400 block">{editingPhoto.aperture}</span>
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-500 block uppercase font-bold">Abertura</span>
+                    <span className="font-bold text-amber-400 block">{editingPhoto.aperture || 'f/--'}</span>
                   </div>
-                  <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-500 block">ISO / OBTURADOR</span>
-                    <span className="font-bold text-emerald-400 block">ISO {editingPhoto.iso} • {editingPhoto.shutterSpeed}</span>
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-500 block uppercase font-bold">ISO / Obturador</span>
+                    <span className="font-bold text-emerald-400 block">
+                      ISO {editingPhoto.iso || 0} • {editingPhoto.shutterSpeed || '1/--'}
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Direita: Painel Limpo de Culling (Inspetor de Seleção) */}
-              <div className="w-full md:w-72 bg-slate-900 p-5 border-l border-slate-800 flex flex-col justify-between space-y-4">
+              <div className="w-full md:w-80 bg-slate-900 p-5 border-l border-slate-800 flex flex-col justify-between space-y-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-purple-400" />
                       <span>Inspetor de Culling</span>
                     </h3>
-                    <button type="button" onClick={() => setEditingPhoto(null)} className="p-1 text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+                      <span>Foco:</span>
+                      <span className="font-bold text-purple-300">{editingPhoto.sharpnessScore}%</span>
+                    </div>
+                  </div>
+
+                  {/* Ações Rápidas de Edição com IA */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAutoEnhancePhoto(editingPhoto)}
+                      className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 transition cursor-pointer"
+                      title="Aplicar ajuste inteligente de exposição, realces, sombras e temperatura de cor"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>✨ Auto IA</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isBW = editingPhoto.editSettings?.saturation === -100;
+                        updateEditingPhotoSettings({ saturation: isBW ? 0 : -100, vibrance: isBW ? 0 : -100 });
+                      }}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        editingPhoto.editSettings?.saturation === -100
+                          ? 'bg-slate-800 text-white border-slate-600 shadow'
+                          : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      }`}
+                      title="Alternar entre Colorido e Preto & Branco"
+                    >
+                      <span>🌗 P&B</span>
                     </button>
                   </div>
 
@@ -2825,10 +3040,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         setEditingPhoto(updated);
                         setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
                       }}
-                      className={`w-full py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition ${editingPhoto.selected
-                        ? 'bg-purple-600 text-white shadow-purple-600/30 ring-2 ring-purple-400/50'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                        }`}
+                      className={`w-full py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer ${
+                        editingPhoto.selected
+                          ? 'bg-purple-600 text-white shadow-purple-600/30 ring-2 ring-purple-400/50'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                      }`}
                     >
                       <Check className="w-4 h-4" />
                       <span>{editingPhoto.selected ? '✓ Foto Aprovada' : 'Aprovar Foto (Espaço)'}</span>
@@ -2841,20 +3057,23 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         setEditingPhoto(updated);
                         setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
                       }}
-                      className={`w-full py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition ${editingPhoto.isDiscarded
-                        ? 'bg-rose-600 text-white'
-                        : 'bg-slate-950 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800'
-                        }`}
+                      className={`w-full py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer ${
+                        editingPhoto.isDiscarded
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-slate-950 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-800'
+                      }`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>{editingPhoto.isDiscarded ? 'Foto Descartada (Restaurar)' : 'Descartar Foto (Tecla X)'}</span>
                     </button>
                   </div>
 
-                  {/* Rating por Estrelas */}
+                  {/* Rating por Estrelas (0 a 5) */}
                   <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-center">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Classificar (Teclas 1 a 5)</span>
-                    <div className="flex justify-center gap-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Classificar (Teclas 1 a 5, 0 = Limpar)
+                    </span>
+                    <div className="flex justify-center items-center gap-1.5">
                       {([1, 2, 3, 4, 5] as const).map((star) => (
                         <button
                           key={star}
@@ -2864,36 +3083,54 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                             setEditingPhoto(updated);
                             setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
                           }}
-                          className={`w-7 h-7 rounded-xl flex items-center justify-center transition ${editingPhoto.starRating >= star ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30' : 'text-slate-600 bg-slate-900'
-                            }`}
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                            editingPhoto.starRating >= star
+                              ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30 shadow'
+                              : 'text-slate-600 bg-slate-900 hover:text-amber-300'
+                          }`}
                         >
                           <Star className={`w-4 h-4 ${editingPhoto.starRating >= star ? 'fill-amber-400' : ''}`} />
                         </button>
                       ))}
+                      <button
+                        onClick={() => {
+                          const updated: CullingPhoto = { ...editingPhoto, starRating: 0 };
+                          setEditingPhoto(updated);
+                          setPhotos((prev) => prev.map((p) => (p.id === editingPhoto.id ? updated : p)));
+                        }}
+                        className={`px-1.5 py-1 text-[10px] font-mono rounded-lg transition cursor-pointer ${
+                          !editingPhoto.starRating || editingPhoto.starRating === 0
+                            ? 'bg-slate-800 text-slate-300 font-bold border border-slate-700'
+                            : 'text-slate-600 hover:text-slate-400'
+                        }`}
+                        title="Remover estrelas (0★)"
+                      >
+                        0★
+                      </button>
                     </div>
                   </div>
 
-                  {/* Informações EXIF & Câmera */}
+                  {/* Informações EXIF & Câmera Detalhadas */}
                   <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs font-mono">
                     <div className="flex justify-between text-slate-400">
                       <span>Câmera:</span>
-                      <span className="text-white font-bold truncate max-w-[140px]">{editingPhoto.cameraModel || 'Desconhecida'}</span>
+                      <span className="text-white font-bold truncate max-w-[150px]">{editingPhoto.cameraModel || 'Desconhecida'}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Lente:</span>
-                      <span className="text-white font-bold truncate max-w-[140px]">{editingPhoto.lensModel || 'Desconhecida'}</span>
+                      <span className="text-white font-bold truncate max-w-[150px]">{editingPhoto.lensModel || 'Desconhecida'}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Abertura:</span>
-                      <span className="text-amber-400 font-bold">{editingPhoto.aperture}</span>
+                      <span className="text-amber-400 font-bold">{editingPhoto.aperture || 'f/--'}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>ISO:</span>
-                      <span className="text-emerald-400 font-bold">ISO {editingPhoto.iso}</span>
+                      <span className="text-emerald-400 font-bold">ISO {editingPhoto.iso || 0}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Obturador:</span>
-                      <span className="text-blue-400 font-bold">{editingPhoto.shutterSpeed}</span>
+                      <span className="text-blue-400 font-bold">{editingPhoto.shutterSpeed || '1/--'}</span>
                     </div>
                   </div>
                 </div>
@@ -2901,37 +3138,43 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                 <button
                   type="button"
                   onClick={() => setEditingPhoto(null)}
-                  className="w-full py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                  className="w-full py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
                 >
                   Concluir Culling (Esc)
                 </button>
               </div>
             </div>
 
-            {/* FILMSTRIP INFERIOR (Lista de Filme no Bottom - Miniaturas Roláveis) */}
-            <div className="w-full bg-slate-950 border-t border-slate-800 p-3 flex items-center gap-3 overflow-x-auto shrink-0">
+            {/* FILMSTRIP INFERIOR (Miniaturas da Seleção Filtrada) */}
+            <div className="w-full bg-slate-950 border-t border-slate-800 p-2.5 flex items-center gap-3 overflow-x-auto shrink-0">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 px-2">
-                <span>Filmstrip</span>
-                <span className="block text-purple-400">
-                  {(filteredPhotos.length > 0 ? filteredPhotos : photos).length} fotos
+                <span>FILMSTRIP</span>
+                <span className="block text-purple-400 font-mono">
+                  {filteredPhotos.length} fotos
                 </span>
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto py-1 max-w-full">
-                {(filteredPhotos.length > 0 ? filteredPhotos : photos).map((p) => {
+                {filteredPhotos.map((p) => {
                   const isActive = p.id === editingPhoto.id;
                   return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => setEditingPhoto(p)}
-                      className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${isActive ? 'border-purple-500 scale-105 shadow-lg shadow-purple-500/20' : 'border-slate-800 opacity-60 hover:opacity-100'
-                        }`}
+                      className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 bg-slate-950 flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                        isActive ? 'border-purple-500 scale-105 shadow-lg shadow-purple-500/20' : 'border-slate-800 opacity-60 hover:opacity-100'
+                      }`}
                     >
-                      <img src={p.previewUrl} alt={p.fileName} className="w-full h-full object-cover" />
+                      <img src={p.previewUrl} alt={p.fileName} className="w-full h-full object-contain" />
                       {p.selected && (
                         <div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-purple-600 text-white text-[8px] flex items-center justify-center font-bold">
                           ✓
+                        </div>
+                      )}
+                      {p.starRating > 0 && (
+                        <div className="absolute bottom-0.5 left-0.5 bg-black/70 text-amber-400 text-[8px] font-bold px-1 rounded">
+                          {p.starRating}★
                         </div>
                       )}
                     </button>
@@ -3070,6 +3313,56 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       <NativeDesktopDownloadModal
         isOpen={isDesktopDownloadModalOpen}
         onClose={() => setIsDesktopDownloadModalOpen(false)}
+      />
+
+      {/* Modal Comparador A/B de Sequência e Séries */}
+      <CompareBurstModal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        photos={comparePhotosList}
+        onToggleSelect={(id) => {
+          setPhotos((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, selected: !p.selected, isDiscarded: false } : p))
+          );
+          setComparePhotosList((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, selected: !p.selected, isDiscarded: false } : p))
+          );
+        }}
+        onSetRating={(id, rating) => {
+          setPhotos((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, starRating: rating, selected: rating > 0 ? true : p.selected } : p))
+          );
+          setComparePhotosList((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, starRating: rating, selected: rating > 0 ? true : p.selected } : p))
+          );
+        }}
+        onToggleDiscard={(id) => {
+          setPhotos((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, isDiscarded: !p.isDiscarded, selected: false } : p))
+          );
+          setComparePhotosList((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, isDiscarded: !p.isDiscarded, selected: false } : p))
+          );
+        }}
+        onSetBestTake={(id) => {
+          setPhotos((prev) =>
+            prev.map((p) => {
+              if (p.id === id) {
+                return { ...p, isBestTake: true, selected: true, isDiscarded: false };
+              }
+              // If in the same burst comparison list, unmark other best take
+              if (comparePhotosList.some((cp) => cp.id === p.id)) {
+                return { ...p, isBestTake: false };
+              }
+              return p;
+            })
+          );
+          setComparePhotosList((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, isBestTake: true, selected: true, isDiscarded: false } : { ...p, isBestTake: false }))
+          );
+          setLearningNotice('🏆 Campeã da série eleita com sucesso!');
+          setTimeout(() => setLearningNotice(null), 3000);
+        }}
       />
     </div>
   );

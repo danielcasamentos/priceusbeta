@@ -88,9 +88,47 @@ export async function callPriHelpAssistant(
     salesByMonth[mKey] = { pagas: 0, pendentes: 0, total: 0, count: 0 };
   });
 
+  interface DetailedCalendarEvent {
+    id: string;
+    data: string;
+    dataFormatada: string;
+    horarioInicio?: string;
+    horarioFim?: string;
+    titulo: string;
+    cliente: string;
+    cidade?: string;
+    status: string;
+    observacoes?: string;
+    origem?: string;
+  }
+
+  interface BlockedDate {
+    data: string;
+    dataFormatada: string;
+    motivo: string;
+  }
+
+  interface BlockedPeriod {
+    inicio: string;
+    fim: string;
+    motivo: string;
+  }
+
+  const formatDateBR = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
   let templatesList: { nome: string; slug: string }[] = [];
   let productsList: { nome: string; valor: number }[] = [];
-  let calendarEvents: { data: string; titulo: string; cliente?: string }[] = [];
+  let calendarEvents: DetailedCalendarEvent[] = [];
+  let blockedDates: BlockedDate[] = [];
+  let blockedPeriods: BlockedPeriod[] = [];
+  let agendaConfig = { agendaAtiva: true, maxPorDia: 1, modoAviso: 'informativo', diasSemanaBloqueados: [] as number[] };
   let contractsSummary = { ativos: 0, assinados: 0, pendentes: 0 };
 
   try {
@@ -205,18 +243,93 @@ export async function callPriHelpAssistant(
         console.warn('[Pri Produtos Query Warning]:', errProd);
       }
 
-      // F. Tabela Eventos Agenda
+      // F. Tabela Eventos Agenda (Todos os eventos ativos e futuros da agenda - multi-anos)
       try {
-        const { data: aData } = await supabase.from('eventos_agenda').select('data_evento, tipo_evento, cliente_nome').eq('user_id', effectiveUserId).limit(10);
-        if (aData) {
+        const { data: aData } = await supabase
+          .from('eventos_agenda')
+          .select('id, data_evento, horario_inicio, horario_fim, tipo_evento, cliente_nome, cidade, status, observacoes, origem')
+          .eq('user_id', effectiveUserId)
+          .neq('status', 'cancelado')
+          .order('data_evento', { ascending: true })
+          .limit(1000);
+
+        if (aData && aData.length > 0) {
           calendarEvents = aData.map((a: any) => ({
+            id: a.id,
             data: a.data_evento || '',
-            titulo: a.tipo_evento || 'Evento Agendado',
-            cliente: a.cliente_nome || ''
+            dataFormatada: formatDateBR(a.data_evento || ''),
+            horarioInicio: a.horario_inicio || undefined,
+            horarioFim: a.horario_fim || undefined,
+            titulo: a.tipo_evento || 'Ensaio / Evento',
+            cliente: a.cliente_nome || '',
+            cidade: a.cidade || undefined,
+            status: a.status || 'confirmado',
+            observacoes: a.observacoes || undefined,
+            origem: a.origem || 'sistema'
           })).filter((a: any) => !!a.data);
         }
       } catch (errAgenda) {
         console.warn('[Pri Agenda Query Warning]:', errAgenda);
+      }
+
+      // F2. Tabela Datas Bloqueadas (Multi-anos)
+      try {
+        const { data: dbData } = await supabase
+          .from('datas_bloqueadas')
+          .select('data, motivo')
+          .eq('user_id', effectiveUserId)
+          .order('data', { ascending: true })
+          .limit(300);
+
+        if (dbData) {
+          blockedDates = dbData.map((d: any) => ({
+            data: d.data,
+            dataFormatada: formatDateBR(d.data),
+            motivo: d.motivo || 'Data bloqueada'
+          }));
+        }
+      } catch (errDb) {
+        console.warn('[Pri Datas Bloqueadas Warning]:', errDb);
+      }
+
+      // F3. Tabela Períodos Bloqueados (Férias / Recessos - Multi-anos)
+      try {
+        const { data: pbData } = await supabase
+          .from('periodos_bloqueados')
+          .select('data_inicio, data_fim, motivo')
+          .eq('user_id', effectiveUserId)
+          .order('data_inicio', { ascending: true })
+          .limit(100);
+
+        if (pbData) {
+          blockedPeriods = pbData.map((p: any) => ({
+            inicio: formatDateBR(p.data_inicio),
+            fim: formatDateBR(p.data_fim),
+            motivo: p.motivo || 'Férias / Recesso'
+          }));
+        }
+      } catch (errPb) {
+        console.warn('[Pri Periodos Bloqueados Warning]:', errPb);
+      }
+
+      // F4. Configuração da Agenda
+      try {
+        const { data: cfgData } = await supabase
+          .from('agenda_config')
+          .select('eventos_max_por_dia, modo_aviso, agenda_ativa, dias_semana_bloqueados, modo_agendamento')
+          .eq('user_id', effectiveUserId)
+          .maybeSingle();
+
+        if (cfgData) {
+          agendaConfig = {
+            agendaAtiva: cfgData.agenda_ativa ?? true,
+            maxPorDia: cfgData.eventos_max_por_dia ?? 1,
+            modoAviso: cfgData.modo_aviso ?? 'informativo',
+            diasSemanaBloqueados: cfgData.dias_semana_bloqueados || []
+          };
+        }
+      } catch (errCfg) {
+        console.warn('[Pri Agenda Config Warning]:', errCfg);
       }
 
       // G. Tabela Contracts
@@ -244,15 +357,38 @@ export async function callPriHelpAssistant(
     })
     .join('\n');
 
+  // Formatar Texto de Eventos da Agenda
+  const calendarEventsText = calendarEvents.length > 0
+    ? calendarEvents.map((e) =>
+      `- Data: ${e.dataFormatada} (${e.data}) | ${e.titulo} | Cliente: ${e.cliente || 'Não informado'}${e.horarioInicio ? ' | Horário: ' + e.horarioInicio : ''}${e.cidade ? ' | Local: ' + e.cidade : ''} | Status: ${e.status}${e.observacoes ? ' | Obs: ' + e.observacoes : ''}`
+    ).join('\n')
+    : '- Nenhum evento ativo registrado na agenda no momento.';
+
+  const blockedDatesText = blockedDates.length > 0
+    ? blockedDates.map((d) => `- Data Bloqueada: ${d.dataFormatada} (${d.data}) — Motivo: ${d.motivo}`).join('\n')
+    : '- Nenhuma data avulsa bloqueada.';
+
+  const blockedPeriodsText = blockedPeriods.length > 0
+    ? blockedPeriods.map((p) => `- Período de Recesso: de ${p.inicio} até ${p.fim} — Motivo: ${p.motivo}`).join('\n')
+    : '- Nenhum recesso ou período de férias bloqueado.';
+
   // 3. Prompt de Raciocínio Integral da Pri
   const priSystemPrompt =
-    `Você se chama "Pri", a especialista e consultora de suporte oficial da plataforma Priceus.\n` +
+    `Você se chama "Pri", a especialista e consultora de inteligência e suporte oficial da plataforma Priceus.\n` +
     `Seu tom de voz é extremamente simpático, didático, claro, acolhedor, profissional e especialista no Priceus.\n\n` +
     `SUA MISSÃO:\n` +
-    `- Responder ao fotógrafo (${userName} do estúdio "${studioName}") consultando os DADOS REAIS extraídos diretamente das tabelas do banco de dados dele.\n` +
-    `- Quando ele perguntar sobre faturamento do ano ou vendas por mês ("quanto vendi em 2026?", "quanto vendi no mês X?"), apresente a lista MÊS A MÊS detalhada abaixo com clareza!\n` +
+    `- Responder ao fotógrafo (${userName} do estúdio "${studioName}") consultando os DADOS REAIS extraídos diretamente das tabelas do banco de dados dele em tempo real.\n` +
+    `- Você TEM ACESSO TOTAL À AGENDA DE EVENTOS do estúdio. A agenda é contínua e possui compromissos para todos os anos (incluindo 2026, 2027, 2028 e além). Quando o fotógrafo perguntar sobre a agenda, próximos eventos, se tem data livre, ou o que tem marcado em qualquer ano/mês/dia específico, consulte detalhadamente a lista de eventos e datas bloqueadas abaixo e informe com precisão os horários, clientes e tipos de evento!\n` +
+    `- REGRA CRÍTICA: NUNCA diga que o banco de dados só possui registros até o fim do ano atual ou até dezembro de 2026. A lista abaixo contém a totalidade dos eventos cadastrados em todos os anos (2026, 2027, 2028, etc.). Se o usuário perguntar por 2027 ou 2028, verifique os eventos desses anos listados abaixo e responda com precisão.\n` +
+    `- Quando ele perguntar sobre faturamento do ano ou vendas por mês ("quanto vendi em ${currentYear}?", "quanto vendi no mês X?"), apresente a lista MÊS A MÊS detalhada abaixo com clareza!\n` +
     `- Se os dados gravados nas tabelas forem R$ 0,00 nos meses, informe respeitosamente que ainda não há lançamentos pagos gravados para esses meses nas tabelas 'company_transactions' ou 'leads' e sugira cadastrar as transações no módulo 'Meu Dia'!\n\n` +
-    `DADOS REAIS LIDOS DAS TABELAS DO BANCO DO USUÁRIO (${currentYear}):\n\n` +
+    `DADOS REAIS LIDOS DAS TABELAS DO BANCO DO USUÁRIO:\n\n` +
+    `🗓️ AGENDA OFICIAL DE EVENTOS (${calendarEvents.length} eventos confirmados/ativos em todos os anos cadastrados):\n` +
+    `${calendarEventsText}\n\n` +
+    `🚫 DATAS BLOQUEADAS E RECOLHIMENTOS:\n` +
+    `${blockedDatesText}\n` +
+    `${blockedPeriodsText}\n` +
+    `⚙️ Configuração da Agenda: Status: ${agendaConfig.agendaAtiva ? 'Ativa' : 'Inativa'}, Máximo de ${agendaConfig.maxPorDia} evento(s)/dia, Modo de aviso: ${agendaConfig.modoAviso}\n\n` +
     `📊 MENSALIDADE DE VENDAS E FATURAMENTO MÊS A MÊS (${currentYear}):\n` +
     `${monthlySalesText}\n\n` +
     `💰 RESUMO FINANCEIRO GERAL:\n` +
@@ -261,7 +397,6 @@ export async function callPriHelpAssistant(
     `- Despesas Registradas: R$ ${financialMetrics.despesasTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
     `- Lucro Líquido Real: R$ ${financialMetrics.lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
     `- Contratos/Vendas Fechadas no Total: ${financialMetrics.vendasFechadasCount}\n\n` +
-    `🗓️ AGENDA DE EVENTOS (${calendarEvents.length} eventos): ${JSON.stringify(calendarEvents)}\n\n` +
     `📋 TEMPLATES DO FOTÓGRAFO (${templatesList.length} templates): ${JSON.stringify(templatesList)}\n\n` +
     `🛍️ CATÁLOGO DE PRODUTOS (${productsList.length} produtos): ${JSON.stringify(productsList)}\n\n` +
     `📝 CONTRATOS (${contractsSummary.ativos} contratos, ${contractsSummary.assinados} assinados, ${contractsSummary.pendentes} pendentes)\n\n` +
@@ -275,11 +410,11 @@ export async function callPriHelpAssistant(
 
   const geminiContents = [
     { role: 'user', parts: [{ text: priSystemPrompt }] },
-    { role: 'model', parts: [{ text: `Olá ${userName}! Sou a Pri! Li com sucesso todas as tabelas do seu estúdio (${studioName}) e estou pronta para te mostrar suas vendas e faturamento.` }] },
+    { role: 'model', parts: [{ text: `Olá ${userName}! Sou a Pri! Li com sucesso todas as tabelas do seu estúdio (${studioName}), incluindo sua Agenda completa de eventos, faturamento e templates.` }] },
     { role: 'user', parts: [{ text: userQuery }] }
   ];
 
-  // 🔄 4. LOOP DO POOL DE CHAVES (Gemini ➔ Groq ➔ DeepSeek/OpenAI ➔ Fallback Pri Local)
+  // 🔄 4. LOOP DO POOL DE CHAVES (Groq ➔ Gemini ➔ DeepSeek/OpenAI ➔ Fallback Pri Local)
   for (const keyCandidate of keyPool) {
     const key = keyCandidate.trim();
 
@@ -308,31 +443,47 @@ export async function callPriHelpAssistant(
       }
     }
 
-    // B. Groq Cloud (Llama 3.3 70B)
+    // B. Groq Cloud (Modelos ativos de alta velocidade com failover)
     if (key.startsWith('gsk_')) {
-      try {
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: openAIMessages,
-            temperature: 0.6
-          })
-        });
+      const groqCandidateModels = [
+        'qwen/qwen3.8-27b',
+        'openai/gpt-oss-120b',
+        'groq/compound',
+        'qwen/qwen3.6-27b',
+        'openai/gpt-oss-20b',
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant'
+      ];
 
-        const groqData = await groqResponse.json();
-        if (groqResponse.ok && groqData.choices?.[0]?.message?.content) {
-          return {
-            replyText: groqData.choices[0].message.content.trim(),
-            toolsExecuted: ['pri_groq_llama70b_table_reader_success']
-          };
+      for (const groqModel of groqCandidateModels) {
+        try {
+          const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify({
+              model: groqModel,
+              messages: openAIMessages,
+              temperature: 0.6,
+              max_tokens: 1200
+            })
+          });
+
+          if (groqResponse.ok) {
+            const groqData = await groqResponse.json();
+            const content = groqData.choices?.[0]?.message?.content;
+            if (content && typeof content === 'string' && content.trim().length > 0) {
+              return {
+                replyText: content.trim(),
+                toolsExecuted: [`pri_groq_${groqModel.replace(/[^a-zA-Z0-9_]/g, '_')}_success`]
+              };
+            }
+          }
+        } catch (e) {
+          console.warn(`[Pri Groq Failover Error on ${groqModel}]:`, e);
         }
-      } catch (e) {
-        console.warn('[Pri Groq Failover Error]:', e);
       }
     }
 
@@ -392,15 +543,26 @@ export async function callPriHelpAssistant(
       `- 💸 **Despesas Totais:** R$ ${financialMetrics.despesasTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
       `- 📈 **Lucro Líquido Real:** R$ ${financialMetrics.lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
       `Quer registrar novas receitas ou lançamentos no módulo **Meu Dia**?`;
-  } else if (qLower.includes('agenda') || qLower.includes('agendamento') || qLower.includes('evento') || qLower.includes('data')) {
+  } else if (qLower.includes('agenda') || qLower.includes('agendamento') || qLower.includes('evento') || qLower.includes('data') || qLower.includes('disponibilidade') || qLower.includes('livre') || qLower.includes('ocupad') || qLower.includes('trabalho') || qLower.includes('ensaio') || qLower.includes('casamento')) {
     const eventsText = calendarEvents.length > 0
-      ? calendarEvents.map(e => `• ${e.data} — ${e.titulo} (${e.cliente || 'Cliente'})`).join('\n')
-      : '• Nenhuma data ocupada no momento. Todas as datas livres!';
+      ? calendarEvents.map(e => `• **${e.dataFormatada}** (${e.data}): **${e.titulo}** — Cliente: *${e.cliente || 'Não informado'}*${e.horarioInicio ? ' às ' + e.horarioInicio : ''}${e.cidade ? ' em ' + e.cidade : ''} [Status: ${e.status}]`).join('\n')
+      : '• Nenhum evento ou ensaio marcado no momento. Todas as datas estão livres!';
+
+    const blockedText = blockedDates.length > 0
+      ? `\n\n🚫 **Datas Bloqueadas:**\n` + blockedDates.map(d => `• **${d.dataFormatada}:** ${d.motivo}`).join('\n')
+      : '';
+
+    const periodsText = blockedPeriods.length > 0
+      ? `\n\n🏖️ **Períodos de Recesso:**\n` + blockedPeriods.map(p => `• De **${p.inicio}** a **${p.fim}**: ${p.motivo}`).join('\n')
+      : '';
 
     text =
-      `Olá ${userName}! Sou a **Pri**! Consultei a tabela da sua agenda no banco de dados: 🗓️✨\n\n` +
-      `${eventsText}\n\n` +
-      `Sua Secretária Virtual de WhatsApp usa essas datas automaticamente para liberar orçamentos aos clientes!`;
+      `Olá ${userName}! Sou a **Pri**! Consultei a sua **Agenda Oficial** em tempo real no banco de dados: 🗓️✨\n\n` +
+      `📌 **Eventos e Ensaios Agendados (${calendarEvents.length}):**\n` +
+      `${eventsText}` +
+      `${blockedText}` +
+      `${periodsText}\n\n` +
+      `Sua Secretária Virtual de WhatsApp e os links de propostas consultam essas exatas datas para informar disponibilidade aos clientes!`;
   } else if (qLower.includes('contrato') || qLower.includes('assinar')) {
     text =
       `Olá ${userName}! Sou a **Pri**! Consultei a tabela de contratos do seu estúdio (\`contracts\`): 📝✨\n\n` +
@@ -412,12 +574,12 @@ export async function callPriHelpAssistant(
     text =
       `Olá ${userName}! Sou a **Pri**, sua especialista e leitora de dados do estúdio **${studioName}**! 💖✨\n\n` +
       `Li todas as tabelas do seu sistema em tempo real e aqui estão os seus indicadores:\n` +
-      `- 📊 **Vendas Pagas no Ano:** R$ ${financialMetrics.entradasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
       `- 🗓️ **Agenda:** ${calendarEvents.length} eventos confirmados na agenda\n` +
+      `- 📊 **Vendas Pagas no Ano:** R$ ${financialMetrics.entradasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
       `- 📋 **Templates:** ${templatesList.length} propostas ativas\n` +
       `- 🛍️ **Produtos:** ${productsList.length} produtos cadastrados no catálogo\n` +
       `- 📝 **Contratos:** ${contractsSummary.ativos} contratos registrados (${contractsSummary.assinados} assinados)\n\n` +
-      `Como posso te ajudar agora? Pode me perguntar sobre faturamento dos meses ou configurações!`;
+      `Como posso te ajudar agora? Pode me perguntar sobre sua agenda, eventos marcados ou faturamento!`;
   }
 
   return {

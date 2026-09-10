@@ -61,8 +61,8 @@ BEGIN
         COALESCE(v_transaction->>'status', 'pendente'),
         COALESCE(v_transaction->>'forma_pagamento', 'Não especificado'),
         COALESCE((v_transaction->>'is_installment')::boolean, false),
-        COALESCE((v_transaction->>'installment_number')::integer, 1),
-        COALESCE((v_transaction->>'total_installments')::integer, 1),
+        CASE WHEN (v_transaction->>'is_installment')::boolean = true THEN (v_transaction->>'installment_number')::integer ELSE NULL END,
+        CASE WHEN (v_transaction->>'is_installment')::boolean = true THEN (v_transaction->>'total_installments')::integer ELSE NULL END,
         NULLIF(v_transaction->>'documento_fiscal', ''),
         NOW(),
         NOW()

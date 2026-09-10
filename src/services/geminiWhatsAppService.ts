@@ -437,32 +437,47 @@ export async function callGeminiSalesAgent(
       }
     }
 
-    // 🚀 B. GROQ CLOUD (`gsk_...` - Llama 3.3 70B)
+    // 🚀 B. GROQ CLOUD (`gsk_...` - Modelos ativos com failover)
     if (key.startsWith('gsk_')) {
-      try {
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: openAIMessages,
-            temperature: 0.7
-          })
-        });
+      const groqCandidateModels = [
+        'qwen/qwen3.8-27b',
+        'openai/gpt-oss-120b',
+        'groq/compound',
+        'qwen/qwen3.6-27b',
+        'openai/gpt-oss-20b',
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant'
+      ];
 
-        const groqData = await groqResponse.json();
-        if (groqResponse.ok && groqData.choices?.[0]?.message?.content) {
-          console.log('[Groq Cloud Llama-3.3 70B Real Template Link Success!]');
-          return {
-            replyText: groqData.choices[0].message.content.trim(),
-            toolsExecuted: ['groq_llama_33_70b_api', 'rag_conversation_continuity']
-          };
+      for (const groqModel of groqCandidateModels) {
+        try {
+          const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify({
+              model: groqModel,
+              messages: openAIMessages,
+              temperature: 0.7,
+              max_tokens: 800
+            })
+          });
+
+          if (groqResponse.ok) {
+            const groqData = await groqResponse.json();
+            if (groqData.choices?.[0]?.message?.content) {
+              console.log(`[Groq Cloud ${groqModel} Success!]`);
+              return {
+                replyText: groqData.choices[0].message.content.trim(),
+                toolsExecuted: [`groq_${groqModel.replace(/[^a-zA-Z0-9_]/g, '_')}_api`, 'rag_conversation_continuity']
+              };
+            }
+          }
+        } catch (e) {
+          console.warn(`[Groq Key Failover on ${groqModel}]:`, e);
         }
-      } catch (e) {
-        console.warn('[Groq Key Failover]: tentando próxima chave...', e);
       }
     }
 

@@ -1,5 +1,190 @@
 import type { CullingPhoto } from '../components/gallery/AICullingManager';
 import type { SuggestedPost, PostSlide, CaptionOption } from '../components/gallery/SocialPostStudio';
+import { computeHammingDistance } from './imageAnalysisEngine';
+import { CullingSensitivityMode, SENSITIVITY_CONFIGS } from './cullingScoreEngine';
+
+export interface BurstGroup {
+  id: string;
+  label: string;
+  photoIds: string[];
+  bestTakeId: string;
+}
+
+/**
+ * Agrupa fotos semelhantes e rajadas consecutivas usando Carimbo de Tempo EXIF + Perceptual Hash (dHash)
+ */
+export function groupSimilarBursts(photos: CullingPhoto[]): BurstGroup[] {
+  if (photos.length === 0) return [];
+
+  const getPhotoTimestamp = (p: CullingPhoto, index: number): number => {
+    if (typeof (p as any).capturedAt === 'number' && (p as any).capturedAt > 0) {
+      return (p as any).capturedAt;
+    }
+    if ((p as any).dateTimeOriginal) {
+      const parsed = Date.parse((p as any).dateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3T'));
+      if (!isNaN(parsed)) return parsed;
+    }
+    return index * 10000;
+  };
+
+  // 1. Ordena o lote primariamente por data/hora de captura EXIF
+  const sortedItems = photos
+    .map((p, idx) => ({ photo: p, timestamp: getPhotoTimestamp(p, idx), origIdx: idx }))
+    .sort((a, b) => a.timestamp - b.timestamp || a.origIdx - b.origIdx);
+
+  const groups: BurstGroup[] = [];
+  const visited = new Set<string>();
+
+  for (let i = 0; i < sortedItems.length; i++) {
+    const currentItem = sortedItems[i];
+    const current = currentItem.photo;
+    if (visited.has(current.id)) continue;
+
+    const currentGroupPhotoIds: string[] = [current.id];
+    visited.add(current.id);
+
+    for (let j = i + 1; j < sortedItems.length; j++) {
+      const nextItem = sortedItems[j];
+      const next = nextItem.photo;
+      if (visited.has(next.id)) continue;
+
+      let isSimilar = false;
+
+      // 2. Duas fotos pertencem à mesma rajada se a diferença de captura for < 2s OU dHash Hamming <= 10
+      const timeDiffMs = Math.abs(nextItem.timestamp - currentItem.timestamp);
+      if (timeDiffMs <= 2000 && timeDiffMs >= 0) {
+        isSimilar = true;
+      }
+
+      if (!isSimilar && current.dHash && next.dHash) {
+        const dist = computeHammingDistance(current.dHash, next.dHash);
+        if (dist <= 10) {
+          isSimilar = true;
+        }
+      }
+
+      if (!isSimilar) {
+        const baseName1 = current.fileName.replace(/\.[^/.]+$/, '').replace(/_\d+$/, '');
+        const baseName2 = next.fileName.replace(/\.[^/.]+$/, '').replace(/_\d+$/, '');
+        if (baseName1 && baseName1 === baseName2 && current.dHash && next.dHash) {
+          const dist = computeHammingDistance(current.dHash, next.dHash);
+          if (dist <= 14) isSimilar = true;
+        }
+      }
+
+      if (isSimilar) {
+        currentGroupPhotoIds.push(next.id);
+        visited.add(next.id);
+      }
+    }
+
+    if (currentGroupPhotoIds.length > 1) {
+      // 3. Eleição do Campeão da Série (bestTakeId)
+      // - Ignora sumariamente fotos com isBlurry === true ou eyesClosed === true
+      // - Utiliza o finalScore ponderado (nitidez + foco facial + exposição)
+      const groupPhotos = currentGroupPhotoIds
+        .map((id) => photos.find((p) => p.id === id))
+        .filter((p): p is CullingPhoto => Boolean(p));
+
+      const validCandidates = groupPhotos.filter((p) => !p.isBlurry && !p.eyesClosed);
+      const candidatesPool = validCandidates.length > 0 ? validCandidates : groupPhotos;
+
+      let bestPhoto = candidatesPool[0];
+      let bestScore = -1;
+
+      for (const p of candidatesPool) {
+        const score = p.qualityScore?.overallScore ?? (p as any).finalScore ?? (p.sharpnessScore || 50);
+        if (score > bestScore) {
+          bestScore = score;
+          bestPhoto = p;
+        }
+      }
+
+      groups.push({
+        id: `burst_${current.id}`,
+        label: `Série #${groups.length + 1} (${currentGroupPhotoIds.length} fotos)`,
+        photoIds: currentGroupPhotoIds,
+        bestTakeId: bestPhoto ? bestPhoto.id : current.id,
+      });
+    }
+  }
+
+  return groups;
+}
+
+/**
+ * Recalcula e atribui a propriedade isBestTake para fotos campeãs das rajadas
+ */
+export function computeBurstChampions(
+  photos: CullingPhoto[],
+  mode: CullingSensitivityMode = 'balanced'
+): CullingPhoto[] {
+  const bursts = groupSimilarBursts(photos);
+  const bestTakeIdSet = new Set<string>();
+  const burstPhotoIdSet = new Set<string>();
+
+  for (const b of bursts) {
+    bestTakeIdSet.add(b.bestTakeId);
+    b.photoIds.forEach((id) => burstPhotoIdSet.add(id));
+  }
+
+  const cfg = SENSITIVITY_CONFIGS[mode] || SENSITIVITY_CONFIGS.balanced;
+
+  return photos.map((p) => {
+    // Se faz parte de uma rajada, é Best Take se for o campeão eleito
+    if (burstPhotoIdSet.has(p.id)) {
+      const isWinner = bestTakeIdSet.has(p.id) && !p.isBlurry && !p.eyesClosed;
+      return {
+        ...p,
+        isBestTake: isWinner,
+      };
+    }
+
+    // Se é foto única (fora de rajada), é Best Take se tiver boa pontuação e sem falhas graves
+    const finalScore = p.qualityScore?.overallScore ?? (p as any).finalScore ?? p.sharpnessScore;
+    const isSingleBest = !p.isBlurry && !p.eyesClosed && (finalScore >= cfg.bestTakeThreshold - 5);
+    return {
+      ...p,
+      isBestTake: isSingleBest,
+    };
+  });
+}
+
+/**
+ * Seleciona com 1 clique todas as fotos campeãs (Best Takes) e fotos únicas válidas
+ */
+export function autoSelectAllBestTakes(photos: CullingPhoto[]): CullingPhoto[] {
+  return photos.map((p) => {
+    if (p.isBestTake && !p.isBlurry && !p.eyesClosed) {
+      return {
+        ...p,
+        selected: true,
+        isDiscarded: false,
+      };
+    }
+    return p;
+  });
+}
+
+/**
+ * Rejeita automaticamente fotos duplicadas inferiores da mesma série ou borradas
+ */
+export function autoRejectInferiorDuplicates(photos: CullingPhoto[]): CullingPhoto[] {
+  const bursts = groupSimilarBursts(photos);
+  const bestTakeIdSet = new Set<string>(bursts.map((b) => b.bestTakeId));
+  const burstPhotoIdSet = new Set<string>();
+  bursts.forEach((b) => b.photoIds.forEach((id) => burstPhotoIdSet.add(id)));
+
+  return photos.map((p) => {
+    if (p.isBlurry || p.eyesClosed) {
+      return { ...p, selected: false, isDiscarded: true };
+    }
+    if (burstPhotoIdSet.has(p.id) && !bestTakeIdSet.has(p.id)) {
+      return { ...p, selected: false, isDiscarded: true };
+    }
+    return p;
+  });
+}
 
 /**
  * AI Photo Culling & Viral Post Curator Engine

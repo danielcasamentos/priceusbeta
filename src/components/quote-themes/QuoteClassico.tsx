@@ -77,6 +77,8 @@ export function QuoteClassico(props: QuoteClassicoProps) {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
+                name="nome_cliente"
+                autoComplete="name"
                 type="text"
                 placeholder="Nome Completo *"
                 value={formData.nome_cliente}
@@ -85,6 +87,9 @@ export function QuoteClassico(props: QuoteClassicoProps) {
                 required
               />
               <input
+                name="email_cliente"
+                autoComplete="email"
+                inputMode="email"
                 type="email"
                 placeholder="E-mail *"
                 value={formData.email_cliente}
@@ -93,6 +98,9 @@ export function QuoteClassico(props: QuoteClassicoProps) {
                 required
               />
               <input
+                name="telefone_cliente"
+                autoComplete="tel"
+                inputMode="tel"
                 type="tel"
                 placeholder="Telefone/WhatsApp *"
                 value={formData.telefone_cliente}
