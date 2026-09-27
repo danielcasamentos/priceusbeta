@@ -1722,6 +1722,33 @@ export function QuotePage() {
 
   useEffect(() => {
     if (template && produtos.length > 0) {
+      // Identificar brindes vinculados aos produtos selecionados
+      const activeBrindesList: any[] = [];
+      const seenBrindeIds = new Set<string>();
+      produtos
+        .filter((p) => selectedProdutos[p.id] && selectedProdutos[p.id] > 0)
+        .forEach((p) => {
+          if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados)) {
+            p.brindes_vinculados.forEach((brindeId: string) => {
+              if (!seenBrindeIds.has(brindeId)) {
+                seenBrindeIds.add(brindeId);
+                const brindeObj = brindesProdutos.find((b) => b.id === brindeId);
+                if (brindeObj) {
+                  activeBrindesList.push({
+                    id: brindeObj.id,
+                    produto_id: brindeObj.id,
+                    nome: brindeObj.nome,
+                    valor: brindeObj.valor,
+                    imagem_url: brindeObj.imagem_url || '',
+                    quantidade: 1,
+                    provedor_id: brindeObj.provedor_id || null,
+                  });
+                }
+              }
+            });
+          }
+        });
+
       updateLead({
         templateId: template.id,
         userId: template.user_id,
@@ -1733,23 +1760,41 @@ export function QuotePage() {
           tipo_evento: template.nome_template || null,
         },
         orcamentoDetalhe: {
-          // ANTES: Apenas IDs eram salvos, o que quebrava a geração da mensagem.
-          // AGORA: Salvamos os objetos completos para reconstrução posterior.
           selectedProdutos,
           selectedFormaPagamento,
+          forma_pagamento_id: selectedFormaPagamento || null,
           produtos: produtos,
-          paymentMethod: formasPagamentoProcessadas.find(f => f.id === selectedFormaPagamento),
+          paymentMethod: formasPagamentoProcessadas.find((f) => f.id === selectedFormaPagamento),
           formasPagamento: formasPagamentoProcessadas,
           priceBreakdown: priceBreakdown,
-          // Campos necessários para o LeadsManager reconstruir a mensagem
+          upsell_produtos: filteredUpsellProdutos
+            .filter((p) => selectedUpsellIds.has(p.id))
+            .map((p) => ({
+              id: p.id,
+              produto_id: p.id,
+              nome: p.nome,
+              valor: p.valor,
+              desconto_percentual: p.desconto_percentual ?? 0,
+              quantidade: 1,
+              imagem_url: p.imagem_url || '',
+              provedor_id: p.provedor_id || null,
+            })),
+          brindes_produtos: activeBrindesList,
+          customFields: camposExtras || [],
+          customFieldsData: camposExtrasData || {},
           sistema_sazonal_ativo: template?.sistema_sazonal_ativo,
           sistema_geografico_ativo: template?.sistema_geografico_ativo,
           ocultar_valores_intermediarios: template?.ocultar_valores_intermediarios,
+          cupomCodigo: cupomAtivo ? cupomCodigo : null,
+          cupomAtivo,
+          cupomDesconto: cupomAtivo ? cupomDesconto : 0,
+          valor_base: priceBreakdown?.subtotal || 0,
+          valor_upsell: priceBreakdown?.upsellTotal || 0,
         },
         valorTotal: calculateTotal(),
       });
     }
-  }, [template, produtos, selectedProdutos, selectedFormaPagamento, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas, priceBreakdown]);
+  }, [template, produtos, selectedProdutos, selectedFormaPagamento, selectedUpsellIds, brindesProdutos, filteredUpsellProdutos, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas, priceBreakdown, cupomAtivo, cupomCodigo, cupomDesconto]);
 
 
 
@@ -2326,65 +2371,125 @@ export function QuotePage() {
       setShowSummaryModal(true);
       console.log('✅ [handleSubmit] Modal de resumo pronto para ser exibido.');
 
-      // 2. AÇÃO EM SEGUNDO PLANO: AGENDAR O SALVAMENTO DO LEAD
-      // O setTimeout desacopla a requisição de rede da ação do usuário,
-      // dando tempo para a UI (modal) renderizar sem ser bloqueada.
-      setTimeout(async () => {
-        // Limpa o orçamento salvo no navegador após o envio bem-sucedido
-        try {
-          console.log('🚀 [setTimeout] Iniciando salvamento do lead em segundo plano...');
+      // 3. DISPARAR O SALVAMENTO DO LEAD IMEDIATAMENTE (SEM DELAY)
+      // Salva dados pessoais do cliente no navegador imediatamente para garantir persistência mesmo se sair
+      try {
+        if (formData.nome_cliente || formData.email_cliente || formData.telefone_cliente) {
+          localStorage.setItem(
+            'priceus_saved_client_profile',
+            JSON.stringify({
+              nome_cliente: formData.nome_cliente,
+              email_cliente: formData.email_cliente,
+              telefone_cliente: formData.telefone_cliente,
+              cidadeSelecionada: cidadeSelecionada || '',
+              dataEvento: dataEvento || '',
+            })
+          );
+        }
+      } catch (e) {}
 
-          // 🔥 CORREÇÃO CRÍTICA DO PAYLOAD
+      // Execução assíncrona imediata para capturar o lead no primeiro instante (IIFE)
+      (async () => {
+        try {
+          console.log('🚀 [handleSubmit] Iniciando salvamento imediato do lead...');
+          const currentTemplate = templateRef.current || template;
+          if (!currentTemplate?.id || !currentTemplate?.user_id) {
+            console.error('❌ [handleSubmit] Template ID ou User ID ausente ao salvar lead:', currentTemplate);
+            return;
+          }
+
+          // Identificar brindes vinculados aos produtos selecionados
+          const activeBrindesList: any[] = [];
+          const seenBrindeIds = new Set<string>();
+          produtos
+            .filter((p) => selectedProdutos[p.id] && selectedProdutos[p.id] > 0)
+            .forEach((p) => {
+              if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados)) {
+                p.brindes_vinculados.forEach((brindeId: string) => {
+                  if (!seenBrindeIds.has(brindeId)) {
+                    seenBrindeIds.add(brindeId);
+                    const brindeObj = brindesProdutos.find((b) => b.id === brindeId);
+                    if (brindeObj) {
+                      activeBrindesList.push({
+                        id: brindeObj.id,
+                        produto_id: brindeObj.id,
+                        nome: brindeObj.nome,
+                        valor: brindeObj.valor,
+                        imagem_url: brindeObj.imagem_url || '',
+                        quantidade: 1,
+                        provedor_id: brindeObj.provedor_id || null,
+                      });
+                    }
+                  }
+                });
+              }
+            });
+
+          // 🔥 PAYLOAD COMPLETO E RICO
           const payload = {
-            templateId: templateRef.current.id,
-            userId: templateRef.current.user_id,
+            templateId: currentTemplate.id,
+            userId: currentTemplate.user_id,
             formData: { 
               ...formData, 
               ...camposExtrasData, 
               data_evento: dataEvento || null, 
               cidade_evento: cidadeSelecionada || null, 
-              tipo_evento: templateRef.current.nome_template || null,
+              tipo_evento: currentTemplate.nome_template || null,
               horario_inicio: horarioSelecionado || null,
               duracao_minutos: activeDuration || null,
             },
             orcamentoDetalhe: {
-              // O objeto 'selectedProdutos' é convertido para um array, que é o que a Edge Function espera.
-              produtos: Object.entries(selectedProdutos).map(([produto_id, quantidade]) => ({
-                produto_id,
-                quantidade: Number(quantidade),
-              })),
-              upsell_produtos: filteredUpsellProdutos
-                .filter(p => selectedUpsellIds.has(p.id))
-                .map(p => ({ produto_id: p.id, nome: p.nome, valor: p.valor, desconto_percentual: p.desconto_percentual ?? 0 })),
+              selectedProdutos,
+              selectedFormaPagamento,
               forma_pagamento_id: selectedFormaPagamento || null,
+              produtos: produtos,
+              paymentMethod: formasPagamentoProcessadas.find((f) => f.id === selectedFormaPagamento),
+              formasPagamento: formasPagamentoProcessadas,
               priceBreakdown: priceBreakdown,
+              upsell_produtos: filteredUpsellProdutos
+                .filter((p) => selectedUpsellIds.has(p.id))
+                .map((p) => ({
+                  id: p.id,
+                  produto_id: p.id,
+                  nome: p.nome,
+                  valor: p.valor,
+                  desconto_percentual: p.desconto_percentual ?? 0,
+                  quantidade: 1,
+                  imagem_url: p.imagem_url || '',
+                  provedor_id: p.provedor_id || null,
+                })),
+              brindes_produtos: activeBrindesList,
+              customFields: camposExtras || [],
+              customFieldsData: camposExtrasData || {},
+              sistema_sazonal_ativo: currentTemplate?.sistema_sazonal_ativo,
+              sistema_geografico_ativo: currentTemplate?.sistema_geografico_ativo,
+              ocultar_valores_intermediarios: currentTemplate?.ocultar_valores_intermediarios,
+              cupomCodigo: cupomAtivo ? cupomCodigo : null,
+              cupomAtivo,
+              cupomDesconto: cupomAtivo ? cupomDesconto : 0,
+              valor_base: priceBreakdown?.subtotal || 0,
+              valor_upsell: priceBreakdown?.upsellTotal || 0,
             },
             valorTotal: calculateTotal(),
           };
 
           const { lead: leadData, error } = await saveFinalLead(payload);
 
-          // O hook agora retorna um objeto { lead, error }.
           if (error || !leadData) {
-            console.error('❌ [setTimeout] Falha ao salvar o lead. A resposta foi vazia ou continha um erro. Erro retornado:', error);
+            console.error('❌ [handleSubmit] Falha ao salvar o lead. Erro retornado:', error);
             return;
           }
 
-          console.log('✅ [setTimeout] Lead salvo com sucesso:', leadData);
-
-          // Mantém os dados preenchidos e a seleção salvos no navegador para caso o cliente retorne ao link
-          console.log('✅ [setTimeout] Dados do cliente mantidos salvos no navegador para visitas futuras.');
+          console.log('✅ [handleSubmit] Lead salvo com sucesso:', leadData);
 
           const leadId = leadData.id;
-
           if (leadId) {
-            console.log('✅ [QuotePage] Lead salvo com id. (A notificação correspondente será criada pelo Backend para evitar duplicação).', leadId);
+            console.log('✅ [QuotePage] Lead salvo com id. Notificação criada com sucesso:', leadId);
           }
         } catch (err) {
-          // Captura erros da chamada `saveFinalLead` ou da notificação
-          console.error('❌ [setTimeout] Erro capturado no bloco CATCH da QuotePage:', err);
+          console.error('❌ [handleSubmit] Erro capturado no salvamento imediato do lead:', err);
         }
-      }, 500); // Delay de 500ms para garantir a renderização do modal
+      })();
 
 
     } catch (error) {

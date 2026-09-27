@@ -512,6 +512,28 @@ export function CullingAiTuningModal({
             </div>
           </div>
 
+          {/* Cota de Seleção / Aceitação */}
+          <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-950 border border-purple-500/30">
+            <div className="flex justify-between items-center text-slate-200">
+              <span className="font-bold flex items-center gap-1.5 text-purple-300">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Cota de Seleção / Aceitação
+              </span>
+              <span className="font-mono font-bold text-purple-400 bg-purple-950/80 px-2 py-0.5 rounded border border-purple-500/30">{targetSelectionRatio}%</span>
+            </div>
+            <p className="text-[10px] text-slate-400">Porcentagem aproximada de fotos do ensaio que a IA deve aprovar e priorizar.</p>
+            <input
+              id="modal_target_selection_ratio"
+              name="modal_target_selection_ratio"
+              type="range"
+              min="10"
+              max="100"
+              step="5"
+              value={targetSelectionRatio}
+              onChange={(e) => setTargetSelectionRatio(parseInt(e.target.value))}
+              className="w-full accent-purple-500"
+            />
+          </div>
+
           {/* 3. Rigor de Nitidez e Foco */}
           <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
             <div className="flex justify-between items-center text-slate-200">
@@ -1177,7 +1199,7 @@ export function CompareBurstModal({
                       alt={photo.fileName}
                       className="w-full h-full object-contain select-none transition-transform duration-100"
                       style={{
-                        transform: `scale(${zoomScale})`,
+                        transform: `rotate(${photo.rotation || 0}deg) scale(${zoomScale * (photo.rotation && photo.rotation % 180 !== 0 ? 0.75 : 1)})`,
                         transformOrigin: 'center center',
                       }}
                     />

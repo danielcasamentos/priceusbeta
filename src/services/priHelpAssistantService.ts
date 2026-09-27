@@ -443,16 +443,13 @@ export async function callPriHelpAssistant(
       }
     }
 
-    // B. Groq Cloud (Modelos ativos de alta velocidade com failover)
+    // B. Groq Cloud (Modelos de alta velocidade com failover)
     if (key.startsWith('gsk_')) {
       const groqCandidateModels = [
-        'qwen/qwen3.8-27b',
         'openai/gpt-oss-120b',
-        'groq/compound',
-        'qwen/qwen3.6-27b',
         'openai/gpt-oss-20b',
-        'llama-3.3-70b-versatile',
-        'llama-3.1-8b-instant'
+        'llama-3.1-8b-instant',
+        'qwen/qwen3.6-27b'
       ];
 
       for (const groqModel of groqCandidateModels) {
@@ -467,7 +464,7 @@ export async function callPriHelpAssistant(
               model: groqModel,
               messages: openAIMessages,
               temperature: 0.6,
-              max_tokens: 1200
+              max_tokens: 800
             })
           });
 

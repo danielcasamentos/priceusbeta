@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, Lead } from '../lib/supabase';
 import { LeadOrcamentoDetalhe } from './LeadsManager';
-import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, Loader2, Check, AlertTriangle, ChevronDown, Mail } from 'lucide-react';
+import { X, Save, RefreshCw, AlertCircle, ShoppingBag, User, MapPin, Calendar, Phone, Loader2, Check, AlertTriangle, ChevronDown, Mail, Gift, Plus, Minus, Sparkles, TrendingUp, Tag } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
@@ -76,18 +76,100 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     '';
   const [selectedForma, setSelectedForma] = useState<string>(initialForma);
 
-  // ── Upsell ──────────────────────────────────────────────────────────────
+  // ── Upsell e Brindes do Template e Lead ──────────────────────────────────
+  const [availableUpsellProducts, setAvailableUpsellProducts] = useState<Product[]>([]);
+  const [availableBrindesProducts, setAvailableBrindesProducts] = useState<Product[]>([]);
+  const [templateDetails, setTemplateDetails] = useState<any>(null);
+
+  // Itens de Upsell contratados no lead
   const [upsellItems, setUpsellItems] = useState<any[]>(
     (savedOrcamentoDetalhe as any).upsell_produtos || []
   );
   const upsellSubtotal = upsellItems.reduce((acc, p) => {
     const baseVal = parseFloat(p.valor || 0);
     const desc = p.desconto_percentual || 0;
-    return acc + baseVal * (1 - desc / 100) * (p.quantidade || 1);
+    const qty = p.quantidade || 1;
+    return acc + baseVal * (1 - desc / 100) * qty;
   }, 0);
 
+  // Itens de Brindes inclusos no lead
+  const [brindesItems, setBrindesItems] = useState<any[]>(
+    (savedOrcamentoDetalhe as any).brindes_produtos || []
+  );
+  const totalBrindesValor = brindesItems.reduce((acc, b) => {
+    return acc + parseFloat(b.valor || 0) * (b.quantidade || 1);
+  }, 0);
+
+  // Ações de Upsell
+  const handleAddUpsell = (product: any) => {
+    setUpsellItems(prev => {
+      const idx = prev.findIndex(p => p.id === product.id || p.produto_id === product.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = {
+          ...copy[idx],
+          quantidade: (copy[idx].quantidade || 1) + 1,
+        };
+        return copy;
+      }
+      return [
+        ...prev,
+        {
+          id: product.id,
+          produto_id: product.id,
+          nome: product.nome,
+          valor: parseFloat(product.valor || 0),
+          desconto_percentual: product.desconto_percentual || 0,
+          quantidade: 1,
+          imagem_url: product.imagem_url || '',
+          provedor_id: product.provedor_id || null,
+        },
+      ];
+    });
+  };
+
+  const handleUpdateUpsellQuantity = (productId: string, delta: number) => {
+    setUpsellItems(prev =>
+      prev
+        .map(p => {
+          if (p.id === productId || p.produto_id === productId) {
+            const newQty = (p.quantidade || 1) + delta;
+            return newQty > 0 ? { ...p, quantidade: newQty } : null;
+          }
+          return p;
+        })
+        .filter(Boolean) as any[]
+    );
+  };
+
   const handleRemoveUpsellItem = (produtoId: string) => {
-    setUpsellItems(prev => prev.filter(p => p.id !== produtoId));
+    setUpsellItems(prev => prev.filter(p => p.id !== produtoId && p.produto_id !== produtoId));
+  };
+
+  // Ações de Brindes
+  const handleToggleBrinde = (product: any) => {
+    setBrindesItems(prev => {
+      const exists = prev.some(b => b.id === product.id || b.produto_id === product.id);
+      if (exists) {
+        return prev.filter(b => b.id !== product.id && b.produto_id !== product.id);
+      }
+      return [
+        ...prev,
+        {
+          id: product.id,
+          produto_id: product.id,
+          nome: product.nome,
+          valor: parseFloat(product.valor || 0),
+          quantidade: 1,
+          imagem_url: product.imagem_url || '',
+          provedor_id: product.provedor_id || null,
+        },
+      ];
+    });
+  };
+
+  const handleRemoveBrindeItem = (produtoId: string) => {
+    setBrindesItems(prev => prev.filter(b => b.id !== produtoId && b.produto_id !== produtoId));
   };
 
   // ── Recalculado em realtime ──────────────────────────────────────────────
@@ -106,7 +188,9 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
   const [manualTotalOverride, setManualTotalOverride] = useState<number | null>(null);
   const [manualTotalInput, setManualTotalInput] = useState('');
 
-  const efectiveTotal = manualTotalOverride !== null ? manualTotalOverride : priceBreakdown.total;
+  // Total base com Upsells adicionados
+  const totalComUpsell = priceBreakdown.total + upsellSubtotal;
+  const efectiveTotal = manualTotalOverride !== null ? manualTotalOverride : totalComUpsell;
 
   const handleManualTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '');
@@ -214,6 +298,125 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         .eq('ativo', true);
       if (tempRes) {
         setTemporadas(tempRes);
+      }
+
+      // Carregar configurações de Upsell e Brindes do template
+      if (lead.template_id) {
+        const { data: tplData } = await supabase
+          .from('templates')
+          .select('id, nome_template, upsell_ativo, upsell_template_id, upsell_produtos_ids, brindes_ativo, brindes_template_id, brindes_produtos_ids, brindes_titulo')
+          .eq('id', lead.template_id)
+          .maybeSingle();
+
+        if (tplData) {
+          setTemplateDetails(tplData);
+
+          // 1. Buscar produtos de Upsell disponíveis
+          const upsellIds = new Set<string>();
+          if (Array.isArray(tplData.upsell_produtos_ids)) {
+            tplData.upsell_produtos_ids.forEach((id: string) => { if (id) upsellIds.add(id); });
+          }
+          const savedUpsells = (savedOrcamentoDetalhe as any)?.upsell_produtos || [];
+          savedUpsells.forEach((u: any) => {
+            const uId = u.id || u.produto_id;
+            if (uId) upsellIds.add(uId);
+          });
+
+          let fetchedUpsells: any[] = [];
+          if (tplData.upsell_template_id) {
+            const { data: tplUpsellProds } = await supabase
+              .from('produtos')
+              .select('*')
+              .eq('template_id', tplData.upsell_template_id)
+              .order('ordem', { ascending: true });
+            if (tplUpsellProds) fetchedUpsells.push(...tplUpsellProds);
+          }
+
+          const missingUpsellIds = Array.from(upsellIds).filter(id => !fetchedUpsells.some(p => p.id === id));
+          if (missingUpsellIds.length > 0) {
+            const { data: byIds } = await supabase
+              .from('produtos')
+              .select('*')
+              .in('id', missingUpsellIds);
+            if (byIds) fetchedUpsells.push(...byIds);
+          }
+
+          // Fallback: se não houver produtos específicos de upsell configurados, oferecer produtos extras do próprio template
+          if (fetchedUpsells.length === 0 && prodData && prodData.length > 1) {
+            fetchedUpsells = prodData.filter(p => p.permite_multiplos || p.permite_multiplas_unidades);
+          }
+          const uniqueUpsells = Array.from(new Map(fetchedUpsells.map(p => [p.id, p])).values());
+          setAvailableUpsellProducts(uniqueUpsells);
+
+          // 2. Buscar produtos de Brindes disponíveis
+          const brindesIds = new Set<string>();
+          if (Array.isArray(tplData.brindes_produtos_ids)) {
+            tplData.brindes_produtos_ids.forEach((id: string) => { if (id) brindesIds.add(id); });
+          }
+          // Brindes vinculados aos produtos do template
+          (prodData || []).forEach((p: any) => {
+            if (Array.isArray(p.brindes_vinculados)) {
+              p.brindes_vinculados.forEach((id: string) => { if (id) brindesIds.add(id); });
+            }
+          });
+          const savedBrindes = (savedOrcamentoDetalhe as any)?.brindes_produtos || [];
+          savedBrindes.forEach((b: any) => {
+            const bId = b.id || b.produto_id;
+            if (bId) brindesIds.add(bId);
+          });
+
+          let fetchedBrindes: any[] = [];
+          if (tplData.brindes_template_id) {
+            const { data: tplBrindesProds } = await supabase
+              .from('produtos')
+              .select('*')
+              .eq('template_id', tplData.brindes_template_id)
+              .order('ordem', { ascending: true });
+            if (tplBrindesProds) fetchedBrindes.push(...tplBrindesProds);
+          }
+
+          const missingBrindeIds = Array.from(brindesIds).filter(id => !fetchedBrindes.some(p => p.id === id));
+          if (missingBrindeIds.length > 0) {
+            const { data: bByIds } = await supabase
+              .from('produtos')
+              .select('*')
+              .in('id', missingBrindeIds);
+            if (bByIds) fetchedBrindes.push(...bByIds);
+          }
+
+          // Fallback: se não tiver brindes específicos cadastrados, permitir itens do próprio template como cortesia
+          if (fetchedBrindes.length === 0 && prodData && prodData.length > 0) {
+            fetchedBrindes = prodData;
+          }
+          const uniqueBrindes = Array.from(new Map(fetchedBrindes.map(p => [p.id, p])).values());
+          setAvailableBrindesProducts(uniqueBrindes);
+
+          // Inicializar brindes do lead se não estavam em orcamento_detalhe.brindes_produtos
+          if (savedBrindes.length > 0) {
+            setBrindesItems(savedBrindes);
+          } else {
+            const linkedIds = new Set<string>();
+            (savedOrcamentoDetalhe?.produtos || []).forEach((p: any) => {
+              if (Array.isArray(p.brindes_vinculados) && (savedOrcamentoDetalhe.selectedProdutos?.[p.id] || 0) > 0) {
+                p.brindes_vinculados.forEach((id: string) => linkedIds.add(id));
+              }
+            });
+            if (linkedIds.size > 0) {
+              const initialLinked = uniqueBrindes
+                .filter(b => linkedIds.has(b.id))
+                .map(b => ({
+                  id: b.id,
+                  produto_id: b.id,
+                  nome: b.nome,
+                  valor: b.valor || 0,
+                  quantidade: 1,
+                  imagem_url: b.imagem_url || '',
+                  provedor_id: b.provedor_id || null,
+                }));
+              setBrindesItems(initialLinked);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error(error);
@@ -462,14 +665,21 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
           ...priceBreakdown,
           total: efectiveTotal, // garante que o override é persistido
         },
-        produtos: allProducts.map((p) => ({
-          ...p,
-          desconto_percentual: p.desconto_percentual ?? 0,
-          desconto_ativo: !!activeDiscounts[p.id],
-        })),
+        produtos: allProducts.map((p) => {
+          const isSelected = (selectedProducts[p.id] || 0) > 0;
+          return {
+            ...p,
+            desconto_percentual: p.desconto_percentual ?? 0,
+            desconto_ativo: !!activeDiscounts[p.id],
+            brindes_vinculados: isSelected
+              ? brindesItems.map((b) => b.id || b.produto_id)
+              : (p.brindes_vinculados || []),
+          };
+        }),
         paymentMethod: formasPagamento.find((f) => f.id === selectedForma),
         customFieldsData: customFieldsData,
         upsell_produtos: upsellItems,
+        brindes_produtos: brindesItems,
         valor_base: efectiveTotal - upsellSubtotal,
         valor_upsell: upsellSubtotal,
         cupomCodigo: cupomAtivo ? cupomCodigo : null,
@@ -907,6 +1117,24 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                                   </label>
                                 </div>
                               )}
+
+                              {/* Brindes vinculados neste pacote */}
+                              {isSelected && brindesItems.length > 0 && (
+                                <div className="mt-2.5 pt-2 border-t border-blue-100 flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1 uppercase tracking-wider">
+                                    🎁 Brindes vinculados:
+                                  </span>
+                                  {brindesItems.map((b) => (
+                                    <span
+                                      key={b.id || b.produto_id}
+                                      className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-medium"
+                                    >
+                                      <span>{b.nome}</span>
+                                      <span className="text-[10px] text-emerald-600 font-bold">(Grátis)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -985,45 +1213,297 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                 </div>
               )}
 
-              {/* ── Seção Upsell ── */}
-              {upsellItems.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                  <h4 className="font-semibold text-amber-900 text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <span>🎁</span> Adicionais Contratados (Upsell)
-                  </h4>
-                  <div className="space-y-2">
+              {/* ── Seção: Upsells & Adicionais Vinculados ao Template ── */}
+              <div className="bg-white border border-amber-200 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                        Adicionais &amp; Upsell do Orçamento
+                        {upsellItems.length > 0 && (
+                          <span className="text-[11px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
+                            {upsellItems.length} selecionado(s)
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        Produtos e serviços adicionais configurados no template que agregam valor ao contrato
+                      </p>
+                    </div>
+                  </div>
+                  {upsellSubtotal > 0 && (
+                    <div className="text-right">
+                      <span className="text-xs text-gray-500 block">Total Adicionais</span>
+                      <span className="text-sm font-bold text-amber-600">+{formatCurrency(upsellSubtotal)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Lista de Upsells já Contratados */}
+                {upsellItems.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-amber-100">
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider block">
+                      Itens Contratados no Lead:
+                    </span>
                     {upsellItems.map((p) => {
+                      const pId = p.id || p.produto_id;
                       const baseVal = parseFloat(p.valor || 0);
                       const desc = p.desconto_percentual || 0;
-                      const precoFinal = baseVal * (1 - desc / 100);
+                      const precoFinalUnit = baseVal * (1 - desc / 100);
+                      const qty = p.quantidade || 1;
+                      const lineTotal = precoFinalUnit * qty;
+
                       return (
                         <div
-                          key={p.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-white border border-amber-100"
+                          key={pId}
+                          className="flex items-center justify-between p-3 rounded-lg bg-amber-50/40 border border-amber-200/80 hover:bg-amber-50 transition-colors"
                         >
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-amber-900">{p.nome}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {desc > 0 && (
-                                <span className="text-xs text-gray-400 line-through">
-                                  {formatCurrency(baseVal)}
-                                </span>
-                              )}
-                              <span className="text-sm font-bold text-amber-700">
-                                {formatCurrency(precoFinal)}
+                          <div className="flex items-center gap-3 flex-1 min-w-0 pr-3">
+                            {p.imagem_url ? (
+                              <img
+                                src={p.imagem_url}
+                                alt={p.nome}
+                                className="w-10 h-10 object-cover rounded-lg flex-shrink-0 border border-amber-200"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700">
+                                <Tag className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-gray-900 leading-snug">{p.nome}</p>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs">
                                 {desc > 0 && (
-                                  <span className="text-xs ml-1 text-green-600 font-normal">(-{desc}%)</span>
+                                  <span className="text-gray-400 line-through">
+                                    {formatCurrency(baseVal)}
+                                  </span>
                                 )}
-                              </span>
-                              {p.quantidade > 1 && (
-                                <span className="text-xs text-gray-500">x {p.quantidade}</span>
-                              )}
+                                <span className="font-bold text-amber-700">
+                                  {formatCurrency(precoFinalUnit)} un.
+                                  {desc > 0 && (
+                                    <span className="text-[10px] ml-1 text-green-600 font-normal">(-{desc}%)</span>
+                                  )}
+                                </span>
+                              </div>
                             </div>
                           </div>
+
+                          {/* Quantidade e Controles */}
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center bg-white border border-amber-300 rounded-lg overflow-hidden shadow-xs">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateUpsellQuantity(pId, -1)}
+                                className="p-1.5 hover:bg-amber-100 text-amber-700 transition-colors"
+                                title="Diminuir quantidade"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="px-2.5 py-1 text-xs font-bold text-gray-800 min-w-7 text-center">
+                                {qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateUpsellQuantity(pId, 1)}
+                                className="p-1.5 hover:bg-amber-100 text-amber-700 transition-colors"
+                                title="Aumentar quantidade"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <span className="text-sm font-bold text-gray-900 min-w-[70px] text-right">
+                              {formatCurrency(lineTotal)}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveUpsellItem(pId)}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Remover adicional"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Catálogo de Produtos de Upsell Disponíveis do Template */}
+                <div className="pt-2 border-t border-gray-100">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-2.5">
+                    Adicionar Serviços/Produtos de Upsell vinculados:
+                  </span>
+
+                  {availableUpsellProducts.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {availableUpsellProducts.map((p) => {
+                        const isAdded = upsellItems.some((u) => u.id === p.id || u.produto_id === p.id);
+                        const existing = upsellItems.find((u) => u.id === p.id || u.produto_id === p.id);
+                        const qty = existing ? (existing.quantidade || 1) : 0;
+                        const desc = p.desconto_percentual || 0;
+                        const finalPrice = p.valor * (1 - desc / 100);
+
+                        return (
+                          <div
+                            key={p.id}
+                            className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                              isAdded
+                                ? 'bg-amber-50/70 border-amber-300 shadow-xs'
+                                : 'bg-gray-50/60 border-gray-200 hover:bg-white hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              {p.imagem_url ? (
+                                <img
+                                  src={p.imagem_url}
+                                  alt={p.nome}
+                                  className="w-12 h-12 object-cover rounded-lg flex-shrink-0 border border-gray-200"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700">
+                                  <Tag className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-gray-900 leading-snug">{p.nome}</p>
+                                {p.resumo && (
+                                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{p.resumo}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-1 text-xs">
+                                  {desc > 0 && (
+                                    <span className="text-gray-400 line-through">
+                                      {formatCurrency(p.valor)}
+                                    </span>
+                                  )}
+                                  <span className="font-bold text-amber-700 text-sm">
+                                    {formatCurrency(finalPrice)}
+                                  </span>
+                                  {desc > 0 && (
+                                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">
+                                      -{desc}%
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddUpsell(p)}
+                              className={`w-full sm:w-auto px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 ${
+                                isAdded
+                                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                                  : 'bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 shadow-xs'
+                              }`}
+                            >
+                              {isAdded ? (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  <span>{qty > 1 ? `No Pacote (x${qty})` : 'No Pacote'} · +1 mais</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-4 h-4" />
+                                  <span>Adicionar</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-center">
+                      <p className="text-xs text-gray-500">
+                        Nenhum produto extra de upsell configurado especificamente para este template.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Seção: Brindes & Mimos Vinculados (Grátis) ── */}
+              <div className="bg-white border border-emerald-200 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                      <Gift className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                        Brindes &amp; Bônus do Orçamento
+                        {brindesItems.length > 0 && (
+                          <span className="text-[11px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
+                            {brindesItems.length} brinde(s) incluso(s)
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        Itens de cortesia vinculados ao template (Custo R$ 0,00 para o cliente, agregam alto valor percebido)
+                      </p>
+                    </div>
+                  </div>
+                  {brindesItems.length > 0 && (
+                    <div className="text-right">
+                      <span className="text-xs text-emerald-700 font-bold block">100% Grátis</span>
+                      <span className="text-[11px] text-gray-400">Economia de {formatCurrency(totalBrindesValor)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Lista de Brindes Inclusos no Lead */}
+                {brindesItems.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-emerald-100">
+                    <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider block">
+                      Brindes Confirmados no Pacote do Lead:
+                    </span>
+                    {brindesItems.map((b) => {
+                      const bId = b.id || b.produto_id;
+                      const val = parseFloat(b.valor || 0);
+
+                      return (
+                        <div
+                          key={bId}
+                          className="flex items-center justify-between p-3 rounded-lg bg-emerald-50/50 border border-emerald-200 hover:bg-emerald-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0 pr-3">
+                            {b.imagem_url ? (
+                              <img
+                                src={b.imagem_url}
+                                alt={b.nome}
+                                className="w-10 h-10 object-cover rounded-lg flex-shrink-0 border border-emerald-200"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-700">
+                                <Gift className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-gray-900 leading-snug">{b.nome}</p>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs">
+                                {val > 0 && (
+                                  <span className="text-gray-400 line-through">
+                                    {formatCurrency(val)}
+                                  </span>
+                                )}
+                                <span className="font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded text-[11px]">
+                                  🎁 Cortesia / Grátis
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                           <button
-                            onClick={() => handleRemoveUpsellItem(p.id)}
-                            className="ml-3 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Remover adicional"
+                            type="button"
+                            onClick={() => handleRemoveBrindeItem(bId)}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remover brinde do pacote"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -1031,20 +1511,102 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                       );
                     })}
                   </div>
-                  <p className="text-xs text-amber-700 mt-3 font-medium">
-                    Subtotal dos adicionais: {formatCurrency(upsellSubtotal)}
-                  </p>
+                )}
+
+                {/* Catálogo de Brindes Disponíveis do Template */}
+                <div className="pt-2 border-t border-gray-100">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-2.5">
+                    Vincular Brindes Disponíveis do Template:
+                  </span>
+
+                  {availableBrindesProducts.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {availableBrindesProducts.map((p) => {
+                        const isIncluded = brindesItems.some((b) => b.id === p.id || b.produto_id === p.id);
+
+                        return (
+                          <div
+                            key={p.id}
+                            className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                              isIncluded
+                                ? 'bg-emerald-50/80 border-emerald-400 shadow-xs'
+                                : 'bg-gray-50/60 border-gray-200 hover:bg-white hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              {p.imagem_url ? (
+                                <img
+                                  src={p.imagem_url}
+                                  alt={p.nome}
+                                  className="w-12 h-12 object-cover rounded-lg flex-shrink-0 border border-gray-200"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-700">
+                                  <Gift className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-gray-900 leading-snug">{p.nome}</p>
+                                {p.resumo && (
+                                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{p.resumo}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-1 text-xs">
+                                  <span className="text-gray-400 line-through">
+                                    {formatCurrency(p.valor)}
+                                  </span>
+                                  <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                                    100% Grátis
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBrinde(p)}
+                              className={`w-full sm:w-auto px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 ${
+                                isIncluded
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                  : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs'
+                              }`}
+                            >
+                              {isIncluded ? (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  <span>Incluso no Pacote</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-4 h-4" />
+                                  <span>+ Incluir Brinde</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-center">
+                      <p className="text-xs text-gray-500">
+                        Nenhum brinde pré-configurado no template do lead.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Direita: Resumo Recalculado */}
             <div className="md:col-span-1">
               <div className="bg-white border border-gray-200 rounded-xl p-5 sticky top-4 shadow-sm">
-                <h4 className="font-bold text-gray-900 mb-4 border-b pb-2">Resumo recalculado</h4>
+                <h4 className="font-bold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-600" />
+                  Resumo Recalculado
+                </h4>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span>
+                    <span>Subtotal dos Pacotes</span>
                     <span>{formatCurrency(priceBreakdown.subtotal)}</span>
                   </div>
 
@@ -1086,13 +1648,28 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                     </div>
                   )}
 
+                  {upsellSubtotal > 0 && (
+                    <div className="flex justify-between text-amber-600 font-medium">
+                      <span className="flex items-center gap-1">🎁 Adicionais (Upsell)</span>
+                      <span>+{formatCurrency(upsellSubtotal)}</span>
+                    </div>
+                  )}
+
+                  {brindesItems.length > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-medium">
+                      <span className="flex items-center gap-1">🎉 Brindes ({brindesItems.length})</span>
+                      <span className="text-right">
+                        Grátis
+                        {totalBrindesValor > 0 && (
+                          <span className="text-[11px] text-gray-400 block line-through">
+                            ({formatCurrency(totalBrindesValor)})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="border-t pt-3 mt-4">
-                    {upsellSubtotal > 0 && (
-                      <div className="flex justify-between text-amber-600 mb-2 text-sm font-medium">
-                        <span>🎁 Adicionais</span>
-                        <span>+{formatCurrency(upsellSubtotal)}</span>
-                      </div>
-                    )}
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-gray-900 text-base">Total Final</span>
                       {manualTotalOverride !== null && (
@@ -1101,7 +1678,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                           onClick={resetManualTotal}
                           className="text-xs text-blue-500 hover:text-blue-700 underline"
                         >
-                          Resetar
+                          Resetar para calculado
                         </button>
                       )}
                     </div>
@@ -1114,14 +1691,14 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                         type="text"
                         value={manualTotalOverride !== null
                           ? manualTotalInput
-                          : new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(priceBreakdown.total)
+                          : new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(totalComUpsell)
                         }
                         onChange={handleManualTotalChange}
                         onFocus={(e) => {
                           if (manualTotalOverride === null) {
-                            const raw = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(priceBreakdown.total);
+                            const raw = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(totalComUpsell);
                             setManualTotalInput(raw);
-                            setManualTotalOverride(priceBreakdown.total);
+                            setManualTotalOverride(totalComUpsell);
                           }
                           e.target.select();
                         }}
@@ -1139,7 +1716,7 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
               <div className="mt-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-800">
-                  Ao salvar, todos os dados do lead e o valor total serão atualizados e refletidos
+                  Ao salvar, os pacotes, brindes inclusos, adicionais de upsell e o valor total serão atualizados e refletidos
                   em contratos e mensagens de WhatsApp.
                 </p>
               </div>

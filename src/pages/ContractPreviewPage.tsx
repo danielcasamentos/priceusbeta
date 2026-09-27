@@ -174,217 +174,6 @@ export function ContractPreviewPage() {
     }
   };
 
-  /**
-   * Cria as transações financeiras (entrada e parcelas) após a assinatura.
-   * Respeita integralmente a configuração da forma de pagamento escolhida.
-   */
-  const createFinancialTransactions = async (signedContract: Contract) => {
-    console.log('🏦 Iniciando criação de transações financeiras...');
-    const paymentDetails = signedContract.payment_details_json;
-    const totalValue = signedContract.lead_data_json?.valor_total || 0;
-    const clientName = signedContract.lead_data_json?.nome_cliente || 'Cliente';
-    const docFiscal = signedContract.client_data_json?.cpf || signedContract.client_data_json?.documento || '';
-
-    if (totalValue <= 0) {
-      console.log('⚠️ Valor total zero. Nenhuma transação será criada.');
-      return;
-    }
-
-    // Fallback: sem detalhes de pagamento → receita única à vista
-    if (!paymentDetails) {
-      console.warn('⚠️ payment_details_json ausente. Criando receita única à vista como fallback.');
-      const { error } = await supabase.rpc('insert_public_transactions', {
-        p_token: token,
-        p_transactions: [{
-          user_id: signedContract.user_id,
-          tipo: 'receita',
-          origem: 'contrato',
-          descricao: `Contrato - ${clientName}`,
-          valor: totalValue,
-          data: new Date().toISOString().split('T')[0],
-          status: 'pendente',
-          forma_pagamento: 'Não especificado',
-          contract_id: signedContract.id,
-          is_installment: false,
-          installment_number: null,
-          total_installments: null,
-          documento_fiscal: docFiscal,
-        }],
-      });
-      if (error) console.error('❌ Erro ao criar transação fallback:', error);
-      else console.log('✅ Transação fallback criada com sucesso.');
-      return;
-    }
-
-    const transactionsToInsert: any[] = [];
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const nomePagamento = paymentDetails.nome || 'Não informado';
-    const maxParcelas = paymentDetails.max_parcelas || 0;
-
-    // ─────────────────────────────────────────────────────
-    // CENÁRIO 1: À vista (sem parcelamento)
-    // max_parcelas = 0 ou 1, e entrada_valor = 0 ou = total
-    // ─────────────────────────────────────────────────────
-    if (maxParcelas <= 1) {
-      // Calcular o valor da entrada
-      let entradaValor = 0;
-      if (paymentDetails.entrada_tipo === 'percentual') {
-        const pct = paymentDetails.entrada_percentual ?? paymentDetails.entrada_valor ?? 0;
-        entradaValor = (totalValue * pct) / 100;
-      } else {
-        entradaValor = paymentDetails.entrada_valor || 0;
-      }
-
-      // Se não há entrada configurada ou a entrada cobre o total → pagamento único
-      const valorUnico = entradaValor > 0 ? entradaValor : totalValue;
-      const valorRestante = totalValue - valorUnico;
-      const hasTwoInstallments = maxParcelas === 1 && valorRestante > 0.01;
-
-      transactionsToInsert.push({
-        user_id: signedContract.user_id,
-        tipo: 'receita',
-        origem: 'contrato',
-        descricao: !hasTwoInstallments
-          ? `Pagamento à vista - Contrato ${clientName}`
-          : `Entrada - Contrato ${clientName}`,
-        valor: valorUnico,
-        data: todayStr,
-        status: 'pendente',
-        forma_pagamento: nomePagamento,
-        contract_id: signedContract.id,
-        is_installment: hasTwoInstallments,
-        installment_number: hasTwoInstallments ? 1 : null,
-        total_installments: hasTwoInstallments ? 2 : null,
-        documento_fiscal: docFiscal,
-      });
-
-      // Se havia entrada menor que o total e max_parcelas = 1, adicionar o restante
-      if (hasTwoInstallments) {
-        const dataRestante = new Date(today);
-        dataRestante.setMonth(dataRestante.getMonth() + 1);
-        transactionsToInsert.push({
-          user_id: signedContract.user_id,
-          tipo: 'receita',
-          origem: 'contrato',
-          descricao: `Parcela 1/1 - Contrato ${clientName}`,
-          valor: valorRestante,
-          data: dataRestante.toISOString().split('T')[0],
-          status: 'pendente',
-          forma_pagamento: nomePagamento,
-          contract_id: signedContract.id,
-          is_installment: true,
-          installment_number: 2,
-          total_installments: 2,
-          documento_fiscal: docFiscal,
-        });
-      }
-    }
-
-    // ─────────────────────────────────────────────────────
-    // CENÁRIO 2: Parcelado (max_parcelas >= 2)
-    // ─────────────────────────────────────────────────────
-    else {
-      // 2a. Calcular entrada
-      let downPaymentValue = 0;
-      if (paymentDetails.entrada_tipo === 'percentual') {
-        const pct = paymentDetails.entrada_percentual ?? paymentDetails.entrada_valor ?? 0;
-        downPaymentValue = (totalValue * pct) / 100;
-      } else {
-        downPaymentValue = paymentDetails.entrada_valor || 0;
-      }
-
-      const totalInstallments = maxParcelas + (downPaymentValue > 0 ? 1 : 0);
-
-      // Entrada (se houver)
-      if (downPaymentValue > 0) {
-        transactionsToInsert.push({
-          user_id: signedContract.user_id,
-          tipo: 'receita',
-          origem: 'contrato',
-          descricao: `Entrada - Contrato ${clientName}`,
-          valor: parseFloat(downPaymentValue.toFixed(2)),
-          data: todayStr,
-          status: 'pendente',
-          forma_pagamento: nomePagamento,
-          contract_id: signedContract.id,
-          is_installment: true,
-          installment_number: 1,
-          total_installments: totalInstallments,
-          documento_fiscal: docFiscal,
-        });
-      }
-
-      const remainingValue = totalValue - downPaymentValue;
-
-      // 2b. Usar parcelas_detalhadas se configuradas
-      const parcelasDetalhadas: any[] = paymentDetails.parcelas_detalhadas || [];
-
-      if (parcelasDetalhadas.length > 0) {
-        // Fotógrafo configurou datas e valores específicos por parcela
-        parcelasDetalhadas.forEach((parcela: any, idx: number) => {
-          transactionsToInsert.push({
-            user_id: signedContract.user_id,
-            tipo: 'receita',
-            origem: 'contrato',
-            descricao: `Parcela ${idx + 1}/${parcelasDetalhadas.length} - Contrato ${clientName}`,
-            valor: parseFloat((parcela.valor || (remainingValue / parcelasDetalhadas.length)).toFixed(2)),
-            data: parcela.data || (() => {
-              const d = new Date(today);
-              d.setMonth(d.getMonth() + idx + 1);
-              return d.toISOString().split('T')[0];
-            })(),
-            status: 'pendente',
-            forma_pagamento: nomePagamento,
-            contract_id: signedContract.id,
-            is_installment: true,
-            installment_number: (downPaymentValue > 0 ? 2 : 1) + idx,
-            total_installments: totalInstallments,
-            documento_fiscal: docFiscal,
-          });
-        });
-      } else {
-        // 2c. Parcelas iguais com datas mensais sequenciais
-        if (maxParcelas > 0 && remainingValue > 0.01) {
-          const installmentValue = parseFloat((remainingValue / maxParcelas).toFixed(2));
-
-          for (let i = 1; i <= maxParcelas; i++) {
-            const installmentDate = new Date(today);
-            installmentDate.setMonth(installmentDate.getMonth() + i);
-            transactionsToInsert.push({
-              user_id: signedContract.user_id,
-              tipo: 'receita',
-              origem: 'contrato',
-              descricao: `Parcela ${i}/${maxParcelas} - Contrato ${clientName}`,
-              valor: installmentValue,
-              data: installmentDate.toISOString().split('T')[0],
-              status: 'pendente',
-              forma_pagamento: nomePagamento,
-              contract_id: signedContract.id,
-              is_installment: true,
-              installment_number: (downPaymentValue > 0 ? 2 : 1) + (i - 1),
-              total_installments: totalInstallments,
-              documento_fiscal: docFiscal,
-            });
-          }
-        }
-      }
-    }
-
-    // Inserir todas as transações via RPC (contorna RLS em página pública)
-    if (transactionsToInsert.length > 0) {
-      console.log(`🏦 Inserindo ${transactionsToInsert.length} transação(ões):`, transactionsToInsert);
-      const { error } = await supabase.rpc('insert_public_transactions', {
-        p_token: token,
-        p_transactions: transactionsToInsert,
-      });
-      if (error) console.error('❌ Erro ao criar transações financeiras:', error);
-      else console.log(`✅ ${transactionsToInsert.length} transação(ões) criada(s) com sucesso.`);
-    } else {
-      console.warn('⚠️ Nenhuma transação gerada. Verifique a configuração da forma de pagamento.');
-    }
-  };
-
   const handleApproveAndFinalize = async () => {
     if (!contract || !clientData || !clientSignature) {
       setError('Faltam dados essenciais para finalizar o contrato.');
@@ -393,7 +182,7 @@ export function ContractPreviewPage() {
 
     setGenerating(true);
     try {
-      // 1. Atualiza o status do contrato no banco
+      // 1. Atualiza o status do contrato no banco para assinado
       const { data: updatedContract, error: updateError } = await supabase.from('contracts').update({
         client_data_json: clientData,
         signature_base64: clientSignature,
@@ -414,31 +203,39 @@ export function ContractPreviewPage() {
         signed_at: new Date().toISOString(),
       };
 
-      // 2. Cria as transações financeiras em background
-      createFinancialTransactions(targetContract).catch((err) => {
-        console.warn('⚠️ Erro ao criar transações financeiras:', err);
-      });
-
-      // 3. Dispara notificações para o profissional
-      const clientName = clientData.nome_completo || 'Cliente';
+      // 2. Dispara notificações para o fotógrafo/profissional
+      const clientName = clientData.nome_completo || clientData.nome || 'Cliente';
       
-      // Tentativa 1: RPC segura (Security Definer)
-      supabase.rpc('notify_public_contract_signed', {
-        p_token: token,
-        p_client_name: clientName,
-      }).catch(() => null);
+      try {
+        await supabase.rpc('notify_public_contract_signed', {
+          p_token: token,
+          p_client_name: clientName,
+        });
+      } catch (err) {
+        console.warn('Aviso ao disparar RPC de notificação:', err);
+      }
 
-      // Tentativa 2: NotificationService padrão
-      NotificationService.sendNotification({
-        userId: targetContract.user_id,
-        title: '📝 Contrato Assinado!',
-        message: `O contrato do evento de ${clientName} foi assinado digitalmente com sucesso.`,
-        type: 'payment',
-        link: '/dashboard/contracts',
-        relatedId: targetContract.id,
-      }).catch(() => null);
+      try {
+        await NotificationService.sendNotification({
+          userId: targetContract.user_id,
+          title: '📝 Contrato Assinado!',
+          message: `O contrato do evento de ${clientName} foi assinado digitalmente com sucesso.`,
+          type: 'payment',
+          link: '/dashboard/contracts',
+          relatedId: targetContract.id,
+        });
+      } catch (err) {
+        console.warn('Aviso ao disparar NotificationService:', err);
+      }
 
       console.log('✅ [DB] Contrato finalizado no banco de dados com sucesso.');
+
+      // Abre a janela nativa de impressão/salvar em PDF do navegador
+      setTimeout(() => {
+        window.print();
+      }, 300);
+
+      // Redireciona para a página de agradecimento e confirmação
       navigate(`/contrato/${token}/completo`);
 
     } catch (err: any) {

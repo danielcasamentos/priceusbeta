@@ -98,6 +98,8 @@ export interface Gallery {
   require_download_pin?: boolean;
   download_pin?: string | null;
   subgalleries?: string[] | null;
+  enable_face_recognition?: boolean;
+  faces_indexed_at?: string | null;
   status: GalleryStatus;
   created_at: string;
   updated_at: string;
@@ -156,7 +158,17 @@ export interface GalleryFormData {
   require_lead_capture?: boolean;
   enable_social_promo?: boolean;
   photographer_instagram?: string;
+  enable_face_recognition?: boolean;
   status: GalleryStatus;
+}
+
+export interface GalleryPhotoFace {
+  id: string;
+  gallery_id: string;
+  photo_id: string;
+  bounding_box?: { x: number; y: number; width: number; height: number } | null;
+  descriptor: number[];
+  created_at?: string;
 }
 
 export interface FileUploadProgress {

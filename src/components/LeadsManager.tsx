@@ -32,6 +32,7 @@ export interface LeadOrcamentoDetalhe {
   ocultar_valores_intermediarios?: boolean;
   priceBreakdown: PriceBreakdown;
   upsell_produtos?: any[];
+  brindes_produtos?: any[];
 }
 
 interface City {
@@ -623,6 +624,7 @@ export function LeadsManager({ userId }: { userId: string }) {
       customFields: savedOrcamentoDetalhe.customFields || [],
       customFieldsData: savedOrcamentoDetalhe.customFieldsData || {},
       upsellProducts: savedOrcamentoDetalhe.upsell_produtos || [],
+      brindesProducts: savedOrcamentoDetalhe.brindes_produtos || [],
       context: 'photographer-to-client',
     });
 
@@ -679,13 +681,6 @@ export function LeadsManager({ userId }: { userId: string }) {
     followupCouponCode, 
     followupBonusGift
   ]);
-
-  useEffect(() => {
-    loadLeads();
-    loadTemplates();
-    loadCities();
-    loadContractsForLeads();
-  }, []);
 
   // Efeito para interceptar link de compartilhamento e carregar modal de importação
   useEffect(() => {
@@ -865,6 +860,41 @@ export function LeadsManager({ userId }: { userId: string }) {
       if (!silent) setLoading(false);
     }
   }, [userId, filter]);
+
+  useEffect(() => {
+    loadLeads();
+    loadTemplates();
+    loadCities();
+    loadContractsForLeads();
+
+    // 🔄 Ouvinte silencioso para novos leads disparados em segundo plano
+    const handleLeadRefresh = () => {
+      console.log('🔄 [LeadsManager] Recarregando leads silenciosamente...');
+      loadLeads(true);
+    };
+    window.addEventListener('priceus-lead-refresh', handleLeadRefresh);
+
+    // 🔄 Recarregar ao retornar para a aba
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadLeads(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // 🔄 Polling invisível a cada 25s
+    const pollId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadLeads(true);
+      }
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('priceus-lead-refresh', handleLeadRefresh);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(pollId);
+    };
+  }, [loadLeads, loadTemplates, loadContractsForLeads]);
 
   const executeCancelConversion = async (leadId: string, newStatus: Lead['status']) => {
     setIsCancelingConversion(true);
@@ -2308,6 +2338,22 @@ export function LeadsManager({ userId }: { userId: string }) {
                           </div>
                         );
                       })()}
+                      {detalhesOrcamento.brindes_produtos && detalhesOrcamento.brindes_produtos.length > 0 && (
+                        <div className="mt-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40">
+                          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                            <span>🎁</span> Brindes Inclusos no Pacote:
+                          </span>
+                          <ul className="space-y-1 text-xs text-emerald-900 dark:text-emerald-200 font-medium">
+                            {detalhesOrcamento.brindes_produtos.map((b: any, idx: number) => (
+                              <li key={b.id || idx} className="flex items-center gap-2">
+                                <span>•</span>
+                                <span>{b.nome || b.nome_produto}</span>
+                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded font-bold">Grátis</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       {detalhesOrcamento.paymentMethod && (
                         <div className="mt-3">
                           <p className="text-sm"><strong>Forma de Pagamento:</strong> {detalhesOrcamento.paymentMethod.nome}</p>

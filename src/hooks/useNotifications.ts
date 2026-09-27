@@ -70,8 +70,24 @@ export function useNotifications(user: User | null) {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // 🔄 Ouvinte de evento customizado disparado por eventos realtime do dashboard
+    const handleCustomRefresh = () => {
+      console.log('🔔 Evento priceus-notification-refresh recebido — recarregando notificações...');
+      loadNotifications(true);
+    };
+    window.addEventListener('priceus-notification-refresh', handleCustomRefresh);
+
+    // 🔄 Polling silencioso e imperceptível a cada 20s quando a aba está visível
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications(true);
+      }
+    }, 20000);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('priceus-notification-refresh', handleCustomRefresh);
+      clearInterval(intervalId);
     };
   }, [userId, loadNotifications]);
 

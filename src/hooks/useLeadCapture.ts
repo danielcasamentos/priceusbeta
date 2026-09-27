@@ -165,49 +165,69 @@ export function useLeadCapture() {
 
       let leadResult = null;
       if (invokeError) {
-        console.warn('⚠️ Edge function create-lead falhou ou foi bloqueada, executando fallback direto via Supabase client...', invokeError);
-        const leadRow = {
-          template_id: data.templateId,
-          user_id: data.userId,
-          nome_cliente: payload.formData.nome_cliente,
-          email_cliente: payload.formData.email_cliente,
-          telefone_cliente: payload.formData.telefone_cliente,
-          dados_formulario: payload.formData,
-          orcamento_detalhe: payload.orcamentoDetalhe,
-          valor_total: payload.valorTotal,
-          status: 'novo',
-          session_id: sessionId,
-          url_origem: window.location.href,
-          user_agent: navigator.userAgent,
-          tempo_preenchimento_segundos: tempoPreenchimento,
-          data_evento: payload.formData.data_evento,
-          cidade_evento: payload.formData.cidade_evento,
-          tipo_evento: payload.formData.tipo_evento,
-        };
+        console.warn('⚠️ Edge function create-lead falhou ou foi bloqueada. Tentando fallback via RPC submit_public_lead...', invokeError);
+        
+        const { data: rpcLead, error: rpcErr } = await supabase.rpc('submit_public_lead', {
+          p_template_id: data.templateId,
+          p_user_id: data.userId,
+          p_form_data: payload.formData,
+          p_orcamento_detalhe: payload.orcamentoDetalhe,
+          p_valor_total: payload.valorTotal,
+          p_status: 'novo',
+          p_session_id: sessionId,
+          p_url_origem: window.location.href,
+          p_user_agent: navigator.userAgent,
+          p_tempo_preenchimento: tempoPreenchimento,
+        });
 
-        const { data: directLead, error: directErr } = await supabase
-          .from('leads')
-          .insert(leadRow)
-          .select()
-          .maybeSingle();
-
-        if (directErr) {
-          throw directErr;
-        }
-
-        leadResult = directLead;
-
-        try {
-          await supabase.from('notifications').insert({
+        if (!rpcErr && rpcLead) {
+          console.log('✅ Lead salvo com sucesso via RPC submit_public_lead:', rpcLead);
+          leadResult = rpcLead;
+        } else {
+          console.warn('⚠️ RPC submit_public_lead falhou, tentando fallback direto via Supabase client...', rpcErr);
+          const leadRow = {
+            template_id: data.templateId,
             user_id: data.userId,
-            title: 'Novo Lead Recebido',
-            message: `Você recebeu um novo lead de ${payload.formData.nome_cliente || 'um cliente'}!`,
-            type: 'info',
-            related_id: directLead?.id || null,
-            link: '/dashboard/leads',
-          });
-        } catch (notifErr) {
-          console.warn('Aviso ao inserir notificação direta:', notifErr);
+            nome_cliente: payload.formData.nome_cliente,
+            email_cliente: payload.formData.email_cliente,
+            telefone_cliente: payload.formData.telefone_cliente,
+            dados_formulario: payload.formData,
+            orcamento_detalhe: payload.orcamentoDetalhe,
+            valor_total: payload.valorTotal,
+            status: 'novo',
+            session_id: sessionId,
+            url_origem: window.location.href,
+            user_agent: navigator.userAgent,
+            tempo_preenchimento_segundos: tempoPreenchimento,
+            data_evento: payload.formData.data_evento,
+            cidade_evento: payload.formData.cidade_evento,
+            tipo_evento: payload.formData.tipo_evento,
+          };
+
+          const { data: directLead, error: directErr } = await supabase
+            .from('leads')
+            .insert(leadRow)
+            .select()
+            .maybeSingle();
+
+          if (directErr) {
+            throw directErr;
+          }
+
+          leadResult = directLead;
+
+          try {
+            await supabase.from('notifications').insert({
+              user_id: data.userId,
+              title: 'Novo Lead Recebido',
+              message: `Você recebeu um novo lead de ${payload.formData.nome_cliente || 'um cliente'}!`,
+              type: 'info',
+              related_id: directLead?.id || null,
+              link: '/dashboard/leads',
+            });
+          } catch (notifErr) {
+            console.warn('Aviso ao inserir notificação direta:', notifErr);
+          }
         }
       } else {
         leadResult = lead;

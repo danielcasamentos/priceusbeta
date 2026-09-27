@@ -21,6 +21,11 @@ export interface Product {
   desconto_percentual?: number;
   desconto_ativo?: boolean;
   resumo?: string;
+  imagem_url?: string;
+  descricao?: string;
+  brindes_vinculados?: string[] | null;
+  brindes_titulo_personalizado?: string;
+  brindes_mostrar_valores?: boolean;
 }
 
 export interface PaymentMethod {
@@ -397,7 +402,7 @@ function buildProductsList(
       // Adicionar brindes vinculados na mensagem
       if (p.brindes_vinculados && Array.isArray(p.brindes_vinculados) && p.brindes_vinculados.length > 0) {
         p.brindes_vinculados.forEach((brindeId: string) => {
-          const brinde = (brindesProducts || []).find((u) => u.id === brindeId);
+          const brinde = (brindesProducts || []).find((u) => u.id === brindeId || (u as any).produto_id === brindeId);
           if (brinde) {
             const titulo = (p as any).brindes_titulo_personalizado || 'Brinde Incluso';
             productLine += `\n   🎁 *${titulo}:* ${brinde.nome}`;

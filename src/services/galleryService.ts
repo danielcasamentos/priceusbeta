@@ -404,7 +404,11 @@ export class GalleryService {
   }
 
   /**
-   * Calcula o preço exato das fotos extras com descontos progressivos
+   * Calcula o preço exato das fotos extras com descontos progressivos.
+   * Suporta:
+   * 1. Pacote Pré-pago (limit > 0): primeiras X fotos inclusas (R$ 0), adicionais cobrados.
+   * 2. Venda Aberta / Eventos Coletivos / Corridas (limit === 0): parte de R$ 0,00 e
+   *    todas as fotos selecionadas são cobradas com descontos progressivos em lote.
    */
   static calculateExtraPhotosPrice(gallery: Gallery, totalSelected: number): {
     extraCount: number;
@@ -413,15 +417,45 @@ export class GalleryService {
     discountApplied: boolean;
   } {
     const limit = gallery.package_photo_limit || 0;
-    if (limit <= 0 || totalSelected <= limit) {
+
+    // Cenário 1: Pacote Pré-Pago com cota de fotos inclusas (ex: 20 fotos contratadas)
+    if (limit > 0) {
+      if (totalSelected <= limit) {
+        return { extraCount: 0, unitPrice: 0, totalPrice: 0, discountApplied: false };
+      }
+
+      const extraCount = totalSelected - limit;
+      let unitPrice = gallery.price_per_extra_photo || 0;
+      let discountApplied = false;
+
+      if (gallery.progressive_discounts && gallery.progressive_discounts.length > 0) {
+        const matchingTier = gallery.progressive_discounts.find(
+          (t) => extraCount >= t.min_photos && extraCount <= t.max_photos
+        );
+        if (matchingTier) {
+          unitPrice = matchingTier.price_per_photo;
+          discountApplied = true;
+        }
+      }
+
+      return {
+        extraCount,
+        unitPrice,
+        totalPrice: extraCount * unitPrice,
+        discountApplied,
+      };
+    }
+
+    // Cenário 2: Venda Aberta / Eventos Coletivos / Corrida (limit === 0)
+    // Parte de R$ 0,00 e soma conforme a quantidade com descontos progressivos
+    if (totalSelected <= 0) {
       return { extraCount: 0, unitPrice: 0, totalPrice: 0, discountApplied: false };
     }
 
-    const extraCount = totalSelected - limit;
+    const extraCount = totalSelected;
     let unitPrice = gallery.price_per_extra_photo || 0;
     let discountApplied = false;
 
-    // Verificar faixas de desconto progressivo
     if (gallery.progressive_discounts && gallery.progressive_discounts.length > 0) {
       const matchingTier = gallery.progressive_discounts.find(
         (t) => extraCount >= t.min_photos && extraCount <= t.max_photos
@@ -438,6 +472,72 @@ export class GalleryService {
       totalPrice: extraCount * unitPrice,
       discountApplied,
     };
+  }
+
+  /**
+   * Salva os rostos detectados de uma foto no Supabase
+   */
+  static async savePhotoFaces(
+    galleryId: string,
+    photoId: string,
+    faces: Array<{ boundingBox?: any; descriptor: number[] }>
+  ): Promise<void> {
+    try {
+      // Deletar rostos antigos desta foto antes de reinserir
+      await supabase.from('gallery_photo_faces').delete().eq('photo_id', photoId);
+
+      if (!faces || faces.length === 0) return;
+
+      const rows = faces.map((f) => ({
+        gallery_id: galleryId,
+        photo_id: photoId,
+        bounding_box: f.boundingBox || null,
+        descriptor: f.descriptor,
+      }));
+
+      const { error } = await supabase.from('gallery_photo_faces').insert(rows);
+      if (error) {
+        console.warn('[GalleryService] Aviso ao salvar rostos no Supabase:', error);
+      }
+    } catch (err) {
+      console.warn('[GalleryService] Exceção ao salvar rostos:', err);
+    }
+  }
+
+  /**
+   * Obtém todos os descritores faciais indexados de uma galeria
+   */
+  static async getGalleryFaces(galleryId: string): Promise<Array<{
+    id: string;
+    photo_id: string;
+    descriptor: number[];
+  }>> {
+    try {
+      const { data, error } = await supabase
+        .from('gallery_photo_faces')
+        .select('id, photo_id, descriptor')
+        .eq('gallery_id', galleryId);
+
+      if (error) throw error;
+      return (data as any) || [];
+    } catch (err) {
+      console.warn('[GalleryService] Erro ao buscar rostos da galeria:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Atualiza o timestamp de indexação de rostos da galeria
+   */
+  static async markGalleryFacesIndexed(galleryId: string): Promise<void> {
+    try {
+      await supabase
+        .from('galleries')
+        .update({ faces_indexed_at: new Date().toISOString() })
+        .eq('id', galleryId);
+    } catch (err) {
+      console.warn('[GalleryService] Erro ao marcar galeria como indexada:', err);
+    }
   }
 
 
@@ -1410,4 +1510,87 @@ export class GalleryService {
 
     return { addedCount, totalInDrive: driveFiles.length };
   }
+
+  /**
+   * Busca os presets de pacotes de fotos extras salvos pelo fotógrafo no Supabase
+   */
+  static async getProofingPresets(userId: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('gallery_proofing_presets')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('[GalleryService] Tabela gallery_proofing_presets ainda não aplicada no banco:', error.message);
+        return [];
+      }
+      return data || [];
+    } catch (e) {
+      console.warn('[GalleryService] Falha ao buscar presets no Supabase:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Salva um novo preset de pacote no Supabase
+   */
+  static async createProofingPreset(
+    userId: string,
+    preset: {
+      name: string;
+      packagePhotoLimit: number;
+      pricePerExtraPhoto: number;
+      progressiveDiscounts: any[];
+      isDefault?: boolean;
+    }
+  ): Promise<any> {
+    try {
+      if (preset.isDefault) {
+        // Desmarcar outros como padrão
+        await supabase
+          .from('gallery_proofing_presets')
+          .update({ is_default: false })
+          .eq('user_id', userId);
+      }
+
+      const { data, error } = await supabase
+        .from('gallery_proofing_presets')
+        .insert({
+          user_id: userId,
+          name: preset.name,
+          package_photo_limit: preset.packagePhotoLimit,
+          price_per_extra_photo: preset.pricePerExtraPhoto,
+          progressive_discounts: preset.progressiveDiscounts,
+          is_default: preset.isDefault ?? false,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (e) {
+      console.error('[GalleryService] Erro ao criar preset no Supabase:', e);
+      throw e;
+    }
+  }
+
+  /**
+   * Exclui um preset de pacote do Supabase
+   */
+  static async deleteProofingPreset(presetId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('gallery_proofing_presets')
+        .delete()
+        .eq('id', presetId);
+
+      if (error) throw error;
+    } catch (e) {
+      console.error('[GalleryService] Erro ao excluir preset:', e);
+      throw e;
+    }
+  }
 }
+

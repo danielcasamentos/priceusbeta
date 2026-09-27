@@ -20,9 +20,14 @@ import {
   Users,
   CheckSquare,
   RefreshCw,
+  CreditCard,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { Gallery, GalleryPhoto, FileUploadProgress, GalleryFormData } from '../../types/gallery';
 import { GalleryService } from '../../services/galleryService';
+import { faceRecognitionService } from '../../services/faceRecognitionService';
+import { requestStripeConnectOnboarding } from '../../services/stripeConnectService';
 import { GalleryEditor } from './GalleryEditor';
 import { GalleryUploader } from './GalleryUploader';
 import { GalleryPhotoGrid } from './GalleryPhotoGrid';
@@ -62,6 +67,36 @@ export function GalleriesManager() {
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(() => {
     return localStorage.getItem('priceus_google_drive_token') || null;
   });
+
+  // Stripe Connect para recebimento de vendas de fotos extras (repasses automáticos de 90%)
+  const [stripeConnectAccountId, setStripeConnectAccountId] = useState<string | null>(null);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+
+  // Notificação de sucesso de retorno da Stripe
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connect') === 'success') {
+      alert('🎉 Parabéns! Sua conta bancária foi conectada com a Stripe com sucesso. Suas vendas de fotos extras serão repassadas automaticamente!');
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  }, []);
+
+  const handleConnectStripe = async () => {
+    setIsConnectingStripe(true);
+    try {
+      const res = await requestStripeConnectOnboarding();
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        alert(res.error || 'Não foi possível gerar o link de conexão da Stripe.');
+      }
+    } catch (e: any) {
+      alert('Erro: ' + (e?.message || 'Falha ao conectar'));
+    } finally {
+      setIsConnectingStripe(false);
+    }
+  };
 
   const handleSaveGoogleToken = async (token: string) => {
     const trimmed = token.trim();
@@ -174,9 +209,13 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
       // Buscar perfil do usuário para o slugUsuario e token do Google OAuth
       const { data: profile } = await supabase
         .from('profiles')
-        .select('slug_usuario, nome_profissional, google_auth_data')
+        .select('slug_usuario, nome_profissional, google_auth_data, stripe_connect_account_id')
         .eq('id', user.id)
         .maybeSingle();
+
+      if (profile?.stripe_connect_account_id) {
+        setStripeConnectAccountId(profile.stripe_connect_account_id);
+      }
 
       if (profile?.google_auth_data?.access_token) {
         const autoToken = profile.google_auth_data.access_token;
@@ -403,6 +442,62 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
     }
   };
 
+  // ── RECONHECIMENTO FACIAL: INDEXAÇÃO DE ROSTOS DA GALERIA ─────────────────
+  const [isIndexingFaces, setIsIndexingFaces] = useState(false);
+  const [indexingProgress, setIndexingProgress] = useState({ current: 0, total: 0 });
+
+  const handleIndexFaces = async () => {
+    if (!managingGallery || galleryPhotos.length === 0) return;
+    setIsIndexingFaces(true);
+    setIndexingProgress({ current: 0, total: galleryPhotos.length });
+
+    try {
+      await faceRecognitionService.loadModels();
+      let totalFacesIndexed = 0;
+
+      for (let i = 0; i < galleryPhotos.length; i++) {
+        const photo = galleryPhotos[i];
+        setIndexingProgress({ current: i + 1, total: galleryPhotos.length });
+
+        const imgUrl = photo.supabase_thumb_path || photo.supabase_web_path;
+        if (!imgUrl) continue;
+
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = imgUrl;
+
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = () => resolve(null);
+          });
+
+          if (img.width > 0 && img.height > 0) {
+            const detected = await faceRecognitionService.detectFaces(img, 0.4);
+            if (detected.length > 0) {
+              await GalleryService.savePhotoFaces(managingGallery.id, photo.id, detected);
+              totalFacesIndexed += detected.length;
+            }
+          }
+        } catch (photoErr) {
+          console.warn(`[IndexFaces] Erro na foto ${photo.id}:`, photoErr);
+        }
+      }
+
+      await GalleryService.markGalleryFacesIndexed(managingGallery.id);
+      const nowIso = new Date().toISOString();
+      setManagingGallery((prev) => (prev ? { ...prev, faces_indexed_at: nowIso } : null));
+      setGalleries((prev) =>
+        prev.map((g) => (g.id === managingGallery.id ? { ...g, faces_indexed_at: nowIso } : g))
+      );
+      alert(`🎉 Indexação concluída! ${totalFacesIndexed} rostos foram identificados em ${galleryPhotos.length} fotos.`);
+    } catch (err: any) {
+      alert('Erro ao indexar rostos: ' + (err?.message || 'Tente novamente'));
+    } finally {
+      setIsIndexingFaces(false);
+    }
+  };
+
   const handleDeletePhoto = async (photoId: string) => {
     if (!window.confirm('Excluir esta foto permanentemente?')) return;
     try {
@@ -471,6 +566,22 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               >
                 <HardDrive className={`w-4 h-4 text-emerald-400 ${offloading ? 'animate-spin' : ''}`} />
                 <span>{offloading ? 'Movendo...' : 'Mover Fotos p/ Google Drive (Liberar Supabase)'}</span>
+              </button>
+
+              <button
+                onClick={handleIndexFaces}
+                disabled={isIndexingFaces || galleryPhotos.length === 0}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all flex items-center space-x-2 disabled:opacity-50 cursor-pointer"
+                title="Detectar e indexar rostos com inteligência artificial para busca por selfie"
+              >
+                <Sparkles className={`w-4 h-4 text-purple-400 ${isIndexingFaces ? 'animate-spin' : ''}`} />
+                <span>
+                  {isIndexingFaces
+                    ? `Indexando Rostos (${indexingProgress.current}/${indexingProgress.total})...`
+                    : managingGallery.faces_indexed_at
+                    ? '✨ Rostos Indexados (Reindexar)'
+                    : '⚡ Indexar Rostos (IA)'}
+                </span>
               </button>
 
               <button
@@ -590,6 +701,8 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
                   };
                 })}
                 projectTitle={managingGallery.title}
+                galleryId={managingGallery.id}
+                driveFolderId={managingGallery.google_drive_folder_id || undefined}
               />
             </div>
           )}
@@ -620,6 +733,24 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               >
                 <HardDrive className="w-4 h-4" />
                 <span>{googleAccessToken ? 'Google Drive Conectado' : 'Conectar Google Drive'}</span>
+              </button>
+
+              <button
+                onClick={handleConnectStripe}
+                disabled={isConnectingStripe}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center space-x-2 cursor-pointer ${
+                  stripeConnectAccountId
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                    : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
+                }`}
+                title={stripeConnectAccountId ? 'Conta Stripe conectada para repasses automáticos (90%)' : 'Conecte sua conta bancária para receber vendas de fotos extras'}
+              >
+                {isConnectingStripe ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                ) : (
+                  <CreditCard className={`w-4 h-4 ${stripeConnectAccountId ? 'text-emerald-400' : 'text-indigo-400'}`} />
+                )}
+                <span>{stripeConnectAccountId ? 'Stripe Ativo (90%)' : 'Receber Vendas (Stripe)'}</span>
               </button>
 
               <button

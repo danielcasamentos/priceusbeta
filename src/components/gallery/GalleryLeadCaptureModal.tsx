@@ -1,17 +1,24 @@
 import { useState } from 'react';
-import { User, Mail, Phone, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User, Mail, Phone, ArrowRight, ShieldCheck, Sparkles, Images } from 'lucide-react';
 
 interface GalleryLeadCaptureModalProps {
   isOpen: boolean;
   galleryTitle: string;
   photographerName?: string;
-  onSubmitLead: (data: { name: string; email: string; whatsapp: string }) => void;
+  enableFaceRecognition?: boolean;
+  onSubmitLead: (data: {
+    name: string;
+    email: string;
+    whatsapp: string;
+    intent?: 'face_search' | 'full_gallery';
+  }) => void;
 }
 
 export function GalleryLeadCaptureModal({
   isOpen,
   galleryTitle,
   photographerName,
+  enableFaceRecognition = false,
   onSubmitLead,
 }: GalleryLeadCaptureModalProps) {
   const [name, setName] = useState('');
@@ -20,13 +27,13 @@ export function GalleryLeadCaptureModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAction = (intent: 'face_search' | 'full_gallery') => {
     if (!name.trim()) return;
     onSubmitLead({
       name: name.trim(),
       email: email.trim(),
       whatsapp: whatsapp.trim(),
+      intent,
     });
   };
 
@@ -43,11 +50,17 @@ export function GalleryLeadCaptureModal({
             {photographerName ? ` • ${photographerName}` : ''}
           </p>
           <p className="text-xs text-slate-300">
-            Preencha seus dados rapidamente abaixo para visualizar e selecionar suas fotos:
+            Preencha seus dados para acessar e escolher suas fotos:
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAction(enableFaceRecognition ? 'face_search' : 'full_gallery');
+          }}
+          className="space-y-4"
+        >
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-emerald-400" />
@@ -91,14 +104,38 @@ export function GalleryLeadCaptureModal({
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={!name.trim()}
-            className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
-          >
-            <span>Acessar Galeria</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {enableFaceRecognition ? (
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handleAction('face_search')}
+                disabled={!name.trim()}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-purple-200" />
+                <span>Encontrar Minhas Fotos (Selfie)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAction('full_gallery')}
+                disabled={!name.trim()}
+                className="w-full py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-medium text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Images className="w-3.5 h-3.5 text-slate-400" />
+                <span>Ver Galeria Completa</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="submit"
+              disabled={!name.trim()}
+              className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              <span>Acessar Galeria</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </form>
       </div>
     </div>

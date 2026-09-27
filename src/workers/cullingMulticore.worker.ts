@@ -178,6 +178,72 @@ self.onmessage = async (e: MessageEvent<CullingWorkerRequest>) => {
   }
 };
 
+function findLargestJpegInWorker(bytes: Uint8Array): Uint8Array | null {
+  // 1. TIFF IFD Tags 0x0111 / 0x0201
+  try {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let tiff = -1, le = true;
+    for (let i = 0; i < Math.min(bytes.length - 8, 4096); i++) {
+      if (bytes[i] === 0x49 && bytes[i + 1] === 0x49 && bytes[i + 2] === 0x2A && bytes[i + 3] === 0x00) { tiff = i; le = true; break; }
+      if (bytes[i] === 0x4D && bytes[i + 1] === 0x4D && bytes[i + 2] === 0x00 && bytes[i + 3] === 0x2A) { tiff = i; le = false; break; }
+    }
+    if (tiff !== -1) {
+      let ifdOffset = tiff + view.getUint32(tiff + 4, le);
+      let maxJpegStart = -1, maxJpegLen = 0;
+      for (let pass = 0; pass < 8 && ifdOffset > 0 && ifdOffset < bytes.length - 2; pass++) {
+        const nEntries = Math.min(view.getUint16(ifdOffset, le), 200);
+        let previewOffset = -1, previewLength = -1;
+        for (let k = 0; k < nEntries; k++) {
+          const to = ifdOffset + 2 + k * 12;
+          if (to + 12 > bytes.length) break;
+          const tag = view.getUint16(to, le);
+          const type = view.getUint16(to + 2, le);
+          const valOffset = to + 8;
+          if ((tag === 0x0111 || tag === 0x0201) && (type === 4 || type === 3)) {
+            previewOffset = tiff + (type === 3 ? view.getUint16(valOffset, le) : view.getUint32(valOffset, le));
+          }
+          if ((tag === 0x0117 || tag === 0x0202) && (type === 4 || type === 3)) {
+            previewLength = type === 3 ? view.getUint16(valOffset, le) : view.getUint32(valOffset, le);
+          }
+        }
+        if (previewOffset > 0 && previewLength > 3000 && previewOffset + previewLength <= bytes.length && bytes[previewOffset] === 0xFF && bytes[previewOffset + 1] === 0xD8) {
+          if (previewLength > maxJpegLen) { maxJpegStart = previewOffset; maxJpegLen = previewLength; }
+        }
+        const nextPtr = ifdOffset + 2 + nEntries * 12;
+        if (nextPtr + 4 > bytes.length) break;
+        const next = view.getUint32(nextPtr, le);
+        if (next === 0 || next === ifdOffset - tiff) break;
+        ifdOffset = tiff + next;
+      }
+      if (maxJpegStart !== -1) return bytes.subarray(maxJpegStart, maxJpegStart + maxJpegLen);
+    }
+  } catch {}
+
+  // 2. Scan SOI 0xFFD8 -> EOI 0xFFD9
+  let bestStart = -1, bestLength = 0;
+  for (let i = 0; i < bytes.length - 4; i++) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
+      for (let j = i + 1000; j < bytes.length - 1; j++) {
+        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
+          const len = j + 2 - i;
+          if (len > bestLength) { bestStart = i; bestLength = len; }
+          break;
+        }
+      }
+    }
+  }
+  if (bestStart !== -1 && bestLength >= 3000) return bytes.subarray(bestStart, bestStart + bestLength);
+
+  // 3. Fallback
+  for (let i = 0; i < Math.min(bytes.length - 4, 131072); i++) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
+      const slice = bytes.subarray(i);
+      if (slice.length > 10000) return slice;
+    }
+  }
+  return null;
+}
+
 async function processImageInWorker(req: CullingWorkerRequest): Promise<CullingWorkerResult> {
   const { file, fileName, sensitivityMode = 'balanced' } = req;
   const ext = fileName.split('.').pop()?.toLowerCase() || 'jpg';
@@ -191,9 +257,23 @@ async function processImageInWorker(req: CullingWorkerRequest): Promise<CullingW
   } catch {}
 
   let imgSource: ImageBitmap | null = null;
+  let sourceBlob: Blob = file;
+
+  // Se for arquivo RAW (ARW, CR2, CR3, NEF, RAF, DNG), extrai o JPEG embutido no buffer
+  if (req.isRaw || !file.type.startsWith('image/')) {
+    try {
+      const sliceSize = Math.min(file.size, 8 * 1024 * 1024);
+      const sliceAb = await file.slice(0, sliceSize).arrayBuffer();
+      const jpegBytes = findLargestJpegInWorker(new Uint8Array(sliceAb));
+      if (jpegBytes && jpegBytes.length > 3000) {
+        sourceBlob = new Blob([jpegBytes], { type: 'image/jpeg' });
+      }
+    } catch {}
+  }
+
   try {
     if (typeof createImageBitmap === 'function') {
-      imgSource = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      imgSource = await createImageBitmap(sourceBlob);
     }
   } catch {}
 

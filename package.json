@@ -50,6 +50,7 @@
     "@stripe/stripe-js": "^8.8.0",
     "@supabase/supabase-js": "^2.57.4",
     "@types/jszip": "^3.4.0",
+    "@vladmandic/face-api": "^1.7.15",
     "@whiskeysockets/baileys": "^6.17.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -218,22 +218,56 @@ function parseExifFromBytes(bytes: Uint8Array, ext: string) {
 function parseOrientation(bytes: Uint8Array): number {
   try {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    let off = 0;
-    while (off < bytes.length - 10) {
-      if (bytes[off]===0xFF && bytes[off+1]===0xE1) {
-        const len = view.getUint16(off+2,false);
-        const eh = off+4;
-        if (bytes[eh]===0x45&&bytes[eh+1]===0x78&&bytes[eh+2]===0x69&&bytes[eh+3]===0x66) {
-          const t = eh+6; const le = view.getUint16(t,false)===0x4949;
-          const n = view.getUint16(t+8,le);
-          for (let i=0;i<n;i++){const to=t+10+i*12;if(to+12>bytes.length)break;if(view.getUint16(to,le)===0x0112){const o=view.getUint16(to+8,le);return o===6?90:o===3?180:o===8?270:0;}}
+    let tiff = -1, le = true;
+
+    // 1. Verifica marcador EXIF APP1 em arquivos JPEG (0xFF 0xE1)
+    for (let i = 0; i < Math.min(bytes.length - 16, 65536); i++) {
+      if (bytes[i] === 0xFF && bytes[i + 1] === 0xE1) {
+        if (
+          bytes[i + 4] === 0x45 && bytes[i + 5] === 0x78 &&
+          bytes[i + 6] === 0x69 && bytes[i + 7] === 0x66 &&
+          bytes[i + 8] === 0x00 && bytes[i + 9] === 0x00
+        ) {
+          tiff = i + 10;
+          le = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
+          break;
         }
-        off += len+2;
-      } else if (bytes[off]===0x49&&bytes[off+1]===0x49) {
-        const le=true, n=Math.min(view.getUint16(off+8,le),50);
-        for(let i=0;i<n;i++){const to=off+10+i*12;if(to+12>bytes.length)break;if(view.getUint16(to,le)===0x0112){const o=view.getUint16(to+8,le);return o===6?90:o===3?180:o===8?270:0;}}
-        break;
-      } else { off++; }
+      }
+    }
+
+    // 2. Fallback para cabeçalho TIFF direto de arquivos RAW (0x4949 ou 0x4D4D)
+    if (tiff === -1) {
+      for (let i = 0; i < Math.min(bytes.length - 8, 32768); i++) {
+        if (bytes[i] === 0x49 && bytes[i + 1] === 0x49 && bytes[i + 2] === 0x2A && bytes[i + 3] === 0x00) { tiff = i; le = true; break; }
+        if (bytes[i] === 0x4D && bytes[i + 1] === 0x4D && bytes[i + 2] === 0x00 && bytes[i + 3] === 0x2A) { tiff = i; le = false; break; }
+      }
+    }
+
+    if (tiff !== -1) {
+      let orientation = 0;
+      const parseIFD = (ifdOffset: number) => {
+        if (ifdOffset < tiff || ifdOffset >= bytes.length - 2) return;
+        const n = Math.min(view.getUint16(ifdOffset, le), 100);
+        for (let k = 0; k < n; k++) {
+          const to = ifdOffset + 2 + k * 12;
+          if (to + 12 > bytes.length) break;
+          const tag = view.getUint16(to, le);
+          if (tag === 0x0112) {
+            const o = view.getUint16(to + 8, le);
+            orientation = o === 6 ? 90 : o === 3 ? 180 : o === 8 ? 270 : 0;
+            return;
+          }
+          if (tag === 0x8769 || tag === 0x014A) {
+            const subPointer = tiff + view.getUint32(to + 8, le);
+            parseIFD(subPointer);
+            if (orientation > 0) return;
+          }
+        }
+      };
+
+      const ifd0 = tiff + view.getUint32(tiff + 4, le);
+      parseIFD(ifd0);
+      return orientation;
     }
   } catch {}
   return 0;
@@ -429,12 +463,20 @@ export async function parseRawImage(file: File): Promise<RawParseResult> {
 
   // Para JPEGs/PNGs normais: blob URL direto sem canvas
   if (!isRawFile(file)) {
+    let orientationDegrees = 0;
+    try {
+      const headerSlice = file.slice(0, Math.min(file.size, 131072));
+      const headerAb = await headerSlice.arrayBuffer();
+      const headerBytes = new Uint8Array(headerAb);
+      orientationDegrees = parseOrientation(headerBytes);
+    } catch {}
+
     const blobUrl = blobToPreviewUrl(file);
     if (blobUrl) {
       setCacheUrl(cacheKey, blobUrl);
-      return { previewUrl: blobUrl, isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees: 0, ...defaultExif(ext) };
+      return { previewUrl: blobUrl, isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...defaultExif(ext) };
     }
-    return { previewUrl: createRawPlaceholderDataUrl(file.name, ext), isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees: 0, ...defaultExif(ext) };
+    return { previewUrl: createRawPlaceholderDataUrl(file.name, ext), isRaw: false, format: ext.toUpperCase(), fileSizeBytes: file.size, orientationDegrees, ...defaultExif(ext) };
   }
 
   try {

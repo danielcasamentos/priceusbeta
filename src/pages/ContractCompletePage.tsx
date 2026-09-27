@@ -118,20 +118,26 @@ export function ContractCompletePage() {
             </button>
           </>
         ) : (
-          <>
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Contrato Assinado com Sucesso!</h2>
-            <p className="text-gray-600 mb-6">
-              Seu contrato foi finalizado. Clique no botão abaixo para baixar sua cópia em PDF.
+          <div className="space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
+              <CheckCircle className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-black text-gray-900">🎉 Muito Obrigado!</h2>
+            <h3 className="text-base font-bold text-gray-800">Contrato Assinado com Sucesso</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Sua assinatura digital foi registrada com segurança jurídica e o profissional já foi notificado da sua confirmação em tempo real.
             </p>
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-500">
+              Caso deseje salvar ou imprimir uma cópia adicional do documento assinado em PDF, utilize o botão abaixo:
+            </div>
             <button
               onClick={handlePrint}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold text-sm hover:opacity-90 transition shadow-lg shadow-blue-500/20 cursor-pointer"
             >
-              <FileText className="w-6 h-6" />
-              Baixar / Imprimir Contrato
+              <FileText className="w-5 h-5" />
+              <span>Imprimir / Salvar Cópia em PDF</span>
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>

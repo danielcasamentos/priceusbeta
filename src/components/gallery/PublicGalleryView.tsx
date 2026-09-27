@@ -13,6 +13,7 @@ import { GalleryUsagePolicyModal } from './GalleryUsagePolicyModal';
 import { GalleryDownloadPinModal } from './GalleryDownloadPinModal';
 import { SmartGalleryImage } from './SmartGalleryImage';
 import { PhotoSortMode, sortGalleryPhotos } from '../../utils/photoSorter';
+import { GalleryFaceSearchModal } from './GalleryFaceSearchModal';
 
 interface PublicGalleryViewProps {
   gallery: Gallery;
@@ -61,21 +62,30 @@ export function PublicGalleryView({
     }
   }, [gallery.photo_sort_order]);
 
+  // Reconhecimento Facial por Selfie
+  const [showFaceSearchModal, setShowFaceSearchModal] = useState(false);
+  const [matchedPhotoIds, setMatchedPhotoIds] = useState<string[] | null>(null);
+
   // Paginação e carregamento progressivo suave para galerias gigantes (1.000+ fotos)
   const [visibleCount, setVisibleCount] = useState<number>(48);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  // Fotos filtradas por subgaleria e ordenadas
+  // Fotos filtradas por subgaleria, ordenadas e filtradas por selfie (se houver)
   const sortedAndFilteredPhotos = useMemo(() => {
-    const base = activeSubgallery === 'all'
+    let base = activeSubgallery === 'all'
       ? photos
       : photos.filter((p) => p.subgallery_name === activeSubgallery);
+
+    if (matchedPhotoIds !== null) {
+      base = base.filter((p) => matchedPhotoIds.includes(p.id));
+    }
+
     return sortGalleryPhotos(base, sortMode);
-  }, [photos, activeSubgallery, sortMode]);
+  }, [photos, activeSubgallery, sortMode, matchedPhotoIds]);
 
   useEffect(() => {
     setVisibleCount(48);
-  }, [activeSubgallery, sortMode]);
+  }, [activeSubgallery, sortMode, matchedPhotoIds]);
 
   useEffect(() => {
     const currentRef = loadMoreRef.current;
@@ -180,13 +190,21 @@ export function PublicGalleryView({
     return false;
   };
 
-  const handleSubmitLead = async (data: { name: string; email: string; whatsapp: string }) => {
+  const handleSubmitLead = async (data: {
+    name: string;
+    email: string;
+    whatsapp: string;
+    intent?: 'face_search' | 'full_gallery';
+  }) => {
     setVisitorLead(data);
     sessionStorage.setItem(`gallery_visitor_${gallery.id}`, JSON.stringify(data));
     setShowLeadModal(false);
     const registered = await GalleryService.registerVisitor(gallery.id, data.name, data.email, data.whatsapp);
     if (registered?.id) {
       sessionStorage.setItem(`gallery_visitor_id_${gallery.id}`, registered.id);
+    }
+    if (data.intent === 'face_search') {
+      setShowFaceSearchModal(true);
     }
   };
 
@@ -368,9 +386,21 @@ export function PublicGalleryView({
           isOpen={showLeadModal}
           galleryTitle={gallery.title}
           photographerName={photographer.nome_profissional}
+          enableFaceRecognition={Boolean(gallery.enable_face_recognition)}
           onSubmitLead={handleSubmitLead}
         />
       )}
+
+      {/* Modal de Busca por Selfie com Reconhecimento Facial */}
+      <GalleryFaceSearchModal
+        isOpen={showFaceSearchModal}
+        onClose={() => setShowFaceSearchModal(false)}
+        galleryId={gallery.id}
+        onMatchSuccess={(matchedIds) => {
+          setMatchedPhotoIds(matchedIds);
+          window.scrollTo({ top: 400, behavior: 'smooth' });
+        }}
+      />
 
       {/* Modal de Divulgação Social Instagram */}
       <GallerySocialPromoModal
@@ -387,6 +417,7 @@ export function PublicGalleryView({
         gallery={gallery}
         selectedPhotos={selectedPhotos}
         visitorName={visitorLead?.name}
+        visitorEmail={visitorLead?.email}
         onConfirmSelection={() => {
           alert('Sua escolha foi aprovada e enviada com sucesso ao fotógrafo! 🎉');
         }}
@@ -555,21 +586,69 @@ export function PublicGalleryView({
                     </div>
                   ) : (
                     <>
-                      {/* Cabeçalho da Lista de Fotos (limpo, sem botões de ordenação internos para o cliente) */}
-                      <div className="flex items-center justify-between gap-3 mb-6 pb-3 border-b border-slate-100">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          {sortedAndFilteredPhotos.length} fotos na galeria
-                        </span>
-                        {gallery.photo_sort_order && (
-                          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                            {gallery.photo_sort_order === 'capture_desc'
-                              ? 'Mais recentes primeiro'
-                              : gallery.photo_sort_order === 'name_asc'
-                              ? 'Ordem alfabética'
-                              : 'Ordem cronológica'}
+                      {/* Cabeçalho da Lista de Fotos */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            {sortedAndFilteredPhotos.length} fotos na galeria
                           </span>
+                          {gallery.photo_sort_order && (
+                            <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                              {gallery.photo_sort_order === 'capture_desc'
+                                ? '• Mais recentes primeiro'
+                                : gallery.photo_sort_order === 'name_asc'
+                                ? '• Ordem alfabética'
+                                : '• Ordem cronológica'}
+                            </span>
+                          )}
+                        </div>
+
+                        {gallery.enable_face_recognition && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFaceSearchModal(true)}
+                            className="px-4 py-2 rounded-full text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/20 flex items-center gap-1.5 transition cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-purple-200" />
+                            <span>{matchedPhotoIds !== null ? 'Nova Selfie / Buscar' : '🔍 Encontrar Minhas Fotos'}</span>
+                          </button>
                         )}
                       </div>
+
+                      {/* Banner de Fotos Filtradas por Selfie */}
+                      {matchedPhotoIds !== null && (
+                        <div className="mb-8 p-4 rounded-2xl bg-gradient-to-r from-purple-900/90 to-indigo-900/90 border border-purple-500/40 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                          <div className="flex items-center gap-3 text-center sm:text-left">
+                            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-400/30 flex items-center justify-center shrink-0 mx-auto sm:mx-0">
+                              <Sparkles className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-white">
+                                🎉 Mostrando {sortedAndFilteredPhotos.length} foto(s) onde você foi identificado(a)!
+                              </h4>
+                              <p className="text-xs text-purple-200">
+                                Filtro facial aplicado com base na sua selfie.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowFaceSearchModal(true)}
+                              className="px-3.5 py-1.5 rounded-xl bg-purple-600/80 hover:bg-purple-600 text-white text-xs font-semibold transition cursor-pointer"
+                            >
+                              Trocar Selfie
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMatchedPhotoIds(null)}
+                              className="px-3.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer"
+                            >
+                              Ver Todas as Fotos
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
                         {sortedAndFilteredPhotos
@@ -775,18 +854,27 @@ export function PublicGalleryView({
                         +{extraCalc.extraCount} extra(s) (R$ {extraCalc.totalPrice.toFixed(2)})
                       </span>
                     )
+                  ) : extraCalc.totalPrice > 0 ? (
+                    <span className="text-emerald-400 font-bold">
+                      Total: R$ {extraCalc.totalPrice.toFixed(2)}
+                      {extraCalc.discountApplied && ' (com desconto em lote)'}
+                    </span>
                   ) : (
-                    'Sem limite de fotos'
+                    'R$ 0,00'
                   )}
                 </p>
               </div>
 
               <button
                 onClick={() => setShowProofingCheckout(true)}
-                className="px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5 shrink-0"
+                className="px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <ShoppingBag className="w-4 h-4" />
-                <span>Aprovar Escolha</span>
+                <span>
+                  {packageLimit > 0 && selectedPhotoIds.length <= packageLimit
+                    ? 'Aprovar Escolha'
+                    : `Finalizar (R$ ${extraCalc.totalPrice.toFixed(2)})`}
+                </span>
               </button>
             </div>
           )}

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -61,7 +62,8 @@ export const ALL_NAV_ITEMS: NavItemConfig[] = [
   { id: 'ajuda', label: 'Suporte', icon: HelpCircle, description: 'FAQ e central de ajuda' },
 ];
 
-const DEFAULT_PRIMARY_IDS = ['meu-dia', 'leads', 'entregas', 'whatsapp-ia'];
+const DEFAULT_PRIMARY_IDS_DANIEL = ['meu-dia', 'leads', 'entregas', 'whatsapp-ia'];
+const DEFAULT_PRIMARY_IDS_PUBLIC = ['meu-dia', 'leads', 'entregas', 'templates'];
 const STORAGE_KEY = 'priceus_mobile_bottom_nav_v1';
 
 // Sub-itens do menu Leads
@@ -96,10 +98,41 @@ const NAV_PRESETS = [
 ];
 
 export function BottomNavigation({ currentPage, onPageChange }: BottomNavigationProps) {
+  const { user } = useAuth();
+  const isDaniel = user?.email?.toLowerCase() === 'odanielfotografo@icloud.com';
+  const defaultPrimaryIds = isDaniel ? DEFAULT_PRIMARY_IDS_DANIEL : DEFAULT_PRIMARY_IDS_PUBLIC;
+
+  const availableNavItems = useMemo(() => {
+    return ALL_NAV_ITEMS.filter((item) => {
+      if (item.id === 'ai-culling' || item.id === 'whatsapp-ia') {
+        return isDaniel;
+      }
+      return true;
+    });
+  }, [isDaniel]);
+
+  const availablePresets = useMemo(() => {
+    return NAV_PRESETS.map((preset) => {
+      if (isDaniel) return preset;
+      return {
+        ...preset,
+        desc: preset.desc
+          .replace(', Zap IA', ', Orçamentos')
+          .replace('Zap IA', 'Orçamentos')
+          .replace('AI Culling', 'Contratos'),
+        ids: preset.ids.map((id) => {
+          if (id === 'whatsapp-ia') return 'templates';
+          if (id === 'ai-culling') return 'contratos';
+          return id;
+        }),
+      };
+    });
+  }, [isDaniel]);
+
   const [expandedMenu, setExpandedMenu] = useState<'leads' | 'more' | null>(null);
   const [isCustomizing, setIsCustomizing] = useState(false);
-  const [primaryIds, setPrimaryIds] = useState<string[]>(DEFAULT_PRIMARY_IDS);
-  const [tempPrimaryIds, setTempPrimaryIds] = useState<string[]>(DEFAULT_PRIMARY_IDS);
+  const [primaryIds, setPrimaryIds] = useState<string[]>(defaultPrimaryIds);
+  const [tempPrimaryIds, setTempPrimaryIds] = useState<string[]>(defaultPrimaryIds);
 
   const planLimits = usePlanLimits();
   const { isActive } = useSubscription();
@@ -113,7 +146,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 3 && parsed.length <= 4) {
-          const validIds = parsed.filter((id) => ALL_NAV_ITEMS.some((item) => item.id === id));
+          const validIds = parsed.filter((id) => availableNavItems.some((item) => item.id === id));
           if (validIds.length === parsed.length) {
             setPrimaryIds(validIds);
             setTempPrimaryIds(validIds);
@@ -124,16 +157,18 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
     } catch {
       // Fallback para padrão
     }
-  }, []);
+    setPrimaryIds(defaultPrimaryIds);
+    setTempPrimaryIds(defaultPrimaryIds);
+  }, [availableNavItems, defaultPrimaryIds]);
 
   // Itens Principais Dinâmicos + Botão "Mais" Fixo
   const primaryNavItems: NavItemConfig[] = [
-    ...primaryIds.map((id) => ALL_NAV_ITEMS.find((item) => item.id === id) || ALL_NAV_ITEMS[0]),
+    ...primaryIds.map((id) => availableNavItems.find((item) => item.id === id) || availableNavItems[0]),
     { id: 'more', label: 'Mais', icon: LayoutGrid },
   ];
 
   // Itens da Folha / Sheet "Mais Ferramentas" (todas que não estão na barra principal)
-  const moreSheetItems = ALL_NAV_ITEMS.filter((item) => !primaryIds.includes(item.id));
+  const moreSheetItems = availableNavItems.filter((item) => !primaryIds.includes(item.id));
 
   // Verifica se a página atual pertence ao grupo do botão "Mais"
   const isMorePageActive = moreSheetItems.some((item) => {
@@ -453,7 +488,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
                 ⚡ Perfis Prontos (1 Toque)
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {NAV_PRESETS.map((preset) => (
+                {availablePresets.map((preset) => (
                   <button
                     key={preset.name}
                     type="button"
@@ -478,7 +513,8 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
 
               <div className="space-y-2">
                 {tempPrimaryIds.map((id, index) => {
-                  const item = ALL_NAV_ITEMS.find((i) => i.id === id) || ALL_NAV_ITEMS[0];
+                  const item = availableNavItems.find((i) => i.id === id) || availableNavItems[0];
+                  if (!item) return null;
                   return (
                     <div
                       key={id}
@@ -530,7 +566,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
                 🧰 Catálogo de Ferramentas (Toque para fixar na barra)
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {ALL_NAV_ITEMS.map((item) => {
+                {availableNavItems.map((item) => {
                   const isPinned = tempPrimaryIds.includes(item.id);
                   return (
                     <button

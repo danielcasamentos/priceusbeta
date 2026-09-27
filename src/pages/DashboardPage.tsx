@@ -100,6 +100,32 @@ export function DashboardPage() {
     return () => window.removeEventListener('profile-updated', handleProfileUpdated);
   }, [user?.id]);
 
+  // Ouvinte em tempo real silencioso para leads e notificações (atualiza o dashboard sem reload visível)
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`user-realtime-dashboard-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leads', filter: `user_id=eq.${user.id}` },
+        () => {
+          window.dispatchEvent(new CustomEvent('priceus-lead-refresh'));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          window.dispatchEvent(new CustomEvent('priceus-notification-refresh'));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   // Sincroniza o estado com a URL quando a página mudar
   // Se a URL tiver params malformados, corrige automaticamente
   useEffect(() => {
@@ -272,16 +298,6 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 electron-no-drag relative z-20">
-            {/* Botão de Console de Logs de Suporte e Dev (Atalhos: Cmd+Shift+L) */}
-            <button
-              onClick={() => setIsLogDrawerOpen(true)}
-              title="Abrir Console de Logs de Suporte / Dev (⌘+Shift+L)"
-              className="p-2 rounded-lg bg-gray-100 dark:bg-[rgba(255,255,255,.08)] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/20 border border-purple-500/30 transition-colors flex items-center gap-1.5 cursor-pointer text-xs font-bold"
-            >
-              <Terminal className="w-4 h-4" />
-              <span className="hidden md:inline">Logs</span>
-            </button>
-
             <PriceusAssistantDrawer />
             {user?.id && (
               <NotificationCenter userId={user.id} onNavigate={handlePageChange} />
@@ -356,11 +372,11 @@ export function DashboardPage() {
                 </div>
                 <LeadsManager userId={user.id} />
               </>
-            ) : currentPage === 'whatsapp-ia' ? (
+            ) : currentPage === 'whatsapp-ia' && user?.email?.toLowerCase() === 'odanielfotografo@icloud.com' ? (
               <WhatsAppStudio userEmail={user.email} />
             ) : currentPage === 'entregas' || currentPage === 'galerias' ? (
               <GalleriesManager />
-            ) : currentPage === 'ai-culling' ? (
+            ) : currentPage === 'ai-culling' && user?.email?.toLowerCase() === 'odanielfotografo@icloud.com' ? (
               <AICullingManager userId={user.id} />
             ) : currentPage === 'videos' ? (
               <VideoGallery />

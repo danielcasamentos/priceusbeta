@@ -1,7 +1,77 @@
 import { useState, useEffect } from 'react';
-import { X, Lock, Globe, Shield, Calendar, User, Type, Link as LinkIcon, Image, Search, Clock, ArrowDownAZ } from 'lucide-react';
+import {
+  X,
+  Lock,
+  Globe,
+  Shield,
+  Calendar,
+  User,
+  Type,
+  Link as LinkIcon,
+  Image,
+  Search,
+  Clock,
+  ArrowDownAZ,
+  Bookmark,
+  Star,
+  Trash2,
+  Check,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import { Gallery, GalleryFormData } from '../../types/gallery';
 import { supabase } from '../../lib/supabase';
+
+export interface ProofingPackagePreset {
+  id: string;
+  name: string;
+  packagePhotoLimit: number;
+  pricePerExtraPhoto: number;
+  progressiveDiscounts: { min_photos: number; max_photos: number; price_per_photo: number }[];
+  isDefault?: boolean;
+}
+
+const DEFAULT_PROOFING_PRESETS: ProofingPackagePreset[] = [
+  {
+    id: 'preset_casamento',
+    name: '💍 Casamento / Evento (40 fotos | R$ 15 extra)',
+    packagePhotoLimit: 40,
+    pricePerExtraPhoto: 15,
+    progressiveDiscounts: [
+      { min_photos: 1, max_photos: 10, price_per_photo: 15 },
+      { min_photos: 11, max_photos: 30, price_per_photo: 12 },
+      { min_photos: 31, max_photos: 999, price_per_photo: 10 },
+    ],
+  },
+  {
+    id: 'preset_ensaio',
+    name: '📸 Ensaio / Família (20 fotos | R$ 20 extra)',
+    packagePhotoLimit: 20,
+    pricePerExtraPhoto: 20,
+    progressiveDiscounts: [
+      { min_photos: 1, max_photos: 5, price_per_photo: 20 },
+      { min_photos: 6, max_photos: 15, price_per_photo: 18 },
+      { min_photos: 16, max_photos: 999, price_per_photo: 15 },
+    ],
+  },
+  {
+    id: 'preset_mini',
+    name: '✨ Mini Ensaio (10 fotos | R$ 25 extra)',
+    packagePhotoLimit: 10,
+    pricePerExtraPhoto: 25,
+    progressiveDiscounts: [
+      { min_photos: 1, max_photos: 5, price_per_photo: 25 },
+      { min_photos: 6, max_photos: 999, price_per_photo: 20 },
+    ],
+  },
+  {
+    id: 'preset_ilimitado',
+    name: '🎉 Tudo Incluso (Ilimitado / Sem Extras)',
+    packagePhotoLimit: 0,
+    pricePerExtraPhoto: 0,
+    progressiveDiscounts: [],
+  },
+];
 
 interface GalleryEditorProps {
   isOpen: boolean;
@@ -31,6 +101,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [requireLeadCapture, setRequireLeadCapture] = useState(true);
   const [enableSocialPromo, setEnableSocialPromo] = useState(false);
   const [photographerInstagram, setPhotographerInstagram] = useState('');
+  const [enableFaceRecognition, setEnableFaceRecognition] = useState(false);
   const [progressiveDiscounts, setProgressiveDiscounts] = useState<{ min_photos: number; max_photos: number; price_per_photo: number }[]>([]);
   const [status, setStatus] = useState<'draft' | 'active' | 'archived'>('active');
 
@@ -43,6 +114,257 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
     template_id?: string;
     template_nome: string;
   }[]>([]);
+
+  // ── PRESETS DE PACOTES DE PROOFING (FOTOS EXTRAS) ─────────────────────────
+  const [proofingPresets, setProofingPresets] = useState<ProofingPackagePreset[]>(() => {
+    try {
+      const stored = localStorage.getItem('priceus_proofing_package_presets');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_PROOFING_PRESETS;
+  });
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const [presetFeedback, setPresetFeedback] = useState<string | null>(null);
+
+  // Modal de Salvar Modelo
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetIsDefault, setNewPresetIsDefault] = useState(false);
+  const [isSavingPresetDb, setIsSavingPresetDb] = useState(false);
+
+  // Carregar presets salvos no Supabase na conta do usuário
+  useEffect(() => {
+    if (!isOpen) return;
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const dbPresets = await GalleryService.getProofingPresets(user.id);
+      if (dbPresets && dbPresets.length > 0) {
+        const formatted: ProofingPackagePreset[] = dbPresets.map((dp) => ({
+          id: dp.id,
+          name: dp.name,
+          packagePhotoLimit: dp.package_photo_limit,
+          pricePerExtraPhoto: Number(dp.price_per_extra_photo),
+          progressiveDiscounts: dp.progressive_discounts || [],
+          isDefault: dp.is_default,
+        }));
+
+        // Se houver um padrão no banco e for nova galeria, aplicar automaticamente
+        const defaultPreset = formatted.find((p) => p.isDefault);
+        if (defaultPreset && !gallery) {
+          setPackagePhotoLimit(defaultPreset.packagePhotoLimit);
+          setPricePerExtraPhoto(defaultPreset.pricePerExtraPhoto);
+          setProgressiveDiscounts(defaultPreset.progressiveDiscounts);
+        }
+
+        setProofingPresets([...formatted, ...DEFAULT_PROOFING_PRESETS]);
+      }
+    });
+  }, [isOpen, gallery]);
+
+  const applyPreset = (presetId: string) => {
+    const found = proofingPresets.find((p) => p.id === presetId);
+    if (!found) return;
+
+    setPackagePhotoLimit(found.packagePhotoLimit);
+    setPricePerExtraPhoto(found.pricePerExtraPhoto);
+    setProgressiveDiscounts(found.progressiveDiscounts || []);
+    setSelectedPresetId(found.id);
+
+    setPresetFeedback(`Modelo "${found.name}" aplicado!`);
+    setTimeout(() => setPresetFeedback(null), 3000);
+  };
+
+  const handleOpenSaveModal = () => {
+    const defaultLabel = packagePhotoLimit > 0 
+      ? `Pacote (${packagePhotoLimit} fotos | R$ ${pricePerExtraPhoto} extra)` 
+      : `Pacote Ilimitado (R$ ${pricePerExtraPhoto} extra)`;
+
+    setNewPresetName(defaultLabel);
+    setNewPresetIsDefault(false);
+    setShowSavePresetModal(true);
+  };
+
+  const handleSavePresetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPresetName.trim()) return;
+    setIsSavingPresetDb(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let createdId = `preset_${Date.now()}`;
+
+      if (user) {
+        try {
+          const res = await GalleryService.createProofingPreset(user.id, {
+            name: newPresetName.trim(),
+            packagePhotoLimit,
+            pricePerExtraPhoto,
+            progressiveDiscounts,
+            isDefault: newPresetIsDefault,
+          });
+          if (res?.id) createdId = res.id;
+        } catch (dbErr) {
+          console.warn('[GalleryEditor] Salvando cópia local (tabela ainda não aplicada no Supabase):', dbErr);
+        }
+      }
+
+      const newPreset: ProofingPackagePreset = {
+        id: createdId,
+        name: newPresetName.trim(),
+        packagePhotoLimit,
+        pricePerExtraPhoto,
+        progressiveDiscounts,
+        isDefault: newPresetIsDefault,
+      };
+
+      const updated = [newPreset, ...proofingPresets];
+      setProofingPresets(updated);
+      setSelectedPresetId(createdId);
+
+      if (newPresetIsDefault) {
+        try {
+          localStorage.setItem(
+            'priceus_proof_default_package',
+            JSON.stringify({
+              packagePhotoLimit,
+              pricePerExtraPhoto,
+              progressiveDiscounts,
+            })
+          );
+        } catch (e) {}
+      }
+
+      try {
+        localStorage.setItem('priceus_proofing_package_presets', JSON.stringify(updated));
+      } catch (e) {}
+
+      setShowSavePresetModal(false);
+      setPresetFeedback(`✅ Modelo "${newPresetName.trim()}" salvo com sucesso no banco de dados!`);
+      setTimeout(() => setPresetFeedback(null), 4000);
+    } catch (err: any) {
+      alert('Erro ao salvar modelo: ' + err.message);
+    } finally {
+      setIsSavingPresetDb(false);
+    }
+  };
+
+  const handleSetAsDefaultPackage = () => {
+    try {
+      localStorage.setItem(
+        'priceus_proof_default_package',
+        JSON.stringify({
+          packagePhotoLimit,
+          pricePerExtraPhoto,
+          progressiveDiscounts,
+        })
+      );
+      setPresetFeedback('⭐ Definido como padrão para novas galerias!');
+      setTimeout(() => setPresetFeedback(null), 4000);
+    } catch (e) {
+      alert('Erro ao salvar padrão no navegador.');
+    }
+  };
+
+  const handleDeleteCurrentPreset = async () => {
+    if (!selectedPresetId) return;
+    const found = proofingPresets.find((p) => p.id === selectedPresetId);
+    if (!found) return;
+
+    if (!window.confirm(`Excluir o modelo "${found.name}" do seu banco de dados?`)) return;
+
+    if (!selectedPresetId.startsWith('preset_')) {
+      try {
+        await GalleryService.deleteProofingPreset(selectedPresetId);
+      } catch (e) {
+        console.warn('Erro ao excluir do Supabase:', e);
+      }
+    }
+
+    const updated = proofingPresets.filter((p) => p.id !== selectedPresetId);
+    setProofingPresets(updated);
+    setSelectedPresetId('');
+
+    try {
+      localStorage.setItem('priceus_proofing_package_presets', JSON.stringify(updated));
+    } catch (e) {}
+
+    setPresetFeedback('Modelo removido com sucesso.');
+    setTimeout(() => setPresetFeedback(null), 3000);
+  };
+
+  const handleSuggestWithAI = () => {
+    const contextStr = (title || '').toLowerCase();
+    
+    let suggestedLimit = 20;
+    let suggestedPrice = 18;
+    let suggestedDiscounts = [
+      { min_photos: 1, max_photos: 5, price_per_photo: 18 },
+      { min_photos: 6, max_photos: 15, price_per_photo: 15 },
+      { min_photos: 16, max_photos: 999, price_per_photo: 12 },
+    ];
+    let strategyName = 'Ensaio / Padrão';
+
+    if (contextStr.includes('casamento') || contextStr.includes('wedding') || contextStr.includes('noiv')) {
+      suggestedLimit = 40;
+      suggestedPrice = 15;
+      suggestedDiscounts = [
+        { min_photos: 1, max_photos: 10, price_per_photo: 15 },
+        { min_photos: 11, max_photos: 30, price_per_photo: 12 },
+        { min_photos: 31, max_photos: 999, price_per_photo: 10 },
+      ];
+      strategyName = 'Casamento / Grande Evento';
+    } else if (contextStr.includes('mini') || contextStr.includes('natal') || contextStr.includes('mães') || contextStr.includes('pais')) {
+      suggestedLimit = 10;
+      suggestedPrice = 25;
+      suggestedDiscounts = [
+        { min_photos: 1, max_photos: 5, price_per_photo: 25 },
+        { min_photos: 6, max_photos: 15, price_per_photo: 20 },
+        { min_photos: 16, max_photos: 999, price_per_photo: 18 },
+      ];
+      strategyName = 'Mini Ensaio Temático';
+    } else if (contextStr.includes('corporativo') || contextStr.includes('empresa') || contextStr.includes('palestra')) {
+      suggestedLimit = 50;
+      suggestedPrice = 12;
+      suggestedDiscounts = [
+        { min_photos: 1, max_photos: 20, price_per_photo: 12 },
+        { min_photos: 21, max_photos: 50, price_per_photo: 10 },
+        { min_photos: 51, max_photos: 999, price_per_photo: 8 },
+      ];
+      strategyName = 'Corporativo / Business';
+    } else if (contextStr.includes('aniversario') || contextStr.includes('infantil') || contextStr.includes('festa') || contextStr.includes('15 anos')) {
+      suggestedLimit = 35;
+      suggestedPrice = 16;
+      suggestedDiscounts = [
+        { min_photos: 1, max_photos: 10, price_per_photo: 16 },
+        { min_photos: 11, max_photos: 25, price_per_photo: 13 },
+        { min_photos: 26, max_photos: 999, price_per_photo: 10 },
+      ];
+      strategyName = 'Festa / Aniversário';
+    } else if (contextStr.includes('gestante') || contextStr.includes('parto') || contextStr.includes('newborn') || contextStr.includes('bebe') || contextStr.includes('bebê')) {
+      suggestedLimit = 25;
+      suggestedPrice = 20;
+      suggestedDiscounts = [
+        { min_photos: 1, max_photos: 5, price_per_photo: 20 },
+        { min_photos: 6, max_photos: 15, price_per_photo: 16 },
+        { min_photos: 16, max_photos: 999, price_per_photo: 14 },
+      ];
+      strategyName = 'Família / Newborn / Gestante';
+    }
+
+    setPackagePhotoLimit(suggestedLimit);
+    setPricePerExtraPhoto(suggestedPrice);
+    setProgressiveDiscounts(suggestedDiscounts);
+    setSelectedPresetId('');
+
+    setPresetFeedback(`✨ Estratégia de IA (${strategyName}) aplicada: ${suggestedLimit} fotos inclusas + descontos progressivos para estimular compra de lote!`);
+    setTimeout(() => setPresetFeedback(null), 5000);
+  };
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [enableSales, setEnableSales] = useState(true);
@@ -126,6 +448,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setRequireLeadCapture(gallery.require_lead_capture ?? true);
       setEnableSocialPromo(gallery.enable_social_promo ?? false);
       setPhotographerInstagram(gallery.photographer_instagram || '');
+      setEnableFaceRecognition(gallery.enable_face_recognition ?? false);
       setProgressiveDiscounts(gallery.progressive_discounts || []);
       setStatus(gallery.status);
       setPassword('');
@@ -155,16 +478,36 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setWatermarkLogoUrl('');
       setEnableUsagePolicyModal(false);
       setUsagePolicyText('');
-      setPricePerExtraPhoto(0);
-      setPackagePhotoLimit(20);
+      // Carregar pacote padrão salvo pelo fotógrafo (ou valores recomendados)
+      try {
+        const savedDefault = localStorage.getItem('priceus_proof_default_package');
+        if (savedDefault) {
+          const parsed = JSON.parse(savedDefault);
+          setPackagePhotoLimit(parsed.packagePhotoLimit ?? 20);
+          setPricePerExtraPhoto(parsed.pricePerExtraPhoto ?? 15);
+          setProgressiveDiscounts(
+            parsed.progressiveDiscounts || [
+              { min_photos: 1, max_photos: 5, price_per_photo: 15 },
+              { min_photos: 6, max_photos: 15, price_per_photo: 12 },
+              { min_photos: 16, max_photos: 999, price_per_photo: 10 },
+            ]
+          );
+        } else {
+          setPackagePhotoLimit(20);
+          setPricePerExtraPhoto(15);
+          setProgressiveDiscounts([
+            { min_photos: 1, max_photos: 5, price_per_photo: 15 },
+            { min_photos: 6, max_photos: 15, price_per_photo: 12 },
+            { min_photos: 16, max_photos: 999, price_per_photo: 10 },
+          ]);
+        }
+      } catch (e) {
+        setPackagePhotoLimit(20);
+        setPricePerExtraPhoto(15);
+      }
       setRequireLeadCapture(true);
       setEnableSocialPromo(true);
       setPhotographerInstagram('');
-      setProgressiveDiscounts([
-        { min_photos: 1, max_photos: 5, price_per_photo: 15 },
-        { min_photos: 6, max_photos: 15, price_per_photo: 12 },
-        { min_photos: 16, max_photos: 999, price_per_photo: 10 }
-      ]);
       setStatus('active');
     }
   }, [gallery, isOpen]);
@@ -335,6 +678,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
         require_lead_capture: requireLeadCapture,
         enable_social_promo: enableSocialPromo,
         photographer_instagram: photographerInstagram.trim() || undefined,
+        enable_face_recognition: enableFaceRecognition,
         status,
       });
       onClose();
@@ -416,26 +760,103 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
 
           {/* Configuração de Pacote & Venda de Fotos Extras (Proofing) */}
           <div className="p-4 rounded-xl bg-slate-800/60 border border-blue-500/30 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-700/80 pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-700/80 pb-3">
               <span className="text-sm font-bold text-blue-400 flex items-center space-x-2">
                 <span>📸 Pacote de Fotos & Venda de Extras (Proofing)</span>
               </span>
+
+              {/* Barra de Presets / Modelos de Pacote */}
+              <div className="flex items-center flex-wrap gap-1.5">
+                <select
+                  value={selectedPresetId}
+                  onChange={(e) => {
+                    const pid = e.target.value;
+                    setSelectedPresetId(pid);
+                    if (pid) applyPreset(pid);
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                >
+                  <option value="">⚡ Carregar Modelo...</option>
+                  {proofingPresets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleSuggestWithAI}
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Calcular estratégia inteligente de fotos inclusas e descontos com IA"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Sugerir com IA</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenSaveModal}
+                  className="px-2.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Salvar valores atuais como um novo modelo na lista"
+                >
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span>Salvar Modelo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSetAsDefaultPackage}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Definir valores atuais como padrão oficial para novas galerias"
+                >
+                  <Star className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Tornar Padrão</span>
+                </button>
+
+                {selectedPresetId && !selectedPresetId.startsWith('preset_default') && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteCurrentPreset}
+                    className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs transition cursor-pointer"
+                    title="Excluir este modelo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Alerta de Feedback de Modelo */}
+            {presetFeedback && (
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium flex items-center gap-2 animate-in fade-in duration-200">
+                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{presetFeedback}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  Fotos Inclusas no Pacote (0 = ilimitado)
+                  Fotos Inclusas no Pacote (0 = Venda Aberta / Sem mínimo)
                 </label>
                 <input
                   type="number"
                   min={0}
                   value={packagePhotoLimit}
                   onChange={(e) => setPackagePhotoLimit(Number(e.target.value))}
-                  placeholder="Ex: 20"
+                  placeholder="Ex: 20 ou 0 para corrida/evento aberto"
                   className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500"
                 />
-                <p className="text-[11px] text-slate-400">Quantidade contratada pelos noivos/cliente</p>
+                {packagePhotoLimit === 0 ? (
+                  <p className="text-[11px] text-amber-300 font-medium">
+                    🏃 <strong>Modo Venda Aberta / Eventos (Corrida / Formatura):</strong> O cliente parte de R$ 0,00 e monta o pacote somando as fotos que escolher com descontos progressivos em lote.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-emerald-400 font-medium">
+                    💍 <strong>Modo Pacote Pré-Pago:</strong> Primeiras {packagePhotoLimit} fotos já inclusas no contrato. Adicionais cobrados como fotos extras.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -518,6 +939,46 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                   </button>
                 </div>
               ))}
+            </div>
+
+            {/* Reconhecimento Facial por Selfie */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 to-indigo-950/40 border border-purple-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      Reconhecimento Facial por Selfie (IA)
+                    </span>
+                    <span className="text-[11px] text-purple-300 block">
+                      Permite que convidados e participantes encontrem suas fotos tirando uma selfie
+                    </span>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableFaceRecognition}
+                    onChange={(e) => setEnableFaceRecognition(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+
+              {enableFaceRecognition && (
+                <div className="text-[11px] text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-purple-500/20 space-y-1">
+                  <p>
+                    ✨ Ao acessar a galeria, o visitante poderá <strong>tirar uma selfie</strong> para filtrar instantaneamente apenas as fotos onde ele aparece.
+                  </p>
+                  <p className="text-purple-300">
+                    ⚡ <em>Dica: No gerenciador da galeria, você pode clicar em "Indexar Rostos" para processar as fotos com IA.</em>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1128,6 +1589,106 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
           </div>
         </form>
       </div>
+
+      {/* Modal para Salvar Modelo de Pacote Personalizado */}
+      {showSavePresetModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                  <Bookmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Salvar Modelo de Pacote</h3>
+                  <p className="text-xs text-slate-400">Salve para reutilizar em qualquer galeria futura</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSavePresetModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePresetSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Nome do Modelo <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPresetName}
+                  onChange={(e) => setNewPresetName(e.target.value)}
+                  placeholder="Ex: Ensaio Família 30 Fotos (R$ 15 extra)"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500 placeholder:text-slate-500 transition"
+                />
+              </div>
+
+              {/* Resumo do que está sendo salvo */}
+              <div className="p-3.5 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-2 text-xs">
+                <div className="text-slate-400 font-medium">Configuração atual a ser salva:</div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="bg-slate-900/70 p-2 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block text-[10px] uppercase">Fotos Inclusas</span>
+                    <span className="text-white font-bold text-sm">
+                      {packagePhotoLimit > 0 ? `${packagePhotoLimit} fotos` : 'Ilimitado (0)'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900/70 p-2 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block text-[10px] uppercase">Foto Extra Base</span>
+                    <span className="text-emerald-400 font-bold text-sm">
+                      R$ {pricePerExtraPhoto.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
+                  <span>Faixas de desconto progressivo:</span>
+                  <span className="font-semibold text-slate-300">
+                    {progressiveDiscounts.length > 0 ? `${progressiveDiscounts.length} faixa(s) ativa(s)` : 'Nenhuma faixa'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Checkbox: Tornar Padrão */}
+              <label className="flex items-start gap-3 p-3 rounded-xl bg-slate-800/30 border border-slate-700/40 cursor-pointer hover:bg-slate-800/50 transition">
+                <input
+                  type="checkbox"
+                  checked={newPresetIsDefault}
+                  onChange={(e) => setNewPresetIsDefault(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-700 text-blue-600 focus:ring-blue-500/20"
+                />
+                <div className="text-xs">
+                  <span className="text-white font-medium block">Tornar modelo padrão para novas galerias</span>
+                  <span className="text-slate-400 text-[11px]">
+                    Novas galerias criadas já virão automaticamente preenchidas com esses valores.
+                  </span>
+                </div>
+              </label>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSavePresetModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPresetDb || !newPresetName.trim()}
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingPresetDb ? 'Salvando no banco...' : 'Confirmar e Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

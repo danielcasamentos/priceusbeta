@@ -130,14 +130,12 @@ ${customInstruction ? `- Instrução Adicional: "${customInstruction}"` : ''}
 
 Responda em JSON válido com as 3 sugestões reescrevendo o texto acima com fidelidade total aos itens.`;
 
-  // 1. Tentar via GROQ com os modelos ativos da plataforma
+  // 1. Tentar via GROQ com os modelos de alta capacidade e resposta instantânea
   const groqModels = [
     'openai/gpt-oss-120b',
-    'qwen/qwen3.8-27b',
     'openai/gpt-oss-20b',
-    'qwen/qwen3.6-27b',
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant'
+    'llama-3.1-8b-instant',
+    'qwen/qwen3.6-27b'
   ];
 
   for (const key of groqKeys) {
@@ -156,7 +154,9 @@ Responda em JSON válido com as 3 sugestões reescrevendo o texto acima com fide
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
             ],
-            temperature: 0.6
+            response_format: { type: "json_object" },
+            temperature: 0.6,
+            max_tokens: 1500
           })
         });
 

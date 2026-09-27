@@ -211,6 +211,40 @@ export async function saveProjectsToIndexedDB(userId: string, projectsData: any[
 }
 
 /**
+ * Salva posts aprovados da galeria no SSD via IndexedDB
+ */
+export async function saveGalleryPostsToSSD(galleryId: string, posts: any[]): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_METADATA, 'readwrite');
+    const store = tx.objectStore(STORE_METADATA);
+    store.put({ projectId: `gallery_posts_${galleryId}`, posts, updatedAt: Date.now() });
+    platformAdapter.addLog('info', 'STORAGE', `[IndexedDB SSD] ${posts.length} posts salvos para a galeria ${galleryId}`);
+  } catch (err) {
+    console.warn('[IndexedDB Storage] Erro ao salvar posts no SSD:', err);
+  }
+}
+
+/**
+ * Recupera posts aprovados da galeria do SSD via IndexedDB
+ */
+export async function getGalleryPostsFromSSD(galleryId: string): Promise<any[] | null> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_METADATA, 'readonly');
+    const store = tx.objectStore(STORE_METADATA);
+    const req = store.get(`gallery_posts_${galleryId}`);
+    return new Promise((resolve) => {
+      req.onsuccess = () => resolve(req.result?.posts || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    console.warn('[IndexedDB Storage] Erro ao recuperar posts do SSD:', err);
+    return null;
+  }
+}
+
+/**
  * Carrega a lista inteira de projetos de culling do IndexedDB
  */
 export async function getProjectsFromIndexedDB(userId: string): Promise<any[] | null> {

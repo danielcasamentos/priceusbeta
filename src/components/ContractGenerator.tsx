@@ -55,6 +55,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
 
   const orcamentoDetalhe = lead.orcamento_detalhe || {};
   const upsellProdutos = orcamentoDetalhe.upsell_produtos || [];
+  const brindesProdutos = orcamentoDetalhe.brindes_produtos || [];
   const valorUpsell = typeof orcamentoDetalhe.valor_upsell === 'number'
     ? orcamentoDetalhe.valor_upsell
     : (typeof orcamentoDetalhe.valor_upsell === 'string' ? parseFloat(orcamentoDetalhe.valor_upsell) : 0);
@@ -352,6 +353,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         // Plano de pagamento final definido pelo usuário no ConvertLeadModal (se já existir)
         plano_pagamento: planoPagamentoDoCaixa || orcamentoDetalhe.plano_pagamento || null,
         upsell_produtos: upsellProdutos,
+        brindes_produtos: brindesProdutos,
         valor_base: valorBase,
         valor_upsell: valorUpsell,
       };
@@ -488,6 +490,10 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           const finalVal = val * desc;
           return `- ${p.nome || p.nome_produto}: R$ ${finalVal.toFixed(2)}${p.quantidade > 1 ? ` x ${p.quantidade}` : ''}`;
         }).join('\n') + '\n';
+      }
+      if (generatedLeadData?.brindes_produtos && generatedLeadData.brindes_produtos.length > 0) {
+        message += `\n*🎁 Brindes Inclusos (Grátis):*\n`;
+        message += generatedLeadData.brindes_produtos.map((b: any) => `- ${b.nome || b.nome_produto}: Grátis`).join('\n') + '\n';
       }
       message += `*Valor Total: R$ ${totalVal.toFixed(2)}*\n\n`;
       message += `Acesse o link abaixo para revisar e assinar:\n${generatedLink}\n\n`;

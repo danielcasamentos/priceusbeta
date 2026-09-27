@@ -53,6 +53,7 @@ import {
   InstagramAccountInfo,
 } from '../../services/instagramPublishService';
 import { InstagramConnectionModal } from '../instagram/InstagramConnectionModal';
+import { saveGalleryPostsToSSD, getGalleryPostsFromSSD } from '../../services/indexedDBStorage';
 
 export interface ApprovedPostItem {
   id: string;
@@ -71,6 +72,8 @@ export interface ApprovedPostItem {
 interface SocialPostStudioProps {
   photos: CullingPhoto[];
   projectTitle?: string;
+  galleryId?: string;
+  driveFolderId?: string;
 }
 
 export function getCandidateImageUrls(primaryUrl?: string | null): string[] {
@@ -102,6 +105,45 @@ export function getCandidateImageUrls(primaryUrl?: string | null): string[] {
   }
 
   return urls;
+}
+
+/**
+ * Renderiza uma imagem no canvas preservando 100% da proporção original (aspect ratio),
+ * aplicando recorte e centralização proporcionais (object-fit: cover) para evitar que as fotos
+ * fiquem achatadas ou distorcidas ao baixar.
+ */
+export function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  alignX = 0.5,
+  alignY = 0.5
+) {
+  const imgW = img.naturalWidth || img.width;
+  const imgH = img.naturalHeight || img.height;
+  if (!imgW || !imgH || !w || !h) return;
+
+  const imgRatio = imgW / imgH;
+  const targetRatio = w / h;
+  let sx = 0;
+  let sy = 0;
+  let sw = imgW;
+  let sh = imgH;
+
+  if (imgRatio > targetRatio) {
+    // Imagem mais larga que o container: recorta as laterais mantendo a altura
+    sw = imgH * targetRatio;
+    sx = (imgW - sw) * alignX;
+  } else {
+    // Imagem mais alta que o container: recorta o topo/base mantendo a largura
+    sh = imgW / targetRatio;
+    sy = (imgH - sh) * alignY;
+  }
+
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
 export function StudioImage({
@@ -193,7 +235,7 @@ export interface SuggestedPost {
   captions: CaptionOption[];
 }
 
-export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps) {
+export function SocialPostStudio({ photos, projectTitle, galleryId, driveFolderId }: SocialPostStudioProps) {
   const [dislikedPhotoIds, setDislikedPhotoIds] = useState<string[]>([]);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
@@ -236,22 +278,36 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
   // Modo de Visualização: Estúdio de Criação vs Estoque de Posts Aprovados
   const [activeViewMode, setActiveViewMode] = useState<'studio' | 'vault'>('studio');
   const [vaultFilter, setVaultFilter] = useState<'all' | 'feed' | 'story' | 'ready' | 'published'>('all');
+  
+  const storageId = galleryId || projectTitle || 'default';
   const [approvedVault, setApprovedVault] = useState<ApprovedPostItem[]>(() => {
     try {
-      const saved = localStorage.getItem(`priceus_approved_posts_${projectTitle || 'default'}`);
+      const saved = localStorage.getItem(`priceus_approved_posts_${storageId}`);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
 
+  // Recupera do SSD via IndexedDB para garantir persistência total mesmo após fechar ou trocar de galeria
+  useEffect(() => {
+    const key = galleryId || projectTitle || 'default';
+    getGalleryPostsFromSSD(key).then((ssdPosts) => {
+      if (ssdPosts && Array.isArray(ssdPosts) && ssdPosts.length > 0) {
+        setApprovedVault(ssdPosts);
+      }
+    });
+  }, [galleryId, projectTitle]);
+
   const updateApprovedVault = (newVault: ApprovedPostItem[]) => {
     setApprovedVault(newVault);
+    const key = galleryId || projectTitle || 'default';
     try {
-      localStorage.setItem(`priceus_approved_posts_${projectTitle || 'default'}`, JSON.stringify(newVault));
+      localStorage.setItem(`priceus_approved_posts_${key}`, JSON.stringify(newVault));
     } catch (e) {
       console.warn('Erro ao salvar estoque no localStorage:', e);
     }
+    saveGalleryPostsToSSD(key, newVault);
   };
 
   // Canvas invisível para download em alta resolução
@@ -647,7 +703,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
           const img = new Image();
           img.onload = () => {
             ctx.save();
-            ctx.drawImage(img, x, y, w, h);
+            drawImageCover(ctx, img, x, y, w, h);
             ctx.restore();
             resolve(true);
           };
@@ -668,7 +724,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
               const img = new Image();
               img.onload = () => {
                 ctx.save();
-                ctx.drawImage(img, x, y, w, h);
+                drawImageCover(ctx, img, x, y, w, h);
                 ctx.restore();
                 URL.revokeObjectURL(objectUrl);
                 resolve(true);
@@ -692,7 +748,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
             img.crossOrigin = 'anonymous';
             img.onload = () => {
               ctx.save();
-              ctx.drawImage(img, x, y, w, h);
+              drawImageCover(ctx, img, x, y, w, h);
               ctx.restore();
               resolve(true);
             };
@@ -854,7 +910,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
               const img = new Image();
               img.onload = () => {
                 ctx.save();
-                ctx.drawImage(img, x, y, w, h);
+                drawImageCover(ctx, img, x, y, w, h);
                 ctx.restore();
                 resolve(true);
               };
@@ -874,7 +930,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
                   const img = new Image();
                   img.onload = () => {
                     ctx.save();
-                    ctx.drawImage(img, x, y, w, h);
+                    drawImageCover(ctx, img, x, y, w, h);
                     ctx.restore();
                     URL.revokeObjectURL(objectUrl);
                     resolve(true);
@@ -897,7 +953,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
                 img.crossOrigin = 'anonymous';
                 img.onload = () => {
                   ctx.save();
-                  ctx.drawImage(img, x, y, w, h);
+                  drawImageCover(ctx, img, x, y, w, h);
                   ctx.restore();
                   resolve(true);
                 };
@@ -1324,7 +1380,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
               const img = new Image();
               img.onload = () => {
                 ctx.save();
-                ctx.drawImage(img, x, y, w, h);
+                drawImageCover(ctx, img, x, y, w, h);
                 ctx.restore();
                 resolve(true);
               };
@@ -1343,7 +1399,7 @@ export function SocialPostStudio({ photos, projectTitle }: SocialPostStudioProps
                   const img = new Image();
                   img.onload = () => {
                     ctx.save();
-                    ctx.drawImage(img, x, y, w, h);
+                    drawImageCover(ctx, img, x, y, w, h);
                     ctx.restore();
                     URL.revokeObjectURL(objUrl);
                     resolve(true);

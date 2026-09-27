@@ -29,6 +29,7 @@ import {
   FolderUp,
   Wand2,
   Cloud,
+  Loader2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { logger } from '../../lib/logger';
@@ -344,13 +345,61 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     setTimeout(() => setLearningNotice(null), 4000);
   };
 
+  const applyAcceptanceQuotaAndSensitivity = (
+    photoList: CullingPhoto[],
+    mode: CullingSensitivityMode,
+    quotaRatio: number
+  ): CullingPhoto[] => {
+    if (photoList.length === 0) return photoList;
+
+    // 1. Recalcula campeões das séries usando o algoritmo de rajadas e dHash
+    const withChampions = computeBurstChampions(photoList, mode);
+
+    // 2. Filtra fotos válidas (sem desfoque severo e sem olhos fechados)
+    const validPhotos = withChampions.filter((p) => !p.isBlurry && !p.eyesClosed);
+    const targetCount = Math.max(1, Math.round((photoList.length * quotaRatio) / 100));
+
+    // 3. Ordena fotos válidas: Campeãs de série (Best Takes) primeiro, depois por pontuação geral
+    const sortedValid = [...validPhotos].sort((a, b) => {
+      if (a.isBestTake && !b.isBestTake) return -1;
+      if (!a.isBestTake && b.isBestTake) return 1;
+      const scoreA = a.qualityScore?.overallScore ?? (a as any).finalScore ?? a.sharpnessScore;
+      const scoreB = b.qualityScore?.overallScore ?? (b as any).finalScore ?? b.sharpnessScore;
+      return scoreB - scoreA;
+    });
+
+    const selectedIds = new Set(sortedValid.slice(0, targetCount).map((p) => p.id));
+
+    return withChampions.map((p) => {
+      if (p.isBlurry || p.eyesClosed) {
+        return { ...p, selected: false, isDiscarded: true };
+      }
+      return {
+        ...p,
+        selected: selectedIds.has(p.id),
+        isDiscarded: false,
+      };
+    });
+  };
+
   const handleChangeSensitivityMode = (newMode: CullingSensitivityMode) => {
     setSensitivityMode(newMode);
-    const updated = computeBurstChampions(photos, newMode);
+    const updated = applyAcceptanceQuotaAndSensitivity(photos, newMode, targetSelectionRatio);
     setPhotos(updated);
     syncProjectStateToDisk(activeProjectIdRef.current || activeProjectId, updated);
-    setLearningNotice(`⚡ Sensibilidade alterada para "${newMode.toUpperCase()}"! Campeões de série recalculados.`);
+    const selCount = updated.filter((p) => p.selected).length;
+    setLearningNotice(`⚡ Sensibilidade alterada para "${newMode.toUpperCase()}"! (${selCount} fotos selecionadas)`);
     setTimeout(() => setLearningNotice(null), 3500);
+  };
+
+  const handleChangeTargetSelectionRatio = (newRatio: number) => {
+    setTargetSelectionRatio(newRatio);
+    const updated = applyAcceptanceQuotaAndSensitivity(photos, sensitivityMode, newRatio);
+    setPhotos(updated);
+    syncProjectStateToDisk(activeProjectIdRef.current || activeProjectId, updated);
+    const selCount = updated.filter((p) => p.selected).length;
+    setLearningNotice(`🎯 Cota ajustada para ${newRatio}%: ${selCount} fotos selecionadas.`);
+    setTimeout(() => setLearningNotice(null), 3000);
   };
 
   const handleOpenBurstComparison = (photo: CullingPhoto) => {
@@ -650,6 +699,11 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
             return up ? { ...p, ...up } : p;
           })
         );
+        setEditingPhoto((prev) => {
+          if (!prev) return null;
+          const up = batch.get(prev.id);
+          return up ? { ...prev, ...up } : prev;
+        });
       }, 150);
     }
   };
@@ -667,6 +721,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
       const ssdData = await getThumbnailFromSSD(projId, photoId);
       if (ssdData) {
         scheduleBatchUpdate(photoId, { previewUrl: ssdData });
+        setEditingPhoto((prev) => (prev && prev.id === photoId ? { ...prev, previewUrl: ssdData } : prev));
         return;
       }
     }
@@ -680,6 +735,16 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         if (projId) {
           saveThumbnailToSSD(projId, photoId, result.previewUrl);
         }
+
+        // Atualiza imediatamente a foto aberta no editor (se for esta)
+        setEditingPhoto((prev) => {
+          if (!prev || prev.id !== photoId) return prev;
+          return {
+            ...prev,
+            previewUrl: result.previewUrl,
+            rotation: result.orientationDegrees !== undefined && result.orientationDegrees > 0 ? result.orientationDegrees : prev.rotation,
+          };
+        });
 
         // Analisar qualidade em 5 pilares reais via Image Element
         let realMetrics: any = null;
@@ -697,6 +762,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
         scheduleBatchUpdate(photoId, {
           previewUrl: result.previewUrl,
+          rotation: result.orientationDegrees !== undefined && result.orientationDegrees > 0 ? result.orientationDegrees : undefined,
           sharpnessScore: realMetrics ? realMetrics.sharpnessScore : undefined,
           isBlurry: realMetrics ? realMetrics.isBlurry : undefined,
           eyesClosed: realMetrics ? realMetrics.eyesClosed : undefined,
@@ -879,6 +945,21 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
 
   const activeProjectIdRef = useRef(activeProjectId);
   useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
+
+  // Carregamento Imediato do Preview RAW ao Abrir o Modal de Edição/Loupe
+  useEffect(() => {
+    if (!editingPhoto) return;
+    const cachedUrl = previewUrlCacheRef.current.get(editingPhoto.id);
+    if (cachedUrl && !cachedUrl.startsWith('data:image/svg')) {
+      if (editingPhoto.previewUrl !== cachedUrl) {
+        setEditingPhoto((prev) => (prev && prev.id === editingPhoto.id ? { ...prev, previewUrl: cachedUrl } : prev));
+      }
+      return;
+    }
+    if (editingPhoto.isRaw && (!editingPhoto.previewUrl || editingPhoto.previewUrl.startsWith('data:image/svg'))) {
+      loadRawPreviewLazy(editingPhoto.id);
+    }
+  }, [editingPhoto?.id]);
 
   // Salvar Alterações do Projeto Ativo com Debounce (salva no IndexedDB SSD sem limite de 5MB)
   useEffect(() => {
@@ -1117,7 +1198,7 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
         previewUrl: res?.thumbnailDataUrl || createRawPlaceholderDataUrl(item.fileName, ext),
         format: ext,
         isRaw: item.isRaw,
-        rotation: 0,
+        rotation: res?.orientationDegrees ?? 0,
         sharpnessScore,
         isBlurry,
         eyesClosed,
@@ -1156,19 +1237,8 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
     // Pipeline de IA estética e presets (gera miniaturas P&B com salvamento imediato no SSD)
     const allProcessedPhotos = await processAiEditingPipeline(rawPhotos, userPresetPref, currentActiveProjId);
 
-    // 🏆 Agrupamento Perceptual de Séries & Eleição de Campeãs (Best Takes)
-    const photosWithChampions = computeBurstChampions(allProcessedPhotos, sensitivityMode);
-
-    // Ajuste final das fotos com base nas campeãs eleitas e filtro de sensibilidade
-    const finalizedPhotos = photosWithChampions.map((p) => {
-      if (p.isBlurry || p.eyesClosed) {
-        return { ...p, selected: false, isDiscarded: true };
-      }
-      if (p.isBestTake) {
-        return { ...p, selected: true, isDiscarded: false };
-      }
-      return p;
-    });
+    // 🏆 Agrupamento Perceptual de Séries & Eleição de Campeãs com base na Cota e Sensibilidade
+    const finalizedPhotos = applyAcceptanceQuotaAndSensitivity(allProcessedPhotos, sensitivityMode, targetSelectionRatio);
 
     // Commit de todas as fotos no estado e persistência imediata no IndexedDB SSD
     if (!cancelImportRef.current) {
@@ -2157,8 +2227,18 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                 </button>
               </div>
 
-              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-800 text-xs text-slate-400">
-                <span className="font-bold">Cota:</span>
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-800 text-xs text-slate-400">
+                <span className="font-bold text-slate-300">Cota:</span>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  step="5"
+                  value={targetSelectionRatio}
+                  onChange={(e) => handleChangeTargetSelectionRatio(parseInt(e.target.value))}
+                  className="w-20 accent-purple-500 cursor-pointer"
+                  title={`Ajustar cota de aprovação da IA: ${targetSelectionRatio}% (${Math.round((photos.length * targetSelectionRatio) / 100)} de ${photos.length} fotos)`}
+                />
                 <span className="font-extrabold text-purple-300 font-mono bg-purple-950 px-2 py-0.5 rounded-lg border border-purple-500/30">
                   {targetSelectionRatio}%
                 </span>
@@ -2455,6 +2535,9 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         <img
                           src={activePhoto.previewUrl}
                           alt={activePhoto.fileName}
+                          style={{
+                            transform: `rotate(${activePhoto.rotation || 0}deg) ${activePhoto.rotation && activePhoto.rotation % 180 !== 0 ? 'scale(0.75)' : ''}`,
+                          }}
                           className="max-h-full max-w-full object-contain transition-all duration-200"
                         />
 
@@ -2553,7 +2636,14 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                             className={`shrink-0 w-24 h-16 rounded-lg overflow-hidden relative cursor-pointer border bg-slate-950 flex items-center justify-center transition-all ${isActiveInFilmstrip ? 'ring-2 ring-purple-500 border-purple-400 scale-105 opacity-100' : 'border-slate-800 opacity-60 hover:opacity-100'
                               }`}
                           >
-                            <img src={photo.previewUrl} alt={photo.fileName} className="w-full h-full object-contain" />
+                            <img
+                              src={photo.previewUrl}
+                              alt={photo.fileName}
+                              style={{
+                                transform: `rotate(${photo.rotation || 0}deg) ${photo.rotation && photo.rotation % 180 !== 0 ? 'scale(0.75)' : ''}`,
+                              }}
+                              className="w-full h-full object-contain"
+                            />
                             {photo.selected && (
                               <div className="absolute top-0.5 right-0.5 bg-purple-600 text-white w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center">
                                 ✓
@@ -2624,7 +2714,10 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                           src={photo.previewUrl}
                           alt={photo.fileName}
                           loading="lazy"
-                          style={{ filter: imgFilter, transform: `rotate(${photo.rotation}deg)` }}
+                          style={{
+                            filter: imgFilter,
+                            transform: `rotate(${photo.rotation || 0}deg) ${photo.rotation && photo.rotation % 180 !== 0 ? 'scale(0.75)' : ''}`,
+                          }}
                           onError={() => {
                             if (photo.isRaw) loadRawPreviewLazy(photo.id);
                           }}
@@ -2898,11 +2991,23 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                   {/* Wrapper da Foto com Suporte a Pan/Arraste */}
                   {(() => {
                     const fileObj = fileRegistryRef.current.get(editingPhoto.id);
-                    const loupeSrc = (editingPhoto.previewUrl && !editingPhoto.previewUrl.startsWith('data:image/svg'))
-                      ? editingPhoto.previewUrl
-                      : fileObj
-                        ? URL.createObjectURL(fileObj)
-                        : editingPhoto.previewUrl;
+                    const cachedUrl = previewUrlCacheRef.current.get(editingPhoto.id);
+                    const photoFromState = photos.find((p) => p.id === editingPhoto.id);
+
+                    let loupeSrc = '';
+                    if (editingPhoto.previewUrl && !editingPhoto.previewUrl.startsWith('data:image/svg')) {
+                      loupeSrc = editingPhoto.previewUrl;
+                    } else if (cachedUrl && !cachedUrl.startsWith('data:image/svg')) {
+                      loupeSrc = cachedUrl;
+                    } else if (photoFromState?.previewUrl && !photoFromState.previewUrl.startsWith('data:image/svg')) {
+                      loupeSrc = photoFromState.previewUrl;
+                    } else if (fileObj && !editingPhoto.isRaw) {
+                      loupeSrc = URL.createObjectURL(fileObj);
+                    } else {
+                      loupeSrc = editingPhoto.previewUrl || '';
+                    }
+
+                    const isStillLoadingPreview = !loupeSrc || loupeSrc.startsWith('data:image/svg');
 
                     const isLoupeBW = (editingPhoto.editSettings?.saturation ?? 0) === -100 || editingPhoto.fileName.toLowerCase().includes('_bw');
                     const loupeSatPercent = isLoupeBW ? 0 : Math.max(0, 100 + (editingPhoto.editSettings?.vibrance || 0) + (editingPhoto.editSettings?.saturation || 0));
@@ -2936,19 +3041,44 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                           isPanDragging ? 'cursor-grabbing' : 'cursor-grab'
                         }`}
                       >
-                        <img
-                          src={loupeSrc}
-                          alt={editingPhoto.fileName}
-                          style={{
-                            filter: loupeFilter,
-                            transform: `translate(${editingPhoto.editSettings.cropOffsetX || 0}px, ${
-                              editingPhoto.editSettings.cropOffsetY || 0
-                            }px) rotate(${editingPhoto.rotation || 0}deg) scale(${
-                              (editingPhoto.editSettings.zoomScale || 1.0) * (1 + Math.abs((editingPhoto.rotation || 0) / 45) * 0.35)
-                            })`,
-                          }}
-                          className="max-h-[64vh] max-w-full w-auto h-auto object-contain transition-transform duration-75 select-none pointer-events-none rounded-lg"
-                        />
+                        {isStillLoadingPreview && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm z-30 pointer-events-none">
+                            <Loader2 className="w-10 h-10 text-purple-400 animate-spin mb-3" />
+                            <span className="text-sm font-bold text-white tracking-wide">Decodificando RAW em Alta Resolução...</span>
+                            <span className="text-xs text-slate-400 mt-1 font-mono">{editingPhoto.fileName}</span>
+                          </div>
+                        )}
+
+                        {(() => {
+                          const rot = editingPhoto.rotation || 0;
+                          const isPortrait = Math.round(rot) % 180 !== 0;
+                          const fineTilt = Math.abs(rot) % 90;
+                          const tiltOffset = fineTilt > 45 ? 90 - fineTilt : fineTilt;
+                          const tiltAutoZoom = 1 + (tiltOffset / 45) * 0.25;
+                          const baseZoom = editingPhoto.editSettings.zoomScale || 1.0;
+                          const scaleFactor = isPortrait ? baseZoom * 0.75 * tiltAutoZoom : baseZoom * tiltAutoZoom;
+
+                          return (
+                            <img
+                              src={loupeSrc}
+                              alt={editingPhoto.fileName}
+                              onError={() => {
+                                if (editingPhoto.isRaw || fileRegistryRef.current.has(editingPhoto.id)) {
+                                  loadRawPreviewLazy(editingPhoto.id);
+                                }
+                              }}
+                              style={{
+                                filter: loupeFilter,
+                                transform: `translate(${editingPhoto.editSettings.cropOffsetX || 0}px, ${
+                                  editingPhoto.editSettings.cropOffsetY || 0
+                                }px) rotate(${rot}deg) scale(${scaleFactor})`,
+                              }}
+                              className={`max-h-[64vh] max-w-full w-auto h-auto object-contain transition-transform duration-75 select-none pointer-events-none rounded-lg ${
+                                isStillLoadingPreview ? 'opacity-0' : 'opacity-100'
+                              }`}
+                            />
+                          );
+                        })()}
 
                         {/* Grade de Corte / Terços Overlay */}
                         {showCropGrid && (
@@ -3166,7 +3296,14 @@ export function AICullingManager({ userId }: AICullingManagerProps) {
                         isActive ? 'border-purple-500 scale-105 shadow-lg shadow-purple-500/20' : 'border-slate-800 opacity-60 hover:opacity-100'
                       }`}
                     >
-                      <img src={p.previewUrl} alt={p.fileName} className="w-full h-full object-contain" />
+                      <img
+                        src={p.previewUrl}
+                        alt={p.fileName}
+                        style={{
+                          transform: `rotate(${p.rotation || 0}deg) ${p.rotation && p.rotation % 180 !== 0 ? 'scale(0.75)' : ''}`,
+                        }}
+                        className="w-full h-full object-contain"
+                      />
                       {p.selected && (
                         <div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-purple-600 text-white text-[8px] flex items-center justify-center font-bold">
                           ✓
