@@ -479,7 +479,10 @@ CREATE POLICY "Fotógrafos autenticados podem deletar suas imagens" ON storage.o
               totalFacesIndexed += detected.length;
             }
           }
-        } catch (photoErr) {
+        } catch (photoErr: any) {
+          if (photoErr?.message?.includes('gallery_photo_faces')) {
+            throw photoErr;
+          }
           console.warn(`[IndexFaces] Erro na foto ${photo.id}:`, photoErr);
         }
       }

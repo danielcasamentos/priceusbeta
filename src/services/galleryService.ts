@@ -484,7 +484,13 @@ export class GalleryService {
   ): Promise<void> {
     try {
       // Deletar rostos antigos desta foto antes de reinserir
-      await supabase.from('gallery_photo_faces').delete().eq('photo_id', photoId);
+      const { error: delErr } = await supabase.from('gallery_photo_faces').delete().eq('photo_id', photoId);
+      if (delErr) {
+        if (delErr.code === 'PGRST205' || delErr.message?.includes('schema cache')) {
+          throw new Error('A tabela gallery_photo_faces ainda não foi criada no Supabase. Execute a migration SQL.');
+        }
+        console.warn('[GalleryService] Aviso ao limpar rostos antigos:', delErr);
+      }
 
       if (!faces || faces.length === 0) return;
 
@@ -497,10 +503,15 @@ export class GalleryService {
 
       const { error } = await supabase.from('gallery_photo_faces').insert(rows);
       if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+          throw new Error('A tabela gallery_photo_faces ainda não foi criada no Supabase. Execute a migration SQL.');
+        }
         console.warn('[GalleryService] Aviso ao salvar rostos no Supabase:', error);
+        throw error;
       }
     } catch (err) {
-      console.warn('[GalleryService] Exceção ao salvar rostos:', err);
+      console.error('[GalleryService] Exceção ao salvar rostos:', err);
+      throw err;
     }
   }
 
@@ -518,7 +529,13 @@ export class GalleryService {
         .select('id, photo_id, descriptor')
         .eq('gallery_id', galleryId);
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+          console.warn('[GalleryService] Tabela gallery_photo_faces não encontrada.');
+          return [];
+        }
+        throw error;
+      }
       return (data as any) || [];
     } catch (err) {
       console.warn('[GalleryService] Erro ao buscar rostos da galeria:', err);
@@ -531,12 +548,21 @@ export class GalleryService {
    */
   static async markGalleryFacesIndexed(galleryId: string): Promise<void> {
     try {
-      await supabase
+      const { error } = await supabase
         .from('galleries')
         .update({ faces_indexed_at: new Date().toISOString() })
         .eq('id', galleryId);
+
+      if (error) {
+        if (error.code === '42703' || error.message?.includes('faces_indexed_at')) {
+          throw new Error('A coluna faces_indexed_at não existe na tabela galleries. Execute a migration SQL no Supabase.');
+        }
+        console.warn('[GalleryService] Erro ao marcar galeria como indexada:', error);
+        throw error;
+      }
     } catch (err) {
       console.warn('[GalleryService] Erro ao marcar galeria como indexada:', err);
+      throw err;
     }
   }
 

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Share2, Check } from 'lucide-react';
+import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Share2, Check, RotateCcw, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { QRCodeCanvas } from 'qrcode.react';
 import { replaceContractVariables, type BusinessSettings, type ClientData, type LeadData } from '../lib/contractVariables';
+import { RenewContractModal } from './RenewContractModal';
 
 interface Contract {
   id: string;
@@ -67,15 +68,21 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
 
   const statusInfo = getStatusInfo(contract.status);
 
-  // Estados para a nova funcionalidade
+  // Estados locais e controle de renovação
+  const [currentContract, setCurrentContract] = useState<Contract>(contract);
+  const [showRenewModal, setShowRenewModal] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [processedContent, setProcessedContent] = useState('');
   const [copiedShareLink, setCopiedShareLink] = useState(false);
 
-  const isLinkActive = contract.status === 'pending' && new Date(contract.expires_at) > new Date();
+  useEffect(() => {
+    setCurrentContract(contract);
+  }, [contract]);
+
+  const isLinkActive = currentContract.status === 'pending' && new Date(currentContract.expires_at) > new Date();
 
   const handleCopyShareLink = () => {
-    const signatureLink = `${window.location.origin}/contrato/${contract.token}`;
+    const signatureLink = `${window.location.origin}/contrato/${currentContract.token}`;
     navigator.clipboard.writeText(signatureLink);
     setCopiedShareLink(true);
     setTimeout(() => setCopiedShareLink(false), 2000);
@@ -311,9 +318,40 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
             </div>
           </div>
 
+          {/* Card de Status da Validade do Link para o Cliente */}
+          {currentContract.status !== 'signed' && (
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              new Date(currentContract.expires_at) <= new Date()
+                ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/40 text-amber-900 dark:text-amber-200'
+                : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200'
+            }`}>
+              <div className="flex items-start gap-2.5">
+                <Clock className={`w-5 h-5 flex-shrink-0 mt-0.5 ${new Date(currentContract.expires_at) <= new Date() ? 'text-amber-600' : 'text-emerald-600'}`} />
+                <div>
+                  <p className="text-xs font-bold">
+                    {new Date(currentContract.expires_at) <= new Date() ? 'Link de Assinatura Expirado para o Cliente' : 'Link de Assinatura Ativo'}
+                  </p>
+                  <p className="text-[11px] opacity-80 mt-0.5">
+                    {new Date(currentContract.expires_at) <= new Date()
+                      ? `Expirou em ${format(new Date(currentContract.expires_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}. O cliente não consegue assinar enquanto você não renovar.`
+                      : `Válido para o cliente até ${format(new Date(currentContract.expires_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRenewModal(true)}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs flex-shrink-0"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {new Date(currentContract.expires_at) <= new Date() ? 'Renovar Link' : 'Prorrogar Prazo'}
+              </button>
+            </div>
+          )}
+
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
             <a 
-              href={`/contrato/${contract.token}`} 
+              href={`/contrato/${currentContract.token}`} 
               target="_blank" 
               rel="noopener noreferrer"
               className="flex items-center justify-between text-blue-700 hover:text-blue-900 font-semibold"
@@ -343,16 +381,27 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
         </div>
 
         <div className="p-4 bg-gray-50 border-t text-right">
-          <div className="flex justify-end items-center gap-3">
-            <button onClick={onClose} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Fechar</button>
+          <div className="flex flex-wrap justify-end items-center gap-3">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium text-xs">Fechar</button>
             
-            {isLinkActive && (
+            {currentContract.status !== 'signed' && (
+              <button
+                type="button"
+                onClick={() => setShowRenewModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {new Date(currentContract.expires_at) <= new Date() ? 'Renovar Link' : 'Prorrogar Prazo'}
+              </button>
+            )}
+
+            {currentContract.status !== 'signed' && (
               <button
                 onClick={handleCopyShareLink}
-                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs transition-colors"
               >
-                {copiedShareLink ? <Check className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
-                {copiedShareLink ? 'Link Copiado!' : 'Compartilhar Link'}
+                {copiedShareLink ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copiedShareLink ? 'Link Copiado!' : 'Copiar Link'}
               </button>
             )}
 
@@ -360,14 +409,28 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
             <button
               onClick={handleViewAndPrint}
               disabled={loadingDetails}
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400"
+              className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold text-xs disabled:bg-gray-400"
             >
-              <Printer className="w-5 h-5" />
+              <Printer className="w-4 h-4" />
               Visualizar e Imprimir
             </button>
           </div>
         </div>
       </div>
+
+      {/* Modal de Renovação de Prazo */}
+      {showRenewModal && (
+        <RenewContractModal
+          contract={currentContract}
+          isOpen={showRenewModal}
+          onClose={() => setShowRenewModal(false)}
+          onSuccess={(updated) => {
+            setCurrentContract(prev => ({ ...prev, ...updated }));
+            // Atualiza também o objeto do prop se possível
+            Object.assign(contract, updated);
+          }}
+        />
+      )}
     </div>
   );
 }

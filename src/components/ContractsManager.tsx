@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Trash2, Eye, Loader2, AlertCircle, Share2, Check } from 'lucide-react';
+import { Search, Trash2, Eye, Loader2, AlertCircle, Share2, Check, RotateCcw, Clock } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { ContractViewerModal } from './ContractViewerModal';
+import { RenewContractModal } from './RenewContractModal';
 
 interface Contract {
   id: string;
@@ -52,6 +53,7 @@ export function ContractsManager({ userId }: { userId:string }) {
   const [yearFilter, setYearFilter] = useState(0); // 0 representa "Todos os Anos"
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [viewingContract, setViewingContract] = useState<Contract | null>(null);
+  const [renewingContract, setRenewingContract] = useState<Contract | null>(null);
   const [deleteConfirmSingle, setDeleteConfirmSingle] = useState<string | null>(null);
   const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
 
@@ -155,18 +157,34 @@ export function ContractsManager({ userId }: { userId:string }) {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      signed: 'bg-green-100 text-green-800',
-      expired: 'bg-red-100 text-red-800',
-    };
-    const labels: Record<string, string> = {
-      pending: 'Pendente',
-      signed: 'Assinado',
-      expired: 'Expirado',
-    };
-    return <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[status] || 'bg-gray-100'}`}>{labels[status] || status}</span>;
+  const getStatusBadge = (contract: Contract) => {
+    if (contract.status === 'signed') {
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 inline-flex items-center gap-1">
+          <Check size={12} /> Assinado
+        </span>
+      );
+    }
+
+    const isExpired = new Date(contract.expires_at) <= new Date();
+
+    if (isExpired || contract.status === 'expired') {
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 inline-flex items-center gap-1">
+          <Clock size={12} /> Link Vencido
+        </span>
+      );
+    }
+
+    const diffMs = new Date(contract.expires_at).getTime() - Date.now();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const expireText = diffDays <= 1 ? 'Vence hoje' : `Expira em ${diffDays}d`;
+
+    return (
+      <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800/40 inline-flex items-center gap-1">
+        <Clock size={12} /> Pendente ({expireText})
+      </span>
+    );
   };
 
   const availableYears = useMemo(() => {
@@ -282,21 +300,34 @@ export function ContractsManager({ userId }: { userId:string }) {
                   <td className="px-6 py-4">{contract.contract_templates?.name || 'Template Removido'}</td>
                   <td className="px-6 py-4">{contract.lead_data_json?.data_evento ? format(new Date(contract.lead_data_json.data_evento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</td>
                   <td className="px-6 py-4 font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(contract.lead_data_json?.valor_total || 0)}</td>
-                  <td className="px-6 py-4">{getStatusBadge(contract.status)}</td>
+                  <td className="px-6 py-4">{getStatusBadge(contract)}</td>
                   <td className="px-6 py-4">{format(new Date(contract.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setViewingContract(contract)} title="Visualizar" className="text-blue-600 hover:text-blue-800"><Eye size={16} /></button>
-                      {contract.status === 'pending' && new Date(contract.expires_at) > new Date() && (
+                      <button onClick={() => setViewingContract(contract)} title="Visualizar" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 p-1"><Eye size={16} /></button>
+                      {contract.status !== 'signed' && (
+                        <button
+                          onClick={() => setRenewingContract(contract)}
+                          title={new Date(contract.expires_at) <= new Date() ? "Link Vencido - Clique para renovar o prazo" : "Prorrogar validade do link"}
+                          className={`p-1 rounded-md transition-colors ${
+                            new Date(contract.expires_at) <= new Date()
+                              ? 'text-amber-600 dark:text-amber-400 hover:text-amber-800 bg-amber-50 dark:bg-amber-900/20'
+                              : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-800'
+                          }`}
+                        >
+                          <RotateCcw size={16} />
+                        </button>
+                      )}
+                      {contract.status !== 'signed' && (
                         <button
                           onClick={() => handleCopyLink(contract.token, contract.id)}
-                          title={copiedId === contract.id ? "Link copiado!" : "Copiar link de assinatura"}
-                          className={`${copiedId === contract.id ? 'text-green-600 hover:text-green-800' : 'text-green-600 hover:text-green-800'}`}
+                          title={copiedId === contract.id ? "Link copiado!" : (new Date(contract.expires_at) <= new Date() ? "Copiar link (Atenção: link vencido para o cliente)" : "Copiar link de assinatura")}
+                          className={`${copiedId === contract.id ? 'text-green-600 hover:text-green-800' : 'text-green-600 hover:text-green-800'} p-1`}
                         >
                           {copiedId === contract.id ? <Check size={16} /> : <Share2 size={16} />}
                         </button>
                       )}
-                      <button type="button" title="Excluir contrato" onClick={(e) => { e.preventDefault(); setDeleteConfirmSingle(contract.id); }} className={`text-red-600 hover:text-red-800 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`} disabled={deletingIds.has(contract.id)}><Trash2 size={16} /></button>
+                      <button type="button" title="Excluir contrato" onClick={(e) => { e.preventDefault(); setDeleteConfirmSingle(contract.id); }} className={`text-red-600 hover:text-red-800 dark:text-red-400 p-1 ${deletingIds.has(contract.id) ? 'animate-pulse opacity-50 cursor-not-allowed' : ''}`} disabled={deletingIds.has(contract.id)}><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>
@@ -323,7 +354,7 @@ export function ContractsManager({ userId }: { userId:string }) {
                     <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)]">{contract.contract_templates?.name || 'Template Removido'}</p>
                   </div>
                 </div>
-                {getStatusBadge(contract.status)}
+                {getStatusBadge(contract)}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)] mb-3">
                 {contract.lead_data_json?.data_evento && (
@@ -334,11 +365,23 @@ export function ContractsManager({ userId }: { userId:string }) {
                 )}
                 <span>🕒 Criado {format(new Date(contract.created_at), 'dd/MM/yy', { locale: ptBR })}</span>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
                 <button onClick={() => setViewingContract(contract)} className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-[rgba(59,130,246,0.3)] rounded-lg text-xs font-medium hover:bg-blue-50 dark:hover:bg-[rgba(59,130,246,0.1)]">
                   <Eye size={13} /> Visualizar
                 </button>
-                {contract.status === 'pending' && new Date(contract.expires_at) > new Date() && (
+                {contract.status !== 'signed' && (
+                  <button
+                    onClick={() => setRenewingContract(contract)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      new Date(contract.expires_at) <= new Date()
+                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700/50'
+                        : 'text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/40 hover:bg-indigo-50 dark:hover:bg-indigo-900/10'
+                    }`}
+                  >
+                    <RotateCcw size={13} /> {new Date(contract.expires_at) <= new Date() ? 'Renovar' : 'Prorrogar'}
+                  </button>
+                )}
+                {contract.status !== 'signed' && (
                   <button
                     onClick={() => handleCopyLink(contract.token, contract.id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-green-600 dark:text-green-400 border border-green-300 dark:border-[rgba(34,197,94,0.3)] rounded-lg text-xs font-medium hover:bg-green-50 dark:hover:bg-[rgba(34,197,94,0.1)]"
@@ -407,6 +450,20 @@ export function ContractsManager({ userId }: { userId:string }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Renovação de Prazo de Contrato */}
+      {renewingContract && (
+        <RenewContractModal
+          contract={renewingContract}
+          isOpen={!!renewingContract}
+          onClose={() => setRenewingContract(null)}
+          onSuccess={(updated) => {
+            setContracts((prev) =>
+              prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c))
+            );
+          }}
+        />
       )}
     </div>
   );

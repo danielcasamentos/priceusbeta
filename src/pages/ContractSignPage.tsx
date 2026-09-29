@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ContractCanvas } from '../components/ContractCanvas';
-import { FileSignature, AlertTriangle, Clock, ExternalLink, Smartphone } from 'lucide-react';
+import { FileSignature, AlertTriangle, Clock, ExternalLink, Smartphone, RotateCcw, MessageCircle } from 'lucide-react';
 import { replaceContractVariables, type BusinessSettings, type ClientData, type LeadData } from '../lib/contractVariables';
 import { isInAppBrowser } from '../lib/browserDetection';
+import { RenewContractModal } from '../components/RenewContractModal';
 
 interface Contract {
   id: string;
@@ -64,6 +65,13 @@ export function ContractSignPage() {
   const [error, setError] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [isInApp, setIsInApp] = useState(false);
+  const [isContractOwner, setIsContractOwner] = useState(false);
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [expiredInfo, setExpiredInfo] = useState<{
+    date: string;
+    businessName: string;
+    phone?: string;
+  } | null>(null);
 
   const [clientData, setClientData] = useState({
     nome_completo: '',
@@ -142,14 +150,27 @@ export function ContractSignPage() {
 
       const { contract: contractData, template: templateData, business_settings: businessData } = contractBundle;
 
+      // Checar se o usuário atual é o dono do contrato
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const isOwner = !!(currentUser && currentUser.id === contractData.user_id);
+      setIsContractOwner(isOwner);
+
       const expiresAt = new Date(contractData.expires_at);
       if (expiresAt < new Date()) {
-        setError(`Este link de contrato expirou em ${expiresAt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}. Por favor, solicite um novo link.`);
-        setLoading(false);
-        return;
+        if (!isOwner) {
+          const bName = businessData?.business_name || 'o profissional responsável';
+          const phone = businessData?.phone || '';
+          setExpiredInfo({
+            date: expiresAt.toLocaleDateString('pt-BR'),
+            businessName: bName,
+            phone,
+          });
+          setLoading(false);
+          return;
+        }
       }
 
-      if (contractData.status !== 'pending') {
+      if (contractData.status !== 'pending' && !isOwner) {
         setError('Este contrato já foi assinado ou não está mais disponível para assinatura.');
         setLoading(false);
         return;
@@ -186,6 +207,43 @@ export function ContractSignPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="text-gray-600 mt-4">Carregando contrato...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (expiredInfo) {
+    const cleanPhone = expiredInfo.phone ? expiredInfo.phone.replace(/\D/g, '') : '';
+    const msg = encodeURIComponent(`Olá, ${expiredInfo.businessName}! O prazo para assinar o meu contrato encerrou. Você poderia renovar o link para mim?`);
+    const waUrl = cleanPhone ? `https://wa.me/55${cleanPhone}?text=${msg}` : `https://wa.me/?text=${msg}`;
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center border border-gray-100">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xs">
+            <Clock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Prazo de Assinatura Encerrado</h2>
+          <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+            A validade deste link expirou em <strong>{expiredInfo.date}</strong>. Não se preocupe! Entre em contato com <strong>{expiredInfo.businessName}</strong> para solicitar a prorrogação do prazo.
+          </p>
+
+          <div className="space-y-3">
+            {expiredInfo.phone && (
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Pedir Novo Prazo no WhatsApp
+              </a>
+            )}
+            <p className="text-xs text-gray-400">
+              Assim que o profissional renovar o link, você poderá assinar normalmente.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -333,6 +391,26 @@ export function ContractSignPage() {
           </div>
         </div>
       )}
+
+      {/* Barra do Autor/Profissional quando o link está expirado para o cliente */}
+      {isContractOwner && contract && new Date(contract.expires_at) < new Date() && (
+        <div className="bg-amber-600 text-white px-4 py-3 shadow-md flex flex-col sm:flex-row items-center justify-between gap-3 sticky top-0 z-50 mb-6">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-medium">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <span>
+              <strong>Visualização do Autor:</strong> Para o seu cliente, este link expirou em {new Date(contract.expires_at).toLocaleDateString('pt-BR')}. Renove o prazo para que o cliente consiga assinar.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowRenewModal(true)}
+            className="px-3.5 py-1.5 bg-white text-amber-900 font-bold text-xs rounded-lg shadow hover:bg-amber-50 transition-colors flex items-center gap-1.5 flex-shrink-0"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Renovar Link Agora
+          </button>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-xl overflow-hidden">
           <div className="bg-blue-600 text-white p-6">
@@ -565,6 +643,20 @@ export function ContractSignPage() {
           </div>
         </div>
       </div>
+
+      {showRenewModal && contract && (
+        <RenewContractModal
+          contract={contract}
+          isOpen={showRenewModal}
+          onClose={() => setShowRenewModal(false)}
+          onSuccess={(updated) => {
+            setContract((prev: any) => ({ ...prev, ...updated }));
+            if (updated.token && updated.token !== token) {
+              navigate(`/contrato/${updated.token}`, { replace: true });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

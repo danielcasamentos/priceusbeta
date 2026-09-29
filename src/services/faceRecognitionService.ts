@@ -23,17 +23,26 @@ class FaceRecognitionService {
     if (this.loadingPromise) return this.loadingPromise;
 
     this.loadingPromise = (async () => {
-      const MODEL_URL = '/models/face';
-      console.log('[FaceRecognitionService] Carregando modelos neurais de face...');
+      try {
+        const MODEL_URL = '/models/face';
+        console.log('[FaceRecognitionService] Carregando modelos neurais de face...');
 
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      ]);
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
 
-      this.modelsLoaded = true;
-      console.log('[FaceRecognitionService] ✅ Modelos neurais carregados com sucesso!');
+        this.modelsLoaded = true;
+        console.log('[FaceRecognitionService] ✅ Modelos neurais carregados com sucesso!');
+      } catch (err: any) {
+        this.loadingPromise = null;
+        this.modelsLoaded = false;
+        console.error('[FaceRecognitionService] ❌ Erro ao carregar modelos neurais:', err);
+        throw new Error(
+          'Falha ao carregar modelos neurais de reconhecimento facial. Certifique-se de que os arquivos em /models/face estão acessíveis.'
+        );
+      }
     })();
 
     return this.loadingPromise;
