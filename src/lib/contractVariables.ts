@@ -67,6 +67,70 @@ const removeEmojis = (text: string | null | undefined): string => {
   return text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
 };
 
+/**
+ * Formata a especificação de um produto no contrato com quantidade, unidade adequada (singular/plural)
+ * e o nome do produto com conector harmonioso ("de ").
+ * Ex:
+ * - 5 (horas) de Cobertura do evento de aniversário por hora
+ * - 1 (hora) de Making of
+ * - 1 (unidade) de Álbum 30x30
+ * - 2 (unidades) de Quadro Fine Art
+ * - 120 (convidados) de Buffet Gastronômico
+ */
+export function formatProductSpecification(
+  quantidade: number = 1,
+  unidade?: string | null,
+  nome?: string
+): string {
+  const cleanNome = removeEmojis(nome || 'Item');
+  const qty = Number(quantidade) > 0 ? Number(quantidade) : 1;
+  const rawUnit = (unidade || '').trim().toLowerCase();
+
+  let unitText = '';
+  if (rawUnit === 'hora' || rawUnit === 'horas' || rawUnit === 'h') {
+    unitText = qty === 1 ? 'hora' : 'horas';
+  } else if (rawUnit === 'dia' || rawUnit === 'dias' || rawUnit === 'diaria' || rawUnit === 'diária' || rawUnit === 'diarias' || rawUnit === 'diárias') {
+    unitText = qty === 1 ? 'diária' : 'diárias';
+  } else if (rawUnit === 'pacote' || rawUnit === 'pacotes') {
+    unitText = qty === 1 ? 'pacote' : 'pacotes';
+  } else if (rawUnit === 'pessoa' || rawUnit === 'pessoas') {
+    unitText = qty === 1 ? 'pessoa' : 'pessoas';
+  } else if (rawUnit === 'convidado' || rawUnit === 'convidados') {
+    unitText = qty === 1 ? 'convidado' : 'convidados';
+  } else if (rawUnit === 'cento' || rawUnit === 'centos') {
+    unitText = qty === 1 ? 'cento' : 'centos';
+  } else if (rawUnit === 'sessao' || rawUnit === 'sessão' || rawUnit === 'sessoes' || rawUnit === 'sessões') {
+    unitText = qty === 1 ? 'sessão' : 'sessões';
+  } else if (rawUnit === 'atendimento' || rawUnit === 'atendimentos') {
+    unitText = qty === 1 ? 'atendimento' : 'atendimentos';
+  } else if (rawUnit === 'metro' || rawUnit === 'metros' || rawUnit === 'm') {
+    unitText = qty === 1 ? 'metro' : 'metros';
+  } else if (rawUnit === 'album' || rawUnit === 'álbum' || rawUnit === 'albuns' || rawUnit === 'álbuns') {
+    unitText = qty === 1 ? 'álbum' : 'álbuns';
+  } else if (rawUnit === 'quadro' || rawUnit === 'quadros') {
+    unitText = qty === 1 ? 'quadro' : 'quadros';
+  } else if (rawUnit && rawUnit !== 'unidade' && rawUnit !== 'unidades') {
+    // Unidade personalizada (ex: garrafa, lote, mesa)
+    unitText = qty === 1 ? rawUnit : (rawUnit.endsWith('s') ? rawUnit : `${rawUnit}s`);
+  } else {
+    // Fallback inteligente pelo nome do produto
+    const lowerNome = cleanNome.toLowerCase();
+    if (/\b(por hora|hora extra|horas de cobertura|cobertura por hora)\b/.test(lowerNome)) {
+      unitText = qty === 1 ? 'hora' : 'horas';
+    } else if (/\b(di[aá]ri[ao]s?)\b/.test(lowerNome)) {
+      unitText = qty === 1 ? 'diária' : 'diárias';
+    } else {
+      unitText = qty === 1 ? 'unidade' : 'unidades';
+    }
+  }
+
+  // Preposição inteligente: se o nome já começar com de/do/da, não duplica
+  const startsWithPreposition = /^(de|do|da|dos|das)\s+/i.test(cleanNome);
+  const connector = startsWithPreposition ? '' : 'de ';
+
+  return `${qty} (${unitText}) ${connector}${cleanNome}`;
+}
+
 export function replaceContractVariables(
   template: string,
   businessSettings: BusinessSettings,
@@ -137,9 +201,76 @@ export function replaceContractVariables(
     '{{CIDADE_EVENTO}}': clientData.cidade_evento || leadData.cidade_evento || leadData.cidade || '',
     '{{LOCAL_EVENTO}}': clientData.local_evento || '',
     '{{ENDERECO_EVENTO}}': clientData.endereco_evento || '',
-    '{{HORARIO_INICIO}}': clientData.horario_inicio || leadData.horario_inicio || leadData.datas_agenda?.[0]?.horario_inicio || '',
+    '{{HORARIO_INICIO}}': (() => {
+      const lista = Array.isArray(leadData.datas_agenda) && leadData.datas_agenda.length > 0
+        ? leadData.datas_agenda
+        : [];
+
+      const itensComHorario = lista.filter((d: any) => d.horario_inicio || d.horario_fim);
+
+      if (itensComHorario.length > 1) {
+        return itensComHorario
+          .map((d: any) => {
+            const titulo = d.tipo_evento || 'Serviço';
+            const horario = d.horario_inicio && d.horario_fim
+              ? `das ${d.horario_inicio} às ${d.horario_fim}`
+              : d.horario_inicio
+                ? `a partir das ${d.horario_inicio}`
+                : `até às ${d.horario_fim}`;
+
+            const dataPrincipal = clientData.data_evento || leadData.data_evento;
+            const dataFmt = d.data && d.data !== dataPrincipal
+              ? `${new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR')}, `
+              : '';
+
+            return `• ${titulo}: ${dataFmt}${horario}`;
+          })
+          .join('\n');
+      }
+
+      if (itensComHorario.length === 1) {
+        const item = itensComHorario[0];
+        const hIni = item.horario_inicio;
+        const hFim = item.horario_fim;
+        const horarioStr = hIni && hFim ? `das ${hIni} às ${hFim}` : hIni ? `a partir das ${hIni}` : `até às ${hFim}`;
+        if (item.tipo_evento && !item.tipo_evento.toLowerCase().startsWith('evento de')) {
+          return `${horarioStr} (${item.tipo_evento})`;
+        }
+        return horarioStr;
+      }
+
+      const hIni = clientData.horario_inicio || leadData.horario_inicio || '';
+      const hFim = clientData.horario_fim || leadData.horario_fim || '';
+      if (hIni && hFim) return `das ${hIni} às ${hFim}`;
+      if (hIni) return `a partir das ${hIni}`;
+      return hIni;
+    })(),
     '{{HORARIO_FIM}}': clientData.horario_fim || leadData.horario_fim || leadData.datas_agenda?.[0]?.horario_fim || '',
     '{{DATAS_HORARIOS_EVENTO}}': (() => {
+      const lista = Array.isArray(leadData.datas_agenda) ? leadData.datas_agenda : [];
+      if (lista.length > 0) {
+        return lista
+          .map((d: any) => {
+            const dataFmt = d.data ? new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+            const titulo = d.tipo_evento || 'Evento';
+            const horario =
+              d.horario_inicio && d.horario_fim
+                ? `${d.horario_inicio} às ${d.horario_fim}`
+                : d.horario_inicio
+                  ? `a partir das ${d.horario_inicio}`
+                  : '';
+            return [dataFmt, titulo, horario ? `(${horario})` : ''].filter(Boolean).join(' — ');
+          })
+          .join('\n');
+      }
+      const dataEvento = clientData.data_evento || leadData.data_evento;
+      const dataFmt = dataEvento ? new Date(dataEvento + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+      const hIni = clientData.horario_inicio || leadData.horario_inicio || '';
+      const hFim = clientData.horario_fim || leadData.horario_fim || '';
+      const horario = hIni && hFim ? `${hIni} às ${hFim}` : hIni ? `a partir das ${hIni}` : '';
+      return [dataFmt, horario].filter(Boolean).join(' — ');
+    })(),
+    '{{DATAS_HORARIOS_EVENTOS}}': (() => {
       const lista = Array.isArray(leadData.datas_agenda) ? leadData.datas_agenda : [];
       if (lista.length > 0) {
         return lista
@@ -281,15 +412,17 @@ export function replaceContractVariables(
   if (leadData.produtos && leadData.produtos.length > 0) {
     const produtosLista = leadData.produtos
       .map((p: any) => {
-        const cleanNome = removeEmojis(p.nome);
-        const showQty = p.permite_multiplas_unidades !== false;
-        const qtyText = showQty ? `${p.quantidade}x ` : '';
+        const spec = formatProductSpecification(
+          p.quantidade || 1,
+          p.unidade,
+          p.nome
+        );
         
         let line = '';
         if (ocultarValores) {
-          line = `• ${qtyText}${cleanNome}`;
+          line = `• ${spec}`;
         } else {
-          line = `• ${qtyText}${cleanNome} - R$ ${p.preco?.toFixed(2).replace('.', ',')}`;
+          line = `• ${spec} - R$ ${p.preco?.toFixed(2).replace('.', ',')}`;
         }
         
         if (p.resumo) {
@@ -344,16 +477,19 @@ export function replaceContractVariables(
   if (leadData.upsell_produtos && leadData.upsell_produtos.length > 0) {
     const upsellLista = leadData.upsell_produtos
       .map((p: any) => {
-        const cleanNome = removeEmojis(p.nome || p.nome_produto);
-        const qtyText = p.quantidade > 1 ? `${p.quantidade}x ` : '';
+        const spec = formatProductSpecification(
+          p.quantidade || 1,
+          p.unidade,
+          p.nome || p.nome_produto
+        );
         const precoVal = parseFloat(p.valor || p.preco || 0);
         const desc = p.desconto_percentual || 0;
         const precoFinal = precoVal * (1 - desc / 100);
         
         if (ocultarValores) {
-          return `• ${qtyText}${cleanNome}`;
+          return `• ${spec}`;
         } else {
-          return `• ${qtyText}${cleanNome} - R$ ${precoFinal.toFixed(2).replace('.', ',')}`;
+          return `• ${spec} - R$ ${precoFinal.toFixed(2).replace('.', ',')}`;
         }
       })
       .join('\n');
@@ -427,7 +563,9 @@ export function getAvailableVariables(): { key: string; description: string; cat
     { key: '{{ENDERECO_EVENTO}}', description: 'Endereço do evento', category: 'Evento' },
     { key: '{{CIDADE_EVENTO}}', description: 'Cidade do evento', category: 'Evento' },
     { key: '{{DATA_EVENTO}}', description: 'Data do evento', category: 'Evento' },
-    { key: '{{HORARIO_INICIO}}', description: 'Horário de início', category: 'Evento' },
+    { key: '{{HORARIO_INICIO}}', description: 'Horário(s) ou cronograma consolidado das etapas/produtos', category: 'Evento' },
+    { key: '{{HORARIO_FIM}}', description: 'Horário de término do evento', category: 'Evento' },
+    { key: '{{DATAS_HORARIOS_EVENTO}}', description: 'Cronograma completo de datas e horários da agenda', category: 'Evento' },
     { key: '{{OBSERVACOES_CLIENTE}}', description: 'Observações do cliente', category: 'Evento' },
 
     { key: '{{SUBTOTAL}}', description: 'Subtotal (antes de ajustes)', category: 'Financeiro' },

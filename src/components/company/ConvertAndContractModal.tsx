@@ -148,6 +148,7 @@ export function ConvertAndContractModal({ userId, lead, initialStep = 1, onClose
                 valorTotal={lead.valor_total || 0}
                 dataEvento={lead.data_evento}
                 paymentMethodData={paymentMethodData}
+                lead={lead}
                 onClose={onClose}
                 onSuccess={onSuccess} // If they click just "Confirmar", it saves normally and triggers this
                 onConfirmWithContract={handleProceedToContract}

@@ -60,7 +60,9 @@ const PLACEHOLDERS = {
     { key: '{{CEP_CLIENTE}}', label: 'CEP' },
     { key: '{{LOCAL_EVENTO}}', label: 'Local do Evento' },
     { key: '{{ENDERECO_EVENTO}}', label: 'Endereço do Evento' },
-    { key: '{{HORARIO_INICIO}}', label: 'Horário de Início' },
+    { key: '{{HORARIO_INICIO}}', label: 'Horário de Início (ou cronograma)' },
+    { key: '{{HORARIO_FIM}}', label: 'Horário de Término' },
+    { key: '{{DATAS_HORARIOS_EVENTO}}', label: 'Datas e Horários da Agenda' },
     { key: '{{OBSERVACOES_CLIENTE}}', label: 'Observações' },
   ],
 };

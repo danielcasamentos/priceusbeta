@@ -237,7 +237,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         if (productIds.length > 0) {
           const { data: dbProducts } = await supabase
             .from('produtos')
-            .select('id, resumo, brindes_vinculados')
+            .select('id, unidade, resumo, brindes_vinculados')
             .in('id', productIds);
           if (dbProducts) {
             dbProductsMap = Object.fromEntries(dbProducts.map(p => [p.id, p]));
@@ -254,6 +254,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
               preco: parseFloat(p.valor || p.preco || 0),
               quantidade: selectedMap[p.id] || p.quantidade || 1,
               permite_multiplas_unidades: p.permite_multiplas_unidades,
+              unidade: dbProduct?.unidade || p.unidade || 'unidade',
               resumo: dbProduct?.resumo || p.resumo || '',
               brindes_vinculados: dbProduct?.brindes_vinculados || p.brindes_vinculados || [],
             };
@@ -265,7 +266,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
         if (produtoIds.length > 0) {
           const { data: produtosData } = await supabase
             .from('produtos')
-            .select('id, nome, valor, permite_multiplas_unidades, resumo, brindes_vinculados')
+            .select('id, nome, valor, unidade, permite_multiplas_unidades, resumo, brindes_vinculados')
             .in('id', produtoIds);
 
           if (produtosData) {
@@ -281,6 +282,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
                   preco: parseFloat(dbProduto.valor || 0),
                   quantidade: p.quantidade || 1,
                   permite_multiplas_unidades: dbProduto.permite_multiplas_unidades,
+                  unidade: dbProduto.unidade || 'unidade',
                   resumo: dbProduto.resumo || '',
                   brindes_vinculados: dbProduto.brindes_vinculados || [],
                 };
@@ -295,7 +297,7 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           const produtoIds = Object.keys(selectedMap);
           const { data: produtosData } = await supabase
             .from('produtos')
-            .select('id, nome, valor, resumo, brindes_vinculados')
+            .select('id, nome, valor, unidade, permite_multiplas_unidades, resumo, brindes_vinculados')
             .in('id', produtoIds);
 
           if (produtosData) {
@@ -304,6 +306,8 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
               nome: p.nome,
               preco: parseFloat(p.valor || 0),
               quantidade: typeof selectedMap[p.id] === 'number' ? selectedMap[p.id] : 1,
+              permite_multiplas_unidades: p.permite_multiplas_unidades,
+              unidade: p.unidade || 'unidade',
               resumo: p.resumo || '',
               brindes_vinculados: p.brindes_vinculados || [],
             }));

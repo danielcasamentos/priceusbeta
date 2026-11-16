@@ -31,6 +31,7 @@ const getDuracaoMinutos = (inicio?: string | null, fim?: string | null): number 
 interface ConvertLeadModalProps {
   userId: string; leadId: string; leadName: string; templateName: string;
   valorTotal: number; dataEvento?: string | null; paymentMethodData?: PaymentMethodData | null;
+  lead?: any;
   fromContract?: boolean; onClose: () => void; onSuccess: () => void; onConfirmWithContract?: (payload: any) => void;
 }
 
@@ -51,7 +52,54 @@ function detectMode(pm: PaymentMethodData | null | undefined, valorTotal: number
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-export function ConvertLeadModal({ userId, leadId, leadName, templateName, valorTotal, dataEvento, paymentMethodData, fromContract, onClose, onSuccess, onConfirmWithContract }: ConvertLeadModalProps) {
+function buildInitialAgendaDates(
+  lead: any,
+  leadName: string,
+  templateName: string,
+  eventoDate?: string | null
+): AgendaDate[] {
+  const primaryDate = eventoDate || '';
+  const formattedDate = primaryDate 
+    ? new Date(primaryDate + 'T12:00:00').toLocaleDateString('pt-BR')
+    : '';
+  const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
+  const defaultBase = `Evento de ${leadName}${templateName ? ` - ${templateName}` : ''}`;
+  const initName = `${defaultBase}${dateSuffix}`;
+
+  const orcamentoDetalhe = lead?.orcamento_detalhe || {};
+  const produtosRaw = Array.isArray(orcamentoDetalhe.produtos) ? orcamentoDetalhe.produtos : [];
+  const selectedMap = orcamentoDetalhe.selectedProdutos || orcamentoDetalhe.selecoes?.produtos || {};
+
+  // Identificar produtos com especificação em horas ou ensaios/making of
+  const hourProducts = produtosRaw.filter((p: any) => {
+    const isSelected = Object.keys(selectedMap).length === 0 || (selectedMap[p.id] && selectedMap[p.id] > 0);
+    if (!isSelected) return false;
+    const unit = (p.unidade || '').toLowerCase();
+    const nome = (p.nome || '').toLowerCase();
+    const isHour = unit === 'hora' || unit === 'horas' || /\b(hora|horas|ensaio|making of|sessao|sessão)\b/.test(nome);
+    const hasDuration = Boolean(p.duracao_minutos && p.duracao_minutos > 0);
+    return isHour || hasDuration;
+  });
+
+  if (hourProducts.length > 0) {
+    return hourProducts.map((p: any, idx: number) => {
+      const qty = selectedMap[p.id] || p.quantidade || 1;
+      const unit = (p.unidade || '').toLowerCase();
+      const qtySuffix = unit === 'hora' ? ` (${qty}h)` : '';
+      return {
+        id: uid(),
+        data: primaryDate,
+        tipo_evento: `${p.nome}${qtySuffix}`,
+        horario_inicio: idx === 0 && lead?.horario_inicio ? String(lead.horario_inicio).substring(0, 5) : '',
+        horario_fim: '',
+      };
+    });
+  }
+
+  return primaryDate ? [{ id: uid(), data: primaryDate, tipo_evento: initName, horario_inicio: lead?.horario_inicio ? String(lead.horario_inicio).substring(0, 5) : '', horario_fim: '' }] : [];
+}
+
+export function ConvertLeadModal({ userId, leadId, leadName, templateName, valorTotal, dataEvento, paymentMethodData, lead, fromContract, onClose, onSuccess, onConfirmWithContract }: ConvertLeadModalProps) {
   const today = new Date().toISOString().split('T')[0];
   const eventoDate = dataEvento?.split('T')[0] ?? '';
   const detected = useMemo(() => detectMode(paymentMethodData, valorTotal), [paymentMethodData, valorTotal]);
@@ -93,13 +141,7 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
 
   // --- Agenda (múltiplas datas) ---
   const [agendaDates, setAgendaDates] = useState<AgendaDate[]>(() => {
-    const formattedDate = eventoDate 
-      ? new Date(eventoDate + 'T12:00:00').toLocaleDateString('pt-BR')
-      : '';
-    const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-    const defaultBase = `Evento de ${leadName}${templateName ? ` - ${templateName}` : ''}`;
-    const initName = `${defaultBase}${dateSuffix}`;
-    return eventoDate ? [{ id: uid(), data: eventoDate, tipo_evento: initName, horario_inicio: '', horario_fim: '' }] : [];
+    return buildInitialAgendaDates(lead, leadName, templateName, eventoDate);
   });
 
   useEffect(() => {

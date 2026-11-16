@@ -186,11 +186,17 @@ export function ContractSignPage() {
 
     if (contractData.lead_data_json) {
       const leadJson = contractData.lead_data_json;
+      const initialHorario = leadJson.horario_inicio || leadJson.datas_agenda?.[0]?.horario_inicio || '';
+      const initialHorarioFim = leadJson.horario_fim || leadJson.datas_agenda?.[0]?.horario_fim || '';
       setClientData((prev) => ({
         ...prev,
         nome_completo: leadJson.nome_cliente || prev.nome_completo,
         data_evento: leadJson.data_evento || prev.data_evento,
         cidade_evento: leadJson.cidade_evento || leadJson.cidade || prev.cidade_evento,
+        horario_inicio: prev.horario_inicio || initialHorario,
+        horario_fim: prev.horario_fim || initialHorarioFim,
+        local_evento: prev.local_evento || leadJson.local_evento || '',
+        endereco_evento: prev.endereco_evento || leadJson.endereco_evento || '',
       }));
     }
     } catch (err) {
@@ -337,7 +343,11 @@ export function ContractSignPage() {
       return;
     }
 
-    if (!clientData.horario_inicio) {
+    const hasPrefilledHorario = !!(
+      contract?.lead_data_json?.horario_inicio ||
+      contract?.lead_data_json?.datas_agenda?.[0]?.horario_inicio
+    );
+    if (!hasPrefilledHorario && !clientData.horario_inicio) {
       alert('Por favor, preencha o Horário de Início do Evento');
       return;
     }

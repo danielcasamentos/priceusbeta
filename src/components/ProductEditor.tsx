@@ -97,6 +97,10 @@ export function ProductEditor({
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [showAiModal, setShowAiModal] = useState(false);
   const [progressiveSaveStatus, setProgressiveSaveStatus] = useState<string | null>(null);
+  const [isCustomUnit, setIsCustomUnit] = useState<boolean>(() => {
+    const std = ['unidade', 'hora', 'dia', 'pacote', 'pessoa', 'cento', 'sessao', 'metro'];
+    return Boolean(product.unidade && !std.includes(product.unidade));
+  });
 
   const [uploadingSlots, setUploadingSlots] = useState<number[]>([]);
   const [slotProgress, setSlotProgress] = useState<Record<number, number>>({});
@@ -846,19 +850,54 @@ export function ProductEditor({
           placeholder="0.00"
         />
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Unidade
           </label>
-          <select
-            value={product.unidade}
-            onChange={(e) => onChange('unidade', e.target.value)}
-            className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="unidade">Unidade</option>
-            <option value="hora">Hora</option>
-            <option value="dia">Dia</option>
-            <option value="pacote">Pacote</option>
-          </select>
+          {isCustomUnit ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={product.unidade === 'custom' ? '' : product.unidade}
+                onChange={(e) => onChange('unidade', e.target.value)}
+                placeholder="Ex: garrafa, lote, mesa..."
+                className="w-full px-3 py-3 border border-gray-300 dark:border-white/10 dark:bg-[#07101f] dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCustomUnit(false);
+                  onChange('unidade', 'unidade');
+                }}
+                className="px-3 py-2 text-xs bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-700 dark:text-gray-300 rounded-lg whitespace-nowrap"
+              >
+                Padrão
+              </button>
+            </div>
+          ) : (
+            <select
+              value={product.unidade || 'unidade'}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setIsCustomUnit(true);
+                  onChange('unidade', '');
+                } else {
+                  onChange('unidade', e.target.value);
+                }
+              }}
+              className="w-full px-3 py-3 border border-gray-300 dark:border-white/10 dark:bg-[#07101f] dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            >
+              <option value="unidade">Unidade (peça, item, álbum, quadro)</option>
+              <option value="hora">Hora (serviço por tempo)</option>
+              <option value="dia">Diária / Dia (espaço, estruturas)</option>
+              <option value="pacote">Pacote / Combo fechado</option>
+              <option value="pessoa">Pessoa / Convidado (buffet, open bar)</option>
+              <option value="cento">Cento (doces finos, salgados)</option>
+              <option value="sessao">Sessão / Atendimento (beleza, noiva)</option>
+              <option value="metro">Metro linear ou m² (cenografia)</option>
+              <option value="custom">Outra unidade personalizada...</option>
+            </select>
+          )}
         </div>
       </div>
 
