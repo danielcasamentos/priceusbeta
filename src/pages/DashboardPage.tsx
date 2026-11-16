@@ -19,6 +19,7 @@ import { TemplatesContracts } from '../components/TemplatesContracts';
 import { Sidebar } from '../components/Sidebar';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { ReviewsManager } from '../components/ReviewsManager';
+import { AdsManager } from '../components/AdsManager';
 import { CompanyDashboardHub } from '../components/company/CompanyDashboardHub';
 import NotificationCenter from '../components/NotificationCenter'; // Import NotificationCenter
 import { AppInstallBanner } from '../components/AppInstallBanner';
@@ -189,6 +190,8 @@ export function DashboardPage() {
         return 'Agenda';
       case 'avaliacoes':
         return 'Avaliações de Clientes';
+      case 'ads':
+        return 'Meu Destaque no Marketplace';
       case 'profile':
         return 'Meu Perfil';
       case 'videos':
@@ -393,6 +396,8 @@ export function DashboardPage() {
                 </div>
                 <ReviewsManager userId={user.id} />
               </>
+            ) : currentPage === 'ads' ? (
+              <AdsManager userId={user.id} />
             ) : currentPage === 'contratos' ? (
               <div>
                 <div className="border-b border-gray-200 dark:border-[rgba(255,255,255,.1)] mb-6">

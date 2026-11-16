@@ -20,6 +20,7 @@ import {
   Images,
   Sparkles,
   MessageSquare,
+  Megaphone,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -84,6 +85,7 @@ export function Sidebar({
         { id: 'entregas', label: 'Galerias Online', icon: Images, section: 'vendas' },
         { id: 'contratos', label: 'Contratos', icon: FileSignature, section: 'vendas' },
         { id: 'avaliacoes', label: 'Avaliações', icon: Star, section: 'vendas' },
+        { id: 'ads', label: 'Meu Destaque (Ads)', icon: Megaphone, section: 'vendas' },
       ]
     },
     {
