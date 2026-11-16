@@ -9,7 +9,7 @@ import { BrindesCountdown } from '../BrindesCountdown';
 interface QuoteRevellonProps {
   template: any; profile: any; produtos: any[]; selectedProdutos: Record<string, number>; formData: any;
   calculateTotal: () => number; handleProdutoQuantityChange: (id: string, qty: number) => void;
-  handleSubmit: (e: React.FormEvent) => void; setFormData: (data: any) => void; fieldsValidation: any;
+  handleSubmit: (e: React.FormEvent) => void; handleStartOnlineChat?: (e?: React.MouseEvent | React.FormEvent) => void; isStartingChat?: boolean; setFormData: (data: any) => void; fieldsValidation: any;
   camposExtras: any[]; camposExtrasData: Record<string, string>; setCamposExtrasData: (data: any) => void;
   renderLocationDateFields?: () => React.ReactNode;
   formasPagamento?: any[]; selectedFormaPagamento?: string; setSelectedFormaPagamento?: (id: string) => void;
@@ -41,7 +41,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
         .rv-prod { transition: border-color .2s, background .2s; }
         .rv-prod.selected { border-color: rgba(245,158,11,.5) !important; background: rgba(245,158,11,.06) !important; }
         .rv-input { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; color: #fff; padding: 12px 16px; width: 100%; font-size: 15px; outline: none; transition: border-color .2s; }
-        .rv-input::placeholder { color: rgba(255,255,255,.35); }
+        .rv-input::placeholder { color: rgba(255,255,255,.55); }
         .rv-input:focus { border-color: rgba(245,158,11,.5); box-shadow: 0 0 0 3px rgba(245,158,11,.1); }
         .rv-qty-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s; }
         .rv-qty-btn:hover:not(:disabled) { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.3); }
@@ -52,7 +52,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
       {/* NAV */}
       <nav style={{ background: 'rgba(3,3,15,.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(245,158,11,.12)', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontSize: 18 }}>🥂</div>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.3)', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Proposta Especial de Réveillon</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Proposta Especial de Réveillon</div>
         <div style={{ fontSize: 18 }}>🎆</div>
       </nav>
 
@@ -82,7 +82,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                 <MapPin size={12} /> {profile.tipo_fotografia}
               </div>
             )}
-            {profile.apresentacao && <p className="rv-in-2" style={{ fontSize: 15, color: 'rgba(255,255,255,.55)', lineHeight: 1.7, maxWidth: 500, margin: '0 auto 24px' }}>{profile.apresentacao}</p>}
+            {profile.apresentacao && <p className="rv-in-2" style={{ fontSize: 15, color: 'rgba(255,255,255,.8)', lineHeight: 1.7, maxWidth: 500, margin: '0 auto 24px' }}>{profile.apresentacao}</p>}
             <div style={{ marginBottom: 20 }}><QuoteHeaderRating userId={template.user_id} ratingMinimo={profile.rating_minimo_exibicao || 1} exibirAvaliacoes={profile.exibir_avaliacoes_publico ?? true} /></div>
             <div className="rv-in-3" style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               {profile.whatsapp_principal && <a href={`https://wa.me/${profile.whatsapp_principal.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#16a34a,#22c55e)', color: '#fff', padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}><MessageCircle size={14} /> WhatsApp</a>}
@@ -318,7 +318,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                               )}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {desconto > 0 && (
-                                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,.3)', textDecoration: 'line-through' }}>{formatCurrency(produto.valor)}</span>
+                                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,.55)', textDecoration: 'line-through' }}>{formatCurrency(produto.valor)}</span>
                                 )}
                                 <span style={{ fontSize: 17, fontWeight: 800, color: '#fbbf24' }}>{formatCurrency(valorFinal)}</span>
                               </div>
@@ -333,7 +333,7 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
                     {/* Linha inferior: controle de quantidade ou toggle */}
                     {(produto.permite_multiplas_unidades ?? true) ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '10px 14px' }}>
-                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>{isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}</span>
+                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', fontWeight: 500 }}>{isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <button type="button" className="rv-qty-btn" onClick={() => props.handleProdutoQuantityChange(produto.id, (selectedProdutos[produto.id] || 0) - 1)} disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}>−</button>
                           <span style={{ width: 28, textAlign: 'center', fontWeight: 800, fontSize: 17 }}>{selectedProdutos[produto.id] || 0}</span>
@@ -450,20 +450,33 @@ export function QuoteRevellon(props: QuoteRevellonProps) {
           <div id="rv-total" ref={totalSectionRef} style={{ background: 'linear-gradient(135deg, rgba(245,158,11,.1), rgba(226,232,240,.05))', border: '1px solid rgba(245,158,11,.3)', borderRadius: 16, padding: '24px', textAlign: 'center', animation: 'rvGlow 3s ease infinite' }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: 'rgba(251,191,36,.8)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 8 }}>{template?.usar_termo_investimento ? '🥂 Investimento Total para o Réveillon' : '🥂 Valor Total para o Réveillon'}</p>
             <p style={{ fontSize: 'clamp(32px,6vw,52px)', fontWeight: 900, background: 'linear-gradient(135deg,#f59e0b,#e2e8f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(calculateTotal())}</p>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', marginTop: 8 }}>🎆 Reserve agora e comece o ano novo com memórias inesquecíveis!</p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,.65)', marginTop: 8 }}>🎆 Reserve agora e comece o ano novo com memórias inesquecíveis!</p>
           </div>
 
-          <button type="submit" disabled={!fieldsValidation.canUseWhatsApp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#b45309,#f59e0b,#fbbf24)' : 'rgba(255,255,255,.1)', border: 'none', color: '#000', padding: '16px 32px', borderRadius: 14, fontSize: 16, fontWeight: 800, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', boxShadow: fieldsValidation.canUseWhatsApp ? '0 4px 24px rgba(245,158,11,.4)' : 'none', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}>
-            {!fieldsValidation.canUseWhatsApp ? <Lock size={20} style={{ color: '#fff' }} /> : <Send size={20} />}
-            {template?.texto_botao_envio || '🎆 Enviar Proposta de Réveillon via WhatsApp'}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button type="submit" disabled={!fieldsValidation.canUseWhatsApp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#b45309,#f59e0b,#fbbf24)' : 'rgba(255,255,255,.1)', border: 'none', color: '#000', padding: '16px 32px', borderRadius: 14, fontSize: 16, fontWeight: 800, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', boxShadow: fieldsValidation.canUseWhatsApp ? '0 4px 24px rgba(245,158,11,.4)' : 'none', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}>
+              {!fieldsValidation.canUseWhatsApp ? <Lock size={20} style={{ color: '#fff' }} /> : <Send size={20} />}
+              {template?.texto_botao_envio || '🎆 Enviar Proposta de Réveillon via WhatsApp'}
+            </button>
+            {props.handleStartOnlineChat && (
+              <button
+                type="button"
+                onClick={props.handleStartOnlineChat}
+                disabled={props.isStartingChat || !fieldsValidation.canUseWhatsApp}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#059669,#10b981)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(16,185,129,.4)', color: '#fff', padding: '14px 28px', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}
+              >
+                <MessageCircle size={18} />
+                {props.isStartingChat ? 'Abrindo Chat...' : '💬 Negociar no Chat PriceU$'}
+              </button>
+            )}
+          </div>
         </form>
       </section>
 
       {/* Rate Photographer Button removido */}
       {!(profile?.status_assinatura === 'active') && (
         <footer style={{ background: '#010108', padding: '28px 24px', borderTop: '1px solid rgba(245,158,11,.08)', textAlign: 'center' }}>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,.25)' }}>Powered by <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a></p>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>Powered by <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a></p>
         </footer>
       )}
     </div>

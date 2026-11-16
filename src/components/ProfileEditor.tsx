@@ -1,9 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase, Profile } from '../lib/supabase';
-import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, CreditCard, Trash2 } from 'lucide-react';
+import { Save, Upload, User, Globe, Eye, Check, X, Link as LinkIcon, ExternalLink, CreditCard, Trash2, Tag, Plus, Sparkles } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkUserSlugAvailability } from '../lib/slugUtils';
 import { useSubscription } from '../hooks/useSubscription';
 import { ImageUploadService } from '../services/imageUploadService';
+
+export const PRESET_WORK_STYLES = [
+  { id: 'Romântico Clássico', label: '💍 Romântico Clássico' },
+  { id: 'Boho Chic & Rústico', label: '🌿 Boho Chic & Rústico' },
+  { id: 'Minimalista Editorial', label: '✨ Minimalista Editorial' },
+  { id: 'Espontâneo / Documental', label: '📸 Espontâneo / Fotojornalismo' },
+  { id: 'Praia & Destination', label: '🌊 Praia & Destination' },
+  { id: 'Garden / Ar Livre', label: '🌸 Garden / Ar Livre' },
+  { id: 'Moderno Urbano', label: '🏙️ Moderno Urbano' },
+  { id: 'Tradicional & Luxo', label: '👑 Tradicional & Luxo' },
+  { id: 'Drone / Aéreo', label: '🚁 Drone / Aéreo' },
+  { id: 'Álbum Luxo', label: '📖 Álbum Impresso de Luxo' },
+  { id: 'Same Day Edit', label: '⚡ Same Day Edit' },
+  { id: 'Cinema 4K', label: '🎬 Cinema 4K' },
+];
 
 interface ProfileEditorProps {
   userId: string;
@@ -24,6 +39,11 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [showSqlFallback, setShowSqlFallback] = useState(false);
+
+  // Estados de Estilos de Trabalho e Tags de Busca (Marketplace)
+  const [vendorCategory, setVendorCategory] = useState<string>('fotografia');
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
+  const [newCustomTag, setNewCustomTag] = useState<string>('');
 
   useEffect(() => {
     // Verificar se há erros de redirecionamento de OAuth na URL
@@ -91,11 +111,72 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           updated_at: new Date().toISOString(),
         } as any);
       }
+
+      // Carrega tags e estilos do marketplace
+      try {
+        const { data: tagRow } = await supabase
+          .from('marketplace_vendor_tags')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (tagRow) {
+          if (tagRow.category) setVendorCategory(tagRow.category);
+          if (tagRow.tags && Array.isArray(tagRow.tags) && tagRow.tags.length > 0) {
+            setSelectedStyles(tagRow.tags);
+          }
+        } else if (data?.tipo_fotografia) {
+          const extracted = data.tipo_fotografia
+            .split(/[,•|]/)
+            .map((s: string) => s.trim())
+            .filter(Boolean);
+          if (extracted.length > 0) {
+            setSelectedStyles(extracted);
+          }
+        }
+      } catch (tagErr) {
+        console.warn('Aviso ao carregar tags do marketplace:', tagErr);
+      }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleStyle = (styleName: string) => {
+    setSelectedStyles((prev) => {
+      const updated = prev.includes(styleName)
+        ? prev.filter((s) => s !== styleName)
+        : [...prev, styleName];
+      if (profile) {
+        handleUpdateField('tipo_fotografia', updated.join(', '));
+      }
+      return updated;
+    });
+  };
+
+  const handleAddCustomTag = () => {
+    const trimmed = newCustomTag.trim();
+    if (!trimmed) return;
+    if (!selectedStyles.includes(trimmed)) {
+      const updated = [...selectedStyles, trimmed];
+      setSelectedStyles(updated);
+      if (profile) {
+        handleUpdateField('tipo_fotografia', updated.join(', '));
+      }
+    }
+    setNewCustomTag('');
+  };
+
+  const handleRemoveTag = (tagName: string) => {
+    setSelectedStyles((prev) => {
+      const updated = prev.filter((s) => s !== tagName);
+      if (profile) {
+        handleUpdateField('tipo_fotografia', updated.join(', '));
+      }
+      return updated;
+    });
   };
 
   const handleUpdateField = (field: keyof Profile, value: any) => {
@@ -190,6 +271,37 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
           status_assinatura: 'trial',
         });
         if (error) throw error;
+      }
+
+      // Sincroniza tags e múltiplos estilos de trabalho no marketplace
+      try {
+        const { data: existingTag } = await supabase
+          .from('marketplace_vendor_tags')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existingTag) {
+          await supabase
+            .from('marketplace_vendor_tags')
+            .update({
+              category: vendorCategory || 'fotografia',
+              tags: selectedStyles,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingTag.id);
+        } else {
+          await supabase
+            .from('marketplace_vendor_tags')
+            .insert({
+              user_id: userId,
+              category: vendorCategory || 'fotografia',
+              tags: selectedStyles,
+              subcategories: ['Casamento', 'Ensaios'],
+            });
+        }
+      } catch (tagErr) {
+        console.warn('Aviso ao sincronizar tags do marketplace:', tagErr);
       }
 
       alert('✅ Perfil atualizado com sucesso!');
@@ -552,7 +664,7 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-[rgba(255,255,255,0.8)] mb-1">
-                Tipo de Fotografia
+                Especialidade Principal / Resumo
               </label>
               <input
                 type="text"
@@ -561,6 +673,96 @@ export function ProfileEditor({ userId }: ProfileEditorProps) {
                 className="w-full px-4 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="Ex: Casamentos, Eventos, Ensaios"
               />
+            </div>
+
+            {/* Seletor de Múltiplos Estilos de Trabalho & Tags de Busca */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gray-50/80 dark:bg-[rgba(255,255,255,0.03)] border border-gray-200 dark:border-[rgba(255,255,255,0.08)] space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-rose-500" />
+                    Estilos de Trabalho & Tags de Busca (Marketplace)
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-[rgba(255,255,255,0.5)] mt-0.5">
+                    Você pode marcar <strong>mais de um estilo</strong> de trabalho. Noivas que buscarem por essas tags encontrarão seus pacotes no Marketplace!
+                  </p>
+                </div>
+                <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-full border border-rose-200 dark:border-rose-800/50 self-start sm:self-auto">
+                  {selectedStyles.length} estilo{selectedStyles.length !== 1 ? 's' : ''} ativo{selectedStyles.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Grid / Chips clicáveis para multi-seleção */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {PRESET_WORK_STYLES.map((st) => {
+                  const isChecked = selectedStyles.includes(st.id);
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => handleToggleStyle(st.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                        isChecked
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-sm shadow-rose-600/20 scale-[1.02]'
+                          : 'bg-white dark:bg-[#07101f] text-gray-700 dark:text-gray-300 border-gray-300 dark:border-[rgba(255,255,255,0.1)] hover:border-rose-300 dark:hover:border-rose-500/50'
+                      }`}
+                    >
+                      <span>{st.label}</span>
+                      {isChecked && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Adição de tag personalizada */}
+              <div className="pt-2 border-t border-gray-200 dark:border-[rgba(255,255,255,0.06)] space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCustomTag}
+                    onChange={(e) => setNewCustomTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomTag();
+                      }
+                    }}
+                    placeholder="Adicionar outro estilo ou tag (Ex: Elopement, Flash Direto, 35mm)..."
+                    className="flex-1 px-3.5 py-2 bg-white dark:bg-[#07101f] border border-gray-300 dark:border-[rgba(255,255,255,.08)] text-gray-900 dark:text-white rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomTag}
+                    className="px-3.5 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer flex-shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar
+                  </button>
+                </div>
+
+                {/* Tags ativas */}
+                {selectedStyles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedStyles.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[#0c182c] border border-gray-200 dark:border-white/10 text-xs font-medium text-gray-800 dark:text-gray-200 shadow-2xs"
+                      >
+                        <Tag className="w-3 h-3 text-rose-500" />
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(tag)}
+                          className="hover:text-red-500 text-gray-400 p-0.5 cursor-pointer"
+                          title="Remover tag"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>

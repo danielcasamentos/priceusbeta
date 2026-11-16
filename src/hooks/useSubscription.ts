@@ -15,15 +15,53 @@ interface Subscription {
 
 export function useSubscription() {
   const { user } = useAuth()
-  const [subscription] = useState<Subscription | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let active = true
+
     if (!user) {
+      setSubscription(null)
       setLoading(false)
       return
     }
-    setLoading(false)
+
+    const fetchSubscription = async () => {
+      setLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('stripe_user_subscriptions')
+          .select(
+            'subscription_status, price_id, current_period_end, cancel_at_period_end, payment_method_brand, payment_method_last4'
+          )
+          .maybeSingle()
+
+        if (!active) return
+
+        if (error) {
+          console.error('Erro ao buscar assinatura:', error)
+          setSubscription(null)
+        } else {
+          setSubscription((data as Subscription | null) ?? null)
+        }
+      } catch (err) {
+        if (active) {
+          console.error('Erro ao buscar assinatura:', err)
+          setSubscription(null)
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchSubscription()
+
+    return () => {
+      active = false
+    }
   }, [user])
 
   const getSubscriptionPlan = () => {

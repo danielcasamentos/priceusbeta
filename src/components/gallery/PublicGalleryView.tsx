@@ -276,13 +276,25 @@ export function PublicGalleryView({
       const baseName = rawName.replace(/\.(webp|png|jpeg|jpg)$/i, '');
 
       if (highRes) {
-        const a = document.createElement('a');
-        a.href = photo.supabase_web_path;
-        a.download = `${baseName}.jpg`;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const highResBlob = await GalleryService.downloadHighResPhotoBlob(photo, null);
+        if (highResBlob) {
+          const blobUrl = URL.createObjectURL(highResBlob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `${baseName}_HD.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } else {
+          const a = document.createElement('a');
+          a.href = photo.supabase_web_path;
+          a.download = `${baseName}.jpg`;
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
       } else {
         // Download em Baixa Resolução / Redes Sociais com Marca d'Água dinâmica
         if (gallery.watermark_enabled || gallery.watermark_text || gallery.watermark_logo_url) {
@@ -349,6 +361,12 @@ export function PublicGalleryView({
         (percent) => setZipProgress(percent)
       );
 
+      // Se o ZIP vier vazio por restrição de rede e houver link público do Drive configurado, usar fallback
+      if (zipBlob.size < 200 && gallery.google_drive_public_url) {
+        window.open(gallery.google_drive_public_url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
@@ -359,9 +377,34 @@ export function PublicGalleryView({
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Erro ao gerar arquivo ZIP:', err);
+      if (gallery.google_drive_public_url) {
+        window.open(gallery.google_drive_public_url, '_blank', 'noopener,noreferrer');
+      }
     } finally {
       setDownloadingZip(false);
     }
+  };
+
+  const handleOpenPublicDriveFolder = () => {
+    if (gallery.enable_downloads === false) return;
+    const publicDriveUrl =
+      gallery.google_drive_public_url ||
+      (gallery.google_drive_folder_id
+        ? `https://drive.google.com/drive/folders/${gallery.google_drive_folder_id}?usp=sharing`
+        : null);
+    if (!publicDriveUrl) return;
+
+    if (gallery.require_download_pin && gallery.download_pin && !isDownloadPinAuthorized) {
+      setPendingDownloadAction(() => () => {
+        trackDownload(photos.length);
+        window.open(publicDriveUrl, '_blank', 'noopener,noreferrer');
+      });
+      setShowDownloadPinModal(true);
+      return;
+    }
+
+    trackDownload(photos.length);
+    window.open(publicDriveUrl, '_blank', 'noopener,noreferrer');
   };
 
   const selectedPhotos = photos.filter((p) => selectedPhotoIds.includes(p.id));
@@ -505,26 +548,40 @@ export function PublicGalleryView({
                     )}
                   </div>
 
-                  {/* Botão Baixar Fotos em Lote (ZIP) */}
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={handleDownloadZip}
-                      disabled={downloadingZip || photos.length === 0}
-                      className="px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-sm shadow-2xl transition-all flex items-center space-x-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    >
-                      {downloadingZip ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                          <span>Gerando ZIP ({zipProgress}%)...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4 text-slate-950" />
-                          <span>Baixar Galeria Completa (ZIP)</span>
-                        </>
+                  {/* Botão Baixar Fotos em Lote (ZIP) e Pasta Pública Sem Login */}
+                  {gallery.enable_downloads !== false && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handleDownloadZip}
+                        disabled={downloadingZip || photos.length === 0}
+                        className="px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-sm shadow-2xl transition-all flex items-center space-x-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                      >
+                        {downloadingZip ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                            <span>Gerando ZIP ({zipProgress}%)...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4 text-slate-950" />
+                            <span>Baixar Galeria Completa (ZIP)</span>
+                          </>
+                        )}
+                      </button>
+
+                      {gallery.allow_high_res_download && gallery.google_drive_public_url && (
+                        <button
+                          type="button"
+                          onClick={handleOpenPublicDriveFolder}
+                          className="px-4 py-3.5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 text-white border border-white/20 backdrop-blur-md font-semibold text-xs shadow-xl transition-all flex items-center space-x-2 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                          title="Abrir pasta pública em alta resolução sem precisar de login"
+                        >
+                          <Download className="w-4 h-4 text-emerald-400" />
+                          <span>Alta Resolução (Pasta Direta)</span>
+                        </button>
                       )}
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

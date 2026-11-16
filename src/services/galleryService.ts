@@ -284,6 +284,7 @@ export class GalleryService {
       require_lead_capture: formData.require_lead_capture ?? true,
       enable_social_promo: formData.enable_social_promo ?? false,
       photographer_instagram: formData.photographer_instagram || null,
+      google_drive_public_url: formData.google_drive_public_url || null,
     };
 
     let { data, error } = await supabase
@@ -378,6 +379,7 @@ export class GalleryService {
       require_lead_capture: formData.require_lead_capture,
       enable_social_promo: formData.enable_social_promo,
       photographer_instagram: formData.photographer_instagram || null,
+      google_drive_public_url: formData.google_drive_public_url !== undefined ? (formData.google_drive_public_url || null) : undefined,
     };
 
     let { data, error } = await supabase
@@ -937,9 +939,79 @@ export class GalleryService {
   }
 
   /**
+   * Baixa o Blob em Alta Resolução de uma foto sem exigir login no Google Drive (usando CDN pública =s0 com fallback)
+   */
+  static async downloadHighResPhotoBlob(
+    photo: GalleryPhoto,
+    googleAccessToken?: string | null
+  ): Promise<Blob | null> {
+    const adapter = getStorageAdapter(googleAccessToken);
+    const candidateUrls: string[] = [];
+
+    const addCandidate = (url?: string | null) => {
+      if (url && !candidateUrls.includes(url)) {
+        candidateUrls.push(url);
+      }
+    };
+
+    // 1. Identificar se a foto possui um ID do Google Drive (não caminho de storage local)
+    let driveId: string | null = null;
+    if (
+      photo.google_drive_file_id &&
+      photo.google_drive_file_id !== 'LOCAL_ONLY' &&
+      !photo.google_drive_file_id.includes('/') &&
+      !photo.google_drive_file_id.startsWith('http')
+    ) {
+      driveId = photo.google_drive_file_id;
+    } else if (photo.supabase_web_path?.includes('googleusercontent.com/d/')) {
+      driveId = photo.supabase_web_path.split('/d/')[1]?.split('=')[0]?.split('?')[0] || null;
+    }
+
+    if (driveId) {
+      // =s0 no lh3.googleusercontent.com entrega o arquivo na resolução original sem exigir login OAuth e com suporte a CORS
+      addCandidate(`https://lh3.googleusercontent.com/d/${driveId}=s0`);
+      addCandidate(`https://lh3.googleusercontent.com/d/${driveId}=w3000`);
+      addCandidate(`https://lh3.googleusercontent.com/d/${driveId}=w1600`);
+    }
+
+    // 2. Se for caminho do Supabase Storage ou URL direta
+    if (
+      photo.google_drive_file_id &&
+      photo.google_drive_file_id !== 'LOCAL_ONLY' &&
+      (photo.google_drive_file_id.includes('/') || photo.google_drive_file_id.startsWith('http'))
+    ) {
+      try {
+        const storageUrl = await adapter.getDownloadUrl(photo.google_drive_file_id);
+        addCandidate(storageUrl);
+      } catch {
+        // Ignorar erro de adaptador e seguir para fallbacks
+      }
+    }
+
+    addCandidate(photo.supabase_web_path);
+    addCandidate(photo.supabase_thumb_path);
+
+    for (const url of candidateUrls) {
+      try {
+        const response = await fetch(url, { referrerPolicy: 'no-referrer' });
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob && blob.size > 0 && !blob.type.includes('text/html')) {
+            return blob;
+          }
+        }
+      } catch {
+        // Tentar próxima URL candidata
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Gera um arquivo ZIP contendo todas ou as fotos selecionadas para download em lote
    * Para baixa resolução, converte on-the-fly para JPEG (.jpg) com no máximo 1920px (96 DPI)
-   * Para alta resolução, inclui o arquivo original intacto do upload
+   * Para alta resolução, inclui o arquivo original intacto sem exigir login Google do cliente
    */
   static async generateGalleryZip(
     _galleryTitle: string,
@@ -949,7 +1021,6 @@ export class GalleryService {
     onProgress?: (percent: number) => void
   ): Promise<Blob> {
     const zip = new JSZip();
-    const adapter = getStorageAdapter(googleAccessToken);
 
     const total = photos.length;
     for (let i = 0; i < total; i++) {
@@ -961,14 +1032,10 @@ export class GalleryService {
         const webUrl = photo.supabase_web_path || photo.supabase_thumb_path;
 
         if (resolutionMode === 'both' || resolutionMode === 'high') {
-          if (photo.google_drive_file_id) {
-            const downloadUrl = await adapter.getDownloadUrl(photo.google_drive_file_id);
-            const response = await fetch(downloadUrl);
-            if (response.ok) {
-              const highResBlob = await response.blob();
-              const folderPrefix = resolutionMode === 'both' ? 'Alta_Resolucao/' : '';
-              zip.file(`${folderPrefix}${baseName}_HD.jpg`, highResBlob);
-            }
+          const highResBlob = await this.downloadHighResPhotoBlob(photo, googleAccessToken);
+          if (highResBlob) {
+            const folderPrefix = resolutionMode === 'both' ? 'Alta_Resolucao/' : '';
+            zip.file(`${folderPrefix}${baseName}_HD.jpg`, highResBlob);
           }
         }
 

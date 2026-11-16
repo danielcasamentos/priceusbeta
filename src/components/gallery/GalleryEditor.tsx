@@ -101,6 +101,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
   const [requireLeadCapture, setRequireLeadCapture] = useState(true);
   const [enableSocialPromo, setEnableSocialPromo] = useState(false);
   const [photographerInstagram, setPhotographerInstagram] = useState('');
+  const [googleDrivePublicUrl, setGoogleDrivePublicUrl] = useState('');
   const [enableFaceRecognition, setEnableFaceRecognition] = useState(false);
   const [progressiveDiscounts, setProgressiveDiscounts] = useState<{ min_photos: number; max_photos: number; price_per_photo: number }[]>([]);
   const [status, setStatus] = useState<'draft' | 'active' | 'archived'>('active');
@@ -448,6 +449,12 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setRequireLeadCapture(gallery.require_lead_capture ?? true);
       setEnableSocialPromo(gallery.enable_social_promo ?? false);
       setPhotographerInstagram(gallery.photographer_instagram || '');
+      setGoogleDrivePublicUrl(
+        gallery.google_drive_public_url ||
+          (gallery.google_drive_folder_id
+            ? `https://drive.google.com/drive/folders/${gallery.google_drive_folder_id}?usp=sharing`
+            : '')
+      );
       setEnableFaceRecognition(gallery.enable_face_recognition ?? false);
       setProgressiveDiscounts(gallery.progressive_discounts || []);
       setStatus(gallery.status);
@@ -508,6 +515,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
       setRequireLeadCapture(true);
       setEnableSocialPromo(true);
       setPhotographerInstagram('');
+      setGoogleDrivePublicUrl('');
       setStatus('active');
     }
   }, [gallery, isOpen]);
@@ -678,6 +686,7 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
         require_lead_capture: requireLeadCapture,
         enable_social_promo: enableSocialPromo,
         photographer_instagram: photographerInstagram.trim() || undefined,
+        google_drive_public_url: googleDrivePublicUrl.trim() || undefined,
         enable_face_recognition: enableFaceRecognition,
         status,
       });
@@ -1303,6 +1312,39 @@ export function GalleryEditor({ isOpen, onClose, onSave, gallery }: GalleryEdito
                   </div>
                 </div>
               )}
+
+              {/* Link Público Google Drive para Download Sem Login */}
+              <div className="pt-3 border-t border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <LinkIcon className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Link Público Google Drive (Download Sem Login - Opcional):</span>
+                  </label>
+                  {gallery?.google_drive_folder_id && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGoogleDrivePublicUrl(
+                          `https://drive.google.com/drive/folders/${gallery.google_drive_folder_id}?usp=sharing`
+                        )
+                      }
+                      className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                    >
+                      Usar pasta vinculada automaticamente
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="url"
+                  placeholder="Ex: https://drive.google.com/drive/folders/..."
+                  value={googleDrivePublicUrl}
+                  onChange={(e) => setGoogleDrivePublicUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Os clientes já baixam as fotos em alta resolução direto na galeria (ZIP ou individual) sem precisar de login Google. Caso queira exibir também um botão alternativo para a pasta pública do Drive, informe o link acima.
+                </p>
+              </div>
             </div>
           )}
 

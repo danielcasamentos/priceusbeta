@@ -15,6 +15,8 @@ interface QuoteOfertaProps {
   calculateTotal: () => number;
   handleProdutoQuantityChange: (id: string, qty: number) => void;
   handleSubmit: (e: React.FormEvent) => void;
+  handleStartOnlineChat?: (e?: React.MouseEvent | React.FormEvent) => void;
+  isStartingChat?: boolean;
   setFormData: (data: any) => void;
   fieldsValidation: any;
   camposExtras: any[];
@@ -864,26 +866,47 @@ export function QuoteOferta(props: QuoteOfertaProps) {
             <p style={{ fontSize: 13, opacity: 0.9, fontWeight: 700 }}>Condições por tempo limitado garantidas para você!</p>
           </div>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={!fieldsValidation.canUseWhatsApp}
-            className={fieldsValidation.canUseWhatsApp ? 'oferta-shimmer-btn' : ''}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              background: fieldsValidation.canUseWhatsApp ? undefined : '#e5e7eb',
-              border: 'none', color: '#fff',
-              padding: '20px 36px', borderRadius: 16,
-              fontSize: 18, fontWeight: 900, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed',
-              boxShadow: fieldsValidation.canUseWhatsApp ? '0 8px 32px rgba(234,88,12,.3)' : 'none',
-              transition: 'opacity .2s',
-              opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5,
-              letterSpacing: '0.5px',
-            }}
-          >
-            {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
-            {fieldsValidation.canUseWhatsApp ? (template?.texto_botao_envio || '⚡ Garantir Minha Oferta via WhatsApp') : 'Preencha os campos obrigatórios'}
-          </button>
+          {/* Submit & Chat */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button
+              type="submit"
+              disabled={!fieldsValidation.canUseWhatsApp}
+              className={fieldsValidation.canUseWhatsApp ? 'oferta-shimmer-btn' : ''}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                background: fieldsValidation.canUseWhatsApp ? undefined : '#e5e7eb',
+                border: 'none', color: '#fff',
+                padding: '20px 36px', borderRadius: 16,
+                fontSize: 18, fontWeight: 900, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed',
+                boxShadow: fieldsValidation.canUseWhatsApp ? '0 8px 32px rgba(234,88,12,.3)' : 'none',
+                transition: 'opacity .2s',
+                opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5,
+                letterSpacing: '0.5px',
+              }}
+            >
+              {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
+              {fieldsValidation.canUseWhatsApp ? (template?.texto_botao_envio || '⚡ Garantir Minha Oferta via WhatsApp') : 'Preencha os campos obrigatórios'}
+            </button>
+            {props.handleStartOnlineChat && (
+              <button
+                type="button"
+                onClick={props.handleStartOnlineChat}
+                disabled={props.isStartingChat || !fieldsValidation.canUseWhatsApp}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#059669,#10b981)' : '#e5e7eb',
+                  border: 'none', color: '#fff',
+                  padding: '16px 32px', borderRadius: 16,
+                  fontSize: 16, fontWeight: 700, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed',
+                  transition: 'opacity .2s',
+                  opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5,
+                }}
+              >
+                <MessageCircle size={18} />
+                {props.isStartingChat ? 'Abrindo Chat...' : '💬 Negociar no Chat PriceU$'}
+              </button>
+            )}
+          </div>
 
         </form>
       </section>

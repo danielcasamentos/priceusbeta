@@ -94,6 +94,7 @@ export interface Gallery {
   enable_social_promo?: boolean;
   photographer_instagram?: string | null;
   google_drive_folder_id?: string | null;
+  google_drive_public_url?: string | null;
   photo_sort_order?: 'capture_asc' | 'capture_desc' | 'name_asc' | 'name_desc' | 'order_asc' | null;
   require_download_pin?: boolean;
   download_pin?: string | null;
@@ -158,6 +159,7 @@ export interface GalleryFormData {
   require_lead_capture?: boolean;
   enable_social_promo?: boolean;
   photographer_instagram?: string;
+  google_drive_public_url?: string;
   enable_face_recognition?: boolean;
   status: GalleryStatus;
 }

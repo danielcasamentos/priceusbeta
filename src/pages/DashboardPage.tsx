@@ -29,6 +29,7 @@ import { MeuDia } from '../components/MeuDia';
 import { useMeuDiaNotification } from '../hooks/useMeuDiaNotification';
 import { ChangelogModal } from '../components/ChangelogModal';
 import { WhatsAppStudio } from '../components/whatsapp/WhatsAppStudio';
+import { ConversasStudio } from '../components/chat/ConversasStudio';
 import { PriceusAssistantDrawer } from '../components/PriceusAssistantDrawer';
 import { GalleriesManager } from '../components/gallery/GalleriesManager';
 import { AICullingManager } from '../components/gallery/AICullingManager';
@@ -372,8 +373,8 @@ export function DashboardPage() {
                 </div>
                 <LeadsManager userId={user.id} />
               </>
-            ) : currentPage === 'whatsapp-ia' && user?.email?.toLowerCase() === 'odanielfotografo@icloud.com' ? (
-              <WhatsAppStudio userEmail={user.email} />
+            ) : currentPage === 'conversas' || currentPage === 'chat' || currentPage === 'whatsapp-ia' ? (
+              <ConversasStudio userId={user?.id} userEmail={user?.email} />
             ) : currentPage === 'entregas' || currentPage === 'galerias' ? (
               <GalleriesManager />
             ) : currentPage === 'ai-culling' && user?.email?.toLowerCase() === 'odanielfotografo@icloud.com' ? (

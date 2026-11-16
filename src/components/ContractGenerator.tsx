@@ -330,12 +330,32 @@ export function ContractGenerator({ userId, lead, onClose, onSuccess }: Contract
           ? parseFloat(lead.valor_total) 
           : (priceBreakdown.total || 0));
 
+      let datasAgenda = Array.isArray(orcamentoDetalhe.datas_agenda) ? orcamentoDetalhe.datas_agenda : [];
+      if (datasAgenda.length === 0 && lead.id) {
+        const { data: agendaRows } = await supabase
+          .from('eventos_agenda')
+          .select('data_evento, tipo_evento, horario_inicio, horario_fim')
+          .eq('lead_id', lead.id)
+          .order('data_evento', { ascending: true });
+        if (agendaRows && agendaRows.length > 0) {
+          datasAgenda = agendaRows.map((r: any) => ({
+            data: r.data_evento,
+            tipo_evento: r.tipo_evento,
+            horario_inicio: r.horario_inicio ? String(r.horario_inicio).substring(0, 5) : '',
+            horario_fim: r.horario_fim ? String(r.horario_fim).substring(0, 5) : '',
+          }));
+        }
+      }
+
       const leadData = {
         nome_cliente: lead.nome_cliente,
         email: lead.email_cliente || lead.email,
         telefone: lead.telefone_cliente || lead.telefone,
         tipo_evento: lead.tipo_evento || null,
-        data_evento: lead.data_evento || null,
+        data_evento: lead.data_evento || datasAgenda[0]?.data || null,
+        horario_inicio: datasAgenda[0]?.horario_inicio || null,
+        horario_fim: datasAgenda[0]?.horario_fim || null,
+        datas_agenda: datasAgenda,
         cidade: cityName,
         cidade_evento: cityName,
         subtotal: priceBreakdown.subtotal || 0,

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Re-
 import { EditLeadQuoteModal } from './EditLeadQuoteModal';
 import { supabase, Lead } from '../lib/supabase'; // Importando Lead para tipagem
 import { formatCurrency, formatDate, formatDateTime } from '../lib/utils';
-import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users, Loader2, Search, Filter, Calendar, MapPin, Phone, X, SlidersHorizontal, RotateCcw } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { Trash2, Crown, AlertTriangle, TrendingUp, FileSignature, Star, CheckSquare, Edit3, ClipboardList, Clapperboard, CheckCircle2, MessageCircle, MessageSquare, Mail, ExternalLink, LayoutGrid, List, ArrowDownWideNarrow, ArrowUpNarrowWide, Users, Loader2, Search, Filter, Calendar, MapPin, Phone, X, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { RealtimeChatService } from '../services/realtimeChatService';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { generateWhatsAppMessage, generateWaLinkToClient, PaymentMethod } from '../lib/whatsappMessageGenerator';
@@ -127,6 +128,44 @@ export function LeadsManager({ userId }: { userId: string }) {
   // Aba principal: 'leads' | 'producao' | 'finalizados'
   const [mainTab, setMainTab] = useState<'leads' | 'producao' | 'finalizados'>('leads');
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleOpenInternalChat = async (lead: Lead) => {
+    try {
+      const localConvs = RealtimeChatService.getAllLocalConversations(userId);
+      const cleanLeadPhone = (lead.telefone_cliente || '').replace(/\D/g, '');
+      const existing = localConvs.find(
+        (c) =>
+          (lead.email_cliente && c.client_email?.toLowerCase() === lead.email_cliente.toLowerCase()) ||
+          (cleanLeadPhone.length >= 8 && (c.client_phone || '').replace(/\D/g, '').endsWith(cleanLeadPhone.slice(-8))) ||
+          (lead.nome_cliente && c.client_name?.toLowerCase() === lead.nome_cliente.toLowerCase())
+      );
+
+      if (existing) {
+        navigate(`/dashboard/conversas?convId=${existing.id}`);
+        return;
+      }
+
+      const tpl = templates[lead.template_id];
+      const session = await RealtimeChatService.initQuoteConversation({
+        vendorId: userId,
+        clientName: lead.nome_cliente || 'Cliente',
+        clientEmail: lead.email_cliente || `lead-${lead.id.slice(0, 8)}@priceus.local`,
+        clientPhone: lead.telefone_cliente || undefined,
+        eventDate: lead.data_evento || undefined,
+        eventCity: cities[lead.cidade_evento || '']?.nome || lead.cidade_evento || undefined,
+        templateId: lead.template_id || 'custom',
+        templateName: tpl?.nome_template || 'Orçamento',
+        selectedPackageName: tpl?.nome_template || 'Proposta Personalizada',
+        totalValue: Number(lead.valor_total) || 0,
+      });
+
+      navigate(`/dashboard/conversas?convId=${session.conversationId}`);
+    } catch (err) {
+      console.error('Erro ao abrir chat interno:', err);
+      navigate('/dashboard/conversas');
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -527,8 +566,12 @@ export function LeadsManager({ userId }: { userId: string }) {
       total: lead.valor_total,
     };
 
-    let couponCode = undefined;
-    let couponDiscount = undefined;
+    const savedCouponActive = (savedOrcamentoDetalhe as any).cupomAtivo;
+    const savedCouponCode = (savedOrcamentoDetalhe as any).cupomCodigo;
+    const savedCouponDiscount = (savedOrcamentoDetalhe as any).cupomDesconto;
+
+    let couponCode: string | undefined = savedCouponActive && savedCouponCode ? savedCouponCode : undefined;
+    let couponDiscount: number | undefined = savedCouponActive && savedCouponDiscount ? savedCouponDiscount : undefined;
 
     if (customFollowup?.type === 'desconto') {
       couponCode = customFollowup.couponCode;
@@ -1999,6 +2042,13 @@ export function LeadsManager({ userId }: { userId: string }) {
                         </button>
                       )}
                       <button
+                        onClick={() => handleOpenInternalChat(lead)}
+                        className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300"
+                        title="Negociar no Chat PriceU$"
+                      >
+                        <MessageSquare className="w-4 h-4 inline" />
+                      </button>
+                      <button
                         onClick={() => setContractLead(lead)}
                         className="text-purple-600 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300 disabled:text-gray-400 dark:disabled:text-[rgba(255,255,255,0.2)] disabled:cursor-not-allowed"
                         title="Gerar contrato"
@@ -2128,6 +2178,13 @@ export function LeadsManager({ userId }: { userId: string }) {
                       💬
                     </button>
                   )}
+                  <button
+                    onClick={() => handleOpenInternalChat(lead)}
+                    className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 rounded-lg transition-colors"
+                    title="Chat PriceU$"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => setContractLead(lead)}
                     disabled={contracts[lead.id]}
@@ -2798,7 +2855,7 @@ export function LeadsManager({ userId }: { userId: string }) {
                 </div>
 
                 <div className="pt-4 flex flex-col gap-3">
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     {selectedLead.telefone_cliente && (
                       <button
                         onClick={() => sendWhatsAppMessage(selectedLead)}
@@ -2807,6 +2864,13 @@ export function LeadsManager({ userId }: { userId: string }) {
                         💬 Enviar WhatsApp
                       </button>
                     )}
+                    <button
+                      onClick={() => handleOpenInternalChat(selectedLead)}
+                      className="flex-1 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Chamar no Chat PriceU$
+                    </button>
                      {(selectedLead.status === 'convertido' || selectedLead.status === 'finalizado') && !selectedLead.avaliacao_id && selectedLead.telefone_cliente && (
                       <button
                         onClick={() => handleSolicitarAvaliacao(selectedLead)}
@@ -3020,24 +3084,38 @@ export function LeadsManager({ userId }: { userId: string }) {
               >
                 Cancelar
               </button>
-              <button
-                type="button"
-                onClick={() => executeWhatsAppMessage(
-                  whatsappLeadConfig.lead!,
-                  whatsappLeadConfig.savedOrcamentoDetalhe!,
-                  whatsappLeadConfig.savedOrcamentoDetalhe!.ocultar_valores_intermediarios || false,
-                  {
-                    type: followupType,
-                    discountPercent: followupDiscountPercent,
-                    couponCode: followupCouponCode,
-                    bonusGift: followupBonusGift
-                  }
-                )}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Enviar via WhatsApp
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const lead = whatsappLeadConfig.lead!;
+                    setWhatsappLeadConfig({ lead: null, savedOrcamentoDetalhe: null, isOpen: false });
+                    handleOpenInternalChat(lead);
+                  }}
+                  className="bg-emerald-600 text-white px-3.5 py-2 rounded-lg hover:bg-emerald-700 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Abrir no Chat PriceU$
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeWhatsAppMessage(
+                    whatsappLeadConfig.lead!,
+                    whatsappLeadConfig.savedOrcamentoDetalhe!,
+                    whatsappLeadConfig.savedOrcamentoDetalhe!.ocultar_valores_intermediarios || false,
+                    {
+                      type: followupType,
+                      discountPercent: followupDiscountPercent,
+                      couponCode: followupCouponCode,
+                      bonusGift: followupBonusGift
+                    }
+                  )}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Enviar via WhatsApp
+                </button>
+              </div>
             </div>
           </div>
         </div>

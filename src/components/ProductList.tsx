@@ -15,7 +15,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { SortableProductItem } from './SortableProductItem';
-import { Plus, Save, GripVertical } from 'lucide-react';
+import { ImportProductFromTemplateModal } from './ImportProductFromTemplateModal';
+import { Plus, Save, GripVertical, Download, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface Product {
@@ -33,6 +34,10 @@ interface Product {
   duracao_minutos?: number | null;
   brindes_vinculados?: string[] | null;
   quantidade_maxima?: number | null;
+  grupo_desconto?: string | null;
+  faixas_preco?: any[] | null;
+  escaloes_quantidade?: any[] | null;
+  regras_preco_data?: any[] | null;
 }
 
 interface ProductListProps {
@@ -41,15 +46,16 @@ interface ProductListProps {
   onRemove: (index: number) => void;
   onDuplicate: (index: number) => void;
   onAdd: () => void;
+  onImportProducts?: (importedProducts: any[]) => void;
   onSave: () => void;
   userId: string;
   templateId?: string;
+  templateName?: string;
+  templateTitle?: string;
   onProductSaved?: (index: number, productId: string) => void;
   upsellProdutosIds?: string[];
   brindesProducts?: any[];
 }
-
-const MAX_PRODUTOS = 15; // 💡 Limite por orçamento para controlar custos de armazenamento
 
 export function ProductList({
   products,
@@ -57,9 +63,12 @@ export function ProductList({
   onRemove,
   onDuplicate,
   onAdd,
+  onImportProducts,
   onSave,
   userId,
   templateId,
+  templateName,
+  templateTitle,
   onProductSaved,
   upsellProdutosIds = [],
   brindesProducts = []
@@ -67,6 +76,7 @@ export function ProductList({
   const [localProducts, setLocalProducts] = useState<Product[]>(products);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedOrder, setHasUnsavedOrder] = useState(false);
+  const [libraryModalTab, setLibraryModalTab] = useState<'ai' | 'templates' | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -222,34 +232,83 @@ export function ProductList({
           <p className="text-gray-600 mb-4">
             Nenhum produto cadastrado ainda
           </p>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Adicionar Primeiro Produto
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={onAdd}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Adicionar Primeiro Produto
+            </button>
+            {onImportProducts && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLibraryModalTab('ai')}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Sugestões IA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLibraryModalTab('templates')}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Importar de Outro Template
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
       {localProducts.length > 0 && (
-        <div>
-          {localProducts.length >= MAX_PRODUTOS ? (
-            <div className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 rounded-lg border-2 border-dashed border-amber-300 text-sm font-medium">
-              📌 Limite de {MAX_PRODUTOS} produtos atingido por orçamento
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onAdd}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium transition-colors border-2 border-dashed border-blue-300"
-            >
-              <Plus className="w-5 h-5" />
-              Adicionar Novo Produto ({localProducts.length}/{MAX_PRODUTOS})
-            </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium transition-colors border-2 border-dashed border-blue-300"
+          >
+            <Plus className="w-5 h-5" />
+            Adicionar Novo Produto ({localProducts.length})
+          </button>
+          {onImportProducts && (
+            <>
+              <button
+                type="button"
+                onClick={() => setLibraryModalTab('ai')}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium transition-colors border-2 border-dashed border-purple-300"
+              >
+                <Sparkles className="w-5 h-5" />
+                Sugestões IA
+              </button>
+              <button
+                type="button"
+                onClick={() => setLibraryModalTab('templates')}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 font-medium transition-colors border-2 border-dashed border-indigo-300"
+              >
+                <Download className="w-5 h-5" />
+                Importar de Template
+              </button>
+            </>
           )}
         </div>
+      )}
+
+      {libraryModalTab && onImportProducts && (
+        <ImportProductFromTemplateModal
+          userId={userId}
+          currentTemplateId={templateId}
+          templateName={templateName}
+          templateTitle={templateTitle}
+          existingProductNames={localProducts.map((p) => p.nome).filter(Boolean)}
+          initialTab={libraryModalTab}
+          onClose={() => setLibraryModalTab(null)}
+          onImport={onImportProducts}
+        />
       )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

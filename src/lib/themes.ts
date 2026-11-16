@@ -211,7 +211,7 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       bgHover: 'hover:bg-zinc-800',
 
       textoPrincipal: 'text-gray-100',
-      textoSecundario: 'text-gray-400',
+      textoSecundario: 'text-zinc-300',
       textoDestaque: 'text-gray-200',
 
       borda: 'border-zinc-800',
@@ -351,8 +351,8 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       bgHover: 'hover:bg-gray-800',
 
       textoPrincipal: 'text-white',
-      textoSecundario: 'text-gray-400',
-      textoDestaque: 'text-blue-500',
+      textoSecundario: 'text-gray-300',
+      textoDestaque: 'text-blue-400',
 
       borda: 'border-gray-700',
       divisor: 'divide-gray-700',
@@ -776,7 +776,7 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       acento: 'bg-amber-500', acentoHover: 'hover:bg-amber-600',
       bgPrincipal: 'bg-gradient-to-br from-zinc-900 via-zinc-800 to-black',
       bgSecundario: 'bg-zinc-800', bgCard: 'bg-zinc-900', bgHover: 'hover:bg-zinc-800',
-      textoPrincipal: 'text-white', textoSecundario: 'text-zinc-400', textoDestaque: 'text-amber-400',
+      textoPrincipal: 'text-white', textoSecundario: 'text-zinc-300', textoDestaque: 'text-amber-400',
       borda: 'border-zinc-800', divisor: 'divide-zinc-800',
     },
     estilos: { borderRadius: 'rounded-lg', borderWidth: 'border', shadow: 'shadow-xl', shadowHover: 'hover:shadow-2xl', fontFamily: 'font-sans', fontHeading: 'font-bold' },
@@ -808,7 +808,7 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       acento: 'bg-purple-500', acentoHover: 'hover:bg-purple-400',
       bgPrincipal: 'bg-zinc-950',
       bgSecundario: 'bg-zinc-900', bgCard: 'bg-zinc-900', bgHover: 'hover:bg-zinc-800',
-      textoPrincipal: 'text-white', textoSecundario: 'text-zinc-400', textoDestaque: 'text-orange-400',
+      textoPrincipal: 'text-white', textoSecundario: 'text-zinc-300', textoDestaque: 'text-orange-400',
       borda: 'border-zinc-800', divisor: 'divide-zinc-800',
     },
     estilos: { borderRadius: 'rounded-xl', borderWidth: 'border', shadow: 'shadow-2xl', shadowHover: 'hover:shadow-2xl', fontFamily: 'font-sans', fontHeading: 'font-bold' },
@@ -824,7 +824,7 @@ export const TEMAS: Record<TemaType, TemaConfig> = {
       acento: 'bg-yellow-500', acentoHover: 'hover:bg-yellow-450',
       bgPrincipal: 'bg-black',
       bgSecundario: 'bg-zinc-900', bgCard: 'bg-zinc-900', bgHover: 'hover:bg-zinc-850',
-      textoPrincipal: 'text-white', textoSecundario: 'text-zinc-400', textoDestaque: 'text-yellow-400',
+      textoPrincipal: 'text-white', textoSecundario: 'text-zinc-300', textoDestaque: 'text-yellow-400',
       borda: 'border-zinc-800', divisor: 'divide-zinc-800',
     },
     estilos: { borderRadius: 'rounded-md', borderWidth: 'border', shadow: 'shadow-2xl', shadowHover: 'hover:shadow-2xl', fontFamily: 'font-sans', fontHeading: 'font-black' },

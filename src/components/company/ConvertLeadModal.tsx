@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/utils';
+import { addEvento, deleteEvento } from '../../services/availabilityService';
 import { X, CheckCircle2, DollarSign, Calendar, Tag, CreditCard, Trash2, Loader2, AlertCircle, FileSignature, Plus } from 'lucide-react';
 
 interface PaymentMethodData {
@@ -266,13 +267,21 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
         console.error('Erro ao buscar cidade do lead:', cityLookupErr);
       }
 
-      // Delete existing eventos_agenda entries for this lead to prevent duplicates
-      await supabase.from('eventos_agenda').delete().eq('lead_id', leadId);
+      // Delete existing eventos_agenda entries for this lead (including from Google Calendar) to prevent duplicates
+      const { data: existingLeadEvents } = await supabase
+        .from('eventos_agenda')
+        .select('id')
+        .eq('lead_id', leadId);
+      if (existingLeadEvents && existingLeadEvents.length > 0) {
+        for (const oldEvt of existingLeadEvents) {
+          await deleteEvento(oldEvt.id);
+        }
+      }
 
       for (const d of datasValidas) {
         try {
           const duracao = getDuracaoMinutos(d.horario_inicio, d.horario_fim);
-          await supabase.from('eventos_agenda').insert({
+          await addEvento({
             user_id: userId, 
             lead_id: leadId,
             data_evento: d.data, 
@@ -285,7 +294,7 @@ export function ConvertLeadModal({ userId, leadId, leadName, templateName, valor
             horario_inicio: d.horario_inicio || null,
             horario_fim: d.horario_fim || null,
             duracao_minutos: duracao,
-          });
+          } as any);
         } catch (agErr) { console.error('Erro ao inserir data na agenda:', agErr); }
       }
 

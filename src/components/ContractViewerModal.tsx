@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Share2, Check, RotateCcw, Clock } from 'lucide-react';
+import { X, FileText, User, Calendar, DollarSign, ExternalLink, Printer, Loader2, Share2, Check, RotateCcw, Clock, Edit3, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '../lib/utils';
@@ -74,9 +74,50 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [processedContent, setProcessedContent] = useState('');
   const [copiedShareLink, setCopiedShareLink] = useState(false);
+  const [isEditingFields, setIsEditingFields] = useState(false);
+  const [savingFields, setSavingFields] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    nome_completo: '',
+    documento: '',
+    rg: '',
+    email: '',
+    telefone: '',
+    endereco_completo: '',
+    cep: '',
+    data_evento: '',
+    horario_inicio: '',
+    horario_fim: '',
+    cidade_evento: '',
+    local_evento: '',
+    endereco_evento: '',
+    valor_total: '',
+    forma_pagamento: '',
+    observacoes: '',
+  });
 
   useEffect(() => {
     setCurrentContract(contract);
+    const cd = contract.client_data_json || {};
+    const ld: any = contract.lead_data_json || {};
+    setEditForm({
+      nome_completo: cd.nome_completo || ld.nome_cliente || '',
+      documento: cd.documento || cd.cpf || '',
+      rg: cd.rg || '',
+      email: cd.email || ld.email || '',
+      telefone: cd.telefone || ld.telefone || '',
+      endereco_completo: cd.endereco_completo || '',
+      cep: cd.cep || '',
+      data_evento: cd.data_evento || ld.data_evento || '',
+      horario_inicio: cd.horario_inicio || ld.horario_inicio || ld.datas_agenda?.[0]?.horario_inicio || '',
+      horario_fim: cd.horario_fim || ld.horario_fim || ld.datas_agenda?.[0]?.horario_fim || '',
+      cidade_evento: cd.cidade_evento || ld.cidade_evento || ld.cidade || '',
+      local_evento: cd.local_evento || '',
+      endereco_evento: cd.endereco_evento || '',
+      valor_total: String(ld.orcamento_total ?? ld.valor_total ?? ''),
+      forma_pagamento: ld.forma_pagamento || '',
+      observacoes: cd.observacoes || ld.observacoes || '',
+    });
   }, [contract]);
 
   const isLinkActive = currentContract.status === 'pending' && new Date(currentContract.expires_at) > new Date();
@@ -100,18 +141,84 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
 
   useEffect(() => {
     if (template && businessSettings) {
-      const leadData: LeadData = contract.lead_data_json || {};
-      const clientData: ClientData = contract.client_data_json || {};
+      const leadData: LeadData = currentContract.lead_data_json || {};
+      const clientData: ClientData = currentContract.client_data_json || {};
 
       const finalContent = replaceContractVariables(
-        contract.content_override || template.content_text,
+        currentContract.content_override || template.content_text,
         businessSettings,
         clientData,
         leadData
       );
       setProcessedContent(finalContent);
     }
-  }, [template, businessSettings, contract]);
+  }, [template, businessSettings, currentContract]);
+
+  const handleSaveEditedFields = async () => {
+    setSavingFields(true);
+    setSaveMessage(null);
+    try {
+      const updatedClientData = {
+        ...(currentContract.client_data_json || {}),
+        nome_completo: editForm.nome_completo,
+        documento: editForm.documento,
+        cpf: editForm.documento,
+        rg: editForm.rg,
+        email: editForm.email,
+        telefone: editForm.telefone,
+        endereco_completo: editForm.endereco_completo,
+        cep: editForm.cep,
+        data_evento: editForm.data_evento,
+        horario_inicio: editForm.horario_inicio,
+        horario_fim: editForm.horario_fim,
+        cidade_evento: editForm.cidade_evento,
+        local_evento: editForm.local_evento,
+        endereco_evento: editForm.endereco_evento,
+        observacoes: editForm.observacoes,
+      };
+
+      const parsedTotal = parseFloat(editForm.valor_total);
+      const updatedLeadData = {
+        ...(currentContract.lead_data_json || {}),
+        nome_cliente: editForm.nome_completo || currentContract.lead_data_json?.nome_cliente,
+        email: editForm.email,
+        telefone: editForm.telefone,
+        data_evento: editForm.data_evento || undefined,
+        horario_inicio: editForm.horario_inicio || undefined,
+        horario_fim: editForm.horario_fim || undefined,
+        cidade_evento: editForm.cidade_evento,
+        cidade: editForm.cidade_evento,
+        forma_pagamento: editForm.forma_pagamento,
+        observacoes: editForm.observacoes,
+        ...(!isNaN(parsedTotal) ? { valor_total: parsedTotal, orcamento_total: parsedTotal } : {}),
+      };
+
+      // Atualiza SOMENTE os campos de dados/observações — NUNCA altera status, signed_at, user_signature_base64 ou signature_base64
+      const { error } = await supabase
+        .from('contracts')
+        .update({
+          client_data_json: updatedClientData,
+          lead_data_json: updatedLeadData,
+        })
+        .eq('id', currentContract.id);
+
+      if (error) throw error;
+
+      setCurrentContract((prev) => ({
+        ...prev,
+        client_data_json: updatedClientData,
+        lead_data_json: updatedLeadData,
+      }));
+      setIsEditingFields(false);
+      setSaveMessage('✅ Campos e observações salvos! Assinaturas e status preservados.');
+      setTimeout(() => setSaveMessage(null), 4000);
+    } catch (err) {
+      console.error('Erro ao salvar edição do contrato:', err);
+      alert('❌ Erro ao salvar alterações do contrato.');
+    } finally {
+      setSavingFields(false);
+    }
+  };
 
   const loadFullContractData = async () => {
     setLoadingDetails(true);
@@ -361,10 +468,178 @@ export function ContractViewerModal({ contract, onClose }: ContractViewerModalPr
             </a>
           </div>
 
-          {/* 🔥 NOVO: Preview do Contrato */}
+          {/* 🔥 NOVO: Preview & Edição de Campos/Observações do Contrato */}
           <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Pré-visualização do Contrato</h3>
-            {loadingDetails ? (
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold text-gray-800">
+                {isEditingFields ? 'Editar Campos e Observações' : 'Pré-visualização do Contrato'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditingFields((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                {isEditingFields ? 'Ver Pré-visualização' : 'Editar Campos e Observações'}
+              </button>
+            </div>
+
+            {saveMessage && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800">
+                {saveMessage}
+              </div>
+            )}
+
+            {isEditingFields ? (
+              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                {currentContract.status === 'signed' && (
+                  <div className="px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
+                    🔒 Contrato já assinado: suas edições e observações serão salvas, e as imagens das assinaturas (sua e do cliente) permanecerão intactas e protegidas.
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Nome Completo</label>
+                    <input
+                      type="text"
+                      value={editForm.nome_completo}
+                      onChange={(e) => setEditForm({ ...editForm, nome_completo: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">CPF / CNPJ</label>
+                    <input
+                      type="text"
+                      value={editForm.documento}
+                      onChange={(e) => setEditForm({ ...editForm, documento: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">E-mail</label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Telefone</label>
+                    <input
+                      type="text"
+                      value={editForm.telefone}
+                      onChange={(e) => setEditForm({ ...editForm, telefone: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Data do Evento</label>
+                    <input
+                      type="date"
+                      value={editForm.data_evento}
+                      onChange={(e) => setEditForm({ ...editForm, data_evento: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-medium text-gray-700 mb-1">Horário Início</label>
+                      <input
+                        type="time"
+                        value={editForm.horario_inicio}
+                        onChange={(e) => setEditForm({ ...editForm, horario_inicio: e.target.value })}
+                        className="w-full px-2 py-1.5 border rounded bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-gray-700 mb-1">Horário Fim</label>
+                      <input
+                        type="time"
+                        value={editForm.horario_fim}
+                        onChange={(e) => setEditForm({ ...editForm, horario_fim: e.target.value })}
+                        className="w-full px-2 py-1.5 border rounded bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Cidade do Evento</label>
+                    <input
+                      type="text"
+                      value={editForm.cidade_evento}
+                      onChange={(e) => setEditForm({ ...editForm, cidade_evento: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Local do Evento</label>
+                    <input
+                      type="text"
+                      value={editForm.local_evento}
+                      onChange={(e) => setEditForm({ ...editForm, local_evento: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Valor Total (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.valor_total}
+                      onChange={(e) => setEditForm({ ...editForm, valor_total: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Forma de Pagamento</label>
+                    <input
+                      type="text"
+                      value={editForm.forma_pagamento}
+                      onChange={(e) => setEditForm({ ...editForm, forma_pagamento: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-medium text-gray-700 mb-1">Endereço Completo</label>
+                    <input
+                      type="text"
+                      value={editForm.endereco_completo}
+                      onChange={(e) => setEditForm({ ...editForm, endereco_completo: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-medium text-gray-700 mb-1">Observações do Contrato</label>
+                    <textarea
+                      rows={3}
+                      value={editForm.observacoes}
+                      onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })}
+                      placeholder="Observações específicas acordadas com o cliente..."
+                      className="w-full px-2.5 py-1.5 border rounded bg-white"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingFields(false)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingFields}
+                    onClick={handleSaveEditedFields}
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {savingFields ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    {savingFields ? 'Salvando...' : 'Salvar Campos e Observações'}
+                  </button>
+                </div>
+              </div>
+            ) : loadingDetails ? (
               <div className="text-center py-8">
                 <Loader2 className="w-6 h-6 mx-auto animate-spin text-blue-600" />
                 <p className="text-sm text-gray-500 mt-2">Carregando conteúdo...</p>

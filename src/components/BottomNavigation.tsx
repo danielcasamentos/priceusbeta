@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Images,
   Bot,
+  MessageSquare,
   Sparkles,
   LayoutGrid,
   Star,
@@ -50,7 +51,7 @@ export const ALL_NAV_ITEMS: NavItemConfig[] = [
   { id: 'meu-dia', label: 'Meu Dia', icon: Sun, description: 'Rotina, tarefas e foco do dia' },
   { id: 'leads', label: 'Leads', icon: LayoutDashboard, hasSubmenu: true, description: 'CRM, orçamentos e atendimentos' },
   { id: 'entregas', label: 'Galerias', icon: Images, description: 'Entregas, clientes e aprovações' },
-  { id: 'whatsapp-ia', label: 'Zap IA', icon: Bot, badge: 'Copilot', highlight: true, description: 'Atendente e vendas por WhatsApp' },
+  { id: 'conversas', label: 'Conversas', icon: MessageSquare, badge: 'Chat', highlight: true, description: 'Atendimento, orçamentos e atas' },
   { id: 'ai-culling', label: 'AI Culling', icon: Sparkles, badge: 'IA Pro', highlight: true, description: 'Curadoria e seleção de fotos' },
   { id: 'templates', label: 'Orçamentos', icon: FileText, description: 'Templates de orçamentos e propostas' },
   { id: 'contratos', label: 'Contratos', icon: FileSignature, description: 'Assinatura digital e minutas' },
@@ -62,8 +63,8 @@ export const ALL_NAV_ITEMS: NavItemConfig[] = [
   { id: 'ajuda', label: 'Suporte', icon: HelpCircle, description: 'FAQ e central de ajuda' },
 ];
 
-const DEFAULT_PRIMARY_IDS_DANIEL = ['meu-dia', 'leads', 'entregas', 'whatsapp-ia'];
-const DEFAULT_PRIMARY_IDS_PUBLIC = ['meu-dia', 'leads', 'entregas', 'templates'];
+const DEFAULT_PRIMARY_IDS_DANIEL = ['meu-dia', 'leads', 'entregas', 'conversas'];
+const DEFAULT_PRIMARY_IDS_PUBLIC = ['meu-dia', 'leads', 'entregas', 'conversas'];
 const STORAGE_KEY = 'priceus_mobile_bottom_nav_v1';
 
 // Sub-itens do menu Leads
@@ -77,8 +78,8 @@ const leadsSubItems = [
 const NAV_PRESETS = [
   {
     name: '🌟 Padrão PriceU$',
-    desc: 'Meu Dia, Leads, Galerias, Zap IA',
-    ids: ['meu-dia', 'leads', 'entregas', 'whatsapp-ia'],
+    desc: 'Meu Dia, Leads, Galerias, Conversas',
+    ids: ['meu-dia', 'leads', 'entregas', 'conversas'],
   },
   {
     name: '💼 Comercial & Vendas',
@@ -104,7 +105,7 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
 
   const availableNavItems = useMemo(() => {
     return ALL_NAV_ITEMS.filter((item) => {
-      if (item.id === 'ai-culling' || item.id === 'whatsapp-ia') {
+      if (item.id === 'ai-culling') {
         return isDaniel;
       }
       return true;
@@ -117,11 +118,8 @@ export function BottomNavigation({ currentPage, onPageChange }: BottomNavigation
       return {
         ...preset,
         desc: preset.desc
-          .replace(', Zap IA', ', Orçamentos')
-          .replace('Zap IA', 'Orçamentos')
           .replace('AI Culling', 'Contratos'),
         ids: preset.ids.map((id) => {
-          if (id === 'whatsapp-ia') return 'templates';
           if (id === 'ai-culling') return 'contratos';
           return id;
         }),

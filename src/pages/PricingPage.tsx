@@ -78,19 +78,19 @@ export function PricingPage() {
 
         {trialStatus.isExpired && trialStatus.status === 'trial' && (
           <div className="mt-8 max-w-2xl mx-auto">
-            <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-4 shadow-sm animate-fade-in">
-              <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={24} />
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-4 shadow-sm animate-fade-in">
+              <AlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" size={24} />
               <div>
-                <h3 className="font-bold text-red-900 text-lg mb-1">Seu período de teste expirou!</h3>
-                <p className="text-sm text-red-700 leading-relaxed mb-3">
-                  Para continuar usando o PriceUs e ter acesso ilimitado a todos os seus recursos, 
-                  escolha um dos nossos planos abaixo. 
+                <h3 className="font-bold text-amber-900 text-lg mb-1">
+                  Seu período de teste Pro terminou — você está na Conta Free do Marketplace!
+                </h3>
+                <p className="text-sm text-amber-800 leading-relaxed mb-3">
+                  Seus dados, perfil e presença no Marketplace continuam salvos e ativos gratuitamente.
+                  Para desbloquear recursos ilimitados (orçamentos, agenda, contratos e IA), assine um plano Pro abaixo.
                 </p>
-                {trialStatus.graceDaysRemaining !== null && (
-                  <p className="text-sm font-semibold text-red-800 bg-red-100/50 inline-block px-3 py-1.5 rounded-lg border border-red-200">
-                    ⚠️ Atenção: Você tem mais <span className="font-extrabold text-red-900">{trialStatus.graceDaysRemaining} {trialStatus.graceDaysRemaining === 1 ? 'dia' : 'dias'}</span> de carência para assinar antes que sua conta e todos os seus dados sejam **excluídos permanentemente**.
-                  </p>
-                )}
+                <p className="text-xs font-semibold text-amber-900 bg-amber-100/70 inline-block px-3 py-1.5 rounded-lg border border-amber-200">
+                  ✅ Sua conta não será excluída: você pode continuar no Marketplace Free ou fazer upgrade a qualquer momento.
+                </p>
               </div>
             </div>
           </div>
@@ -129,7 +129,7 @@ export function PricingPage() {
               📂 Resgate de Contratos Fechados
             </h3>
             <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-              Durante o período de carência de 15 dias, você pode baixar a cópia em PDF de todos os contratos que fechou pela plataforma. Após este prazo, sua conta será totalmente excluída do sistema.
+              Você pode consultar e baixar a cópia em PDF dos contratos que fechou pela plataforma sempre que precisar.
             </p>
             
             {loadingContracts ? (

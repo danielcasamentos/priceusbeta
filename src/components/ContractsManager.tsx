@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Trash2, Eye, Loader2, AlertCircle, Share2, Check, RotateCcw, Clock } from 'lucide-react';
+import { Search, Trash2, Eye, Loader2, AlertCircle, Share2, Check, RotateCcw, Clock, Camera } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { ContractViewerModal } from './ContractViewerModal';
 import { RenewContractModal } from './RenewContractModal';
+import { PhotoDeliveryTermsModal } from './PhotoDeliveryTermsModal';
 
 interface Contract {
   id: string;
@@ -56,6 +57,7 @@ export function ContractsManager({ userId }: { userId:string }) {
   const [renewingContract, setRenewingContract] = useState<Contract | null>(null);
   const [deleteConfirmSingle, setDeleteConfirmSingle] = useState<string | null>(null);
   const [deleteConfirmMultiple, setDeleteConfirmMultiple] = useState(false);
+  const [showDeliveryTermsModal, setShowDeliveryTermsModal] = useState(false);
 
   useEffect(() => {
     loadContracts();
@@ -234,6 +236,14 @@ export function ContractsManager({ userId }: { userId:string }) {
             <option value={0}>Todos os Anos</option>
             {availableYears.map(y => <option key={y} value={y!}>{y}</option>)}
           </select>
+          <button
+            type="button"
+            onClick={() => setShowDeliveryTermsModal(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+          >
+            <Camera className="w-4 h-4" />
+            Termo de Entrega de Fotos
+          </button>
           {selectedIds.length > 0 && (
               <button
                 type="button"
@@ -463,6 +473,14 @@ export function ContractsManager({ userId }: { userId:string }) {
               prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c))
             );
           }}
+        />
+      )}
+
+      {/* Modal de Termos de Entrega de Fotos */}
+      {showDeliveryTermsModal && (
+        <PhotoDeliveryTermsModal
+          userId={userId}
+          onClose={() => setShowDeliveryTermsModal(false)}
         />
       )}
     </div>

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { MapPin, Calendar, Plus, Trash2, Info, Globe, Map } from 'lucide-react';
+import { MapPin, Calendar, Plus, Trash2, Info, Globe, Map, Navigation, Trophy } from 'lucide-react';
 import { NumberInput } from './ui/NumberInput';
+import { GeoRadiusSuggesterModal } from './GeoRadiusSuggesterModal';
+import { BaseLocationInfo } from '../services/geoRadiusService';
 
 interface Pais {
   id: string;
@@ -84,6 +86,13 @@ export function SeasonalPricingManager({
   const [showAddEstadoModal, setShowAddEstadoModal] = useState(false);
   const [showAddCidadeModal, setShowAddCidadeModal] = useState(false);
   const [showAddTemporadaModal, setShowAddTemporadaModal] = useState(false);
+  const [showGeoRadiusModal, setShowGeoRadiusModal] = useState(false);
+  const [topCities, setTopCities] = useState<Array<{
+    cityName: string;
+    totalLeads: number;
+    convertedLeads: number;
+    hasRule: boolean;
+  }>>([]);
 
   // Estados para notificações (substituem alert())
   const [notification, setNotification] = useState<{
@@ -145,6 +154,46 @@ export function SeasonalPricingManager({
       setEstados(estadosData || []);
       setCidades(cidadesData || []);
       setTemporadas(temporadasData || []);
+
+      // Calcular ranking de melhores cidades por quantidade de orçamentos (leads)
+      const { data: leadsData } = await supabase
+        .from('leads')
+        .select('id, cidade_evento, status')
+        .eq('user_id', userId);
+
+      if (leadsData) {
+        const cityById = new Map<string, string>();
+        const configuredNames = new Set<string>();
+        (cidadesData || []).forEach((c: Cidade) => {
+          cityById.set(c.id, c.nome);
+          configuredNames.add(c.nome.trim().toLowerCase());
+        });
+
+        const statsMap = new Map<string, { displayName: string; totalLeads: number; convertedLeads: number }>();
+        for (const lead of leadsData as any[]) {
+          const rawCity = String(lead.cidade_evento || '').trim();
+          if (!rawCity) continue;
+          const resolvedName = cityById.get(rawCity) || rawCity;
+          const key = resolvedName.toLowerCase();
+          const entry = statsMap.get(key) || { displayName: resolvedName, totalLeads: 0, convertedLeads: 0 };
+          entry.totalLeads += 1;
+          if (lead.status === 'convertido' || lead.status === 'fechado') {
+            entry.convertedLeads += 1;
+          }
+          statsMap.set(key, entry);
+        }
+
+        const ranking = Array.from(statsMap.values())
+          .sort((a, b) => b.totalLeads - a.totalLeads || b.convertedLeads - a.convertedLeads)
+          .slice(0, 8)
+          .map((item) => ({
+            cityName: item.displayName,
+            totalLeads: item.totalLeads,
+            convertedLeads: item.convertedLeads,
+            hasRule: configuredNames.has(item.displayName.toLowerCase()),
+          }));
+        setTopCities(ranking);
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -259,6 +308,94 @@ export function SeasonalPricingManager({
       console.error('Erro:', error);
       showNotification('❌ Erro ao adicionar cidade', 'error');
     }
+  };
+
+  const handleBatchImportCities = async ({
+    baseLocation,
+    cities: suggestedCities,
+  }: {
+    baseLocation: BaseLocationInfo;
+    cities: Array<{
+      nome: string;
+      taxa_deslocamento: number;
+      ajuste_percentual: number;
+    }>;
+  }) => {
+    // 1. Encontrar ou criar País
+    let paisRecord = paises.find(
+      (p) =>
+        p.codigo_pais?.toUpperCase() === baseLocation.countryCode.toUpperCase() ||
+        p.nome.trim().toLowerCase() === baseLocation.countryName.trim().toLowerCase()
+    );
+
+    if (!paisRecord) {
+      const { data: insertedPais, error: paisErr } = await supabase
+        .from('paises')
+        .insert({
+          user_id: userId,
+          nome: baseLocation.countryName,
+          codigo_pais: baseLocation.countryCode,
+        })
+        .select('*')
+        .single();
+      if (paisErr) throw paisErr;
+      paisRecord = insertedPais;
+    }
+
+    // 2. Encontrar ou criar Estado dentro do País
+    let estadoRecord = estados.find(
+      (e) =>
+        e.pais_id === paisRecord!.id &&
+        (e.sigla?.toUpperCase() === baseLocation.stateCode.toUpperCase() ||
+          e.nome.trim().toLowerCase() === baseLocation.stateName.trim().toLowerCase())
+    );
+
+    if (!estadoRecord) {
+      const { data: insertedEstado, error: estErr } = await supabase
+        .from('estados')
+        .insert({
+          user_id: userId,
+          pais_id: paisRecord!.id,
+          nome: baseLocation.stateName,
+          sigla: baseLocation.stateCode.slice(0, 5),
+        })
+        .select('*')
+        .single();
+      if (estErr) throw estErr;
+      estadoRecord = insertedEstado;
+    }
+
+    // 3. Inserir cidades evitando duplicatas no mesmo estado
+    const existingInState = new Set(
+      cidades
+        .filter((c) => c.estado_id === estadoRecord!.id)
+        .map((c) => c.nome.trim().toLowerCase())
+    );
+
+    const toInsert = suggestedCities
+      .filter((c) => !existingInState.has(c.nome.trim().toLowerCase()))
+      .map((c) => ({
+        user_id: userId,
+        estado_id: estadoRecord!.id,
+        nome: c.nome,
+        ajuste_percentual: c.ajuste_percentual,
+        taxa_deslocamento: c.taxa_deslocamento,
+      }));
+
+    if (toInsert.length > 0) {
+      const { error: insertErr } = await supabase.from('cidades_ajuste').insert(toInsert);
+      if (insertErr) throw insertErr;
+    }
+
+    setSelectedPais(paisRecord!.id);
+    setSelectedEstado(estadoRecord!.id);
+    await loadData(true);
+    showNotification(
+      toInsert.length > 0
+        ? `✅ ${toInsert.length} cidade(s) adicionada(s) em ${estadoRecord!.sigla}!`
+        : 'ℹ️ Todas as cidades selecionadas já estavam cadastradas.',
+      toInsert.length > 0 ? 'success' : 'info'
+    );
   };
 
   const handleUpdateCidade = async (id: string, field: string, value: number) => {
@@ -859,7 +996,67 @@ export function SeasonalPricingManager({
 
             <div className="p-6">
               {activeTab === 'geographic' ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-6">
+                  {/* Barra de Ação Inteligente por Raio + Ranking de Melhores Cidades */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                        <Navigation className="w-4 h-4 text-blue-600" />
+                        Preenchimento Rápido por Raio de Distância
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Use sua localização (com aprovação) ou busque uma cidade base para sugerir taxas de deslocamento automáticas sem perder suas regras manuais.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGeoRadiusModal(true)}
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                      <Navigation className="w-4 h-4" />
+                      Sugerir Cidades por Raio
+                    </button>
+                  </div>
+
+                  {topCities.length > 0 && (
+                    <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/60">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Trophy className="w-4 h-4 text-amber-600" />
+                        <h4 className="font-semibold text-gray-900 text-sm">
+                          Melhores Cidades por Volume de Orçamentos
+                        </h4>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        {topCities.map((item) => (
+                          <div
+                            key={item.cityName}
+                            className="p-2.5 rounded-lg bg-white border border-amber-200/80 flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-medium text-xs text-gray-900 truncate">
+                                {item.cityName}
+                              </div>
+                              <div className="text-[11px] text-gray-500">
+                                {item.totalLeads} {item.totalLeads === 1 ? 'orçamento' : 'orçamentos'}
+                                {item.convertedLeads > 0 ? ` • ${item.convertedLeads} fechado(s)` : ''}
+                              </div>
+                            </div>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                                item.hasRule
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {item.hasRule ? 'Com regra' : 'Sem regra'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Países */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
@@ -1073,6 +1270,7 @@ export function SeasonalPricingManager({
                     </div>
                   </div>
                 </div>
+                </div>
               ) : (
                 <div>
                   <div className="flex items-center justify-between mb-4">
@@ -1215,6 +1413,14 @@ export function SeasonalPricingManager({
             </div>
           </div>
         </div>
+      )}
+
+      {showGeoRadiusModal && (
+        <GeoRadiusSuggesterModal
+          existingCityNames={cidades.map((c) => c.nome)}
+          onClose={() => setShowGeoRadiusModal(false)}
+          onConfirmSave={handleBatchImportCities}
+        />
       )}
     </div>
     </>

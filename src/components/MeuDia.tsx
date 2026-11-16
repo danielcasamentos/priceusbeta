@@ -4,9 +4,17 @@ import { supabase, Lead } from '../lib/supabase';
 import {
   Calendar, DollarSign, CheckSquare, Sun, RefreshCw,
   Zap, ChevronRight, Plus, ArrowRight, Trash2, MessageCircle, Users,
-  AlertCircle, Star, Sliders, Clock, Link,
+  AlertCircle, Star, Sliders, Clock, Link, CheckCircle2,
 } from 'lucide-react';
 import { CobrancaModal } from './company/CobrancaModal';
+import {
+  addEvento,
+  updateEvento,
+  deleteEvento,
+  checkAgendaSyncStatus,
+  syncBidirectionalAgenda,
+  AgendaSyncStatus,
+} from '../services/availabilityService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -375,6 +383,12 @@ export function MeuDia({ userId }: MeuDiaProps) {
   const [ticketMedioReal, setTicketMedioReal] = useState<number | null>(null);
   const [conversaoReal, setConversaoReal] = useState<number | null>(null);
 
+  // ── Agenda Sync Status & Bidirectional Sync ───────────────────────────────
+  const [agendaSyncStatus, setAgendaSyncStatus] = useState<AgendaSyncStatus | null>(null);
+  const [syncingAgenda, setSyncingAgenda] = useState(false);
+  const [syncStepMsg, setSyncStepMsg] = useState<string | null>(null);
+  const [syncFeedbackMsg, setSyncFeedbackMsg] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
+
   const range = getRangeForPeriodo(periodo, customStart, customEnd);
 
   const formatWhatsappMessage = (templateText: string, lead: any) => {
@@ -601,8 +615,36 @@ export function MeuDia({ userId }: MeuDiaProps) {
 
       setTodasTarefas(todasTarefasRaw);
       setTarefasConcluidas(concluidasRaw);
+
+      const syncSt = await checkAgendaSyncStatus(userId);
+      setAgendaSyncStatus(syncSt);
     } finally { setLoading(false); }
   }, [userId]);
+
+  const handleVerifyAndSyncAgenda = useCallback(async () => {
+    if (syncingAgenda) return;
+    setSyncingAgenda(true);
+    setSyncFeedbackMsg(null);
+    setSyncStepMsg('Iniciando verificação...');
+    try {
+      const res = await syncBidirectionalAgenda(userId, (info) => {
+        setSyncStepMsg(info.step);
+      });
+      await load();
+      setSyncFeedbackMsg({
+        type: res.success ? 'success' : 'warning',
+        text: res.message,
+      });
+    } catch (err: any) {
+      setSyncFeedbackMsg({
+        type: 'error',
+        text: err.message || 'Erro ao sincronizar agendas.',
+      });
+    } finally {
+      setSyncingAgenda(false);
+      setSyncStepMsg(null);
+    }
+  }, [syncingAgenda, userId, load]);
 
   const loadCompanyTasks = useCallback(async () => {
     try {
@@ -627,25 +669,21 @@ export function MeuDia({ userId }: MeuDiaProps) {
         const timePart = newTaskStartTime || '09:00';
         const dur = parseInt(newTaskDuration) || 60;
 
-        const { data: eventData, error: eventErr } = await supabase
-          .from('eventos_agenda')
-          .insert({
-            user_id: userId,
-            data_evento: newTaskDate,
-            tipo_evento: 'Tarefa Administrativa',
-            cliente_nome: `Tarefa: ${text}`,
-            status: 'confirmado',
-            origem: 'manual',
-            cidade: '',
-            horario_inicio: timePart,
-            duracao_minutos: dur,
-            ambiente: newTaskType,
-            observacoes: 'Gerado automaticamente a partir de tarefa administrativa'
-          })
-          .select('id')
-          .single();
+        const eventData = await addEvento({
+          user_id: userId,
+          data_evento: newTaskDate,
+          tipo_evento: 'Tarefa Administrativa',
+          cliente_nome: `Tarefa: ${text}`,
+          status: 'confirmado',
+          origem: 'manual',
+          cidade: '',
+          horario_inicio: timePart,
+          duracao_minutos: dur,
+          ambiente: newTaskType,
+          observacoes: 'Gerado automaticamente a partir de tarefa administrativa'
+        } as any);
 
-        if (!eventErr && eventData) {
+        if (eventData) {
           createdEventId = eventData.id;
         }
       }
@@ -675,11 +713,14 @@ export function MeuDia({ userId }: MeuDiaProps) {
         setNewTaskType('interno');
         setNewTaskSyncAgenda(false);
         setNewTaskStartTime('');
+        if (createdEventId) {
+          load();
+        }
       }
     } catch (err) {
       console.error('Erro ao adicionar tarefa:', err);
     }
-  }, [newTaskText, newTaskDate, newTaskPriority, newTaskDuration, newTaskType, newTaskSyncAgenda, newTaskStartTime, userId]);
+  }, [newTaskText, newTaskDate, newTaskPriority, newTaskDuration, newTaskType, newTaskSyncAgenda, newTaskStartTime, userId, load]);
 
   const toggleTask = useCallback(async (id: string, current: boolean) => {
     const next = !current;
@@ -691,11 +732,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
       }).eq('id', id).eq('user_id', userId);
 
       if (task?.evento_id) {
-        await supabase
-          .from('eventos_agenda')
-          .update({ status: next ? 'concluido' : 'agendado' })
-          .eq('id', task.evento_id)
-          .eq('user_id', userId);
+        await updateEvento(task.evento_id, { status: next ? 'concluido' : 'confirmado' });
       }
     } catch { }
   }, [companyTasks, userId]);
@@ -706,7 +743,7 @@ export function MeuDia({ userId }: MeuDiaProps) {
     try {
       await supabase.from('company_tasks').delete().eq('id', id).eq('user_id', userId);
       if (taskToDelete?.evento_id) {
-        await supabase.from('eventos_agenda').delete().eq('id', taskToDelete.evento_id).eq('user_id', userId);
+        await deleteEvento(taskToDelete.evento_id);
       }
     } catch {}
   }, [companyTasks, userId]);
@@ -969,11 +1006,138 @@ export function MeuDia({ userId }: MeuDiaProps) {
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{range.label}</p>
           </div>
         </div>
-        <button onClick={load} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/5 rounded-xl hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.03)] hover:shadow-sm active:scale-95 transition-all">
-          <RefreshCw className="w-4 h-4 text-gray-500" />
-          Atualizar
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleVerifyAndSyncAgenda}
+            disabled={syncingAgenda}
+            className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all active:scale-95 ${
+              agendaSyncStatus && !agendaSyncStatus.isSynced
+                ? 'bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10'
+                : 'bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+            }`}
+            title="Verifica os eventos do PriceU$ e do Google Calendar em ambos os sentidos e sincroniza pendências"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingAgenda ? 'animate-spin' : ''}`} />
+            <span>
+              {syncingAgenda
+                ? syncStepMsg || 'Sincronizando...'
+                : agendaSyncStatus && !agendaSyncStatus.isSynced
+                  ? (agendaSyncStatus.pendingLocalToGoogle +
+                      agendaSyncStatus.missingConvertedClientsCount +
+                      agendaSyncStatus.duplicateLocalEventsCount) > 0
+                    ? `Checkup & Sincronizar (${
+                        agendaSyncStatus.pendingLocalToGoogle +
+                        agendaSyncStatus.missingConvertedClientsCount +
+                        agendaSyncStatus.duplicateLocalEventsCount
+                      } pendente${
+                        agendaSyncStatus.pendingLocalToGoogle +
+                          agendaSyncStatus.missingConvertedClientsCount +
+                          agendaSyncStatus.duplicateLocalEventsCount >
+                        1
+                          ? 's'
+                          : ''
+                      })`
+                    : 'Checkup e Sincronizar Agenda'
+                  : 'Agenda Espelhada • Verificar'}
+            </span>
+          </button>
+          <button onClick={load} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/5 rounded-xl hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.03)] hover:shadow-sm active:scale-95 transition-all">
+            <RefreshCw className="w-4 h-4 text-gray-500" />
+            Atualizar
+          </button>
+        </div>
       </div>
+
+      {/* ── Banner Inteligente de Sincronização da Agenda ── */}
+      {(syncFeedbackMsg || (agendaSyncStatus && !agendaSyncStatus.isSynced)) && (
+        <div
+          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border backdrop-blur-md transition-all ${
+            syncFeedbackMsg?.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+              : syncFeedbackMsg?.type === 'error'
+                ? 'bg-red-500/10 border-red-500/30 text-red-800 dark:text-red-200'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200'
+          }`}
+        >
+          <div className="flex items-start sm:items-center gap-3">
+            {syncFeedbackMsg?.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
+            )}
+            <div className="text-xs sm:text-sm space-y-0.5">
+              {syncFeedbackMsg ? (
+                <p className="font-semibold">{syncFeedbackMsg.text}</p>
+              ) : (
+                <>
+                  {agendaSyncStatus?.missingConvertedClientsCount ? (
+                    <p className="font-semibold">
+                      • <strong>{agendaSyncStatus.missingConvertedClientsCount} cliente(s) convertido(s)</strong> (com ou sem contrato / workflow) ainda não possuem a data inserida na agenda.
+                    </p>
+                  ) : null}
+                  {agendaSyncStatus?.duplicateLocalEventsCount ? (
+                    <p className="font-semibold">
+                      • <strong>{agendaSyncStatus.duplicateLocalEventsCount} evento(s) duplicado(s)</strong> detectado(s) na mesma data (mesmo nome / tags iguais ou diferentes).
+                    </p>
+                  ) : null}
+                  {agendaSyncStatus?.pendingLocalToGoogle ? (
+                    <p className="font-semibold">
+                      • <strong>{agendaSyncStatus.pendingLocalToGoogle} evento(s)</strong> do PriceU$ aguardando espelhamento para o Google Calendar.
+                    </p>
+                  ) : null}
+                  {!agendaSyncStatus?.hasIntegration ? (
+                    <p className="font-semibold">
+                      • Sua agenda ainda não está vinculada ao Google Calendar. Conecte sua conta para espelhar nos dois sentidos.
+                    </p>
+                  ) : (
+                    !agendaSyncStatus.missingConvertedClientsCount &&
+                    !agendaSyncStatus.duplicateLocalEventsCount &&
+                    !agendaSyncStatus.pendingLocalToGoogle && (
+                      <p className="font-semibold">
+                        A verificação periódica entre a sua Agenda e o Google Calendar está pendente. Clique para verificar e espelhar os dois lados.
+                      </p>
+                    )
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {(agendaSyncStatus?.hasIntegration ||
+              (agendaSyncStatus?.missingConvertedClientsCount || 0) > 0 ||
+              (agendaSyncStatus?.duplicateLocalEventsCount || 0) > 0) && (
+              <button
+                type="button"
+                onClick={handleVerifyAndSyncAgenda}
+                disabled={syncingAgenda}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingAgenda ? 'animate-spin' : ''}`} />
+                {syncingAgenda ? 'Verificando...' : 'Fazer Checkup & Espelhar'}
+              </button>
+            )}
+            {!agendaSyncStatus?.hasIntegration && (
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard/agenda')}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all"
+              >
+                Vincular Google
+              </button>
+            )}
+            {syncFeedbackMsg && (
+              <button
+                type="button"
+                onClick={() => setSyncFeedbackMsg(null)}
+                className="px-2 py-1 text-xs opacity-70 hover:opacity-100"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Tabs Selector ── */}
       <div className="flex border-b border-gray-200 dark:border-white/10 gap-6 overflow-x-auto pb-1 scrollbar-hide">
@@ -1794,10 +1958,37 @@ export function MeuDia({ userId }: MeuDiaProps) {
                   <div className="flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-blue-500" />
                     <h3 className="font-bold text-gray-900 dark:text-white text-sm">🗓️ Agenda</h3>
+                    {agendaSyncStatus && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          agendaSyncStatus.isSynced
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                        }`}
+                      >
+                        {agendaSyncStatus.isSynced
+                          ? '✓ Google Sync'
+                          : agendaSyncStatus.pendingLocalToGoogle > 0
+                            ? `${agendaSyncStatus.pendingLocalToGoogle} não vinc.`
+                            : 'Não sinc.'}
+                      </span>
+                    )}
                   </div>
-                  <button onClick={() => navigate('/dashboard/agenda')} className="text-xs font-bold text-blue-500 hover:text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                    Ver tudo <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleVerifyAndSyncAgenda}
+                      disabled={syncingAgenda}
+                      title="Verificar e sincronizar agenda (PriceU$ ↔ Google)"
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncingAgenda ? 'animate-spin' : ''}`} />
+                      {syncingAgenda ? 'Sincronizando...' : 'Sincronizar'}
+                    </button>
+                    <button onClick={() => navigate('/dashboard/agenda')} className="text-xs font-bold text-blue-500 hover:text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                      Ver tudo <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Abas da Agenda */}

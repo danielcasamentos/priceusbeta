@@ -18,6 +18,10 @@ interface Product {
   duracao_minutos?: number | null;
   brindes_vinculados?: string[] | null;
   quantidade_maxima?: number | null;
+  grupo_desconto?: string | null;
+  faixas_preco?: any[] | null;
+  escaloes_quantidade?: any[] | null;
+  regras_preco_data?: any[] | null;
 }
 
 interface SortableProductItemProps {

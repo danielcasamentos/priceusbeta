@@ -60,6 +60,25 @@ async function handleEvent(event: Stripe.Event) {
     return;
   }
 
+  // 1. Handle Gallery Extra Photos one-time checkout (guest or customer checkout)
+  if (event.type === 'checkout.session.completed') {
+    const session = stripeData as Stripe.Checkout.Session;
+    if (session.metadata?.type === 'gallery_extra_photos' && session.payment_status === 'paid') {
+      await handleGalleryExtraPhotosPurchase(session);
+      return;
+    }
+
+    if (
+      session.metadata?.type === 'marketplace_addon' &&
+      session.metadata?.addon_key &&
+      session.metadata?.user_id &&
+      session.payment_status === 'paid'
+    ) {
+      await handleMarketplaceAddonPurchase(session);
+      return;
+    }
+  }
+
   if (!('customer' in stripeData)) {
     return;
   }
@@ -230,5 +249,179 @@ async function syncCustomerFromStripe(customerId: string) {
   } catch (error) {
     console.error(`Failed to sync subscription for customer ${customerId}:`, error);
     throw error;
+  }
+}
+
+async function handleMarketplaceAddonPurchase(session: Stripe.Checkout.Session) {
+  try {
+    const meta = session.metadata || {};
+    const userId = meta.user_id;
+    const addonKey = meta.addon_key;
+    const expiresAt = meta.expires_at || null;
+
+    if (!userId || !addonKey) {
+      console.error('[Stripe Webhook] marketplace_addon missing user_id or addon_key:', session.id);
+      return;
+    }
+
+    const { error } = await supabase.from('user_addons').upsert(
+      {
+        user_id: userId,
+        addon_key: addonKey,
+        status: 'active',
+        stripe_session_id: session.id,
+        stripe_subscription_id:
+          typeof session.subscription === 'string' ? session.subscription : null,
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,addon_key' },
+    );
+
+    if (error) {
+      console.error('[Stripe Webhook] Error upserting user_addons:', error);
+    } else {
+      console.info(`[Stripe Webhook] Activated addon ${addonKey} for user ${userId}`);
+    }
+  } catch (err) {
+    console.error('[Stripe Webhook] Failed to process marketplace addon purchase:', err);
+  }
+}
+
+async function handleGalleryExtraPhotosPurchase(session: Stripe.Checkout.Session) {
+  try {
+    const meta = session.metadata || {};
+    const galleryId = meta.gallery_id;
+    const photographerId = meta.photographer_id || null;
+    const extraCount = Math.max(1, parseInt(meta.extra_count || '1', 10) || 1);
+    const buyerName = (meta.visitor_name || session.customer_details?.name || 'Cliente').trim();
+    const buyerEmail = (meta.visitor_email || session.customer_details?.email || '').trim() || null;
+    const buyerWhatsapp = (meta.visitor_whatsapp || session.customer_details?.phone || '').trim() || null;
+    const photoIds = meta.photo_ids
+      ? meta.photo_ids.split(',').map((id) => id.trim()).filter(Boolean)
+      : [];
+
+    const amountTotalBrl = (session.amount_total || 0) / 100;
+    const platformFeeBrl = (parseInt(meta.platform_fee_cents || '0', 10) || 0) / 100;
+    const photographerShareBrl = (parseInt(meta.photographer_share_cents || '0', 10) || 0) / 100;
+
+    if (!galleryId) {
+      console.error('[Stripe Webhook] gallery_extra_photos missing gallery_id in metadata:', session.id);
+      return;
+    }
+
+    // 1. Localizar ou criar visitante em gallery_visitors e incrementar downloads_count
+    let visitorId: string | null = null;
+    try {
+      let visitorQuery = supabase
+        .from('gallery_visitors')
+        .select('id, downloads_count')
+        .eq('gallery_id', galleryId);
+
+      if (buyerEmail) {
+        visitorQuery = visitorQuery.eq('email', buyerEmail);
+      } else {
+        visitorQuery = visitorQuery.eq('name', buyerName);
+      }
+
+      const { data: existingVisitor } = await visitorQuery.maybeSingle();
+
+      if (existingVisitor) {
+        visitorId = existingVisitor.id;
+        const currentDownloads = existingVisitor.downloads_count || 0;
+        await supabase
+          .from('gallery_visitors')
+          .update({
+            downloads_count: currentDownloads + extraCount,
+            last_accessed_at: new Date().toISOString(),
+          })
+          .eq('id', existingVisitor.id);
+      } else {
+        const { data: createdVisitor } = await supabase
+          .from('gallery_visitors')
+          .insert({
+            gallery_id: galleryId,
+            name: buyerName,
+            email: buyerEmail,
+            whatsapp: buyerWhatsapp,
+            accessed_at: new Date().toISOString(),
+            last_accessed_at: new Date().toISOString(),
+            downloads_count: extraCount,
+          })
+          .select('id')
+          .maybeSingle();
+        visitorId = createdVisitor?.id || null;
+      }
+    } catch (visErr) {
+      console.warn('[Stripe Webhook] Aviso ao atualizar gallery_visitors:', visErr);
+    }
+
+    // 2. Registrar na tabela gallery_photo_purchases (com idempotência por stripe_session_id)
+    const { error: purchaseError } = await supabase
+      .from('gallery_photo_purchases')
+      .upsert(
+        {
+          gallery_id: galleryId,
+          photographer_id: photographerId,
+          visitor_id: visitorId,
+          buyer_name: buyerName,
+          buyer_email: buyerEmail,
+          buyer_whatsapp: buyerWhatsapp,
+          photo_ids: photoIds,
+          photo_count: extraCount,
+          amount_total: amountTotalBrl,
+          platform_fee: platformFeeBrl,
+          photographer_share: photographerShareBrl,
+          stripe_session_id: session.id,
+          payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+          payment_status: session.payment_status || 'paid',
+        },
+        { onConflict: 'stripe_session_id' }
+      );
+
+    if (purchaseError) {
+      console.error('[Stripe Webhook] Erro ao salvar em gallery_photo_purchases:', purchaseError);
+    }
+
+    // 3. Registrar também em gallery_orders e no caixa financeiro (company_transactions)
+    try {
+      await supabase.from('gallery_orders').insert({
+        gallery_id: galleryId,
+        visitor_id: visitorId,
+        buyer_name: buyerName,
+        buyer_email: buyerEmail,
+        buyer_whatsapp: buyerWhatsapp,
+        photo_count: extraCount,
+        total_price: amountTotalBrl,
+        payment_status: 'paid',
+        payment_method: 'cartao_stripe',
+      });
+    } catch (ordErr) {
+      console.warn('[Stripe Webhook] Aviso ao registrar em gallery_orders:', ordErr);
+    }
+
+    if (photographerId && amountTotalBrl > 0) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        await supabase.from('company_transactions').insert({
+          user_id: photographerId,
+          tipo: 'receita',
+          origem: 'galeria',
+          descricao: `Venda de ${extraCount} foto(s) extra(s) via Stripe (Galeria)`,
+          valor: photographerShareBrl > 0 ? photographerShareBrl : amountTotalBrl,
+          data: today,
+          status: 'pago',
+          forma_pagamento: 'cartao_credito',
+          cliente_nome: buyerName,
+          cliente_telefone: buyerWhatsapp,
+        });
+      } catch (finErr) {
+        console.warn('[Stripe Webhook] Aviso ao registrar receita em company_transactions:', finErr);
+      }
+    }
+
+    console.info(`[Stripe Webhook] ✅ Venda de ${extraCount} foto(s) extra(s) processada com sucesso para galeria ${galleryId} (sessão: ${session.id})`);
+  } catch (err) {
+    console.error('[Stripe Webhook] Erro ao processar compra de fotos extras:', err);
   }
 }

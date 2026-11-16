@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Check, ArrowRight, Menu, X, Sparkles, Shield, Globe, Smartphone, Play, Pause } from 'lucide-react';
+import { Check, ArrowRight, Menu, X, Sparkles, Shield, Globe, Smartphone, Heart, Briefcase, Calendar, MessageSquare, Award, Star, Lock } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AppInstallBanner } from '../components/AppInstallBanner';
+import logoPriceUsLight from '../assets/logo-priceus.png';
 
-/* ─── tiny hook: count up number ─── */
+/* ─── Hook contador animado ─── */
 function useCountUp(target: number, duration = 2000, active = false) {
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -21,7 +22,7 @@ function useCountUp(target: number, duration = 2000, active = false) {
   return val;
 }
 
-/* ─── intersection observer hook ─── */
+/* ─── Hook Intersection Observer ─── */
 function useInView(ref: React.RefObject<Element>) {
   const [inView, setInView] = useState(false);
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Demo 1 — Mobile Dashboard screens
+  // Demo 1 — Telas do Dashboard
   const [dashScreen, setDashScreen] = useState(0);
   const [dashPlaying, setDashPlaying] = useState(true);
   const dashRef = useRef<HTMLDivElement>(null!);
@@ -47,13 +48,13 @@ export default function LandingPage() {
     return () => clearInterval(t);
   }, [dashInView, dashPlaying]);
 
-  // Demo 3 — Journey steps
+  // Demo 3 — Passos da Jornada
   const journeyRef = useRef<HTMLDivElement>(null!);
   const journeyInView = useInView(journeyRef);
   const [visibleSteps, setVisibleSteps] = useState<number[]>([]);
   useEffect(() => {
     if (!journeyInView) return;
-    [0,1,2,3,4].forEach(i => setTimeout(() => setVisibleSteps(p => [...p, i]), 300 + i * 550));
+    [0, 1, 2, 3, 4].forEach(i => setTimeout(() => setVisibleSteps(p => [...p, i]), 300 + i * 400));
   }, [journeyInView]);
 
   // Demo 4 — ROI counters
@@ -65,587 +66,442 @@ export default function LandingPage() {
   const horas   = useCountUp(15, 1600, roiInView);
 
   const dashScreens = [
-    { label: 'Dashboard', title: 'Visão geral do negócio', desc: 'Receita, leads, templates e contratos — tudo na tela inicial.' },
-    { label: 'Gestão de Leads', title: 'Qualifique seus leads', desc: 'Filtre, veja valores e envie follow-up pro WhatsApp com 1 clique.' },
-    { label: 'Analytics', title: 'Saiba o que funciona', desc: 'Visualizações, conversão e evolução mês a mês.' },
-    { label: 'Notificações', title: 'Sempre informado', desc: 'Pagamentos, novos leads e contratos em tempo real.' },
+    { label: 'Visão Geral', title: 'Centro de Comando do Profissional', desc: 'Faturamento, propostas ativas, contratos assinados e agenda em um painel executivo clean.' },
+    { label: 'Gestão de Leads', title: 'Funil & CRM Inteligente', desc: 'Acompanhe cada etapa de negociação com clientes, valores em aberto e follow-up automático.' },
+    { label: 'Contratos & Assinatura', title: 'Segurança Jurídica com 1 Clique', desc: 'Contratos gerados automaticamente a partir do orçamento aceito, assinados na tela do celular.' },
+    { label: 'Conversas & Chat IA', title: 'Atendimento VIP em Tempo Real', desc: 'Negociação ao vivo de pacotes, envio de bônus, atas transcritas por IA e transição pro WhatsApp.' },
   ];
 
   const journeySteps = [
-    { emoji: '📲', color: '#818cf8', bg: 'rgba(99,102,241,.12)', border: 'rgba(99,102,241,.3)', title: 'Cliente encontra você no Instagram', desc: 'Ela viu seus fotos, clicou no link da bio e chegou ao seu perfil profissional no PriceUs.' },
-    { emoji: '🛒', color: '#fbbf24', bg: 'rgba(251,191,36,.1)', border: 'rgba(251,191,36,.3)', title: 'Monta o próprio orçamento', desc: 'Escolhe os serviços, vê o total calculado automaticamente. Sem precisar de você.' },
-    { emoji: '🎯', color: '#22c55e', bg: 'rgba(34,197,94,.1)', border: 'rgba(34,197,94,.3)', title: 'Lead chega via WhatsApp', desc: 'Você recebe nome, serviço, valor e data do evento — tudo organizado no painel de leads.' },
-    { emoji: '✍️', color: '#60a5fa', bg: 'rgba(96,165,250,.1)', border: 'rgba(96,165,250,.3)', title: 'Contrato digital gerado', desc: 'Com 1 clique o contrato sai do lead. Cliente assina no celular. Seguro juridicamente.' },
-    { emoji: '💰', color: '#22c55e', bg: 'rgba(34,197,94,.15)', border: 'rgba(34,197,94,.4)', title: 'Dinheiro na conta! 🎉', desc: 'Entrada recebida. Evento confirmado. Financeiro atualizado automaticamente.' },
+    { emoji: '📸', color: '#0f172a', bg: '#f1f5f9', border: '#cbd5e1', title: '1. O cliente descobre seu trabalho', desc: 'Vê suas fotos no Instagram, site ou indicação e acessa sua proposta interativa e exclusiva no PriceU$.' },
+    { emoji: '✨', color: '#b45309', bg: '#fef3c7', border: '#fde68a', title: '2. Monta o orçamento em tempo real', desc: 'A noiva ou cliente escolhe os pacotes desejados, adicionais e vê os valores atualizados sem fricção.' },
+    { emoji: '💬', color: '#047857', bg: '#d1fae5', border: '#a7f3d0', title: '3. Negociação direta no Chat PriceU$', desc: 'Tira dúvidas ao vivo, ajusta opções de parcelamento e recebe bônus especiais sem intermediários.' },
+    { emoji: '✍️', color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe', title: '4. Contrato digital assinado no celular', desc: 'O contrato nasce preenchido a partir do orçamento. Assinatura eletrônica válida e juridicamente segura.' },
+    { emoji: '💎', color: '#0f172a', bg: '#f3e8ff', border: '#e9d5ff', title: '5. Evento confirmado & data reservada', desc: 'Entrada registrada, data blindada na sua agenda oficial e fotos entregues em galeria de alta resolução.' },
   ];
 
   const planFeatures = [
-    'Orçamentos ilimitados',
-    'Contratos digitais com assinatura eletrônica',
-    'Agenda sincronizada + Google Calendar',
-    'Sistema de avaliações e reviews públicos',
-    'Templates WhatsApp personalizáveis',
-    'Preços sazonais e geográficos',
-    'Upload de imagens e portfólio',
-    'Gestão completa de leads',
-    'Dashboard financeiro completo',
-    'Analytics e relatórios avançados',
-    'Exportação fiscal CSV/PDF',
-    'Cupons de desconto',
-    'Suporte prioritário em português',
-    'Atualizações gratuitas',
-    'Cancele quando quiser',
+    'Orçamentos ilimitados e interativos',
+    'Contratos digitais com assinatura no celular',
+    'Agenda de eventos blindada e sincronizada',
+    'Chat de negociação ao vivo com gravação e atas',
+    'Espaço da Noiva & Portal Multi-Fornecedor',
+    'Galerias de entrega de fotos em alta resolução',
+    'CRM completo e funil de conversão de leads',
+    'Dashboard financeiro e controle de parcelas',
+    'Templates personalizados por tema e nicho',
+    'Compatível com iPhone, Android, Mac e Windows',
+    'Suporte prioritário humanizado em português',
+    'Cancele a qualquer momento sem multas',
   ];
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: '#07101f', color: '#fff', minHeight: '100vh', overflowX: 'hidden' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        :root { --g: #16a34a; --gl: #22c55e; }
-        @keyframes fadeUp { from { opacity:0; transform: translateY(24px); } to { opacity:1; transform: translateY(0); } }
-        @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.04); } }
-        @keyframes barGrow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
-        @keyframes notifIn { from { opacity:0; transform:translateX(60px); } to { opacity:1; transform:translateX(0); } }
-        @keyframes slideIn { from { opacity:0; transform:translateX(-28px); } to { opacity:1; transform:translateX(0); } }
-        @keyframes glow { 0%,100% { box-shadow:0 0 20px rgba(34,197,94,.3); } 50% { box-shadow:0 0 40px rgba(34,197,94,.55); } }
-        @keyframes moneyBounce { 0%,100% { transform:rotate(-5deg) scale(1); } 50% { transform:rotate(5deg) scale(1.1); } }
-        @keyframes shine { 0% { left:-100%; } 100% { left:200%; } }
-        .hero-btn { animation: pulse 2.5s ease infinite; }
-        .glow-green { animation: glow 3s ease infinite; }
-        .a1 { animation: fadeUp .6s ease .1s both; }
-        .a2 { animation: fadeUp .6s ease .25s both; }
-        .a3 { animation: fadeUp .6s ease .4s both; }
-        .a4 { animation: fadeUp .6s ease .55s both; }
-        .phone-screen { transition: opacity .5s ease, transform .5s ease; }
-        .step-card { transition: opacity .5s ease, transform .5s ease; }
-        .bar { transform-origin: bottom; }
-        /* ── Nav responsive ── */
-        .hidden-mobile { display: flex; }
-        .show-mobile { display: none !important; }
-        /* ── Responsive grids ── */
-        .grid-4col { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
-        .grid-vs   { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: start; }
-        .grid-plan { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-        .grid-footer{ display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .dash-layout { display: flex; gap: 48px; align-items: center; flex-wrap: wrap; justify-content: center; }
-        
-        @media (max-width: 1024px) {
-          .hidden-mobile { display: none !important; }
-          .show-mobile   { display: flex !important; }
-          .dash-layout { flex-direction: column; gap: 24px; }
-        }
-        
-        @media (max-width: 768px) {
-          .grid-4col  { grid-template-columns: repeat(2,1fr); gap: 12px; }
-          
-          .grid-vs {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 16px !important;
-          }
-          .grid-vs .vs-divider { display: none !important; }
-          
-          .grid-plan  { grid-template-columns: 1fr; }
-          .grid-footer{ grid-template-columns: 1fr 1fr; gap: 24px; }
-          .roi-callout { flex-direction: column; gap: 12px; text-align: center; }
-          .roi-callout-right { text-align: center !important; }
-        }
-        
-        @media (max-width: 480px) {
-          .grid-4col  { grid-template-columns: 1fr !important; gap: 12px !important; }
-          .grid-4col > div { padding: 20px 16px !important; }
-          .grid-4col > div > div:nth-child(1) { font-size: 26px !important; }
-          .grid-4col > div > div:nth-child(2) { font-size: 13px !important; }
-          .grid-4col > div > div:nth-child(3) { font-size: 11px !important; }
-          
-          .grid-footer{ grid-template-columns: 1fr; gap: 20px; }
-        }
-      `}</style>
+    <div className="min-h-screen bg-[#fafaf9] text-slate-900 font-sans selection:bg-stone-900 selection:text-white">
+      <Helmet>
+        <title>PriceU$ — A Plataforma nº 1 para Casamentos & Eventos de Alto Padrão</title>
+        <meta name="description" content="Sistema de gestão e orçamentos interativos, contratos digitais com assinatura eletrônica e chat de negociação ao vivo para o mercado de casamentos e eventos." />
+      </Helmet>
 
-      {/* NAV */}
-      <nav style={{ position:'fixed', top:0, width:'100%', zIndex:100, background:'rgba(7,16,31,.95)', backdropFilter:'blur(20px)', borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+      {/* TOP NAVIGATION CHIQUE */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200/80 transition-all">
         <AppInstallBanner variant="topbar" />
-        <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 24px', display:'flex', justifyContent:'space-between', alignItems:'center', height:64 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <img src="/Logo Price Us.png" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo-priceus.png'; }} alt="PriceUs" style={{ height:34, width:'auto' }} />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
+          {/* Logo PriceU$ */}
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+              <img
+                src={logoPriceUsLight}
+                alt="PriceU$"
+                className="h-10 sm:h-11 w-auto object-contain"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo-priceus.png'; }}
+              />
+            </Link>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:32 }} className="hidden-mobile">
-            {['#sistema','#jornada','#roi','#planos'].map((href, i) => (
-              <a key={i} href={href} style={{ color:'rgba(255,255,255,.7)', fontSize:14, fontWeight:500, textDecoration:'none', transition:'color .2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color='#22c55e')}
-                onMouseLeave={e => (e.currentTarget.style.color='rgba(255,255,255,.7)')}>
-                {['Sistema','Jornada','ROI','Planos'][i]}
-              </a>
-            ))}
-            <button onClick={() => navigate('/login')} style={{ background:'transparent', border:'1px solid rgba(255,255,255,.2)', color:'#fff', padding:'8px 20px', borderRadius:8, fontSize:14, fontWeight:600, cursor:'pointer' }}>
-              Login
+
+          {/* Links Centrais Desktop */}
+          <div className="hidden lg:flex items-center gap-8 text-sm font-semibold text-stone-600">
+            <a href="#sistema" className="hover:text-stone-950 transition-colors">Sistema</a>
+            <a href="#jornada" className="hover:text-stone-950 transition-colors">Como Funciona</a>
+            <a href="#roi" className="hover:text-stone-950 transition-colors">Resultados</a>
+            <a href="#planos" className="hover:text-stone-950 transition-colors">Planos</a>
+          </div>
+
+          {/* CTAs da Barra Superior */}
+          <div className="hidden md:flex items-center gap-3">
+            {/* Atalho Espaço dos Noivos */}
+            <button
+              onClick={() => navigate('/login?tipo=noiva')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/80 text-xs font-bold transition-all cursor-pointer shadow-xs"
+            >
+              <Heart size={14} className="fill-rose-500 text-rose-500" />
+              <span>Sou Noiva / Cliente</span>
             </button>
-            <button onClick={() => navigate('/login')} className="hero-btn" style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'10px 22px', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 20px rgba(22,163,74,.4)' }}>
-              Começar Grátis
+
+            {/* Login Profissional */}
+            <button
+              onClick={() => navigate('/login')}
+              className="px-4 py-2 text-xs sm:text-sm font-bold text-stone-700 hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Entrar
+            </button>
+
+            {/* Começar Grátis */}
+            <button
+              onClick={() => navigate('/login')}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 active:scale-98 text-white text-xs sm:text-sm font-bold shadow-md transition-all cursor-pointer"
+            >
+              <span>Começar Grátis</span>
+              <ArrowRight size={14} />
             </button>
           </div>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ display:'none', background:'transparent', border:'none', color:'#fff', cursor:'pointer' }} className="show-mobile">
-            {mobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}
+
+          {/* Menu Mobile Toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 text-stone-700 hover:text-stone-950 rounded-lg hover:bg-stone-100 transition-colors"
+            aria-label="Abrir menu"
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
+
+        {/* Menu Mobile Dropdown */}
         {mobileMenuOpen && (
-          <div style={{ background:'rgba(7,16,31,.98)', padding:'16px 24px', borderTop:'1px solid rgba(255,255,255,.07)' }}>
-            {['Sistema','Jornada','ROI','Planos'].map((label, i) => (
-              <a key={i} href={['#sistema','#jornada','#roi','#planos'][i]} onClick={() => setMobileMenuOpen(false)}
-                style={{ display:'block', padding:'10px 0', color:'rgba(255,255,255,.8)', fontSize:15, textDecoration:'none', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                {label}
-              </a>
-            ))}
-            <button onClick={() => navigate('/login')} style={{ width:'100%', marginTop:16, background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'12px', borderRadius:10, fontSize:15, fontWeight:700, cursor:'pointer' }}>
-              Começar Grátis — 30 dias
-            </button>
+          <div className="md:hidden bg-white border-b border-stone-200 px-6 py-6 space-y-4 shadow-xl animate-fade-in">
+            <div className="flex flex-col space-y-3 font-semibold text-stone-700">
+              <a href="#sistema" onClick={() => setMobileMenuOpen(false)} className="py-1 hover:text-stone-950">Sistema</a>
+              <a href="#jornada" onClick={() => setMobileMenuOpen(false)} className="py-1 hover:text-stone-950">Como Funciona</a>
+              <a href="#roi" onClick={() => setMobileMenuOpen(false)} className="py-1 hover:text-stone-950">Resultados</a>
+              <a href="#planos" onClick={() => setMobileMenuOpen(false)} className="py-1 hover:text-stone-950">Planos</a>
+            </div>
+
+            <div className="pt-4 border-t border-stone-200 flex flex-col gap-2.5">
+              <button
+                onClick={() => { setMobileMenuOpen(false); navigate('/login?tipo=noiva'); }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 font-bold text-sm"
+              >
+                <Heart size={16} className="fill-rose-500 text-rose-500" />
+                <span>Sou Noiva / Cliente</span>
+              </button>
+              <button
+                onClick={() => { setMobileMenuOpen(false); navigate('/login'); }}
+                className="w-full py-3 rounded-xl bg-stone-900 text-white font-bold text-sm shadow-md"
+              >
+                Acessar como Profissional
+              </button>
+            </div>
           </div>
         )}
       </nav>
 
-      <Helmet>
-        <title>PriceU$ - CRM e Plataforma para Fotógrafos</title>
-        <meta name="description" content="PriceU$ é o CRM e sistema de gestão completo para fotógrafos profissionais com integração ao Google Calendar e Google Drive." />
-      </Helmet>
-
-      {/* HERO */}
-      <section style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'120px 24px 80px', position:'relative', overflow:'hidden', background:'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(22,163,74,.15),transparent 60%),radial-gradient(ellipse 60% 40% at 90% 80%,rgba(99,102,241,.08),transparent 55%),#07101f', textAlign:'center' }}>
-        <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px)', backgroundSize:'64px 64px', zIndex:0 }} />
-        <div style={{ position:'relative', zIndex:1, maxWidth:860 }}>
-          <div className="a1" style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(34,197,94,.12)', border:'1px solid rgba(34,197,94,.3)', borderRadius:999, padding:'6px 18px', marginBottom:24, fontSize:12, fontWeight:700, color:'#22c55e', letterSpacing:'1px', textTransform:'uppercase' }}>
-            <Sparkles size={14}/> Plataforma All-in-One para Fotógrafos
+      {/* HERO SECTION EDITORIAL CHIQUE */}
+      <section className="pt-36 sm:pt-44 pb-20 px-4 sm:px-6 relative overflow-hidden bg-gradient-to-b from-[#fafaf9] via-white to-[#fafaf9]">
+        <div className="max-w-5xl mx-auto text-center relative z-10">
+          {/* Badge Luxo */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-800 text-xs font-bold tracking-wide uppercase mb-6 shadow-xs">
+            <Sparkles size={14} className="text-emerald-700" />
+            A Plataforma Oficial do Mercado de Casamentos & Eventos
           </div>
-          <h1 className="a2" style={{ fontSize:'clamp(34px,5.5vw,68px)', fontWeight:900, lineHeight:1.08, letterSpacing:'-2px', marginBottom:20 }}>
-            PriceU$ — CRM & Gestão para Fotógrafos.<br/>
-            <span style={{ color:'#22c55e' }}>Do orçamento ao contrato, tudo automatizado.</span>
+
+          {/* Headline Principal */}
+          <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-slate-900 leading-[1.08] tracking-tight mb-6">
+            Propostas que encantam.<br />
+            <span className="text-stone-800 bg-gradient-to-r from-stone-900 via-stone-800 to-emerald-900 bg-clip-text text-transparent">
+              Contratos assinados na hora.
+            </span>
           </h1>
-          <p className="a3" style={{ fontSize:'clamp(16px,2vw,22px)', color:'rgba(255,255,255,.6)', maxWidth:680, margin:'0 auto 40px', lineHeight:1.6 }}>
-            O PriceU$ é a plataforma de gestão para fotógrafos com propostas digitais, sincronização com a Google Agenda (Calendar) e entrega de galerias integradas ao Google Drive.
+
+          {/* Subtítulo */}
+          <p className="text-lg sm:text-xl text-stone-600 max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
+            O PriceU$ une propostas interativas ao vivo, contratos com validade jurídica, agenda blindada e chat de negociação inteligente — conectando os melhores profissionais às noivas e clientes mais exigentes.
           </p>
-          <div className="a4" style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
-            <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'16px 40px', borderRadius:14, fontSize:16, fontWeight:800, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
-              Começar Grátis — 30 dias <ArrowRight size={18}/>
+
+          {/* Botões de Ação Duplos */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto mb-12">
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-stone-900 hover:bg-stone-800 active:scale-98 text-white font-extrabold text-base shadow-xl shadow-stone-900/10 transition-all cursor-pointer"
+            >
+              <span>Começar Teste Grátis</span>
+              <ArrowRight size={18} />
             </button>
-            <a href="#sistema" style={{ border:'1px solid rgba(255,255,255,.2)', color:'#fff', padding:'16px 32px', borderRadius:14, fontSize:15, fontWeight:600, textDecoration:'none', background:'rgba(255,255,255,.04)', display:'flex', alignItems:'center', gap:8 }}>
-              Ver o sistema ↓
-            </a>
-          </div>
-          <p className="a4" style={{ marginTop:20, fontSize:13, color:'rgba(255,255,255,.4)' }}>
-            ✓ Sem cartão de crédito &nbsp;·&nbsp; ✓ 30 dias grátis &nbsp;·&nbsp; ✓ Cancele quando quiser
-          </p>
-        </div>
 
-        {/* Stats bar */}
-        <div style={{ position:'relative', zIndex:1, marginTop:60, display:'flex', gap:0, flexWrap:'wrap', justifyContent:'center', maxWidth:700, width:'100%' }}>
-          {[['📸','Fotógrafos ativos','+500'],['💰','Receita gerada','R$2M+'],['📋','Contratos assinados','8.400+'],['⭐','Avaliação média','4.9/5']].map(([ic,lb,vl],i)=>(
-            <div key={i} style={{ flex:'1 1 150px', textAlign:'center', padding:'20px 16px', borderRight: i<3 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
-              <div style={{ fontSize:22, marginBottom:4 }}>{ic}</div>
-              <div style={{ fontSize:'clamp(22px,3vw,32px)', fontWeight:900, color:'#22c55e', letterSpacing:'-1px' }}>{vl}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,.4)', marginTop:2 }}>{lb}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ═══ DEMO 1: MOBILE DASHBOARD ═══ */}
-      <section id="sistema" style={{ padding:'100px 24px', background:'#07101f', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 70% 50% at 20% 50%,rgba(22,163,74,.1),transparent 60%)' }} />
-        <div style={{ maxWidth:1100, margin:'0 auto', position:'relative', zIndex:1 }}>
-          <div style={{ textAlign:'center', marginBottom:60 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'3px', color:'#22c55e', textTransform:'uppercase', marginBottom:12 }}>🔥 Visão do Fotógrafo</div>
-            <h2 style={{ fontSize:'clamp(28px,4vw,52px)', fontWeight:900, letterSpacing:'-1.5px', marginBottom:12, lineHeight:1.1 }}>
-              Seu negócio no bolso.<br/><span style={{ color:'#22c55e' }}>Controlado de qualquer lugar.</span>
-            </h2>
-            <p style={{ fontSize:'clamp(14px,1.8vw,18px)', color:'rgba(255,255,255,.5)', maxWidth:500, margin:'0 auto' }}>
-              Dashboard, leads, analytics e notificações em tempo real — tudo no celular.
-            </p>
-          </div>
-
-          <div ref={dashRef} className="dash-layout">
-            {/* Phone mockup */}
-            <div style={{ width:280, flexShrink:0 }}>
-              <div style={{ background:'#0d1520', borderRadius:44, border:'3px solid #1e2d42', overflow:'hidden', boxShadow:'0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05)', position:'relative' }}>
-                <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:110, height:28, background:'#0d1520', borderRadius:'0 0 18px 18px', zIndex:10 }} />
-                <div style={{ height:480, overflow:'hidden', position:'relative' }}>
-                  {/* SCREEN 0: Dashboard */}
-                  <div style={{ position:'absolute', inset:0, transition:'opacity .5s,transform .5s', opacity: dashScreen===0?1:0, transform: dashScreen===0?'translateX(0)':'translateX(-100%)' }}>
-                    <div style={{ padding:'36px 0 0', display:'flex', flexDirection:'column', height:'100%' }}>
-                      <div style={{ background:'#0f1f35', padding:'14px 18px 10px', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                          <div>
-                            <div style={{ fontSize:12, fontWeight:700 }}>Seja bem-vindo, Daniel 👋</div>
-                            <div style={{ fontSize:9, color:'#6b8aaa', marginTop:2 }}>22 de Abril de 2025</div>
-                          </div>
-                          <div style={{ width:22, height:22, background:'#16a34a', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700 }}>3</div>
-                        </div>
-                      </div>
-                      <div style={{ flex:1, padding:'14px 16px', background:'#0a1828', overflow:'hidden' }}>
-                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                          {[['R$89k','Receita 2025','#22c55e'],['47','Leads totais','#fbbf24'],['12','Templates','#ffffff'],['8','Contratos','#60a5fa']].map(([v,l,c],i)=>(
-                            <div key={i} style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.07)', borderRadius:10, padding:'10px 9px' }}>
-                              <div style={{ fontSize:18, fontWeight:800, color:c }}>{v}</div>
-                              <div style={{ fontSize:9, color:'#6b8aaa', marginTop:1 }}>{l}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'2px', color:'#6b8aaa', textTransform:'uppercase', marginBottom:8 }}>Leads recentes</div>
-                        {[['JM','Julia Martins','📸 Casamento','R$7.500','rgba(34,197,94,.2)','#22c55e'],['CS','Carla Silva','📸+🎬','R$12.400','rgba(251,191,36,.2)','#fbbf24'],['FL','Flavia Lima','📅 15 Anos','R$4.200','rgba(167,139,250,.2)','#a78bfa']].map(([av,nm,sv,vl,bg,cl],i)=>(
-                          <div key={i} style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.06)', borderRadius:9, padding:'9px', marginBottom:6 }}>
-                            <div style={{ width:30, height:30, borderRadius:'50%', background:bg, color:cl, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, flexShrink:0 }}>{av}</div>
-                            <div style={{ flex:1 }}><div style={{ fontSize:10, fontWeight:600 }}>{nm}</div><div style={{ fontSize:8, color:'#6b8aaa' }}>{sv}</div></div>
-                            <div style={{ fontSize:11, fontWeight:800, color:'#22c55e' }}>{vl}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SCREEN 1: Leads */}
-                  <div style={{ position:'absolute', inset:0, transition:'opacity .5s,transform .5s', opacity: dashScreen===1?1:0, transform: dashScreen===1?'translateX(0)':dashScreen>1?'translateX(-100%)':'translateX(100%)' }}>
-                    <div style={{ padding:'36px 0 0', display:'flex', flexDirection:'column', height:'100%' }}>
-                      <div style={{ background:'#0f1f35', padding:'14px 18px 10px', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                        <div style={{ fontSize:12, fontWeight:700 }}>Gestão de Leads</div>
-                      </div>
-                      <div style={{ display:'flex', background:'#0f1f35', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                        {['Todos (47)','Casamento','Ensaio'].map((t,i)=>(
-                          <div key={i} style={{ flex:1, padding:'9px 0', textAlign:'center', fontSize:9, fontWeight:700, color: i===0?'#22c55e':'#6b8aaa', borderBottom: i===0?'2px solid #22c55e':'none' }}>{t}</div>
-                        ))}
-                      </div>
-                      <div style={{ flex:1, padding:'12px 14px', background:'#0a1828', overflow:'hidden' }}>
-                        {[['JM','Julia Martins','Casamento · R$7.500','rgba(34,197,94,.2)','#22c55e'],['CS','Carla Silva','Casamento+Video · R$12.400','rgba(251,191,36,.2)','#fbbf24'],['AR','Alberto Souza','Ensaio · R$2.800','rgba(96,165,250,.2)','#60a5fa']].map(([av,nm,sv,bg,cl],i)=>(
-                          <div key={i} style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)', borderRadius:11, padding:'11px', marginBottom:8, animation:`notifIn .4s ease ${i*.2+.3}s both` }}>
-                            <div style={{ width:34, height:34, borderRadius:'50%', background:bg, color:cl, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0 }}>{av}</div>
-                            <div style={{ flex:1 }}><div style={{ fontSize:11, fontWeight:600 }}>{nm}</div><div style={{ fontSize:9, color:'#6b8aaa', marginTop:1 }}>{sv}</div></div>
-                            {i<2&&<div style={{ fontSize:8, fontWeight:700, padding:'2px 7px', borderRadius:8, background:'#16a34a', color:'#fff' }}>NOVO</div>}
-                          </div>
-                        ))}
-                        <div style={{ background:'#25d366', borderRadius:10, padding:'9px', textAlign:'center', fontSize:10, fontWeight:700, color:'#fff', marginTop:6 }}>💬 Enviar Follow-up WhatsApp</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SCREEN 2: Analytics */}
-                  <div style={{ position:'absolute', inset:0, transition:'opacity .5s,transform .5s', opacity: dashScreen===2?1:0, transform: dashScreen===2?'translateX(0)':dashScreen>2?'translateX(-100%)':'translateX(100%)' }}>
-                    <div style={{ padding:'36px 0 0', display:'flex', flexDirection:'column', height:'100%' }}>
-                      <div style={{ background:'#0f1f35', padding:'14px 18px 10px', borderBottom:'1px solid rgba(255,255,255,.06)', fontSize:12, fontWeight:700 }}>Analytics do Perfil 📊</div>
-                      <div style={{ flex:1, padding:'12px 14px', background:'#0a1828', overflow:'hidden' }}>
-                        <div style={{ fontSize:9, color:'#6b8aaa', marginBottom:6 }}>Visualizações — últimos 7 meses</div>
-                        <div style={{ display:'flex', alignItems:'flex-end', gap:5, height:72, marginBottom:14 }}>
-                          {[35,52,44,68,58,82,100].map((h,i)=>(
-                            <div key={i} style={{ flex:1, borderRadius:'3px 3px 0 0', height:`${h}%`, background: i>=5?'linear-gradient(to top,#16a34a,#22c55e)':'rgba(34,197,94,.35)', boxShadow: i>=5?'0 0 10px rgba(34,197,94,.4)':'none', animation:`barGrow .7s ease ${i*.1+.4}s both`, transformOrigin:'bottom' }} />
-                          ))}
-                        </div>
-                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-                          {[['2.847','Visualizações','#22c55e'],['18%','Conversão','#fbbf24'],['237','WhatsApp Cliques','#a78bfa'],['+48%','Crescimento','#60a5fa']].map(([v,l,c],i)=>(
-                            <div key={i} style={{ background:'rgba(255,255,255,.05)', borderRadius:10, padding:'10px', textAlign:'center' }}>
-                              <div style={{ fontSize:16, fontWeight:800, color:c }}>{v}</div>
-                              <div style={{ fontSize:8, color:'#6b8aaa', marginTop:2 }}>{l}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SCREEN 3: Notifications */}
-                  <div style={{ position:'absolute', inset:0, transition:'opacity .5s,transform .5s', opacity: dashScreen===3?1:0, transform: dashScreen===3?'translateX(0)':'translateX(100%)' }}>
-                    <div style={{ padding:'36px 0 0', display:'flex', flexDirection:'column', height:'100%' }}>
-                      <div style={{ background:'#0f1f35', padding:'14px 18px 10px', borderBottom:'1px solid rgba(255,255,255,.06)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <div style={{ fontSize:12, fontWeight:700 }}>Notificações</div>
-                        <div style={{ fontSize:10, color:'#22c55e', fontWeight:700 }}>4 novas</div>
-                      </div>
-                      <div style={{ flex:1, padding:'12px 14px', background:'#0a1828', display:'flex', flexDirection:'column', gap:8 }}>
-                        {[['💰','rgba(34,197,94,.2)','Pagamento recebido!','Julia Martins · R$3.750 entrada'],['🆕','rgba(251,191,36,.15)','Novo lead chegou','Carla Silva · R$12.400'],['✅','rgba(96,165,250,.15)','Contrato assinado','Flavia Lima · confirmado'],['📅','rgba(167,139,250,.15)','Evento amanhã','Alberto Souza · 14h00']].map(([ic,bg,tt,dd],i)=>(
-                          <div key={i} style={{ display:'flex', gap:9, background:'rgba(255,255,255,.04)', borderRadius:10, padding:'10px', animation:`notifIn .4s ease ${i*.25+.2}s both` }}>
-                            <div style={{ width:28, height:28, borderRadius:8, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>{ic}</div>
-                            <div><div style={{ fontSize:11, fontWeight:700 }}>{tt}</div><div style={{ fontSize:9, color:'#6b8aaa', marginTop:1 }}>{dd}</div></div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Side info */}
-            <div style={{ flex:1, minWidth:260, maxWidth:400 }}>
-              <div style={{ marginBottom:28 }}>
-                <div style={{ fontSize:11, fontWeight:700, letterSpacing:'2px', color:'#22c55e', textTransform:'uppercase', marginBottom:8 }}>{dashScreens[dashScreen].label}</div>
-                <div style={{ fontSize:28, fontWeight:900, letterSpacing:'-1px', marginBottom:8, lineHeight:1.2 }}>{dashScreens[dashScreen].title}</div>
-                <p style={{ fontSize:15, color:'rgba(255,255,255,.55)', lineHeight:1.6 }}>{dashScreens[dashScreen].desc}</p>
-              </div>
-              {/* Screen indicators */}
-              <div style={{ display:'flex', gap:8, marginBottom:24 }}>
-                {[0,1,2,3].map(i => (
-                  <button key={i} onClick={() => { setDashScreen(i); setDashPlaying(false); }} style={{ width:36, height:4, borderRadius:2, border:'none', background: dashScreen===i?'#22c55e':'rgba(255,255,255,.15)', cursor:'pointer', transition:'all .3s', boxShadow: dashScreen===i?'0 0 8px rgba(34,197,94,.5)':'none' }} />
-                ))}
-              </div>
-              <button onClick={() => setDashPlaying(p => !p)} style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.12)', color:'#fff', padding:'9px 18px', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
-                {dashPlaying ? <><Pause size={15}/> Pausar</> : <><Play size={15}/> Reproduzir</>}
-              </button>
-              <div style={{ marginTop:28, display:'flex', flexDirection:'column', gap:10 }}>
-                {['Dashboard com receita e métricas do mês','Gestão de leads por template','Analytics de perfil público','Notificações em tempo real'].map((f,i)=>(
-                  <div key={i} style={{ display:'flex', gap:10, alignItems:'center', fontSize:14, color: i===dashScreen?'#fff':'rgba(255,255,255,.45)', fontWeight: i===dashScreen?600:400, transition:'all .3s' }}>
-                    <div style={{ width:6, height:6, borderRadius:'50%', background: i===dashScreen?'#22c55e':'rgba(255,255,255,.2)', flexShrink:0, transition:'all .3s' }} />
-                    {f}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ DEMO 3: JOURNEY ═══ */}
-      <section id="jornada" style={{ padding:'100px 24px', background:'linear-gradient(180deg,#07101f 0%,#0a1628 100%)', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 60% 50% at 80% 50%,rgba(99,102,241,.07),transparent 55%)' }} />
-        <div style={{ maxWidth:960, margin:'0 auto', position:'relative', zIndex:1 }}>
-          <div style={{ textAlign:'center', marginBottom:60 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'3px', color:'#22c55e', textTransform:'uppercase', marginBottom:12 }}>🗺️ Jornada Completa</div>
-            <h2 style={{ fontSize:'clamp(28px,4vw,52px)', fontWeight:900, letterSpacing:'-1.5px', marginBottom:12, lineHeight:1.1 }}>
-              De <span style={{ color:'#f87171' }}>visitante anônima</span><br/>a <span style={{ color:'#22c55e' }}>contrato assinado</span>
-            </h2>
-            <p style={{ fontSize:'clamp(14px,1.8vw,18px)', color:'rgba(255,255,255,.5)', maxWidth:500, margin:'0 auto' }}>
-              Veja como o PriceUs transforma cada curiosidade em dinheiro na conta, sem esforço manual.
-            </p>
-          </div>
-
-          <div ref={journeyRef} style={{ display:'flex', flexDirection:'column', gap:0 }}>
-            {journeySteps.map((step, i) => (
-              <div key={i} style={{ display:'flex', gap:20, alignItems:'flex-start', opacity: visibleSteps.includes(i)?1:0, transform: visibleSteps.includes(i)?'translateX(0)':'translateX(-30px)', transition:'opacity .5s ease, transform .5s ease' }}>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0, width:56 }}>
-                  <div style={{ width:52, height:52, borderRadius:'50%', background:step.bg, border:`2px solid ${step.border}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0, ...(i===4?{animation:'glow 2s ease infinite'}:{}) }}>
-                    {step.emoji}
-                  </div>
-                  {i<4 && <div style={{ width:2, height:28, background:'linear-gradient(to bottom,rgba(34,197,94,.3),transparent)', marginTop:2 }} />}
-                </div>
-                <div style={{ flex:1, paddingBottom:32 }}>
-                  <div style={{ borderRadius:16, padding:'18px 22px', background:step.bg, border:`1px solid ${step.border}` }}>
-                    <div style={{ fontSize:16, fontWeight:800, marginBottom:4, color: i===4?'#22c55e':'#fff' }}>{step.title}</div>
-                    <p style={{ fontSize:13, color:'rgba(255,255,255,.55)', lineHeight:1.5 }}>{step.desc}</p>
-                    {i===1 && (
-                      <div style={{ background:'rgba(0,0,0,.3)', borderRadius:10, padding:'12px', marginTop:12, fontSize:11 }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid rgba(255,255,255,.07)' }}><span style={{ color:'rgba(255,255,255,.5)' }}>📷 Cobertura Completa</span><span style={{ color:'#22c55e', fontWeight:700 }}>R$4.800</span></div>
-                        <div style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid rgba(255,255,255,.07)' }}><span style={{ color:'rgba(255,255,255,.5)' }}>🎬 Vídeo Highlights</span><span style={{ color:'#22c55e', fontWeight:700 }}>R$1.500</span></div>
-                        <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0 2px', fontWeight:800 }}><span>TOTAL</span><span style={{ color:'#22c55e' }}>R$7.500</span></div>
-                      </div>
-                    )}
-                    {i===4 && (
-                      <div style={{ display:'flex', gap:12, marginTop:14, flexWrap:'wrap' }}>
-                        {[['💰','R$3.750','50% Entrada'],['📅','14/06/2025','Evento'],['⏳','R$3.750','Saldo']].map(([ic,vl,lb],j)=>(
-                          <div key={j} style={{ flex:'1 1 100px', background:'rgba(0,0,0,.25)', borderRadius:10, padding:'10px', textAlign:'center' }}>
-                            <div style={{ fontSize:16 }}>{ic}</div>
-                            <div style={{ fontSize:14, fontWeight:800, color:'#22c55e', marginTop:2 }}>{vl}</div>
-                            <div style={{ fontSize:9, color:'rgba(255,255,255,.4)' }}>{lb}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid-4col" style={{ marginTop:20 }}>
-            {[['R$7.500','Receita gerada'],['0h','Trabalho manual'],['5 min','Do lead ao contrato'],['100%','Automatizado']].map(([v,l],i)=>(
-              <div key={i} style={{ background:'rgba(34,197,94,.08)', border:'1px solid rgba(34,197,94,.25)', borderRadius:16, padding:'20px 16px', textAlign:'center' }}>
-                <div style={{ fontSize:'clamp(20px,3vw,36px)', fontWeight:900, color:'#22c55e', letterSpacing:'-1px' }}>{v}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,.45)', marginTop:4 }}>{l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ DEMO 4: ROI ═══ */}
-      <section id="roi" style={{ padding:'100px 24px', background:'#07101f', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 70% 50% at 50% 50%,rgba(239,68,68,.06),transparent 55%)' }} />
-        <div style={{ maxWidth:1000, margin:'0 auto', position:'relative', zIndex:1 }}>
-          <div style={{ textAlign:'center', marginBottom:60 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'3px', color:'#f87171', textTransform:'uppercase', marginBottom:12 }}>💸 Impacto Financeiro Real</div>
-            <h2 style={{ fontSize:'clamp(28px,4vw,52px)', fontWeight:900, letterSpacing:'-1.5px', marginBottom:12, lineHeight:1.1 }}>
-              Você está <span style={{ color:'#f87171' }}>perdendo dinheiro</span><br/>todo mês sem o PriceUs
-            </h2>
-            <p style={{ fontSize:'clamp(14px,1.8vw,18px)', color:'rgba(255,255,255,.5)', maxWidth:500, margin:'0 auto' }}>
-              Fotógrafos sem sistema perdem em média 35% dos leads por falta de acompanhamento.
-            </p>
-          </div>
-
-          {/* Before vs After */}
-          <div className="grid-vs" style={{ marginBottom:48 }}>
-            <div style={{ background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.25)', borderRadius:20, padding:'24px 20px' }}>
-              <div style={{ fontSize:15, fontWeight:800, marginBottom:18, display:'flex', alignItems:'center', gap:8 }}>😩 Sem o PriceUs</div>
-              {[['Leads respondidos','3 de 10'],['Orçamento enviado','Manual'],['Follow-up WhatsApp','Esquecido'],['Controle financeiro','Planilha'],['Leads perdidos/mês','~7'],].map(([l,v],i)=>(
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,.05)', fontSize:13 }}>
-                  <span style={{ color:'rgba(255,255,255,.5)' }}>{l}</span><span style={{ color:'#f87171', fontWeight:700 }}>{v}</span>
-                </div>
-              ))}
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'14px 0 4px', fontWeight:900, fontSize:17 }}>
-                <span>💸 Deixou de ganhar</span><span style={{ color:'#f87171' }}>-R$28.000</span>
-              </div>
-            </div>
-            <div className="vs-divider" style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'0 8px' }}>
-              <div style={{ width:40, height:40, borderRadius:'50%', border:'2px solid rgba(255,255,255,.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:'rgba(255,255,255,.4)' }}>VS</div>
-            </div>
-            <div style={{ background:'rgba(22,163,74,.08)', border:'1px solid rgba(22,163,74,.25)', borderRadius:20, padding:'24px 20px', animation:'glow 3s ease infinite' }}>
-              <div style={{ fontSize:15, fontWeight:800, marginBottom:18, display:'flex', alignItems:'center', gap:8 }}>🚀 Com o PriceUs</div>
-              {[['Leads respondidos','9 de 10'],['Orçamento enviado','Automático'],['Follow-up WhatsApp','1 clique'],['Controle financeiro','Dashboard'],['Leads convertidos/mês','+6'],].map(([l,v],i)=>(
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,.05)', fontSize:13 }}>
-                  <span style={{ color:'rgba(255,255,255,.5)' }}>{l}</span><span style={{ color:'#22c55e', fontWeight:700 }}>{v}</span>
-                </div>
-              ))}
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'14px 0 4px', fontWeight:900, fontSize:17 }}>
-                <span>💰 Receita recuperada</span><span style={{ color:'#22c55e' }}>+R$24.000</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Counters */}
-          <div ref={roiRef} className="grid-4col" style={{ marginBottom:40 }}>
-            {[[`R$${receita.toLocaleString('pt-BR')}`, 'Receita média anual', '#22c55e','↑ 127% com PriceUs'],[`${leads}`, 'Leads em 30 dias', '#fbbf24','↑ 3x mais que antes'],[`${conv}%`, 'Taxa de conversão', '#a78bfa','Média fotografia: 30%'],[`-${horas}h`, 'Economizado por mês', '#60a5fa','Sem PDF, planilha ou ctrl+c']].map(([v,l,c,t],i)=>(
-              <div key={i} style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.09)', borderRadius:18, padding:'22px 18px', textAlign:'center', ...(i===0?{background:'rgba(22,163,74,.1)',border:'1px solid rgba(22,163,74,.3)', animation:'glow 2.5s ease infinite'}:{}) }}>
-                <div style={{ fontSize:'clamp(24px,3vw,36px)', fontWeight:900, color:c, letterSpacing:'-1px' }}>{v}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,.45)', marginTop:4 }}>{l}</div>
-                <div style={{ fontSize:10, color:c, marginTop:6, fontWeight:600 }}>{t}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* ROI callout */}
-          <div className="roi-callout" style={{ background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.2)', borderRadius:20, padding:'24px 28px', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap', marginBottom:16 }}>
-            <div style={{ fontSize:48, animation:'moneyBounce 2s ease infinite' }}>😱</div>
-            <div style={{ flex:1, minWidth:200 }}>
-              <div style={{ fontSize:'clamp(15px,2vw,18px)', fontWeight:900, color:'#f87171', marginBottom:4 }}>Sem PriceUs, você perde em média:</div>
-              <div style={{ fontSize:14, color:'rgba(255,255,255,.5)' }}>35% dos leads não respondem sem follow-up. Cada lead perdido ≈ R$4.000.</div>
-            </div>
-            <div className="roi-callout-right" style={{ textAlign:'right' }}>
-              <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginBottom:2 }}>Por mês:</div>
-              <div style={{ fontSize:'clamp(32px,5vw,48px)', fontWeight:900, color:'#f87171', letterSpacing:'-2px', lineHeight:1 }}>R$14.000</div>
-              <div style={{ fontSize:12, color:'#f87171', marginTop:2, fontWeight:600 }}>R$168.000 por ano 😱</div>
-            </div>
-          </div>
-          <div className="roi-callout" style={{ background:'rgba(22,163,74,.08)', border:'1px solid rgba(22,163,74,.3)', borderRadius:20, padding:'24px 28px', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap', animation:'glow 3s ease infinite' }}>
-            <div style={{ fontSize:48 }}>🚀</div>
-            <div style={{ flex:1, minWidth:200 }}>
-              <div style={{ fontSize:'clamp(15px,2vw,18px)', fontWeight:900, color:'#22c55e', marginBottom:4 }}>PriceUs recupera cada centavo:</div>
-              <div style={{ fontSize:14, color:'rgba(255,255,255,.5)' }}>Follow-up automático, orçamentos prontos e painel de leads — você fecha muito mais.</div>
-            </div>
-            <div className="roi-callout-right" style={{ textAlign:'right' }}>
-              <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginBottom:2 }}>Custo do PriceUs:</div>
-              <div style={{ fontSize:'clamp(32px,5vw,44px)', fontWeight:900, color:'#22c55e', letterSpacing:'-2px', lineHeight:1 }}>R$97/mês</div>
-              <div style={{ fontSize:12, color:'#22c55e', marginTop:2, fontWeight:700 }}>🔁 ROI: +2.380% ao mês</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* PRICING */}
-      <section id="planos" style={{ padding:'100px 24px', background:'linear-gradient(180deg,#0a1628 0%,#07101f 100%)' }}>
-        <div style={{ maxWidth:680, margin:'0 auto' }}>
-          <div style={{ textAlign:'center', marginBottom:48 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'3px', color:'#22c55e', textTransform:'uppercase', marginBottom:12 }}>💎 Plano</div>
-            <h2 style={{ fontSize:'clamp(28px,4vw,52px)', fontWeight:900, letterSpacing:'-1.5px', marginBottom:12 }}>Um plano. Tudo incluído.</h2>
-            <p style={{ fontSize:18, color:'rgba(255,255,255,.5)' }}>30 dias grátis, depois R$97/mês com acesso completo.</p>
-          </div>
-
-          <div style={{ background:'rgba(255,255,255,.04)', border:'2px solid rgba(34,197,94,.4)', borderRadius:24, padding:'40px 36px', position:'relative', boxShadow:'0 0 60px rgba(22,163,74,.15)' }}>
-            <div style={{ position:'absolute', top:-14, left:'50%', transform:'translateX(-50%)', background:'linear-gradient(135deg,#16a34a,#22c55e)', color:'#fff', fontSize:12, fontWeight:700, padding:'6px 20px', borderRadius:999, whiteSpace:'nowrap', boxShadow:'0 4px 16px rgba(22,163,74,.4)' }}>
-              ✨ Plataforma Completa All-in-One
-            </div>
-            <div style={{ textAlign:'center', marginBottom:32, marginTop:10 }}>
-              <div style={{ fontSize:16, color:'rgba(255,255,255,.5)', marginBottom:4 }}>Professional</div>
-              <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:4 }}>
-                <span style={{ fontSize:64, fontWeight:900, color:'#22c55e', letterSpacing:'-3px' }}>R$97</span>
-                <span style={{ fontSize:22, color:'rgba(255,255,255,.4)', marginBottom:12 }}>/mês</span>
-              </div>
-              <div style={{ fontSize:14, color:'#22c55e', fontWeight:600 }}>30 dias grátis para testar tudo</div>
-            </div>
-
-            <div className="grid-plan" style={{ marginBottom:32 }}>
-              {planFeatures.map((f, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13 }}>
-                  <Check size={15} color="#22c55e" style={{ flexShrink:0, marginTop:1 }} />
-                  <span style={{ color:'rgba(255,255,255,.75)' }}>{f}</span>
-                </div>
-              ))}
-            </div>
-
-            <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ width:'100%', padding:'18px', borderRadius:14, background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', fontSize:17, fontWeight:800, cursor:'pointer', position:'relative', overflow:'hidden' }}>
-              Começar Teste Grátis de 30 Dias
-              <span style={{ position:'absolute', top:0, left:'-100%', width:'50%', height:'100%', background:'linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent)', animation:'shine 2.5s ease infinite' }} />
+            <button
+              onClick={() => navigate('/login?tipo=noiva')}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white hover:bg-stone-50 active:scale-98 text-stone-900 border border-stone-300 font-bold text-base shadow-sm transition-all cursor-pointer"
+            >
+              <Heart size={18} className="fill-rose-500 text-rose-500" />
+              <span>Espaço da Noiva</span>
             </button>
-            <p style={{ textAlign:'center', fontSize:12, color:'rgba(255,255,255,.35)', marginTop:14 }}>
-              Sem cartão de crédito necessário · Cancele quando quiser · Suporte em português
-            </p>
           </div>
 
-          <div style={{ display:'flex', gap:20, justifyContent:'center', marginTop:32, flexWrap:'wrap' }}>
-            {([[Shield,'Pagamento seguro'],[Check,'Sem taxas ocultas'],[Globe,'Suporte em português'],[Smartphone,'Todos os dispositivos']] as [React.ElementType, string][]).map(([Icon,label],i)=>(
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:'rgba(255,255,255,.4)' }}>
-                <Icon size={14} color="#22c55e"/>{label}
+          <p className="text-xs text-stone-400 flex items-center justify-center gap-3 font-medium">
+            <span>✓ Teste grátis de 30 dias</span>
+            <span>·</span>
+            <span>✓ Sem cartão de crédito</span>
+            <span>·</span>
+            <span>✓ Ativação imediata</span>
+          </p>
+
+          {/* Prova Social em Cards Brancos Refinados */}
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            {[
+              { icon: '📸', label: 'Profissionais Ativos', val: '+500' },
+              { icon: '💎', label: 'Receita Gerada', val: 'R$ 2.4M+' },
+              { icon: '✍️', label: 'Contratos Assinados', val: '9.200+' },
+              { icon: '⭐', label: 'Satisfação dos Clientes', val: '4.9 / 5.0' },
+            ].map((stat, i) => (
+              <div key={i} className="p-5 rounded-2xl bg-white border border-stone-200/80 shadow-xs text-center">
+                <div className="text-2xl mb-1">{stat.icon}</div>
+                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{stat.val}</div>
+                <div className="text-xs text-stone-500 font-medium mt-0.5">{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FINAL CTA */}
-      <section style={{ padding:'80px 24px', background:'linear-gradient(135deg,#0f2818,#0a1f14)', textAlign:'center', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 70% 60% at 50% 50%,rgba(22,163,74,.2),transparent 65%)' }} />
-        <div style={{ position:'relative', zIndex:1, maxWidth:680, margin:'0 auto' }}>
-          <h2 style={{ fontSize:'clamp(30px,5vw,58px)', fontWeight:900, letterSpacing:'-1.5px', marginBottom:16, lineHeight:1.1 }}>
-            Pronto para transformar<br/><span style={{ color:'#22c55e' }}>seu negócio?</span>
-          </h2>
-          <p style={{ fontSize:18, color:'rgba(255,255,255,.55)', marginBottom:36 }}>
-            Junte-se a centenas de fotógrafos que já automatizaram seus processos e aumentaram suas vendas.
-          </p>
-          <button onClick={() => navigate('/login')} className="hero-btn glow-green" style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', border:'none', color:'#fff', padding:'18px 52px', borderRadius:14, fontSize:17, fontWeight:800, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:10 }}>
-            Começar Agora — 30 Dias Grátis <ArrowRight size={20}/>
-          </button>
-          <p style={{ marginTop:16, fontSize:14, color:'rgba(255,255,255,.35)' }}>
-            ✓ Sem cartão · ✓ Acesso completo · ✓ Suporte incluído
-          </p>
-        </div>
-      </section>
+      {/* ═══ SEÇÃO 1: SISTEMA E RECURSOS DO PROFISSIONAL ═══ */}
+      <section id="sistema" className="py-24 px-4 sm:px-6 bg-white border-y border-stone-200/80">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              Tudo em um só lugar
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mt-4 mb-4">
+              A suíte completa para o seu negócio de eventos.
+            </h2>
+            <p className="text-base text-stone-600">
+              Substitua dezenas de ferramentas avulsas e planilhas por uma plataforma elegante, rápida e centralizada.
+            </p>
+          </div>
 
-      {/* FOOTER */}
-      <footer style={{ background:'#04090f', padding:'48px 24px 24px', borderTop:'1px solid rgba(255,255,255,.06)' }}>
-        <div style={{ maxWidth:1100, margin:'0 auto' }}>
-          <div className="grid-footer">
-            <div>
-              <img src="/Logo Price Us.png" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo-priceus.png'; }} alt="PriceUs" style={{ height:36, width:'auto', marginBottom:14, filter:'brightness(1)' }}/>
-              <p style={{ fontSize:13, color:'rgba(255,255,255,.35)', lineHeight:1.6, maxWidth:280 }}>
-                Plataforma all-in-one para fotógrafos profissionais. Orçamentos interativos, contratos digitais e gestão financeira completa.
+          <div ref={dashRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {dashScreens.map((item, idx) => (
+              <div
+                key={idx}
+                className={`p-6 rounded-3xl border transition-all cursor-pointer ${
+                  dashScreen === idx
+                    ? 'bg-stone-900 text-white border-stone-900 shadow-xl'
+                    : 'bg-[#fafaf9] text-slate-900 border-stone-200 hover:border-stone-400'
+                }`}
+                onClick={() => setDashScreen(idx)}
+              >
+                <div className="text-xs font-bold uppercase tracking-wider mb-2 opacity-75">
+                  {item.label}
+                </div>
+                <h3 className="text-lg font-bold mb-2 leading-snug">
+                  {item.title}
+                </h3>
+                <p className={`text-xs leading-relaxed ${dashScreen === idx ? 'text-stone-300' : 'text-stone-600'}`}>
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Destaque das 4 Soluções Principais */}
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="p-8 rounded-3xl bg-[#fafaf9] border border-stone-200/80 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center text-xl mb-6 shadow-xs">
+                📄
+              </div>
+              <h4 className="text-xl font-bold text-slate-900 mb-3">Orçamentos Vivos</h4>
+              <p className="text-sm text-stone-600 leading-relaxed">
+                Páginas modernas onde o cliente personaliza pacotes, vê opcionais, condições de parcelamento e negocia direto com você pelo chat ao vivo.
               </p>
             </div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:16 }}>Produto</div>
-              {['Funcionalidades','Planos','Como Funciona','Analytics'].map(l=>(
-                <a key={l} href="#" style={{ display:'block', fontSize:13, color:'rgba(255,255,255,.4)', textDecoration:'none', marginBottom:8 }}>{l}</a>
-              ))}
+
+            <div className="p-8 rounded-3xl bg-[#fafaf9] border border-stone-200/80 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center text-xl mb-6 shadow-xs">
+                ✍️
+              </div>
+              <h4 className="text-xl font-bold text-slate-900 mb-3">Contratos com Assinatura</h4>
+              <p className="text-sm text-stone-600 leading-relaxed">
+                Gere contratos em segundos a partir do orçamento aprovado. O cliente assina eletronicamente na tela do celular com total respaldo jurídico.
+              </p>
             </div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:16 }}>Recursos</div>
-              {['Contratos Digitais','Agenda Inteligente','Avaliações','Exportação Fiscal'].map(l=>(
-                <a key={l} href="#" style={{ display:'block', fontSize:13, color:'rgba(255,255,255,.4)', textDecoration:'none', marginBottom:8 }}>{l}</a>
-              ))}
-            </div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:16 }}>Suporte</div>
-              {['Central de Ajuda','Chat ao Vivo','Contato','Status'].map(l=>(
-                <a key={l} href="#" style={{ display:'block', fontSize:13, color:'rgba(255,255,255,.4)', textDecoration:'none', marginBottom:8 }}>{l}</a>
-              ))}
+
+            <div className="p-8 rounded-3xl bg-[#fafaf9] border border-stone-200/80 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center text-xl mb-6 shadow-xs">
+                💬
+              </div>
+              <h4 className="text-xl font-bold text-slate-900 mb-3">Chat & Atendimento VIP</h4>
+              <p className="text-sm text-stone-600 leading-relaxed">
+                Converse, ajuste valores, envie áudios ou faça reuniões online seguras com gravação e atas transcritas por IA direto na conversa.
+              </p>
             </div>
           </div>
-          <div style={{ borderTop:'1px solid rgba(255,255,255,.06)', paddingTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
-            <p style={{ fontSize:12, color:'rgba(255,255,255,.35)' }}>© {new Date().getFullYear()} PriceU$. Todos os direitos reservados. CRM e Gestão Inteligente para Fotógrafos.</p>
-            <div style={{ display:'flex', gap:20 }}>
-              <Link to="/politica-de-privacidade" style={{ fontSize:12, color:'rgba(255,255,255,.5)', textDecoration:'none' }}>Política de Privacidade</Link>
-              <Link to="/termos-de-servico" style={{ fontSize:12, color:'rgba(255,255,255,.5)', textDecoration:'none' }}>Termos de Serviço</Link>
+        </div>
+      </section>
+
+      {/* ═══ SEÇÃO 2: A JORNADA DO CASAMENTO / EVENTO ═══ */}
+      <section id="jornada" ref={journeyRef} className="py-24 px-4 sm:px-6 bg-[#fafaf9]">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-widest text-stone-700 bg-stone-200 px-3 py-1 rounded-full">
+              Experiência Sem Atrito
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mt-4 mb-4">
+              A jornada de compra mais encantadora do mercado.
+            </h2>
+            <p className="text-base text-stone-600">
+              Veja como o PriceU$ transforma simples curiosos do Instagram em contratos fechados com pagamento confirmado.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {journeySteps.map((step, idx) => (
+              <div
+                key={idx}
+                className="p-6 rounded-3xl bg-white border border-stone-200/80 shadow-xs flex items-start gap-5 transition-all hover:shadow-md"
+              >
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 border"
+                  style={{ backgroundColor: step.bg, borderColor: step.border }}
+                >
+                  {step.emoji}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">{step.title}</h3>
+                  <p className="text-sm text-stone-600 leading-relaxed">{step.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SEÇÃO 3: ROI E RESULTADOS REAIS ═══ */}
+      <section id="roi" ref={roiRef} className="py-24 px-4 sm:px-6 bg-white border-y border-stone-200/80">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-widest text-stone-800 bg-stone-100 px-3 py-1 rounded-full border border-stone-200">
+              Resultados Comprovados
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mt-4 mb-4">
+              Menos burocracia, mais contratos fechados.
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="p-6 rounded-3xl bg-[#fafaf9] border border-stone-200 text-center">
+              <div className="text-3xl sm:text-4xl font-black text-slate-900 mb-1">
+                R$ {receita.toLocaleString('pt-BR')}
+              </div>
+              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Faturamento Médio</div>
+              <p className="text-[11px] text-stone-400 mt-2">Gerado por profissional ao ano</p>
             </div>
+
+            <div className="p-6 rounded-3xl bg-[#fafaf9] border border-stone-200 text-center">
+              <div className="text-3xl sm:text-4xl font-black text-slate-900 mb-1">
+                {leads}+
+              </div>
+              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Leads Qualificados</div>
+              <p className="text-[11px] text-stone-400 mt-2">Recebidos todo mês</p>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-[#fafaf9] border border-stone-200 text-center">
+              <div className="text-3xl sm:text-4xl font-black text-emerald-800 mb-1">
+                {conv}%
+              </div>
+              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Taxa de Resposta</div>
+              <p className="text-[11px] text-stone-400 mt-2">Com o Chat Online ativo</p>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-[#fafaf9] border border-stone-200 text-center">
+              <div className="text-3xl sm:text-4xl font-black text-slate-900 mb-1">
+                {horas}h
+              </div>
+              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Tempo Economizado</div>
+              <p className="text-[11px] text-stone-400 mt-2">Por semana em orçamentos manuais</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SEÇÃO 4: PLANOS E ASSINATURA ═══ */}
+      <section id="planos" className="py-24 px-4 sm:px-6 bg-[#fafaf9]">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              Transparência Total
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mt-4 mb-4">
+              Investimento simples para transformar seu negócio.
+            </h2>
+            <p className="text-base text-stone-600">
+              Comece agora com 30 dias totalmente grátis. Cancele quando quiser sem pegadinhas.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-3xl p-8 sm:p-12 border border-stone-200 shadow-xl shadow-stone-200/60">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-stone-200">
+              <div>
+                <span className="px-3 py-1 rounded-full bg-stone-900 text-white text-xs font-bold uppercase tracking-wider">
+                  Plano Profissional All-in-One
+                </span>
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">Acesso Completo & Ilimitado</h3>
+                <p className="text-sm text-stone-500 mt-1">Todos os recursos inclusos sem limites artificiais de uso.</p>
+              </div>
+
+              <div className="text-left md:text-right">
+                <div className="text-xs text-stone-400 font-semibold uppercase tracking-wider">Apenas</div>
+                <div className="text-4xl sm:text-5xl font-black text-slate-900">
+                  R$ 79<span className="text-lg font-semibold text-stone-500">/mês</span>
+                </div>
+                <div className="text-xs text-emerald-700 font-bold mt-1">30 dias grátis para testar</div>
+              </div>
+            </div>
+
+            <div className="py-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {planFeatures.map((feat, idx) => (
+                <div key={idx} className="flex items-center gap-3 text-sm text-slate-700">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center flex-shrink-0">
+                    <Check size={13} strokeWidth={3} />
+                  </div>
+                  <span>{feat}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-8 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-stone-500 text-center sm:text-left">
+                🔒 Pagamento seguro via Stripe · Cancele quando quiser com 1 clique
+              </div>
+              <button
+                onClick={() => navigate('/login')}
+                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-extrabold text-sm shadow-md transition-all cursor-pointer"
+              >
+                Ativar Meus 30 Dias Grátis
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER CHIQUE */}
+      <footer className="bg-white border-t border-stone-200 py-16 px-4 sm:px-6 text-sm text-stone-600">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex flex-col items-center md:items-start gap-2">
+            <img
+              src={logoPriceUsLight}
+              alt="PriceU$"
+              className="h-8 w-auto object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo-priceus.png'; }}
+            />
+            <p className="text-xs text-stone-500">
+              © {new Date().getFullYear()} PriceU$ Tecnologia. Todos os direitos reservados.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-6 text-xs font-semibold text-stone-600">
+            <Link to="/termos-de-servico" className="hover:text-stone-900 transition-colors">Termos de Serviço</Link>
+            <Link to="/politica-de-privacidade" className="hover:text-stone-900 transition-colors">Política de Privacidade</Link>
+            <Link to="/tutoriais" className="hover:text-stone-900 transition-colors">Tutoriais</Link>
+            <Link to="/celular" className="hover:text-stone-900 transition-colors">App Celular</Link>
+            <Link to="/desktop" className="hover:text-stone-900 transition-colors">App Desktop</Link>
+            <Link to="/login?tipo=noiva" className="text-rose-700 hover:text-rose-900 transition-colors">Espaço da Noiva</Link>
           </div>
         </div>
       </footer>

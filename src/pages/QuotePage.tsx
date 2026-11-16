@@ -5,11 +5,13 @@ import { useLeadCapture } from '../hooks/useLeadCapture';
 import { useRequiredFieldsValidation } from '../hooks/useRequiredFieldsValidation';
 import { useQuoteAnalytics } from '../hooks/useQuoteAnalytics';
 import { formatCurrency, formatDuration } from '../lib/utils';
-import { ShoppingCart, Send, Lock, User, AlertCircle, Check, X, Trash2 } from 'lucide-react';
+import { ShoppingCart, Send, Lock, User, AlertCircle, Check, X, Trash2, MessageSquare, MessageCircle, Sparkles, ShieldCheck } from 'lucide-react';
 import { checkAvailability, getOrCreateAgendaConfig, type AvailabilityResult } from '../services/availabilityService';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { ProductGalleryCarousel } from '../components/ui/ProductGalleryCarousel';
 import { CookieBanner } from '../components/CookieBanner';
+import { QuoteChatDrawer } from '../components/chat/QuoteChatDrawer';
+import { RealtimeChatService, VendorOnlinePresence } from '../services/realtimeChatService';
 import { MobileDatePicker } from '../components/MobileDatePicker';
 import { AvailabilityIndicator } from '../components/AvailabilityIndicator';
 import { generateWhatsAppMessage, generateWaLinkToPhotographer } from '../lib/whatsappMessageGenerator';
@@ -29,6 +31,15 @@ import { QuotePdfElegante2 } from '../components/quote-themes/QuotePdfElegante2'
 import { QuoteNatal } from '../components/quote-themes/QuoteNatal';
 import { QuoteRevellon } from '../components/quote-themes/QuoteRevellon';
 import { secureLocalStorage } from '../lib/secureStorage';
+import {
+  EscalaoQuantidadeProduto,
+  FaixaPrecoProduto,
+  RegraPrecoDataProduto,
+  resolveProductEffectivePrice,
+  resolveProductQuantityPricing,
+  calculateProgressiveDiscounts,
+  resolveTierPrice,
+} from '../lib/progressivePricing';
 
 interface Produto {
   id: string;
@@ -59,6 +70,10 @@ interface Produto {
   brindes_expira_dias?: number | null;
   brindes_expira_data?: string | null;
   brindes_mostrar_valores?: boolean;
+  grupo_desconto?: string | null;
+  faixas_preco?: FaixaPrecoProduto[] | null;
+  escaloes_quantidade?: EscalaoQuantidadeProduto[] | null;
+  regras_preco_data?: RegraPrecoDataProduto[] | null;
 }
 
 interface FormaPagamento {
@@ -134,6 +149,7 @@ export function QuotePage() {
   }, [template?.tema, tema]);
 
   const [selectedProdutos, setSelectedProdutos] = useState<Record<string, number>>({});
+  const [selectedTiers, setSelectedTiers] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     nome_cliente: '',
     email_cliente: '',
@@ -149,6 +165,8 @@ export function QuotePage() {
   const [cupomCodigo, setCupomCodigo] = useState<string>('');
   const [cupomAtivo, setCupomAtivo] = useState<boolean>(false);
   const [cupomDesconto, setCupomDesconto] = useState<number>(0);
+  const [cupomTipoDesconto, setCupomTipoDesconto] = useState<'percentual' | 'valor_fixo'>('percentual');
+  const [cupomValorFixo, setCupomValorFixo] = useState<number>(0);
   const [cupomMensagem, setCupomMensagem] = useState<string>('');
 
   // Campos para preços dinâmicos
@@ -163,6 +181,14 @@ export function QuotePage() {
 
   // Modal de Resumo e Envio
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  // Chat de Negociação Online PriceU$ (Passos 1, 2, 3 e 4)
+  const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState('');
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const [toastChatNotice, setToastChatNotice] = useState<string | null>(null);
+  const [vendorPresence, setVendorPresence] = useState<VendorOnlinePresence>(() => {
+    return RealtimeChatService.getVendorOnlinePresence(template?.user_id || profile?.id || '');
+  });
   const [summaryData, setSummaryData] = useState({
     waLink: '',
     message: '',
@@ -189,8 +215,16 @@ export function QuotePage() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [agendaConfig, setAgendaConfig] = useState<any>(null);
   const [_feriadosNacionais, _setFeriadosNacionais] = useState<string[]>([]); // Estado para feriados da API
+  const [agendaFeriados, setAgendaFeriados] = useState<string[]>([]);
   const [datasBloqueadas, setDatasBloqueadas] = useState<string[]>([]);
   const [periodosBloqueados, setPeriodosBloqueados] = useState<{data_inicio: string, data_fim: string}[]>([]);
+
+  const allCustomHolidays = useMemo(() => {
+    const tplHolidays: string[] = Array.isArray(template?.feriados_personalizados)
+      ? template.feriados_personalizados
+      : [];
+    return Array.from(new Set([...tplHolidays, ...agendaFeriados]));
+  }, [template?.feriados_personalizados, agendaFeriados]);
 
   // 📌 Ref para o rodapé
   const produtosSectionRef = useRef<HTMLDivElement>(null);
@@ -442,23 +476,43 @@ export function QuotePage() {
   };
 
   // 🚪 Exit Intent Listener para Resgate de Leads / Monte seu Pacote
+  // Só dispara quando o cliente JÁ COTOU (selecionou produto), NÃO clicou no CTA
+  // e está prestes a sair. Nunca na abertura da página (evita desconfiança/evasão).
+  const hasQuotedProducts = Object.values(selectedProdutos).some((q) => q > 0);
+  const pageOpenedAtRef = useRef(Date.now());
+
   useEffect(() => {
     if (!template?.template_alternativo_ativo || !alternativeTemplate || hasSubmitted) return;
+    if (!hasQuotedProducts || isChatDrawerOpen || showAlternativeModal || showSummaryModal) return;
 
     const sessionKey = `dismissed_alt_modal_${template.id}`;
     if (sessionStorage.getItem(sessionKey)) return;
 
+    const MIN_TIME_ON_PAGE_MS = 15000;
+    const trigger = () => {
+      if (Date.now() - pageOpenedAtRef.current < MIN_TIME_ON_PAGE_MS) return;
+      setShowAlternativeModal(true);
+    };
+
+    // Desktop: cursor saindo pelo topo (rumo à aba/fechar)
     const handleMouseLeave = (e: MouseEvent) => {
-      if (e.clientY <= 15 && !showAlternativeModal && !showSummaryModal) {
-        setShowAlternativeModal(true);
-      }
+      if (e.clientY <= 15) trigger();
+    };
+
+    // Mobile: cliente trocou de aba/app; ao voltar, mostra a oferta
+    let leftPage = false;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') leftPage = true;
+      else if (leftPage) trigger();
     };
 
     document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [template, alternativeTemplate, hasSubmitted, showAlternativeModal, showSummaryModal]);
+  }, [template, alternativeTemplate, hasSubmitted, hasQuotedProducts, isChatDrawerOpen, showAlternativeModal, showSummaryModal]);
 
 
 
@@ -512,7 +566,13 @@ export function QuotePage() {
       setDisponibilidade(null);
       setCheckingAvailability(true);
 
-      checkAvailability(template.user_id, dataEvento, activeDuration)
+      checkAvailability(
+        template.user_id,
+        dataEvento,
+        activeDuration,
+        0,
+        Boolean(template?.permitir_escolha_horario)
+      )
         .then((result) => {
           if (!isCancelled) {
             console.log('[QuotePage] ✅ Disponibilidade recebida', {
@@ -542,7 +602,7 @@ export function QuotePage() {
     return () => {
       isCancelled = true;
     };
-  }, [dataEvento, template?.user_id, template?.dias_semana_bloqueados, activeDuration]);
+  }, [dataEvento, template?.user_id, template?.dias_semana_bloqueados, template?.permitir_escolha_horario, activeDuration]);
 
   useEffect(() => {
     if (formData.nome_cliente) analytics?.trackFieldFilled('nome_cliente', true);
@@ -1300,27 +1360,49 @@ export function QuotePage() {
         }
       }
 
-      // Processar nomes dos produtos com a assinatura de parceria
+      // Processar nomes dos produtos com a assinatura de parceria e mesclar grupo_desconto / faixas_preco / escaloes_quantidade
+      const customThemeConfig = {
+        ...(templateData.tema_personalizado || {}),
+        ...(templateData.collab_valores_manuais || {}),
+      };
+      const prodExtrasMap: Record<string, any> = customThemeConfig.produtos_extras || {};
+
       const processedProdutos = (produtosData || []).map((p: any) => {
+        const bq = p.brindes_quantidades || {};
+        let finalP = {
+          ...p,
+          grupo_desconto: p.grupo_desconto ?? bq._grupo_desconto ?? prodExtrasMap[p.id]?.grupo_desconto ?? null,
+          faixas_preco: p.faixas_preco ?? bq._faixas_preco ?? prodExtrasMap[p.id]?.faixas_preco ?? [],
+          escaloes_quantidade: p.escaloes_quantidade ?? bq._escaloes_quantidade ?? prodExtrasMap[p.id]?.escaloes_quantidade ?? [],
+          regras_preco_data: p.regras_preco_data ?? bq._regras_preco_data ?? prodExtrasMap[p.id]?.regras_preco_data ?? [],
+        };
         if (templateData.collab_ativo && templateData.exibir_nome_parceiro && p.provedor_id && p.provedor_id !== templateData.user_id) {
           const partner = profileMap[p.provedor_id];
           const name = partner ? (partner.nome_profissional || partner.nome_admin || partner.nome) : '';
           if (name) {
-            return { ...p, nome: `${p.nome} (🤝 Parceria: ${name})` };
+            finalP = { ...finalP, nome: `${finalP.nome} (🤝 Parceria: ${name})` };
           }
         }
-        return p;
+        return finalP;
       });
 
       const processedUpsell = upsellData.map((p: any) => {
+        const bq = p.brindes_quantidades || {};
+        let finalUp = {
+          ...p,
+          grupo_desconto: p.grupo_desconto ?? bq._grupo_desconto ?? prodExtrasMap[p.id]?.grupo_desconto ?? null,
+          faixas_preco: p.faixas_preco ?? bq._faixas_preco ?? prodExtrasMap[p.id]?.faixas_preco ?? [],
+          escaloes_quantidade: p.escaloes_quantidade ?? bq._escaloes_quantidade ?? prodExtrasMap[p.id]?.escaloes_quantidade ?? [],
+          regras_preco_data: p.regras_preco_data ?? bq._regras_preco_data ?? prodExtrasMap[p.id]?.regras_preco_data ?? [],
+        };
         if (templateData.collab_ativo && templateData.exibir_nome_parceiro && p.provedor_id && p.provedor_id !== templateData.user_id) {
           const partner = profileMap[p.provedor_id];
           const name = partner ? (partner.nome_profissional || partner.nome_admin || partner.nome) : '';
           if (name) {
-            return { ...p, nome: `${p.nome} (🤝 Parceria: ${name})` };
+            return { ...finalUp, nome: `${finalUp.nome} (🤝 Parceria: ${name})` };
           }
         }
-        return p;
+        return finalUp;
       });
 
       const processedBrindes = brindesData.map((p: any) => {
@@ -1338,8 +1420,7 @@ export function QuotePage() {
       const mainNames = processedProdutos.map((p: any) => p.nome.toLowerCase().trim());
       const filteredUpsell = processedUpsell.filter((p: any) => !mainNames.includes(p.nome.toLowerCase().trim()));
 
-      // 🔄 Buscar template alternativo vinculado se ativo
-      const customThemeConfig = templateData.tema_personalizado || {};
+      // 🔄 Buscar template alternativo vinculado se ativo e mesclar desconto progressivo / horários
       const isAltAtivo = templateData.template_alternativo_ativo ?? customThemeConfig.template_alternativo_ativo ?? false;
       const altId = templateData.template_alternativo_id ?? customThemeConfig.template_alternativo_id ?? null;
       
@@ -1348,6 +1429,8 @@ export function QuotePage() {
       templateData.template_alternativo_titulo = templateData.template_alternativo_titulo ?? customThemeConfig.template_alternativo_titulo ?? '';
       templateData.template_alternativo_subtitulo = templateData.template_alternativo_subtitulo ?? customThemeConfig.template_alternativo_subtitulo ?? '';
       templateData.template_alternativo_botao_texto = templateData.template_alternativo_botao_texto ?? customThemeConfig.template_alternativo_botao_texto ?? '';
+      templateData.regras_desconto_progressivo = templateData.regras_desconto_progressivo ?? customThemeConfig.regras_desconto_progressivo ?? null;
+      templateData.permitir_escolha_horario = templateData.permitir_escolha_horario ?? customThemeConfig.permitir_escolha_horario ?? false;
 
       let altTemplateData: any = null;
       if (isAltAtivo && altId) {
@@ -1377,6 +1460,23 @@ export function QuotePage() {
       const config = await getOrCreateAgendaConfig(templateData.user_id);
       setAgendaConfig(config);
       console.log('[QuotePage] 📅 Configuração da agenda carregada', config);
+
+      // Carregar feriados cadastrados na Agenda do profissional para sincronizar com regras de preço por data/feriado
+      try {
+        const { data: feriadosAgendaData } = await supabase
+          .from('feriados')
+          .select('nome, data')
+          .eq('user_id', templateData.user_id);
+        if (Array.isArray(feriadosAgendaData)) {
+          setAgendaFeriados(
+            feriadosAgendaData
+              .filter((f: any) => f?.data)
+              .map((f: any) => `${f.data}|${f.nome || 'Feriado Agenda'}`)
+          );
+        }
+      } catch (ferErr) {
+        console.warn('[QuotePage] Aviso ao carregar feriados da agenda:', ferErr);
+      }
 
       // Carregar dados de preços dinâmicos se qualquer sistema estiver ativo
       if (templateData.sistema_sazonal_ativo || templateData.sistema_geografico_ativo) {
@@ -1522,15 +1622,33 @@ export function QuotePage() {
     }
   };
 
+  const progressiveSummary = useMemo(() => {
+    return calculateProgressiveDiscounts(
+      produtos,
+      selectedProdutos,
+      selectedTiers,
+      template?.regras_desconto_progressivo,
+      dataEvento,
+      allCustomHolidays
+    );
+  }, [produtos, selectedProdutos, selectedTiers, template?.regras_desconto_progressivo, dataEvento, allCustomHolidays]);
+
   /**
-   * Calcula subtotal dos produtos selecionados (sem ajustes)
+   * Calcula subtotal dos produtos selecionados (já aplicando os escalões progressivos do botão "+" e regras de data)
    */
   const calculateSubtotal = () => {
     const subtotalProdutos = produtos.reduce((total, produto) => {
       const qty = selectedProdutos[produto.id] || 0;
-      const desconto = produto.desconto_percentual ?? 0;
-      const valorComDesconto = produto.valor * (1 - desconto / 100);
-      return total + valorComDesconto * qty;
+      if (qty <= 0) return total;
+      const { totalPrice } = resolveProductQuantityPricing(
+        produto,
+        qty,
+        selectedTiers[produto.id],
+        dataEvento,
+        template?.regras_desconto_progressivo,
+        allCustomHolidays
+      );
+      return total + totalPrice;
     }, 0);
     // Adicionar produtos de upsell selecionados
     const subtotalUpsell = filteredUpsellProdutos
@@ -1598,8 +1716,11 @@ export function QuotePage() {
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
 
-    // Ajuste sazonal (se sistema ativo)
-    let totalComAjustes = subtotal;
+    // Desconto progressivo por grupo e ajuste por dia da semana
+    let totalComAjustes = Math.max(
+      0,
+      subtotal - progressiveSummary.groupDiscountTotal + progressiveSummary.dayOfWeekAdjustment
+    );
     let ajusteSazonal = 0;
     let ajusteGeografico = 0;
     let taxaDeslocamento = 0;
@@ -1625,13 +1746,16 @@ export function QuotePage() {
       totalComAjustes += acrescimo;
     }
 
-    // Aplicar desconto do cupom
-    if (cupomAtivo && cupomDesconto > 0) {
-      const descontoCupom = (totalComAjustes * cupomDesconto) / 100;
+    // Aplicar desconto do cupom (% ou R$ fixo)
+    if (cupomAtivo && (cupomDesconto > 0 || cupomValorFixo > 0)) {
+      const descontoCupom =
+        cupomTipoDesconto === 'valor_fixo'
+          ? Math.min(totalComAjustes, cupomValorFixo)
+          : (totalComAjustes * cupomDesconto) / 100;
       totalComAjustes -= descontoCupom;
     }
 
-    return totalComAjustes;
+    return Math.max(0, totalComAjustes);
   };
 
   /**
@@ -1639,15 +1763,25 @@ export function QuotePage() {
    */
   const getPriceBreakdown = () => {
     const subtotal = calculateSubtotal();
-    const ajusteSazonal = template?.sistema_sazonal_ativo ? calculateSeasonalAdjustment(subtotal) : 0;
-    const geoAdjustment = template?.sistema_geografico_ativo ? calculateGeographicAdjustment(subtotal + ajusteSazonal) : { percentual: 0, taxa: 0 };
+    const descontoProgressivo = progressiveSummary.groupDiscountTotal;
+    const economiaQuantidadeProdutos = progressiveSummary.productQuantitySavingsTotal;
+    const ajusteDiaSemana = progressiveSummary.dayOfWeekAdjustment;
+    const subtotalAposProgressivo = Math.max(0, subtotal - descontoProgressivo + ajusteDiaSemana);
+
+    const ajusteSazonal = template?.sistema_sazonal_ativo ? calculateSeasonalAdjustment(subtotalAposProgressivo) : 0;
+    const geoAdjustment = template?.sistema_geografico_ativo ? calculateGeographicAdjustment(subtotalAposProgressivo + ajusteSazonal) : { percentual: 0, taxa: 0 };
 
     const formaPagamento = formasPagamento.find((f) => f.id === selectedFormaPagamento);
-    const totalAntesFormaPagamento = subtotal + ajusteSazonal + geoAdjustment.percentual + geoAdjustment.taxa;
+    const totalAntesFormaPagamento = subtotalAposProgressivo + ajusteSazonal + geoAdjustment.percentual + geoAdjustment.taxa;
     const acrescimoFormaPagamento = formaPagamento ? (totalAntesFormaPagamento * formaPagamento.acrescimo) / 100 : 0;
 
     const totalAntesCupom = totalAntesFormaPagamento + acrescimoFormaPagamento;
-    const descontoCupom = cupomAtivo && cupomDesconto > 0 ? (totalAntesCupom * cupomDesconto) / 100 : 0;
+    const descontoCupom =
+      cupomAtivo && (cupomDesconto > 0 || cupomValorFixo > 0)
+        ? cupomTipoDesconto === 'valor_fixo'
+          ? Math.min(totalAntesCupom, cupomValorFixo)
+          : (totalAntesCupom * cupomDesconto) / 100
+        : 0;
 
     const total = calculateTotal();
     const valorUpsell = upsellSubtotal;
@@ -1656,6 +1790,9 @@ export function QuotePage() {
     const ocultarDeslocamento = template?.ocultar_taxa_deslocamento || false;
     return {
       subtotal,
+      descontoProgressivo,
+      economiaQuantidadeProdutos,
+      ajusteDiaSemana,
       ajusteSazonal,
       ajusteGeografico: {
         percentual: geoAdjustment.percentual,
@@ -1674,6 +1811,8 @@ export function QuotePage() {
     return getPriceBreakdown();
   }, [
     selectedProdutos,
+    selectedTiers,
+    progressiveSummary,
     selectedUpsellIds,
     selectedFormaPagamento,
     dataEvento,
@@ -1683,6 +1822,8 @@ export function QuotePage() {
     cupomCodigo,
     cupomAtivo,
     cupomDesconto,
+    cupomTipoDesconto,
+    cupomValorFixo,
     template,
     formasPagamento,
     upsellSubtotal
@@ -1756,14 +1897,38 @@ export function QuotePage() {
           ...formData,
           ...camposExtrasData,
           data_evento: dataEvento || null,
+          horario_evento: horarioSelecionado || null,
           cidade_evento: cidadeSelecionada || null,
           tipo_evento: template.nome_template || null,
         },
         orcamentoDetalhe: {
           selectedProdutos,
+          selectedTiers,
+          horario_evento: horarioSelecionado || null,
           selectedFormaPagamento,
           forma_pagamento_id: selectedFormaPagamento || null,
-          produtos: produtos,
+          produtos: produtos.map((p) => {
+            const qty = selectedProdutos[p.id] || 1;
+            const resolved = resolveProductEffectivePrice(
+              p,
+              selectedTiers[p.id],
+              dataEvento,
+              template?.regras_desconto_progressivo,
+              allCustomHolidays,
+              qty
+            );
+            return {
+              ...p,
+              nome: resolved.activeTier
+                ? `${p.nome} (${resolved.activeTier.label})`
+                : resolved.activeDateRule
+                ? `${p.nome} (${resolved.activeDateRule.nome})`
+                : p.nome,
+              valor: resolved.unitPrice,
+              faixa_selecionada: resolved.activeTier || null,
+              regra_data_aplicada: resolved.activeDateRule?.nome || null,
+            };
+          }),
           paymentMethod: formasPagamentoProcessadas.find((f) => f.id === selectedFormaPagamento),
           formasPagamento: formasPagamentoProcessadas,
           priceBreakdown: priceBreakdown,
@@ -1788,13 +1953,15 @@ export function QuotePage() {
           cupomCodigo: cupomAtivo ? cupomCodigo : null,
           cupomAtivo,
           cupomDesconto: cupomAtivo ? cupomDesconto : 0,
+          cupomTipoDesconto: cupomAtivo ? cupomTipoDesconto : 'percentual',
+          cupomValorFixo: cupomAtivo ? cupomValorFixo : 0,
           valor_base: priceBreakdown?.subtotal || 0,
-          valor_upsell: priceBreakdown?.upsellTotal || 0,
+          valor_upsell: priceBreakdown?.valorUpsell || 0,
         },
         valorTotal: calculateTotal(),
       });
     }
-  }, [template, produtos, selectedProdutos, selectedFormaPagamento, selectedUpsellIds, brindesProdutos, filteredUpsellProdutos, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas, priceBreakdown, cupomAtivo, cupomCodigo, cupomDesconto]);
+  }, [template, produtos, selectedProdutos, selectedTiers, horarioSelecionado, selectedFormaPagamento, selectedUpsellIds, brindesProdutos, filteredUpsellProdutos, formData, camposExtrasData, dataEvento, cidadeSelecionada, formasPagamentoProcessadas, priceBreakdown, cupomAtivo, cupomCodigo, cupomDesconto, cupomTipoDesconto, cupomValorFixo]);
 
 
 
@@ -1857,13 +2024,24 @@ export function QuotePage() {
       }
 
       setCupomAtivo(true);
-      setCupomDesconto(data.porcentagem);
-      setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+      const tipo = data.tipo_desconto === 'valor_fixo' ? 'valor_fixo' : 'percentual';
+      setCupomTipoDesconto(tipo);
+      if (tipo === 'valor_fixo') {
+        const vFixo = Number(data.valor_fixo) || 0;
+        setCupomValorFixo(vFixo);
+        setCupomDesconto(0);
+        setCupomMensagem(`✅ Cupom aplicado: R$ ${vFixo.toFixed(2).replace('.', ',')} de desconto!`);
+      } else {
+        setCupomDesconto(Number(data.porcentagem) || 0);
+        setCupomValorFixo(0);
+        setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+      }
     } catch (error) {
       console.error('Erro ao validar cupom:', error);
       setCupomMensagem('❌ Erro ao validar cupom');
       setCupomAtivo(false);
       setCupomDesconto(0);
+      setCupomValorFixo(0);
     }
   };
 
@@ -1944,8 +2122,29 @@ export function QuotePage() {
         ocultar_taxa_deslocamento: template?.ocultar_taxa_deslocamento,
       },
 
-      // Produtos
-      products: produtos,
+      // Produtos (com faixa selecionada, regra de data e desconto progressivo no botão "+" resolvidos)
+      products: produtos.map((p) => {
+        const qty = selectedProdutos[p.id] || 1;
+        const resolved = resolveProductEffectivePrice(
+          p,
+          selectedTiers[p.id],
+          dataEvento,
+          template?.regras_desconto_progressivo,
+          allCustomHolidays,
+          qty
+        );
+        return {
+          ...p,
+          nome: resolved.activeTier
+            ? `${p.nome} (${resolved.activeTier.label})`
+            : resolved.activeDateRule
+            ? `${p.nome} (${resolved.activeDateRule.nome})`
+            : p.nome,
+          valor: resolved.originalUnitPrice,
+          _progressiveTotal: resolved.totalPrice,
+          _progressiveSavings: resolved.progressiveQuantitySavings,
+        };
+      }),
       selectedProducts: selectedProdutos,
 
       // Adicionais de upsell
@@ -2060,7 +2259,15 @@ export function QuotePage() {
   };
 
   const renderLocationDateFields = () => {
-    const isAgendaRequired = agendaConfig?.agenda_ativa && !template?.ignorar_agenda_global;
+    const hasTieredProducts = produtos.some((p) => Array.isArray(p.faixas_preco) && p.faixas_preco.length > 0);
+    const hasDateRulesProducts = produtos.some((p) => Array.isArray(p.regras_preco_data) && p.regras_preco_data.length > 0);
+    const hasProgressiveOrTime = Boolean(
+      template?.permitir_escolha_horario ||
+      template?.regras_desconto_progressivo?.ativo ||
+      hasTieredProducts ||
+      hasDateRulesProducts
+    );
+    const isAgendaRequired = (agendaConfig?.agenda_ativa || hasProgressiveOrTime) && !template?.ignorar_agenda_global;
     
     if (!((template?.sistema_sazonal_ativo && temporadas.length > 0) || (template?.sistema_geografico_ativo && paises.length > 0) || isAgendaRequired)) {
       return null;
@@ -2080,7 +2287,7 @@ export function QuotePage() {
               min={new Date().toISOString().split('T')[0]}
               required
               label="Selecione a data que deseja *"
-              description="Preços podem variar por temporada"
+              description="Preços podem variar por temporada ou dia da semana"
               disabledDate={isDateDisabled} // Passando a função para o componente
               tema={tema}
               className="touch-manipulation"
@@ -2094,7 +2301,13 @@ export function QuotePage() {
                   console.log('[QuotePage] 🔄 Atualizando disponibilidade manualmente');
                   setDisponibilidade(null);
                   setCheckingAvailability(true);
-                  checkAvailability(template.user_id, dataEvento, activeDuration)
+                  checkAvailability(
+                    template.user_id,
+                    dataEvento,
+                    activeDuration,
+                    0,
+                    Boolean(template?.permitir_escolha_horario)
+                  )
                     .then(setDisponibilidade)
                     .finally(() => setCheckingAvailability(false));
                 }
@@ -2248,6 +2461,191 @@ export function QuotePage() {
     );
   };
 
+  // Recupera sessão prévia do chat de negociação se houver ou abre via URL (?chat=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const chatParam = params.get('chat');
+    if (chatParam) {
+      setChatConversationId(chatParam);
+      setIsChatDrawerOpen(true);
+      return;
+    }
+    if (template?.id) {
+      const stored = RealtimeChatService.getStoredSession(template.id);
+      if (stored?.conversationId) {
+        setChatConversationId(stored.conversationId);
+      }
+    }
+  }, [template?.id]);
+
+  // Sincroniza presença online do fornecedor em tempo real
+  useEffect(() => {
+    const vId = template?.user_id || profile?.id;
+    if (!vId) return;
+    setVendorPresence(RealtimeChatService.getVendorOnlinePresence(vId));
+    const unsubscribe = RealtimeChatService.subscribeToVendorPresence(vId, (newPresence) => {
+      setVendorPresence(newPresence);
+    });
+    return () => unsubscribe();
+  }, [template?.user_id, profile?.id]);
+
+  const handleStartOnlineChat = async (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isStartingChat) return;
+
+    // Validação de formato de email e telefone
+    const emailError = validateEmail(formData.email_cliente);
+    const phoneError = validatePhone(formData.telefone_cliente);
+
+    if (emailError || phoneError) {
+      setFieldErrors({ email: emailError, telefone: phoneError });
+      alert('⚠️ Opa! Por favor, preencha nome, email e WhatsApp corretamente para iniciarmos a conversa em tempo real.');
+      const errorId = emailError ? 'email-cliente' : 'telefone-cliente';
+      document.getElementById(errorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (!fieldsValidation.canUseWhatsApp) {
+      alert(fieldsValidation.validationMessage);
+      return;
+    }
+
+    const currentTemplate = templateRef.current || template;
+    if (!currentTemplate?.user_id) {
+      alert('Não foi possível identificar o profissional deste orçamento.');
+      return;
+    }
+
+    setIsStartingChat(true);
+
+    try {
+      // Salva dados pessoais do cliente no navegador imediatamente para persistência
+      try {
+        if (formData.nome_cliente || formData.email_cliente || formData.telefone_cliente) {
+          localStorage.setItem(
+            'priceus_saved_client_profile',
+            JSON.stringify({
+              nome_cliente: formData.nome_cliente,
+              email_cliente: formData.email_cliente,
+              telefone_cliente: formData.telefone_cliente,
+              cidadeSelecionada: cidadeSelecionada || '',
+              dataEvento: dataEvento || '',
+            })
+          );
+        }
+      } catch (e) {}
+
+      const selectedProductsList = produtos.filter((p) => selectedProdutos[p.id] > 0);
+      const pkgName =
+        selectedProductsList.length > 0
+          ? selectedProductsList[0].nome + (selectedProductsList.length > 1 ? ` (+${selectedProductsList.length - 1} itens)` : '')
+          : currentTemplate.nome_template || 'Proposta Personalizada';
+
+      const paymentTerms =
+        formasPagamento.find((f) => f.id === selectedFormaPagamento)?.nome ||
+        'À vista ou parcelado';
+
+      const session = await RealtimeChatService.initQuoteConversation({
+        vendorId: currentTemplate.user_id,
+        vendorName: profile?.nome_profissional || profile?.nome_empresa || 'Profissional',
+        clientName: formData.nome_cliente.trim(),
+        clientEmail: formData.email_cliente.trim(),
+        clientPhone: formData.telefone_cliente.trim(),
+        eventDate: dataEvento,
+        eventCity: cidades.find((c) => c.id === cidadeSelecionada)?.nome || cidadeSelecionada || undefined,
+        templateId: currentTemplate.id,
+        templateName: currentTemplate.nome_template,
+        selectedPackageName: pkgName,
+        totalValue: calculateTotal(),
+        paymentTerms,
+      });
+
+      setChatConversationId(session.conversationId);
+      setIsChatDrawerOpen(true);
+      setShowSummaryModal(false);
+      analytics?.trackStage('negociar_chat_online');
+
+      // Injeta ativamente o resumo estruturado da proposta (o mesmo do WhatsApp) dentro do chat
+      try {
+        const existingMsgs = await RealtimeChatService.fetchMessages(session.conversationId);
+        if (!existingMsgs || existingMsgs.length === 0) {
+          const structuredMessage = buildWhatsAppMessage();
+          await RealtimeChatService.sendMessage({
+            conversationId: session.conversationId,
+            senderType: 'bride',
+            senderName: formData.nome_cliente.trim() || 'Cliente',
+            content: structuredMessage,
+          });
+        }
+      } catch (e) {
+        console.warn('Falha ao injetar mensagem inicial estruturada:', e);
+      }
+    } catch (err: any) {
+      console.error('Erro ao iniciar chat online:', err);
+      alert('Não foi possível iniciar o chat online no momento. Você pode prosseguir via WhatsApp!');
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
+
+  const handleOpenChatFromDock = () => {
+    if (chatConversationId) {
+      setIsChatDrawerOpen(true);
+      return;
+    }
+    // Se o cliente já preencheu nome e telefone válidos, inicia o chat online instantaneamente
+    if (formData.nome_cliente.trim().length >= 2 && formData.telefone_cliente.trim().length >= 8) {
+      handleStartOnlineChat();
+    } else {
+      // Se ainda faltam dados, foca no formulário com aviso amigável
+      const nameInput = document.getElementById('nome-cliente') || document.querySelector('input[name="nome_cliente"]');
+      if (nameInput) {
+        nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (nameInput as HTMLInputElement).focus();
+      } else {
+        const formEl = document.querySelector('form');
+        formEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setToastChatNotice('👋 Informe seu nome e WhatsApp para iniciarmos sua negociação em tempo real!');
+      setTimeout(() => setToastChatNotice(null), 4500);
+    }
+  };
+
+  const renderChatEcosystem = () => (
+    <>
+      {/* Toast informativo flutuante ao acionar chat sem dados completos */}
+      {toastChatNotice && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-slate-950/95 text-white border border-emerald-500/50 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-bounce duration-1000 text-xs sm:text-sm font-semibold max-w-md text-center">
+          <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <span>{toastChatNotice}</span>
+        </div>
+      )}
+
+      {/* Drawer de Negociação Online PriceU$ */}
+      <QuoteChatDrawer
+        isOpen={isChatDrawerOpen}
+        onClose={() => setIsChatDrawerOpen(false)}
+        conversationId={chatConversationId}
+        clientName={formData.nome_cliente || 'Cliente'}
+        vendorName={profile?.nome_profissional || profile?.nome_empresa || 'Profissional PriceU$'}
+        vendorPhone={profile?.whatsapp_principal}
+        vendorAvatar={profile?.logo_url || profile?.foto_perfil}
+        packageName={
+          produtos.filter((p) => selectedProdutos[p.id] > 0)[0]?.nome ||
+          template?.nome_template ||
+          'Proposta Personalizada'
+        }
+        totalValue={calculateTotal()}
+        paymentTerms={
+          formasPagamento.find((f) => f.id === selectedFormaPagamento)?.nome ||
+          'À vista ou parcelado'
+        }
+        eventDate={dataEvento}
+        quoteUrl={window.location.href}
+      />
+    </>
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting || hasSubmitted) return;
@@ -2339,12 +2737,27 @@ export function QuotePage() {
         items: [
           ...produtos
             .filter((p) => selectedProdutos[p.id] > 0)
-            .map((p) => ({
-              name: p.nome,
-              quantity: selectedProdutos[p.id],
-              price: p.valor * (1 - (p.desconto_percentual ?? 0) / 100),
-              permite_multiplas_unidades: p.permite_multiplas_unidades,
-            })),
+            .map((p) => {
+              const qty = selectedProdutos[p.id] || 1;
+              const resolved = resolveProductEffectivePrice(
+                p,
+                selectedTiers[p.id],
+                dataEvento,
+                template?.regras_desconto_progressivo,
+                allCustomHolidays,
+                qty
+              );
+              return {
+                name: resolved.activeTier
+                  ? `${p.nome} (${resolved.activeTier.label})`
+                  : resolved.activeDateRule
+                  ? `${p.nome} (${resolved.activeDateRule.nome})`
+                  : p.nome,
+                quantity: qty,
+                price: resolved.unitPrice,
+                permite_multiplas_unidades: p.permite_multiplas_unidades,
+              };
+            }),
           ...filteredUpsellProdutos
             .filter((p) => selectedUpsellIds.has(p.id))
             .map((p) => ({
@@ -2468,7 +2881,7 @@ export function QuotePage() {
               cupomAtivo,
               cupomDesconto: cupomAtivo ? cupomDesconto : 0,
               valor_base: priceBreakdown?.subtotal || 0,
-              valor_upsell: priceBreakdown?.upsellTotal || 0,
+              valor_upsell: priceBreakdown?.valorUpsell || 0,
             },
             valorTotal: calculateTotal(),
           };
@@ -2534,6 +2947,17 @@ export function QuotePage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Aviso Informativo: Novas Regras da Meta/WhatsApp contra Bloqueio e Spam */}
+            <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-amber-950 text-xs leading-relaxed space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-2 font-bold text-amber-900">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>Por que oferecemos a Negociação no Chat Oficial PriceU$?</span>
+              </div>
+              <p className="text-[11.5px] text-stone-600 leading-normal">
+                Devido às novas regras da Meta/WhatsApp contra disparos comerciais e risco de bloqueio de contas por mensagens repetitivas de vendas, disponibilizamos este canal oficial seguro. Nele sua data fica pré-reservada na hora, o atendimento é prioritário e você pode simular descontos ao vivo. O WhatsApp tradicional continua 100% ativo e disponível com 1 clique abaixo caso você prefira!
+              </p>
+            </div>
+
             <div className="bg-gray-50 rounded-lg p-4 border">
               <h3 className="font-semibold text-gray-800 mb-2">Seus Dados:</h3>
               <p className="text-sm">
@@ -2583,29 +3007,64 @@ export function QuotePage() {
 
           <div className="p-6 border-t bg-gray-50">
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Opção 1: Chat Oficial PriceU$ */}
+                <button
+                  type="button"
+                  onClick={handleStartOnlineChat}
+                  disabled={isStartingChat}
+                  className="w-full p-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all shadow-md shadow-emerald-950/20 text-left flex flex-col justify-between space-y-1 cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold bg-emerald-950/60 px-2 py-0.5 rounded-full text-emerald-200 border border-emerald-400/30">
+                      Recomendado • Sem Bloqueios
+                    </span>
+                    <Sparkles className="w-4 h-4 text-emerald-200 group-hover:rotate-12 transition-transform" />
+                  </div>
+                  <div className="font-black text-sm pt-1">
+                    {isStartingChat ? 'Iniciando Conversa...' : 'Negociar no Chat Oficial PriceU$'}
+                  </div>
+                  <p className="text-[10px] text-emerald-100/90 font-normal">
+                    Resposta prioritária, pré-reserva de data e desconto em 1 clique.
+                  </p>
+                </button>
+
+                {/* Opção 2: WhatsApp Tradicional (Preservado como Ponto-Chave de Vendas) */}
+                <a
+                  href={summaryData.waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full p-4 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold transition-all shadow-md shadow-green-950/20 text-left flex flex-col justify-between space-y-1 cursor-pointer group"
+                  onClick={() => {
+                    analytics?.markAsConverted();
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold bg-green-900/60 px-2 py-0.5 rounded-full text-green-200 border border-green-400/30">
+                      WhatsApp Tradicional
+                    </span>
+                    <Send className="w-4 h-4 text-green-100 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                  <div className="font-black text-sm pt-1">
+                    Enviar via WhatsApp Oficial
+                  </div>
+                  <p className="text-[10px] text-green-100/90 font-normal">
+                    Transfere este orçamento pronto para seu aplicativo do WhatsApp.
+                  </p>
+                </a>
+              </div>
+
+              <div className="flex justify-center pt-1">
                 <button
                   type="button"
                   onClick={() => {
                     setShowSummaryModal(false);
                     setHasSubmitted(false);
                   }}
-                  className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  className="text-xs text-gray-500 hover:text-gray-800 font-medium transition-colors cursor-pointer py-1"
                 >
-                  Voltar
+                  ← Voltar e ajustar itens do orçamento
                 </button>
-                <a
-                  href={summaryData.waLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex-1 flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
-                  onClick={() => {
-                    analytics?.markAsConverted();
-                  }}
-                >
-                  <Send className="w-6 h-6" />
-                  Enviar via WhatsApp
-                </a>
               </div>
             </div>
           </div>
@@ -2910,6 +3369,8 @@ export function QuotePage() {
       calculateTotal,
       handleProdutoQuantityChange,
       handleSubmit,
+      handleStartOnlineChat,
+      isStartingChat,
       setFormData,
       fieldsValidation,
       fieldErrors,
@@ -2946,6 +3407,7 @@ export function QuotePage() {
           />
         )}
         {renderSummaryModal()}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -2960,6 +3422,8 @@ export function QuotePage() {
       calculateTotal,
       handleProdutoQuantityChange,
       handleSubmit,
+      handleStartOnlineChat,
+      isStartingChat,
       setFormData,
       fieldsValidation,
       fieldErrors,
@@ -2996,6 +3460,7 @@ export function QuotePage() {
           />
         )}
         {renderSummaryModal()}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -3045,6 +3510,7 @@ export function QuotePage() {
           />
         )}
         {renderSummaryModal()}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -3094,6 +3560,7 @@ export function QuotePage() {
           />
         )}
         {renderSummaryModal()}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -3149,74 +3616,83 @@ export function QuotePage() {
         {/* ── Modal de Resumo e Envio Dark Studio ── */}
         {showSummaryModal && (
           <div
-            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 16 }}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 16 }}
           >
-            <div style={{ background: '#07101f', border: '1px solid rgba(255,255,255,.08)', borderRadius: 24, boxShadow: '0 24px 64px rgba(0,0,0,.6)', maxWidth: 672, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 24, boxShadow: '0 24px 64px rgba(0,0,0,.15)', maxWidth: 672, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: 24, borderBottom: '1px solid #f5f5f4', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <h2 style={{ fontSize: 24, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Quase lá!</h2>
-                  <p style={{ color: 'rgba(255,255,255,.6)', marginTop: 4, fontSize: 15 }}>
+                  <h2 style={{ fontSize: 24, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.5px' }}>Quase lá!</h2>
+                  <p style={{ color: '#64748b', marginTop: 4, fontSize: 15 }}>
                     Confira o resumo e envie seu pedido para{' '}
-                    <strong style={{ color: '#22c55e' }}>{summaryData.profileName}</strong>.
+                    <strong style={{ color: '#059669' }}>{summaryData.profileName}</strong>.
                   </p>
                 </div>
                 <button
                   onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
-                  style={{ background: 'rgba(255,255,255,.05)', border: 'none', color: '#fff', padding: 8, borderRadius: '50%', cursor: 'pointer', transition: 'background .2s' }}
+                  style={{ background: '#f5f5f4', border: 'none', color: '#64748b', padding: 8, borderRadius: '50%', cursor: 'pointer', transition: 'background .2s' }}
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 12, padding: 16, border: '1px solid rgba(255,255,255,.05)' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Seus Dados:</h3>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Nome:</strong> {summaryData.clientData.nome}</p>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Email:</strong> {summaryData.clientData.email}</p>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)' }}><strong style={{ color: '#fff' }}>Telefone:</strong> {summaryData.clientData.telefone}</p>
+                <div style={{ background: '#fafaf9', borderRadius: 16, padding: 16, border: '1px solid #f5f5f4' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Seus Dados:</h3>
+                  <p style={{ fontSize: 14, color: '#475569', marginBottom: 4 }}><strong style={{ color: '#0f172a' }}>Nome:</strong> {summaryData.clientData.nome}</p>
+                  <p style={{ fontSize: 14, color: '#475569', marginBottom: 4 }}><strong style={{ color: '#0f172a' }}>Email:</strong> {summaryData.clientData.email}</p>
+                  <p style={{ fontSize: 14, color: '#475569' }}><strong style={{ color: '#0f172a' }}>Telefone:</strong> {summaryData.clientData.telefone}</p>
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 12, padding: 16, border: '1px solid rgba(255,255,255,.05)' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Detalhes do Evento:</h3>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Orçamento:</strong> {summaryData.eventData.tipo}</p>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)', marginBottom: 4 }}><strong style={{ color: '#fff' }}>Data:</strong> {summaryData.eventData.data}</p>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,.8)' }}><strong style={{ color: '#fff' }}>Cidade:</strong> {summaryData.eventData.cidade}</p>
+                <div style={{ background: '#fafaf9', borderRadius: 16, padding: 16, border: '1px solid #f5f5f4' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Detalhes do Evento:</h3>
+                  <p style={{ fontSize: 14, color: '#475569', marginBottom: 4 }}><strong style={{ color: '#0f172a' }}>Orçamento:</strong> {summaryData.eventData.tipo}</p>
+                  <p style={{ fontSize: 14, color: '#475569', marginBottom: 4 }}><strong style={{ color: '#0f172a' }}>Data:</strong> {summaryData.eventData.data}</p>
+                  <p style={{ fontSize: 14, color: '#475569' }}><strong style={{ color: '#0f172a' }}>Cidade:</strong> {summaryData.eventData.cidade}</p>
                 </div>
 
-                <div style={{ background: 'rgba(34,197,94,.05)', borderRadius: 12, padding: 16, border: '1px solid rgba(34,197,94,.15)' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Itens Selecionados:</h3>
+                <div style={{ background: '#f0fdf4', borderRadius: 16, padding: 16, border: '1px solid #bbf7d0' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Itens Selecionados:</h3>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {summaryData.quoteData.items.map((item: any, index: number) => (
-                      <li key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'rgba(255,255,255,.8)' }}>
+                      <li key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#334155' }}>
                         <span>{item.permite_multiplas_unidades === false ? item.name : `${item.quantity}x ${item.name}`}</span>
-                        <span style={{ fontWeight: 600, color: '#fff' }}>{formatCurrency(item.price * item.quantity)}</span>
+                        <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(item.price * item.quantity)}</span>
                       </li>
                     ))}
                   </ul>
-                  <div style={{ borderTop: '1px solid rgba(34,197,94,.2)', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 900, color: '#22c55e' }}>
+                  <div style={{ borderTop: '1px solid #86efac', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 900, color: '#059669' }}>
                     <span>{template?.usar_termo_investimento ? 'Investimento Total:' : 'Valor Total:'}</span>
                     <span>{formatCurrency(summaryData.quoteData.total)}</span>
                   </div>
                 </div>
               </div>
 
-              <div style={{ padding: 24, borderTop: '1px solid rgba(255,255,255,.06)', background: 'rgba(0,0,0,.2)', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
+              <div style={{ padding: 24, borderTop: '1px solid #f5f5f4', background: '#fafaf9', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     onClick={() => { setShowSummaryModal(false); setHasSubmitted(false); }}
-                    style={{ flex: '1 1 120px', padding: '14px 24px', background: 'rgba(255,255,255,.05)', color: '#fff', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', transition: 'background .2s' }}
+                    style={{ flex: '1 1 100px', padding: '14px 20px', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'background .2s' }}
                   >
                     Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartOnlineChat}
+                    disabled={isStartingChat}
+                    style={{ flex: '2 1 180px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 20px', background: 'linear-gradient(135deg,#059669,#10b981)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(16,185,129,.25)' }}
+                  >
+                    <MessageSquare className="w-5 h-5 flex-shrink-0" />
+                    <span>{isStartingChat ? 'Abrindo Chat...' : 'Negociar no Chat PriceU$'}</span>
                   </button>
                   <a
                     href={summaryData.waLink}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => analytics?.markAsConverted()}
-                    style={{ flex: '2 1 200px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 24px', background: 'linear-gradient(135deg,#16a34a,#22c55e)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(22,163,74,.3)', cursor: 'pointer' }}
+                    style={{ flex: '2 1 180px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 20px', background: 'linear-gradient(135deg,#16a34a,#22c55e)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 16px rgba(22,163,74,.25)', cursor: 'pointer' }}
                   >
-                    <Send className="w-5 h-5" />
+                    <Send className="w-5 h-5 flex-shrink-0" />
                     Enviar via WhatsApp
                   </a>
                 </div>
@@ -3224,6 +3700,7 @@ export function QuotePage() {
             </div>
           </div>
         )}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -3238,6 +3715,8 @@ export function QuotePage() {
       calculateTotal,
       handleProdutoQuantityChange,
       handleSubmit,
+      handleStartOnlineChat,
+      isStartingChat,
       setFormData,
       fieldsValidation,
       fieldErrors,
@@ -3274,6 +3753,7 @@ export function QuotePage() {
           />
         )}
         {renderSummaryModal()}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -3288,6 +3768,8 @@ export function QuotePage() {
       calculateTotal,
       handleProdutoQuantityChange,
       handleSubmit,
+      handleStartOnlineChat,
+      isStartingChat,
       setFormData,
       fieldsValidation,
       fieldErrors,
@@ -3324,6 +3806,7 @@ export function QuotePage() {
           />
         )}
         {renderSummaryModal()}
+        {renderChatEcosystem()}
       </>
     );
   }
@@ -3906,7 +4389,13 @@ export function QuotePage() {
             </div>
 
             {/* Campos de Localização e Data para Preços Dinâmicos */}
-            {((template?.sistema_sazonal_ativo && temporadas.length > 0) || (template?.sistema_geografico_ativo && paises.length > 0) || (agendaConfig?.agenda_ativa && !template?.ignorar_agenda_global)) && (
+            {((template?.sistema_sazonal_ativo && temporadas.length > 0) ||
+              (template?.sistema_geografico_ativo && paises.length > 0) ||
+              ((agendaConfig?.agenda_ativa ||
+                template?.permitir_escolha_horario ||
+                template?.regras_desconto_progressivo?.ativo ||
+                produtos.some((p) => Array.isArray(p.faixas_preco) && p.faixas_preco.length > 0)) &&
+                !template?.ignorar_agenda_global)) && (
               <div className="border-t pt-6 mt-6">
                 <h3 className={`text-lg font-semibold ${tema.cores.textoPrincipal} mb-4`} style={{ ...inlineStyles.heading2, fontSize: '1.25rem', borderBottom: 'none', paddingBottom: 0 }}>
                   📍 Localização e Data
@@ -3979,6 +4468,29 @@ export function QuotePage() {
                       </p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Banners de Desconto Progressivo e Dicas de Próxima Faixa */}
+              {(progressiveSummary.activeGroupBadges.length > 0 || progressiveSummary.nextTierHints.length > 0) && (
+                <div className="mb-4 space-y-2">
+                  {progressiveSummary.activeGroupBadges.map((b, bIdx) => (
+                    <div
+                      key={bIdx}
+                      className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-semibold flex items-center justify-between gap-2"
+                    >
+                      <span>🎉 Desconto Progressivo Ativo: {b.descricao}</span>
+                      <span className="font-bold whitespace-nowrap">-{formatCurrency(b.descontoAplicado)}</span>
+                    </div>
+                  ))}
+                  {progressiveSummary.nextTierHints.map((h, hIdx) => (
+                    <div
+                      key={hIdx}
+                      className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-700 dark:text-indigo-300 text-xs font-medium flex items-center gap-2"
+                    >
+                      <span>💡 {h.beneficioTexto}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -4176,10 +4688,89 @@ export function QuotePage() {
                               ⏱️ {formatDuration(produto.duracao_minutos)}
                             </span>
                           )}
+                          {produto.grupo_desconto && (
+                            <span className="text-[11px] bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full whitespace-nowrap font-semibold">
+                              🏷️ {produto.grupo_desconto}
+                            </span>
+                          )}
                         </h4>
                         {produto.resumo && (
                           <FormattedDescription text={produto.resumo} className="mt-2" />
                         )}
+
+                        {/* 📸 Seletor de Faixas Progressivas (Ex: 10 fotos, 20 fotos, 30 fotos) */}
+                        {Array.isArray(produto.faixas_preco) && produto.faixas_preco.length > 0 && (() => {
+                          const activeTierId = selectedTiers[produto.id] || produto.faixas_preco[0].id;
+                          const sampleResolved = resolveTierPrice(
+                            produto.faixas_preco[0],
+                            dataEvento,
+                            template?.regras_desconto_progressivo
+                          );
+                          return (
+                            <div className="mt-3 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-1">
+                                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: inlineStyles.textColor }}>
+                                  📸 Escolha a Opção / Quantidade:
+                                </span>
+                                {dataEvento && (
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                    sampleResolved.isWeekendOrHoliday
+                                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                                      : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
+                                  }`}>
+                                    📅 {sampleResolved.isWeekendOrHoliday
+                                      ? `Tabela ${sampleResolved.periodLabel || 'Fim de Semana / Feriado'}`
+                                      : 'Tabela Dias de Semana'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {produto.faixas_preco.map((tier) => {
+                                  const tierRes = resolveTierPrice(
+                                    tier,
+                                    dataEvento,
+                                    template?.regras_desconto_progressivo
+                                  );
+                                  const isSelectedTier = activeTierId === tier.id;
+                                  return (
+                                    <button
+                                      key={tier.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedTiers((prev) => ({ ...prev, [produto.id]: tier.id }));
+                                        if (!selectedProdutos[produto.id]) {
+                                          handleProdutoQuantityChange(produto.id, 1);
+                                        }
+                                      }}
+                                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                                        isSelectedTier
+                                          ? 'ring-2 ring-indigo-500/40 font-bold'
+                                          : 'opacity-80 hover:opacity-100'
+                                      }`}
+                                      style={
+                                        isSelectedTier
+                                          ? {
+                                              borderColor: inlineStyles.accentColor,
+                                              background: `${inlineStyles.accentColor}18`,
+                                              color: inlineStyles.textColor,
+                                            }
+                                          : {
+                                              borderColor: `${inlineStyles.textColorSecondary}25`,
+                                              color: inlineStyles.textColor,
+                                            }
+                                      }
+                                    >
+                                      <div className="text-xs font-bold truncate">{tier.label}</div>
+                                      <div className="text-sm font-extrabold mt-0.5" style={{ color: inlineStyles.accentColor }}>
+                                        {formatCurrency(tierRes.price)}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Brindes Vinculados em Sub-Cards */}
                         {produto.brindes_vinculados && Array.isArray(produto.brindes_vinculados) && produto.brindes_vinculados.length > 0 && (
@@ -4236,22 +4827,161 @@ export function QuotePage() {
                         )}
                         {!template.ocultar_valores_intermediarios && (() => {
                           const desconto = produto.desconto_percentual ?? 0;
-                          const valorFinal = produto.valor * (1 - desconto / 100);
+                          const currentQty = selectedProdutos[produto.id] || 0;
+                          const effectiveQtyForCalc = currentQty > 0 ? currentQty : 1;
+                          const qtyPricing = resolveProductQuantityPricing(
+                            produto,
+                            effectiveQtyForCalc,
+                            selectedTiers[produto.id],
+                            dataEvento,
+                            template?.regras_desconto_progressivo,
+                            allCustomHolidays
+                          );
+                          const valorFinalUnitarioBase = qtyPricing.baseUnitPrice;
+                          const originalUnitPrice = qtyPricing.originalBaseUnitPrice;
+                          const hasQuantitySteps = qtyPricing.resolvedSteps.length > 0;
+
                           return (
-                            <div className="mt-3 flex items-center gap-2 flex-wrap">
-                              {desconto > 0 && (
-                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${inlineStyles.accentColor}15`, color: inlineStyles.accentColor }}>
-                                  🏷️ {desconto}% OFF
-                                </span>
+                            <div className="mt-3 space-y-2.5">
+                              {/* Badge de Regra de Data Personalizada do Produto */}
+                              {dataEvento && qtyPricing.activeDateRule && (
+                                <div>
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                    📅 Tabela: {qtyPricing.periodLabel || qtyPricing.activeDateRule.nome}
+                                  </span>
+                                </div>
                               )}
-                              <div className="flex items-center gap-2">
+
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {desconto > 0 && (
-                                  <span className="text-sm text-gray-400 line-through">{formatCurrency(produto.valor)}</span>
+                                  <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${inlineStyles.accentColor}15`, color: inlineStyles.accentColor }}>
+                                    🏷️ {desconto}% OFF
+                                  </span>
                                 )}
-                                <span className="text-lg sm:text-xl font-bold text-blue-600" style={inlineStyles.priceBadge}>{formatCurrency(valorFinal)}</span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {desconto > 0 && (
+                                    <span className="text-sm text-gray-400 line-through">{formatCurrency(originalUnitPrice)}</span>
+                                  )}
+                                  <span className="text-lg sm:text-xl font-bold text-blue-600" style={inlineStyles.priceBadge}>
+                                    {formatCurrency(valorFinalUnitarioBase)}
+                                  </span>
+                                  {(produto.permite_multiplas_unidades ?? true) && (
+                                    <span className="text-xs opacity-70" style={{ color: inlineStyles.textColorSecondary }}>
+                                      / 1 {produto.unidade || 'un.'}
+                                    </span>
+                                  )}
+                                </div>
+                                {desconto > 0 && (
+                                  <span className="text-xs text-green-600">Economia de {formatCurrency(originalUnitPrice - valorFinalUnitarioBase)}</span>
+                                )}
                               </div>
-                              {desconto > 0 && (
-                                <span className="text-xs text-green-600">Economia de {formatCurrency(produto.valor - valorFinal)}</span>
+
+                              {/* Destaque do Valor Total Progressivo quando o cliente seleciona 2+ no botão "+" */}
+                              {currentQty >= 2 && (
+                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-2">
+                                  <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                                    ✨ Total para <strong>{currentQty}x {produto.unidade || 'un.'}</strong>:
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {qtyPricing.progressiveSavings > 0 && (
+                                      <span className="text-xs text-gray-400 line-through">
+                                        {formatCurrency(qtyPricing.normalTotal)}
+                                      </span>
+                                    )}
+                                    <span className="text-sm sm:text-base font-extrabold text-emerald-700 dark:text-emerald-300">
+                                      {formatCurrency(qtyPricing.totalPrice)}
+                                    </span>
+                                    {qtyPricing.progressiveSavings > 0 && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                                        🔥 -{formatCurrency(qtyPricing.progressiveSavings)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Pílulas interativas de Desconto Progressivo por Quantidade (+) */}
+                              {hasQuantitySteps && (produto.permite_multiplas_unidades ?? true) && (
+                                <div className="p-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 space-y-1.5">
+                                  <div className="text-[11px] font-bold uppercase tracking-wider flex items-center justify-between" style={{ color: inlineStyles.textColor }}>
+                                    <span>📉 Desconto Progressivo no &ldquo;+&rdquo;:</span>
+                                    {produto.quantidade_maxima && (
+                                      <span className="text-[10px] font-normal opacity-75">
+                                        Máx: {produto.quantidade_maxima} {produto.unidade || 'un.'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {/* Pílula de 1x */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                          alert(fieldsValidation.validationMessage);
+                                          return;
+                                        }
+                                        handleProdutoQuantityChange(produto.id, 1);
+                                      }}
+                                      className={`px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                                        currentQty === 1 ? 'font-bold ring-2 ring-indigo-500/40' : 'opacity-80 hover:opacity-100'
+                                      }`}
+                                      style={
+                                        currentQty === 1
+                                          ? {
+                                              borderColor: inlineStyles.accentColor,
+                                              background: `${inlineStyles.accentColor}18`,
+                                              color: inlineStyles.textColor,
+                                            }
+                                          : {
+                                              borderColor: `${inlineStyles.textColorSecondary}25`,
+                                              color: inlineStyles.textColor,
+                                            }
+                                      }
+                                    >
+                                      1x = {formatCurrency(valorFinalUnitarioBase)}
+                                    </button>
+                                    {qtyPricing.resolvedSteps.map((st) => {
+                                      const isSelectedStep = currentQty === st.quantidade;
+                                      return (
+                                        <button
+                                          key={st.quantidade}
+                                          type="button"
+                                          onClick={() => {
+                                            if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                              alert(fieldsValidation.validationMessage);
+                                              return;
+                                            }
+                                            handleProdutoQuantityChange(produto.id, st.quantidade);
+                                          }}
+                                          className={`px-2.5 py-1 rounded-lg border text-xs transition-all flex items-center gap-1 ${
+                                            isSelectedStep ? 'font-bold ring-2 ring-emerald-500/40' : 'opacity-85 hover:opacity-100'
+                                          }`}
+                                          style={
+                                            isSelectedStep
+                                              ? {
+                                                  borderColor: inlineStyles.accentColor,
+                                                  background: `${inlineStyles.accentColor}20`,
+                                                  color: inlineStyles.textColor,
+                                                }
+                                              : {
+                                                  borderColor: `${inlineStyles.textColorSecondary}25`,
+                                                  color: inlineStyles.textColor,
+                                                }
+                                          }
+                                        >
+                                          <span>
+                                            {st.quantidade}x = <strong>{formatCurrency(st.totalPrice)}</strong>
+                                          </span>
+                                          {st.savings > 0 && (
+                                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                              (-{formatCurrency(st.savings)})
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           );
@@ -4261,52 +4991,68 @@ export function QuotePage() {
 
                     {/* Controle: toggle simples ou +/- quantidade */}
                     {(produto.permite_multiplas_unidades ?? true) ? (
-                      <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-200" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleProdutoQuantityChange(
-                            produto.id,
-                            (selectedProdutos[produto.id] || 0) - 1
-                          )
-                        }
-                        disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
-                        className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold transition-colors"
-                        style={{
-                          background: `${inlineStyles.textColorSecondary}15`,
-                          color: inlineStyles.textColor,
-                        }}
-                        aria-label="Diminuir quantidade"
-                      >
-                        -
-                      </button>
-                      <span className={`min-w-[60px] text-center font-bold text-xl ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>
-                        {selectedProdutos[produto.id] || 0}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
-                            alert(fieldsValidation.validationMessage);
-                            return;
-                          }
-                          handleProdutoQuantityChange(
-                            produto.id,
-                            (selectedProdutos[produto.id] || 0) + 1
-                          );
-                        }}
-                        disabled={!produto.obrigatorio && !fieldsValidation.canAddProducts}
-                        className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold transition-colors"
-                        style={{
-                          background: inlineStyles.accentColor,
-                          color: '#fff',
-                        }}
-                        title={!produto.obrigatorio && !fieldsValidation.canAddProducts ? 'Preencha os campos obrigatórios primeiro' : ''}
-                        aria-label="Aumentar quantidade"
-                      >
-                        {!produto.obrigatorio && !fieldsValidation.canAddProducts ? <Lock className="w-5 h-5" /> : '+'}
-                      </button>
-                    </div>
+                      <div className="flex flex-col items-center justify-center gap-1.5 mt-4 pt-4 border-t border-gray-200" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleProdutoQuantityChange(
+                                produto.id,
+                                (selectedProdutos[produto.id] || 0) - 1
+                              )
+                            }
+                            disabled={produto.obrigatorio && selectedProdutos[produto.id] === 1}
+                            className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold transition-colors"
+                            style={{
+                              background: `${inlineStyles.textColorSecondary}15`,
+                              color: inlineStyles.textColor,
+                            }}
+                            aria-label="Diminuir quantidade"
+                          >
+                            -
+                          </button>
+                          <span className={`min-w-[60px] text-center font-bold text-xl ${tema.cores.textoPrincipal}`} style={{ color: inlineStyles.textColor }}>
+                            {selectedProdutos[produto.id] || 0}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!produto.obrigatorio && !fieldsValidation.canAddProducts) {
+                                alert(fieldsValidation.validationMessage);
+                                return;
+                              }
+                              handleProdutoQuantityChange(
+                                produto.id,
+                                (selectedProdutos[produto.id] || 0) + 1
+                              );
+                            }}
+                            disabled={
+                              (!produto.obrigatorio && !fieldsValidation.canAddProducts) ||
+                              Boolean(produto.quantidade_maxima && (selectedProdutos[produto.id] || 0) >= produto.quantidade_maxima)
+                            }
+                            className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold transition-colors"
+                            style={{
+                              background: inlineStyles.accentColor,
+                              color: '#fff',
+                            }}
+                            title={
+                              !produto.obrigatorio && !fieldsValidation.canAddProducts
+                                ? 'Preencha os campos obrigatórios primeiro'
+                                : produto.quantidade_maxima && (selectedProdutos[produto.id] || 0) >= produto.quantidade_maxima
+                                ? `Limite máximo de ${produto.quantidade_maxima} unidades atingido`
+                                : ''
+                            }
+                            aria-label="Aumentar quantidade"
+                          >
+                            {!produto.obrigatorio && !fieldsValidation.canAddProducts ? <Lock className="w-5 h-5" /> : '+'}
+                          </button>
+                        </div>
+                        {produto.quantidade_maxima && (selectedProdutos[produto.id] || 0) >= produto.quantidade_maxima && (
+                          <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                            Limite máximo de {produto.quantidade_maxima} {produto.unidade || 'unidades'} atingido
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       // Modo toggle — selecionar/desselecionar (qty sempre 0 ou 1)
                       <div className="mt-4 pt-4 border-t border-gray-200" style={{ borderTopColor: `${inlineStyles.textColorSecondary}20` }}>
@@ -4635,6 +5381,45 @@ export function QuotePage() {
                             </span>
                           </div>
 
+                          {(breakdown.economiaQuantidadeProdutos ?? 0) > 0 && (
+                            <div className="flex items-start justify-between text-sm gap-2">
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>
+                                ➕ Economia Progressiva nas Quantidades (já aplicada):
+                              </span>
+                              <span className="text-green-600 font-semibold text-right" style={{ color: '#16a34a' }}>
+                                -{formatCurrency(breakdown.economiaQuantidadeProdutos || 0)}
+                              </span>
+                            </div>
+                          )}
+
+                          {(breakdown.descontoProgressivo ?? 0) > 0 && (
+                            <div className="flex items-start justify-between text-sm gap-2">
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>
+                                📊 Desconto Progressivo:
+                              </span>
+                              <span className="text-green-600 font-semibold text-right" style={{ color: '#16a34a' }}>
+                                -{formatCurrency(breakdown.descontoProgressivo || 0)}
+                              </span>
+                            </div>
+                          )}
+
+                          {(breakdown.ajusteDiaSemana ?? 0) !== 0 && (
+                            <div className="flex items-start justify-between text-sm gap-2">
+                              <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>
+                                📅 {progressiveSummary.activeDayRuleLabel || 'Ajuste por Dia da Semana'}:
+                              </span>
+                              <span
+                                className={`font-semibold text-right ${
+                                  (breakdown.ajusteDiaSemana || 0) > 0 ? 'text-red-600' : 'text-green-600'
+                                }`}
+                                style={{ color: (breakdown.ajusteDiaSemana || 0) > 0 ? '#dc2626' : '#16a34a' }}
+                              >
+                                {(breakdown.ajusteDiaSemana || 0) > 0 ? '+' : ''}
+                                {formatCurrency(breakdown.ajusteDiaSemana || 0)}
+                              </span>
+                            </div>
+                          )}
+
                           {breakdown.ajusteSazonal !== 0 && (
                             <div className="flex items-start justify-between text-sm gap-2">
                               <span className={`${tema.cores.textoSecundario} flex-1`} style={{ color: inlineStyles.textColorSecondary }}>
@@ -4768,50 +5553,94 @@ export function QuotePage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              className={`w-full flex items-center justify-center gap-2 sm:gap-3 bg-green-600 hover:bg-green-700 active:opacity-90 text-white px-6 py-4 sm:py-5 ${tema.estilos.borderRadius} font-semibold text-base sm:text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${tema.estilos.shadow} ${tema.estilos.shadowHover} min-h-[56px] touch-manipulation`}
-              style={{
-                ...inlineStyles.submitButton,
-                ...((isSubmitting ||
-                  !profile?.whatsapp_principal ||
-                  !fieldsValidation.canUseWhatsApp ||
-                  (disponibilidade?.modo_aviso === 'restritivo' &&
-                   (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada')))
-                  ? { opacity: 0.5, cursor: 'not-allowed', background: '#9ca3af', border: 'none', boxShadow: 'none' }
-                  : {})
-              }}
-              disabled={
-                isSubmitting ||
-                !profile?.whatsapp_principal ||
-                !fieldsValidation.canUseWhatsApp ||
-                (disponibilidade?.modo_aviso === 'restritivo' &&
-                 (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada'))
-              }
-              title={
-                isSubmitting
-                  ? 'Salvando...'
-                  : !profile?.whatsapp_principal
-                  ? 'O fotógrafo não configurou um número para negociação via WhatsApp.'
-                  : !fieldsValidation.canUseWhatsApp
-                  ? 'Preencha todos os campos obrigatórios primeiro'
-                  : (disponibilidade?.modo_aviso === 'restritivo' &&
+            {/* CTA PRINCIPAL DE ENVIO & NEGOCIAÇÃO DA PROPOSTA */}
+            <div className="space-y-3.5 pt-3">
+              {/* Badge de Presença Online do Profissional */}
+              {vendorPresence.showOnlineStatus !== false && vendorPresence.status !== 'invisible' && (
+                <div className="flex items-center justify-center gap-2 p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      vendorPresence.status === 'online' ? 'bg-emerald-400' : 'bg-amber-400'
+                    }`} />
+                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                      vendorPresence.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`} />
+                  </span>
+                  <span>
+                    {profile?.nome_profissional || profile?.nome_empresa || 'Profissional'}{' '}
+                    {vendorPresence.status === 'online' ? 'está Online Agora' : 'está em Atendimento'}
+                    {vendorPresence.responseTimeText ? ` • ${vendorPresence.responseTimeText}` : ''}
+                  </span>
+                </div>
+              )}
+
+              {/* Botões de CTA: Envio (Resumo/WhatsApp) + Chat Oficial Direto */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="submit"
+                  className={`flex-1 relative group overflow-hidden flex flex-col items-center justify-center bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white px-6 py-4 sm:py-5 ${tema.estilos.borderRadius} font-bold transition-all shadow-xl shadow-emerald-950/40 border border-emerald-400/50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[66px] touch-manipulation cursor-pointer ring-2 ring-emerald-400/20 hover:ring-emerald-400/60`}
+                  style={inlineStyles.submitButton}
+                  disabled={
+                    isSubmitting ||
+                    !fieldsValidation.canUseWhatsApp ||
+                    (disponibilidade?.modo_aviso === 'restritivo' &&
                      (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada'))
-                  ? 'Esta data não está disponível. Por favor, escolha outra data.'
-                  : 'Prosseguir para o envio'
-              }
-              data-fixed-button
-            >
-              {(!fieldsValidation.canUseWhatsApp ||
-                isSubmitting ||
-                (disponibilidade?.modo_aviso === 'restritivo' &&
-                 (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada')))
-                ? <Lock className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" /> // Mantém o ícone de bloqueio quando desabilitado
-                : <Send className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />}
-              <span className="leading-tight">
-                {isSubmitting ? 'Salvando e Finalizando...' : (template?.texto_botao_envio || 'Negociar no WhatsApp')}
-              </span>
-            </button>
+                  }
+                  title={
+                    isSubmitting
+                      ? 'Salvando...'
+                      : !fieldsValidation.canUseWhatsApp
+                      ? 'Preencha os campos obrigatórios primeiro'
+                      : 'Enviar orçamento'
+                  }
+                  data-fixed-button
+                >
+                  {/* Efeito de brilho animado */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
+                  
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold bg-emerald-950/80 text-emerald-200 border border-emerald-400/40 flex items-center gap-1 shadow-sm">
+                      <ShieldCheck className="w-3 h-3 text-emerald-300" />
+                      Canal Oficial Protegido • WhatsApp & Chat
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2.5 sm:gap-3 text-base sm:text-lg leading-tight">
+                    <Send className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+                    <span>
+                      {isSubmitting
+                        ? 'Preparando Envio...'
+                        : (template?.texto_botao_envio || 'Negociar Proposta no WhatsApp')}
+                    </span>
+                  </div>
+
+                  <span className="text-[11px] sm:text-xs font-normal text-emerald-100/90 mt-1 text-center">
+                    Conferir resumo e escolher entre envio direto pelo WhatsApp ou Chat Oficial PriceU$
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStartOnlineChat}
+                  disabled={
+                    isStartingChat ||
+                    !fieldsValidation.canUseWhatsApp ||
+                    (disponibilidade?.modo_aviso === 'restritivo' &&
+                     (disponibilidade?.status === 'ocupada' || disponibilidade?.status === 'bloqueada'))
+                  }
+                  className={`sm:w-64 relative group overflow-hidden flex flex-col items-center justify-center bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-500 active:scale-[0.99] text-white px-5 py-4 ${tema.estilos.borderRadius} font-bold transition-all shadow-xl shadow-indigo-950/30 border border-indigo-400/40 disabled:opacity-50 disabled:cursor-not-allowed min-h-[66px] touch-manipulation cursor-pointer`}
+                  title="Negociar ao vivo no Chat PriceU$"
+                >
+                  <div className="flex items-center gap-2 text-sm sm:text-base leading-tight">
+                    <MessageSquare className="w-5 h-5 flex-shrink-0" />
+                    <span>{isStartingChat ? 'Abrindo Chat...' : 'Negociar no Chat PriceU$'}</span>
+                  </div>
+                  <span className="text-[10px] font-normal text-indigo-100/90 mt-1 text-center">
+                    Chat oficial em tempo real • Sem bloqueios
+                  </span>
+                </button>
+              </div>
+            </div>
           </form>
 
           {/* Rate Photographer Button removido de propostas públicas */}
@@ -4844,6 +5673,9 @@ export function QuotePage() {
 
       {/* Modal de Resumo e Envio */}
       {renderSummaryModal()}
+
+      {/* Ecossistema de Chat e Negociação Online PriceU$ (Live Dock & Drawer) */}
+      {renderChatEcosystem()}
 
       {/* Rodapé */}
       {!(profile?.status_assinatura === 'active') && (

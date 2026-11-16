@@ -13,6 +13,7 @@ import { SuccessPage } from './pages/SuccessPage'
 import { QuotePage } from './pages/QuotePage'
 import { PublicProfilePage } from './pages/PublicProfilePage'
 import { ContractSignPage } from './pages/ContractSignPage'
+import { PhotoDeliverySignPage } from './pages/PhotoDeliverySignPage'
 import { ContractCompletePage } from './pages/ContractCompletePage'
 import { ContractVerificationPage } from './pages/ContractVerificationPage'; // Adicionado
 import { ContractPreviewPage } from './pages/ContractPreviewPage' // Adicionado
@@ -24,6 +25,8 @@ import { PublicPortfolioPage } from './pages/PublicPortfolioPage';
 import { MobileAppDownloadPage, DesktopAppDownloadPage } from './pages/AppDownloadsPages';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
+import { BrideLoginPage } from './pages/beta/BrideLoginPage';
+import { BridePortalPage } from './pages/beta/BridePortalPage';
 import { DesktopAuthBridge } from './components/auth/DesktopAuthBridge';
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { DebugOverlay } from './components/DebugOverlay'
@@ -105,6 +108,10 @@ function App() {
               <Route path="/desktop" element={<DesktopAppDownloadPage />} />
               <Route path="/desktop-auth" element={<DesktopAuthBridge />} />
 
+              {/* Módulo Isolado: Portal da Noiva, Marketplace Multi-Fornecedor & Chat */}
+              <Route path="/beta/noiva/login" element={<BrideLoginPage />} />
+              <Route path="/beta/portal-noiva" element={<BridePortalPage />} />
+
               {/* Rotas públicas de tutoriais, galerias, políticas e portfólio */}
               <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
               <Route path="/termos-de-servico" element={<TermsOfServicePage />} />
@@ -120,6 +127,7 @@ function App() {
               <Route path="/contrato/:token/preview" element={<ContractPreviewPage />} />
               <Route path="/verificar/:token" element={<ContractVerificationPage />} />
               <Route path="/contrato/:token/completo" element={<ContractCompletePage />} />
+              <Route path="/termo-entrega/:token" element={<PhotoDeliverySignPage />} />
             </Routes>
           </div>
         </Router>

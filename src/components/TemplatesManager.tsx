@@ -19,9 +19,8 @@ interface Template {
   created_at: string;
   ativo?: boolean;
 }
-import { Plus, Edit2, Trash2, Copy, ExternalLink, Crown, AlertCircle, GripVertical, X, LayoutGrid, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Edit2, Trash2, Copy, ExternalLink, GripVertical, X, LayoutGrid, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePlanLimits } from '../hooks/usePlanLimits';
-import { UpgradeLimitModal } from './UpgradeLimitModal';
 import { TemplateAnalyticsSummary } from './TemplateAnalyticsSummary';
 import { QuoteAnalytics } from './QuoteAnalytics';
 import {
@@ -237,7 +236,6 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showEditNameModal, setShowEditNameModal] = useState(false);
   const [templateToEdit, setTemplateToEdit] = useState<Template | null>(null);
@@ -295,22 +293,12 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   };
 
   const handleNewTemplateClick = () => {
-    if (!planLimits.canCreateTemplate) {
-      setShowUpgradeModal(true);
-      return;
-    }
     setShowNewTemplateModal(true);
   };
 
   const handleCreateTemplate = async () => {
     if (!newTemplateName.trim()) {
       alert('❌ Nome do template é obrigatório');
-      return;
-    }
-
-    if (!planLimits.canCreateTemplate) {
-      setShowNewTemplateModal(false);
-      setShowUpgradeModal(true);
       return;
     }
 
@@ -362,12 +350,6 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
   };
 
   const handleDuplicateClick = (template: Template) => {
-    // Validar limite antes de duplicar
-    if (!planLimits.canCreateTemplate) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
     // Abrir modal para editar o nome
     setTemplateToDuplicate(template);
     setNewTemplateName(`${template.nome_template} (Cópia)`);
@@ -612,13 +594,6 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
     }
   };
 
-  const getLimitProgressColor = () => {
-    const percentage = (planLimits.templatesUsed / planLimits.templatesLimit) * 100;
-    if (percentage >= 90) return 'bg-red-600';
-    if (percentage >= 70) return 'bg-yellow-600';
-    return 'bg-green-600';
-  };
-
   if (loading || planLimits.loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -629,7 +604,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
 
   return (
     <div className="space-y-6">
-      {/* Header com Contador de Limites */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Meus Templates</h2>
@@ -637,17 +612,8 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         </div>
         <button
           onClick={handleNewTemplateClick}
-          disabled={!planLimits.canCreateTemplate}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-            planLimits.canCreateTemplate
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
-          title={
-            !planLimits.canCreateTemplate
-              ? 'Limite de templates atingido. Faça upgrade para criar mais!'
-              : 'Criar novo template'
-          }
+          className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
+          title="Criar novo template"
         >
           <Plus className="w-5 h-5" />
           Novo Template
@@ -673,78 +639,6 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
         </div>
       </div>
 
-      {/* Card de Estatísticas e Limites */}
-      {!planLimits.isPremium && (
-        <div className="bg-white dark:bg-[#0a1628] rounded-lg shadow dark:shadow-none p-4 border border-gray-200 dark:border-[rgba(255,255,255,0.08)]">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Templates: {planLimits.templatesUsed} de {planLimits.templatesLimit}
-                </h3>
-                {!planLimits.isPremium && (
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                    Plano Gratuito
-                  </span>
-                )}
-                {planLimits.isPremium && !planLimits.isPrivileged && (
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                    <Crown className="w-3 h-3" />
-                    Premium
-                  </span>
-                )}
-                {planLimits.isPrivileged && (
-                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                    <Crown className="w-3 h-3" />
-                    Conta Especial
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-600 dark:text-[rgba(255,255,255,0.55)] mt-1">
-                {planLimits.isPremium 
-                  ? 'Você pode criar até 10 templates no plano premium'
-                  : 'Faça upgrade para criar até 10 templates'}
-              </p>
-            </div>
-            {!planLimits.isPremium && (
-              <button
-                onClick={() => setShowUpgradeModal(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium text-sm"
-              >
-                <Crown className="w-4 h-4" />
-                Fazer Upgrade
-              </button>
-            )}
-          </div>
-
-          {/* Barra de Progresso */}
-          <div className="w-full bg-gray-200 dark:bg-[rgba(255,255,255,0.1)] rounded-full h-2.5 overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 ${getLimitProgressColor()}`}
-              style={{
-                width: `${Math.min((planLimits.templatesUsed / planLimits.templatesLimit) * 100, 100)}%`,
-              }}
-            />
-          </div>
-
-          {/* Aviso de Limite Próximo */}
-          {!planLimits.isPremium && planLimits.templatesUsed >= planLimits.templatesLimit && (
-            <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-red-900">
-                  Limite de templates atingido!
-                </p>
-                <p className="text-sm text-red-700 mt-1">
-                  Você atingiu o limite de {planLimits.templatesLimit} template no plano gratuito. 
-                  Faça upgrade para criar até 10 templates.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {templates.length === 0 ? (
         <div className="bg-white dark:bg-[rgba(255,255,255,0.04)] border dark:border-[rgba(255,255,255,0.08)] rounded-lg shadow p-12 text-center">
           <div className="text-gray-400 text-6xl mb-4">📝</div>
@@ -756,12 +650,7 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
           </p>
           <button
             onClick={handleNewTemplateClick}
-            disabled={!planLimits.canCreateTemplate}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              planLimits.canCreateTemplate
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
+            className="px-6 py-3 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
           >
             Criar Primeiro Template
           </button>
@@ -1020,16 +909,6 @@ export function TemplatesManager({ userId, onEditTemplate }: TemplatesManagerPro
             </div>
           </div>
         </div>
-      )}
-
-      {/* Modal de Upgrade */}
-      {showUpgradeModal && (
-        <UpgradeLimitModal
-          type="templates"
-          currentLimit={planLimits.templatesLimit}
-          premiumLimit={10}
-          onClose={() => setShowUpgradeModal(false)}
-        />
       )}
     </div>
   );

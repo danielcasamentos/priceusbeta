@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { checkAvailability, AvailabilityResult } from '../services/availabilityService';
 import { Product, PriceBreakdown } from '../lib/whatsappMessageGenerator';
+import { formatCurrency } from '../lib/utils';
 import { GalleryService } from '../services/galleryService';
 import { GalleryVisitor } from '../types/gallery';
 import {
@@ -66,7 +67,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   // Cidades e Temporadas do Usuário
   const [cidadesAjuste, setCidadesAjuste] = useState<any[]>([]);
   const [temporadas, setTemporadas] = useState<any[]>([]);
-  
+
   // Controle de cidade personalizada
   const [selectedCidadeId, setSelectedCidadeId] = useState<string>('');
   const [isCustomCity, setIsCustomCity] = useState(false);
@@ -87,8 +88,11 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   const [cupomCodigo, setCupomCodigo] = useState('');
   const [cupomAtivo, setCupomAtivo] = useState(false);
   const [cupomDesconto, setCupomDesconto] = useState(0);
+  const [cupomTipoDesconto, setCupomTipoDesconto] = useState<'percentual' | 'valor_fixo'>('percentual');
+  const [cupomValorFixo, setCupomValorFixo] = useState(0);
   const [cupomMensagem, setCupomMensagem] = useState('');
   const [validandoCupom, setValidandoCupom] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
 
   // Disponibilidade
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -142,15 +146,15 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     setNome(visitor.name);
     if (visitor.email) setEmail(visitor.email);
     if (visitor.whatsapp) setTelefone(visitor.whatsapp);
-    
+
     const galTitle = visitor.gallery_title || 'Galeria Online';
     setSelectedVisitorGalleryTitle(galTitle);
     setOrigem('evento');
-    
+
     const dateFormatted = visitor.accessed_at ? new Date(visitor.accessed_at).toLocaleDateString('pt-BR') : 'recente';
     const downloadsInfo = visitor.downloads_count ? ` (Baixou ${visitor.downloads_count} foto(s))` : '';
     setNotas(`📍 Lead capturado via acesso à Galeria Online "${galTitle}"${downloadsInfo}. Data de Acesso: ${dateFormatted}.`);
-    
+
     setShowGalleryPicker(false);
   };
 
@@ -195,10 +199,11 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     loadInitialData();
   }, [userId]);
 
-  // Carrega temporadas do template selecionado
+  // Carrega temporadas e cupons ativos do template selecionado
   useEffect(() => {
     if (!templateId) {
       setTemporadas([]);
+      setAvailableCoupons([]);
       return;
     }
     async function loadTemporadas() {
@@ -210,7 +215,17 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
         .order('data_inicio');
       if (data) setTemporadas(data);
     }
+    async function loadCoupons() {
+      const { data } = await supabase
+        .from('cupons')
+        .select('*')
+        .eq('template_id', templateId)
+        .eq('ativo', true)
+        .order('created_at', { ascending: false });
+      setAvailableCoupons(data || []);
+    }
     loadTemporadas();
+    loadCoupons();
   }, [templateId]);
 
   // Verifica disponibilidade da agenda quando a data muda
@@ -266,7 +281,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
           .select('*')
           .eq('template_id', templateId)
           .order('ordem');
-        
+
         if (!isMounted) return;
 
         if (prodErr) {
@@ -277,11 +292,13 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
         if (data) {
           const prods = data as Product[];
           setTemplateProducts(prods);
-          
-          // Por padrão, seleciona todos os produtos do template
+
+          // Por padrão, vem desmarcado (ou apenas os itens obrigatórios)
           const initialSelection: Record<string, number> = {};
           prods.forEach((p) => {
-            initialSelection[p.id] = 1;
+            if (p.obrigatorio) {
+              initialSelection[p.id] = 1;
+            }
           });
           setSelectedProducts(initialSelection);
         }
@@ -371,8 +388,12 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     const manualAcres = parseFloat(acrescimoManual) || 0;
 
     let descontoCupomValor = 0;
-    if (cupomAtivo && cupomDesconto > 0) {
-      descontoCupomValor = ((subtotal + ajusteSazonal + geoPercentual + geoTaxa) * cupomDesconto) / 100;
+    if (cupomAtivo) {
+      if (cupomTipoDesconto === 'valor_fixo' && cupomValorFixo > 0) {
+        descontoCupomValor = cupomValorFixo;
+      } else if (cupomDesconto > 0) {
+        descontoCupomValor = ((subtotal + ajusteSazonal + geoPercentual + geoTaxa) * cupomDesconto) / 100;
+      }
     }
 
     const baseCalculatedTotal = subtotal + ajusteSazonal + geoPercentual + geoTaxa + manualAcres - manualDesc - descontoCupomValor;
@@ -397,7 +418,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
   useEffect(() => {
     if (isManualValueOverride) return;
     setValor((calculated.total * 100).toString());
-  }, [selectedProducts, templateProducts, isManualValueOverride, dataEvento, temporadas, selectedCidadeId, isCustomCity, customCityPercent, customCityTax, descontoManual, acrescimoManual, cupomAtivo, cupomDesconto]);
+  }, [selectedProducts, templateProducts, isManualValueOverride, dataEvento, temporadas, selectedCidadeId, isCustomCity, customCityPercent, customCityTax, descontoManual, acrescimoManual, cupomAtivo, cupomDesconto, cupomTipoDesconto, cupomValorFixo]);
 
   // Auto-fill tipoEvento ao selecionar template
   const handleTemplateChange = (id: string) => {
@@ -436,15 +457,17 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
         return;
       }
 
-      // Se tiver data_validade, verifica
-      if (data.data_validade) {
-        const validade = new Date(data.data_validade);
+      // Se tiver validade, verifica
+      if (data.validade) {
+        const validade = new Date(data.validade);
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
         if (validade < hoje) {
           setCupomMensagem('❌ Cupom expirado');
           setCupomAtivo(false);
           setCupomDesconto(0);
+          setCupomTipoDesconto('percentual');
+          setCupomValorFixo(0);
           return;
         }
       }
@@ -458,8 +481,17 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
       }
 
       setCupomAtivo(true);
-      setCupomDesconto(data.porcentagem || 0);
-      setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+      if (data.tipo_desconto === 'valor_fixo') {
+        setCupomTipoDesconto('valor_fixo');
+        setCupomValorFixo(data.valor_fixo || 0);
+        setCupomDesconto(0);
+        setCupomMensagem(`✅ Cupom aplicado: -${formatCurrency(data.valor_fixo || 0)} de desconto!`);
+      } else {
+        setCupomTipoDesconto('percentual');
+        setCupomDesconto(data.porcentagem || 0);
+        setCupomValorFixo(0);
+        setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+      }
     } catch (err) {
       console.error('Erro ao validar cupom:', err);
       setCupomMensagem('❌ Erro ao validar cupom');
@@ -500,6 +532,22 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
     }));
   };
 
+  const handleSelectAllProducts = () => {
+    const allSelected: Record<string, number> = {};
+    templateProducts.forEach((p) => {
+      allSelected[p.id] = selectedProducts[p.id] || 1;
+    });
+    setSelectedProducts(allSelected);
+  };
+
+  const handleDeselectAllProducts = () => {
+    const onlyRequired: Record<string, number> = {};
+    templateProducts.forEach((p) => {
+      if (p.obrigatorio) onlyRequired[p.id] = 1;
+    });
+    setSelectedProducts(onlyRequired);
+  };
+
   const valorNumerico = valor ? parseInt(valor, 10) / 100 : 0;
 
   const formatValorDisplay = () => {
@@ -521,7 +569,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
 
     try {
       const effectiveTotal = isManualValueOverride ? valorNumerico : calculated.total;
-      
+
       const priceBreakdown: PriceBreakdown = {
         subtotal: calculated.subtotal,
         ajusteSazonal: calculated.ajusteSazonal,
@@ -608,6 +656,8 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
           cupomCodigo: cupomAtivo ? cupomCodigo : null,
           cupomAtivo,
           cupomDesconto,
+          cupomTipoDesconto: cupomAtivo ? cupomTipoDesconto : null,
+          cupomValorFixo: cupomAtivo && cupomTipoDesconto === 'valor_fixo' ? cupomValorFixo : 0,
         },
       };
 
@@ -839,16 +889,15 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Status de Disponibilidade */}
                   {disponibilidade && (
-                    <div className={`mt-2 flex items-center gap-1.5 p-2.5 rounded-lg border text-xs font-semibold ${
-                      disponibilidade.status === 'disponivel'
+                    <div className={`mt-2 flex items-center gap-1.5 p-2.5 rounded-lg border text-xs font-semibold ${disponibilidade.status === 'disponivel'
                         ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/20 dark:border-green-900/50 dark:text-green-400'
                         : disponibilidade.status === 'parcial'
-                        ? 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-900/50 dark:text-yellow-400'
-                        : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-900/50 dark:text-red-400'
-                    }`}>
+                          ? 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-900/50 dark:text-yellow-400'
+                          : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-900/50 dark:text-red-400'
+                      }`}>
                       {disponibilidade.status === 'disponivel' ? (
                         <Check className="w-3.5 h-3.5 shrink-0" />
                       ) : (
@@ -992,10 +1041,31 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
               {/* Seção de seleção de produtos do Template */}
               {templateId && (
                 <div className="mt-3 p-3 bg-white dark:bg-[rgba(255,255,255,0.02)] rounded-xl border border-gray-100 dark:border-[rgba(255,255,255,0.06)]">
-                  <label className="block text-xs font-bold text-gray-500 dark:text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-2">
-                    Produtos / Pacotes do Template
-                  </label>
-                  
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-bold text-gray-500 dark:text-[rgba(255,255,255,0.4)] uppercase tracking-wider">
+                      Produtos / Pacotes do Template
+                    </label>
+                    {templateProducts.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllProducts}
+                          className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 cursor-pointer"
+                        >
+                          Marcar Todos
+                        </button>
+                        <span className="text-gray-300 dark:text-gray-600 text-[10px]">•</span>
+                        <button
+                          type="button"
+                          onClick={handleDeselectAllProducts}
+                          className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 hover:underline px-2 py-0.5 rounded bg-gray-100 dark:bg-white/5 cursor-pointer"
+                        >
+                          Desmarcar Todos
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {loadingProducts ? (
                     <div className="py-4 flex justify-center items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
@@ -1011,11 +1081,10 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                         return (
                           <div
                             key={p.id}
-                            className={`flex items-center justify-between p-2 rounded-lg border text-sm transition-colors ${
-                              isSelected
+                            className={`flex items-center justify-between p-2 rounded-lg border text-sm transition-colors ${isSelected
                                 ? 'bg-indigo-50/50 border-indigo-150 dark:bg-indigo-950/10 dark:border-indigo-900/50'
                                 : 'bg-gray-50 border-gray-100 dark:bg-transparent dark:border-[rgba(255,255,255,0.04)]'
-                            }`}
+                              }`}
                           >
                             <label className="flex items-center gap-2 cursor-pointer flex-1">
                               <input
@@ -1075,17 +1144,16 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                       return (
                         <div
                           key={p.id}
-                          className={`flex items-center justify-between p-2 rounded-lg border text-sm transition-colors ${
-                            isSelected
+                          className={`flex items-center justify-between p-2 rounded-lg border text-sm transition-colors ${isSelected
                               ? 'bg-amber-100/50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800/50'
                               : 'bg-white border-gray-100 dark:bg-transparent dark:border-[rgba(255,255,255,0.04)]'
-                          }`}
+                            }`}
                         >
                           <label className="flex items-center gap-2 cursor-pointer flex-1">
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={(e) => setSelectedUpsellProducts(prev => ({...prev, [p.id]: e.target.checked}))}
+                              onChange={(e) => setSelectedUpsellProducts(prev => ({ ...prev, [p.id]: e.target.checked }))}
                               className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
                             />
                             <div>
@@ -1120,6 +1188,25 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
               {/* Seção de Cupom de Desconto */}
               <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-[rgba(255,255,255,0.05)] space-y-2">
                 <label className={labelCls}>🎫 Cupom de Desconto</label>
+                {availableCoupons.length > 0 && (
+                  <select
+                    className={inputCls}
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) setCupomCodigo(e.target.value);
+                    }}
+                  >
+                    <option value="">— Selecionar cupom do template —</option>
+                    {availableCoupons.map((c) => (
+                      <option key={c.id} value={c.codigo}>
+                        {c.codigo} — {c.tipo_desconto === 'valor_fixo'
+                          ? `${formatCurrency(Number(c.valor_fixo || 0))} de desconto`
+                          : `${c.porcentagem}% de desconto`}
+                        {c.descricao ? ` (${c.descricao})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1132,7 +1219,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                     type="button"
                     onClick={handleValidarCupom}
                     disabled={validandoCupom}
-                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
                   >
                     {validandoCupom ? 'Validando...' : 'Aplicar'}
                   </button>
@@ -1185,7 +1272,7 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                     <span>Subtotal dos Produtos:</span>
                     <span className="font-semibold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculated.subtotal)}</span>
                   </div>
-                  
+
                   {calculated.ajusteSazonal !== 0 && (
                     <div className="flex justify-between text-amber-700 dark:text-amber-400 font-semibold">
                       <span>Ajuste Sazonal ({calculated.seasonalPercent}%):</span>
@@ -1266,11 +1353,10 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                     value={formatValorDisplay()}
                     onChange={(e) => handleValorChange(e.target.value)}
                     placeholder="0,00"
-                    className={`${inputCls} pl-9 font-semibold ${
-                      isManualValueOverride
+                    className={`${inputCls} pl-9 font-semibold ${isManualValueOverride
                         ? 'border-amber-400 bg-amber-50/30 text-amber-700 focus:ring-amber-500'
                         : 'text-indigo-600 dark:text-indigo-400 font-bold'
-                    }`}
+                      }`}
                   />
                 </div>
               </div>
@@ -1293,11 +1379,10 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                       key={o.value}
                       type="button"
                       onClick={() => setOrigem(o.value)}
-                      className={`px-2 py-2 text-xs font-semibold rounded-xl border transition-all text-center leading-tight ${
-                        origem === o.value
+                      className={`px-2 py-2 text-xs font-semibold rounded-xl border transition-all text-center leading-tight ${origem === o.value
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : 'bg-white dark:bg-[rgba(255,255,255,0.04)] border-gray-200 dark:border-[rgba(255,255,255,0.08)] text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:border-indigo-300 dark:hover:border-indigo-500'
-                      }`}
+                        }`}
                     >
                       {o.label}
                     </button>
@@ -1315,11 +1400,10 @@ export function NewLeadModal({ userId, onClose, onSuccess }: NewLeadModalProps) 
                       key={s.value}
                       type="button"
                       onClick={() => setStatus(s.value)}
-                      className={`px-3 py-2.5 text-xs font-semibold rounded-xl border transition-all text-center ${
-                        status === s.value
+                      className={`px-3 py-2.5 text-xs font-semibold rounded-xl border transition-all text-center ${status === s.value
                           ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                           : 'bg-white dark:bg-[rgba(255,255,255,0.04)] border-gray-200 dark:border-[rgba(255,255,255,0.08)] text-gray-600 dark:text-[rgba(255,255,255,0.6)] hover:border-blue-300 dark:hover:border-blue-500'
-                      }`}
+                        }`}
                     >
                       {s.label}
                     </button>

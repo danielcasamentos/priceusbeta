@@ -94,7 +94,8 @@ export async function checkAvailability(
   userId: string,
   dataEvento: string,
   duracaoMinutos?: number,
-  retryCount: number = 0
+  retryCount: number = 0,
+  forceHourlySlots: boolean = false
 ): Promise<AvailabilityResult> {
   const maxRetries = 2;
 
@@ -121,6 +122,72 @@ export async function checkAvailability(
       inativa: 'gray',
     };
 
+    let finalModo = data.modo_agendamento;
+    let finalSlots: SlotDisponibilidade[] | undefined = data.slots;
+
+    // Se o template exige escolha de horário (forceHourlySlots) mas a agenda global retornou sem slots (modo 'dia'),
+    // geramos os horários consultando os compromissos reais da agenda na data escolhida.
+    if (
+      forceHourlySlots &&
+      !data.bloqueada &&
+      (!Array.isArray(finalSlots) || finalSlots.length === 0)
+    ) {
+      finalModo = 'hora';
+      const defaultHours = ['08:00', '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+      let candidateHours = defaultHours;
+
+      try {
+        const { data: cfg } = await supabase
+          .from('configuracao_agenda')
+          .select('config_horarios_trabalho')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const dow = new Date(`${dataEvento}T12:00:00`).getDay();
+        const customForDay = cfg?.config_horarios_trabalho?.[String(dow)];
+        if (Array.isArray(customForDay) && customForDay.length > 0) {
+          candidateHours = customForDay;
+        }
+      } catch {
+        // usa defaultHours
+      }
+
+      const { data: evts } = await supabase
+        .from('eventos_agenda')
+        .select('horario_inicio, duracao_minutos, status')
+        .eq('user_id', userId)
+        .eq('data_evento', dataEvento)
+        .in('status', ['confirmado', 'pendente']);
+
+      const durationReq = duracaoMinutos || 60;
+      const toMinutes = (hhmm: string) => {
+        const [h, m] = hhmm.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+
+      finalSlots = candidateHours.map((slotStr) => {
+        const slotStart = toMinutes(slotStr);
+        const slotEnd = slotStart + durationReq;
+        let conflict = false;
+
+        for (const ev of evts || []) {
+          if (!ev.horario_inicio) continue;
+          const evStart = toMinutes(String(ev.horario_inicio).slice(0, 5));
+          const evEnd = evStart + (ev.duracao_minutos || 60);
+          if (slotStart < evEnd && slotEnd > evStart) {
+            conflict = true;
+            break;
+          }
+        }
+
+        return {
+          horario: slotStr,
+          disponivel: !conflict,
+          motivo: conflict ? 'Horário ocupado na agenda' : null,
+        };
+      });
+    }
+
     return {
       disponivel: data.disponivel,
       status: data.status,
@@ -130,8 +197,8 @@ export async function checkAvailability(
       bloqueada: data.bloqueada,
       mensagem: data.mensagem,
       cor_status: statusColorMap[data.status as keyof typeof statusColorMap] || 'gray',
-      modo_agendamento: data.modo_agendamento,
-      slots: data.slots,
+      modo_agendamento: finalModo,
+      slots: finalSlots,
     };
   } catch (error) {
     console.error('[AGENDA] Erro ao verificar disponibilidade:', error);
@@ -139,7 +206,7 @@ export async function checkAvailability(
     if (retryCount < maxRetries) {
       const delay = 500 * (retryCount + 1);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return checkAvailability(userId, dataEvento, duracaoMinutos, retryCount + 1);
+      return checkAvailability(userId, dataEvento, duracaoMinutos, retryCount + 1, forceHourlySlots);
     }
 
     return {
@@ -234,8 +301,8 @@ export async function getEventosByMonth(userId: string, year: number, month: num
 
 export async function triggerGoogleCalendarSync(
   _userId: string,
-  action: 'insert' | 'update' | 'delete',
-  event: any,
+  action: 'insert' | 'update' | 'delete' | 'list',
+  event?: any,
   eventId?: string
 ) {
   try {
@@ -282,9 +349,70 @@ export async function triggerGoogleCalendarSync(
 
 export async function addEvento(evento: Partial<EventoAgenda>): Promise<EventoAgenda | null> {
   try {
+    const incomingId = extractCanonicalEventIdentity(
+      evento.cliente_nome,
+      evento.tipo_evento,
+      evento.uid_externo,
+      evento.origem
+    );
+
+    const normalizedEvento: Partial<EventoAgenda> = {
+      ...evento,
+      cliente_nome: incomingId.baseName || evento.cliente_nome,
+      tipo_evento: incomingId.extractedTag || evento.tipo_evento || 'Evento',
+    };
+
+    // Verifica se já existe um evento ativo na mesma data com o mesmo nome canônico (mesma tag ou tag diferente)
+    if (normalizedEvento.user_id && normalizedEvento.data_evento && normalizedEvento.cliente_nome) {
+      const { data: sameDayEvents } = await supabase
+        .from('eventos_agenda')
+        .select('*')
+        .eq('user_id', normalizedEvento.user_id)
+        .eq('data_evento', normalizedEvento.data_evento)
+        .neq('status', 'cancelado');
+
+      if (sameDayEvents && sameDayEvents.length > 0) {
+        const match = sameDayEvents.find((existing) => {
+          const existingId = extractCanonicalEventIdentity(
+            existing.cliente_nome,
+            existing.tipo_evento,
+            existing.uid_externo,
+            existing.origem
+          );
+          return existingId.canonicalKey === incomingId.canonicalKey;
+        });
+
+        if (match) {
+          const existingId = extractCanonicalEventIdentity(
+            match.cliente_nome,
+            match.tipo_evento,
+            match.uid_externo,
+            match.origem
+          );
+          const mergedUpdates: Partial<EventoAgenda> = {
+            cliente_nome: incomingId.baseName || existingId.baseName,
+            tipo_evento: chooseBetterEventTag(existingId.extractedTag, incomingId.extractedTag),
+            cidade: normalizedEvento.cidade || match.cidade || '',
+            status: (normalizedEvento.status as any) || match.status || 'confirmado',
+            origem: match.origem === 'ics_sync' && normalizedEvento.origem ? normalizedEvento.origem : match.origem,
+            observacoes: normalizedEvento.observacoes || match.observacoes || '',
+            horario_inicio: normalizedEvento.horario_inicio || match.horario_inicio || null,
+            horario_fim: normalizedEvento.horario_fim || match.horario_fim || null,
+            duracao_minutos: normalizedEvento.duracao_minutos || match.duracao_minutos || null,
+          };
+          if ((normalizedEvento as any).lead_id || (match as any).lead_id) {
+            (mergedUpdates as any).lead_id = (normalizedEvento as any).lead_id || (match as any).lead_id;
+          }
+
+          await updateEvento(match.id, mergedUpdates, normalizedEvento.origem === 'ics_sync');
+          return { ...match, ...mergedUpdates };
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from('eventos_agenda')
-      .insert([evento])
+      .insert([normalizedEvento])
       .select()
       .single();
 
@@ -342,11 +470,15 @@ export async function updateEvento(
         gcalId
       ).then(async (res) => {
         if (res?.success) {
+          const syncUpdate: Record<string, any> = {
+            last_synced_at: new Date().toISOString()
+          };
+          if (res.googleEventId && (!existingEvent.uid_externo || !existingEvent.uid_externo.startsWith('gcal_'))) {
+            syncUpdate.uid_externo = `gcal_${res.googleEventId}`;
+          }
           await supabase
             .from('eventos_agenda')
-            .update({ 
-              last_synced_at: new Date().toISOString()
-            })
+            .update(syncUpdate)
             .eq('id', id);
         }
       });
@@ -501,6 +633,114 @@ export async function rollbackImportacao(userId: string, importacaoId: string): 
   }
 }
 
+export interface CanonicalEventIdentity {
+  baseName: string;
+  extractedTag: string;
+  canonicalName: string;
+  canonicalTag: string;
+  canonicalKey: string;
+  isWorkflow: boolean;
+}
+
+const GENERIC_EVENT_TAGS = new Set([
+  '',
+  'evento',
+  'compromisso',
+  'agendamento',
+  'outro',
+  'outros',
+  'geral',
+]);
+
+export function normalizeTextForMatch(str?: string | null): string {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function isSpecificEventTag(tag?: string | null): boolean {
+  if (!tag) return false;
+  const clean = normalizeTextForMatch(tag);
+  if (!clean || GENERIC_EVENT_TAGS.has(clean)) return false;
+  if (clean.length > 55 || clean.includes('http://') || clean.includes('https://') || clean.includes('id do evento')) {
+    return false;
+  }
+  return true;
+}
+
+export function chooseBetterEventTag(tagA?: string | null, tagB?: string | null): string {
+  const cleanTag = (t?: string | null) => {
+    if (!t) return '';
+    let s = t.trim();
+    s = s.replace(/^(\[priceu\$\]\s*)+/i, '').trim();
+    s = s.replace(/\s*-\s*\d{2}\/\d{2}\/\d{4}\s*$/, '').trim();
+    if (/^evento\s+de\s+/i.test(s)) {
+      const parts = s.split(' - ').map(p => p.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        s = parts[parts.length - 1];
+      }
+    }
+    return s;
+  };
+
+  const a = cleanTag(tagA);
+  const b = cleanTag(tagB);
+  const aSpec = isSpecificEventTag(a);
+  const bSpec = isSpecificEventTag(b);
+
+  if (aSpec && !bSpec) return a;
+  if (bSpec && !aSpec) return b;
+  if (aSpec && bSpec) return a.length <= b.length ? a : b;
+  return a || b || 'Evento';
+}
+
+export function extractCanonicalEventIdentity(
+  rawName?: string | null,
+  rawTag?: string | null,
+  uidExterno?: string | null,
+  origem?: string | null
+): CanonicalEventIdentity {
+  let text = (rawName || '').trim();
+  text = text.replace(/^(\[priceu\$\]\s*)+/i, '').trim();
+  text = text.replace(/^evento\s+de\s+/i, '').trim();
+  text = text.replace(/\s*-\s*\d{2}\/\d{2}\/\d{4}\s*$/, '').trim();
+
+  let extractedTag = (rawTag || '').trim();
+  let baseName = text;
+
+  const dashParts = text.split(' - ').map(p => p.trim()).filter(Boolean);
+  if (dashParts.length >= 2) {
+    baseName = dashParts[0].replace(/^evento\s+de\s+/i, '').trim();
+    const tailTag = dashParts[dashParts.length - 1];
+    extractedTag = chooseBetterEventTag(extractedTag, tailTag);
+  } else {
+    extractedTag = chooseBetterEventTag(extractedTag, null);
+  }
+
+  const canonicalName = normalizeTextForMatch(baseName || rawName || 'cliente');
+  const canonicalTag = normalizeTextForMatch(extractedTag || 'evento');
+  const isWorkflow =
+    origem === 'workflow' ||
+    Boolean(uidExterno && uidExterno.includes('workflow_')) ||
+    /^tarefa:/i.test(baseName);
+
+  const canonicalKey = isWorkflow
+    ? `wf:${canonicalName}:${canonicalTag}`
+    : `ev:${canonicalName}`;
+
+  return {
+    baseName: baseName || (rawName || 'Cliente').trim(),
+    extractedTag: extractedTag || 'Evento',
+    canonicalName,
+    canonicalTag,
+    canonicalKey,
+    isWorkflow,
+  };
+}
+
 export async function importarEventosInteligente(
   userId: string,
   nomeArquivo: string,
@@ -571,10 +811,8 @@ export async function importarEventosInteligente(
       return clean;
     };
 
-    // Helper: busca evento existente em memória
-    const findExistente = (evento: { data: string; nome: string; uid_externo?: string }): EventoAgenda | null => {
-      const targetName = evento.nome.trim().toLowerCase();
-      
+    // Helper: busca evento existente em memória usando UID normalizado OU identidade canônica (mesmo nome + mesma tag ou tags diferentes)
+    const findExistente = (evento: { data: string; nome: string; tipo?: string; uid_externo?: string }): EventoAgenda | null => {
       if (evento.uid_externo) {
         const targetUidNormalized = normalizeUid(evento.uid_externo);
         const found = eventosLocaisCache.find(e => {
@@ -587,25 +825,17 @@ export async function importarEventosInteligente(
         }
       }
 
-      // Limpeza de nome para fallback em eventos criados pelo Priceus
-      let cleanImportedName = targetName;
-      if (cleanImportedName.startsWith('[priceu$]')) {
-        let parts = cleanImportedName.substring(9).trim(); // Remove '[priceu$]'
-        const dashIdx = parts.indexOf(' - ');
-        if (dashIdx !== -1) {
-          parts = parts.substring(0, dashIdx).trim();
-        }
-        cleanImportedName = parts;
-      }
+      const incomingId = extractCanonicalEventIdentity(evento.nome, evento.tipo, evento.uid_externo, 'ics_sync');
 
-      // Fallback por data e nome (comparando nomes limpos)
+      // Fallback canônico por data + nome canônico (mesmo se as tags forem diferentes ex: 'evento' vs 'Casamento')
       const foundFallback = eventosLocaisCache.find(e => {
-        const localName = e.cliente_nome.trim().toLowerCase();
-        return e.data_evento === evento.data && localName === cleanImportedName;
+        if (e.data_evento !== evento.data) return false;
+        const localId = extractCanonicalEventIdentity(e.cliente_nome, e.tipo_evento, e.uid_externo, e.origem);
+        return localId.canonicalKey === incomingId.canonicalKey;
       });
 
       if (foundFallback) {
-        console.log(`[findExistente] Encontrado evento por data+nome (fallback cache): ${evento.nome} (${evento.data})`);
+        console.log(`[findExistente] Encontrado evento por identidade canônica (cache): ${evento.nome} (${evento.data})`);
         return foundFallback;
       }
       return null;
@@ -658,13 +888,33 @@ export async function importarEventosInteligente(
           }
 
           if (
-            (evento.nome && evento.nome.startsWith('[PriceU$]')) ||
+            (evento.nome && /^\[priceu\$\]/i.test(evento.nome.trim())) ||
             (evento.uid_externo && (evento.uid_externo.includes('workflow_') || evento.uid_externo.includes('priceus')))
           ) {
+            // Se o evento do Google com [PriceU$] corresponde a um evento local ainda sem vínculo gcal_, vinculamos sem duplicar!
+            const existenteLocal = findExistente(evento);
+            if (
+              existenteLocal &&
+              evento.uid_externo &&
+              (!existenteLocal.uid_externo || !existenteLocal.uid_externo.startsWith('gcal_')) &&
+              existenteLocal.origem !== 'workflow'
+            ) {
+              const linkedUid = `gcal_${normalizeUid(evento.uid_externo)}`;
+              await supabase
+                .from('eventos_agenda')
+                .update({
+                  uid_externo: linkedUid,
+                  last_synced_at: new Date().toISOString(),
+                })
+                .eq('id', existenteLocal.id);
+              existenteLocal.uid_externo = linkedUid;
+            }
             console.log(`[importarEventosInteligente] Ignorando evento de sincronismo reverso/workflow: ${evento.nome} (${evento.uid_externo})`);
             result.eventos_ignorados++;
             return;
           }
+
+          const incomingIdentity = extractCanonicalEventIdentity(evento.nome, evento.tipo, evento.uid_externo, 'ics_sync');
 
           if (estrategia === 'adicionar_novos') {
             const existente = findExistente(evento);
@@ -677,17 +927,30 @@ export async function importarEventosInteligente(
           if (estrategia === 'mesclar_atualizar') {
             const existente = findExistente(evento);
             if (existente) {
+              const existingIdentity = extractCanonicalEventIdentity(
+                existente.cliente_nome,
+                existente.tipo_evento,
+                existente.uid_externo,
+                existente.origem
+              );
+              const bestTag = chooseBetterEventTag(existingIdentity.extractedTag, incomingIdentity.extractedTag);
+              const bestClientName = existingIdentity.baseName || incomingIdentity.baseName;
+
               const updatePayload: Partial<EventoAgenda> = {
                 data_evento: evento.data,
-                cliente_nome: evento.nome,
-                tipo_evento: evento.tipo || existente.tipo_evento,
+                cliente_nome: bestClientName,
+                tipo_evento: bestTag,
                 cidade: evento.cidade || existente.cidade,
-                observacoes: `Atualizado de ${nomeArquivo}`,
+                observacoes: existente.observacoes || `Atualizado de ${nomeArquivo}`,
                 importacao_id: historicoId,
+                horario_inicio: evento.horario_inicio !== undefined && evento.horario_inicio !== null ? evento.horario_inicio : existente.horario_inicio,
+                duracao_minutos: evento.duracao_minutos !== undefined && evento.duracao_minutos !== null ? evento.duracao_minutos : existente.duracao_minutos,
               };
               // Só inclui uid_externo na atualização se já existe no registro ou no evento importado
               if (evento.uid_externo || (existente as any).uid_externo) {
-                (updatePayload as any).uid_externo = evento.uid_externo || (existente as any).uid_externo;
+                (updatePayload as any).uid_externo = (existente as any).uid_externo?.startsWith('gcal_')
+                  ? (existente as any).uid_externo
+                  : (evento.uid_externo || (existente as any).uid_externo);
               }
               await updateEvento(existente.id, updatePayload, true);
               // Atualiza o cache local
@@ -706,8 +969,8 @@ export async function importarEventosInteligente(
           const novoPayload: Partial<EventoAgenda> = {
             user_id: userId,
             data_evento: evento.data,
-            cliente_nome: evento.nome,
-            tipo_evento: evento.tipo || 'evento',
+            cliente_nome: incomingIdentity.baseName,
+            tipo_evento: incomingIdentity.extractedTag || 'Evento',
             cidade: evento.cidade || '',
             status: 'confirmado',
             // 'google-calendar-sync' viola o CHECK constraint (só aceita valores fixos).
@@ -752,7 +1015,7 @@ export async function importarEventosInteligente(
         let eventosSincronizados: any[] | null = null;
         const { data: comUid, error: errUid } = await supabase
           .from('eventos_agenda')
-          .select('id, data_evento, cliente_nome, uid_externo')
+          .select('id, data_evento, cliente_nome, tipo_evento, uid_externo')
           .eq('user_id', userId)
           .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%');
 
@@ -763,7 +1026,7 @@ export async function importarEventosInteligente(
           console.warn('[sync] uid_externo indisponível na detecção de órfãos, usando fallback.', errUid.message);
           const { data: semUid } = await supabase
             .from('eventos_agenda')
-            .select('id, data_evento, cliente_nome')
+            .select('id, data_evento, cliente_nome, tipo_evento')
             .eq('user_id', userId)
             .or('origem.eq.ics_sync,observacoes.ilike.%google-calendar-sync%');
           eventosSincronizados = semUid;
@@ -773,24 +1036,31 @@ export async function importarEventosInteligente(
 
         if (eventosSincronizados && eventosSincronizados.length > 0) {
           // Criamos dois conjuntos para comparação resiliente:
-          // 1. Pelos UIDs únicos fornecidos pelo iCalendar (com trim)
-          const setUidsICS = new Set(eventos.map(e => e.uid_externo?.trim()).filter(Boolean));
-          // 2. Por data e nome como fallback (normalizado e case-insensitive)
-          const setDataNomeICS = new Set(eventos.map(e => `${e.data.trim()}-${e.nome.trim().toLowerCase()}`));
+          // 1. Pelos UIDs únicos normalizados (sem prefixo gcal_ ou sufixo @google.com)
+          const setUidsICS = new Set(eventos.map(e => e.uid_externo ? normalizeUid(e.uid_externo) : '').filter(Boolean));
+          // 2. Por data e chave canônica como fallback
+          const setCanonicalICS = new Set(
+            eventos.map(e => `${e.data.trim()}::${extractCanonicalEventIdentity(e.nome, e.tipo, e.uid_externo, 'ics_sync').canonicalKey}`)
+          );
+          const datasFeed = eventos.map(e => e.data).filter(Boolean).sort();
+          const minDateInFeed = datasFeed[0] || '1970-01-01';
 
           const idsParaDeletar = eventosSincronizados
             .filter(e => {
+              if (e.data_evento && e.data_evento < minDateInFeed) {
+                return false;
+              }
+              const localCanonical = `${e.data_evento.trim()}::${extractCanonicalEventIdentity(e.cliente_nome, e.tipo_evento, e.uid_externo, 'ics_sync').canonicalKey}`;
               if (e.uid_externo) {
-                const hasUid = setUidsICS.has(e.uid_externo.trim());
+                const hasUid = setUidsICS.has(normalizeUid(e.uid_externo)) || setCanonicalICS.has(localCanonical);
                 if (!hasUid) {
-                  console.log(`[Sync] Evento marcado para exclusão (UID não encontrado no ICS): ${e.cliente_nome} (${e.data_evento}), UID: ${e.uid_externo}`);
+                  console.log(`[Sync] Evento marcado para exclusão (UID não encontrado no feed): ${e.cliente_nome} (${e.data_evento}), UID: ${e.uid_externo}`);
                 }
                 return !hasUid;
               }
-              const chFallback = `${e.data_evento.trim()}-${e.cliente_nome.trim().toLowerCase()}`;
-              const hasFallback = setDataNomeICS.has(chFallback);
+              const hasFallback = setCanonicalICS.has(localCanonical);
               if (!hasFallback) {
-                console.log(`[Sync] Evento marcado para exclusão (Chave fallback '${chFallback}' não encontrada no ICS): ${e.cliente_nome} (${e.data_evento})`);
+                console.log(`[Sync] Evento marcado para exclusão (Chave canônica '${localCanonical}' não encontrada no feed): ${e.cliente_nome} (${e.data_evento})`);
               }
               return !hasFallback;
             })
@@ -1201,13 +1471,29 @@ export async function syncWorkflowToCalendar(
             .eq('id', eventId);
           existingEventsMap.delete(uid);
 
-          triggerGoogleCalendarSync(userId, 'update', eventPayload);
+          triggerGoogleCalendarSync(userId, 'update', eventPayload).then(async (res) => {
+            if (res?.success && eventId) {
+              await supabase
+                .from('eventos_agenda')
+                .update({ last_synced_at: new Date().toISOString() })
+                .eq('id', eventId);
+            }
+          });
         } else {
-          await supabase
+          const { data: insertedWf } = await supabase
             .from('eventos_agenda')
-            .insert([eventPayload]);
+            .insert([eventPayload])
+            .select('id')
+            .single();
 
-          triggerGoogleCalendarSync(userId, 'insert', eventPayload);
+          triggerGoogleCalendarSync(userId, 'insert', eventPayload).then(async (res) => {
+            if (res?.success && insertedWf?.id) {
+              await supabase
+                .from('eventos_agenda')
+                .update({ last_synced_at: new Date().toISOString() })
+                .eq('id', insertedWf.id);
+            }
+          });
         }
       } else {
         if (existingEventsMap.has(uid)) {
@@ -1254,9 +1540,15 @@ export async function syncLocalEventsToGoogle(userId: string): Promise<{ success
 
     let syncedCount = 0;
     for (const evt of eventos) {
-      if (evt.uid_externo && evt.uid_externo.startsWith('gcal_')) {
+      const isAlreadyGcal = evt.uid_externo && (evt.uid_externo.startsWith('gcal_') || (evt.origem === 'workflow' && evt.last_synced_at));
+      const isModified = evt.last_synced_at && evt.updated_at && new Date(evt.updated_at).getTime() > new Date(evt.last_synced_at).getTime() + 1000;
+      if (isAlreadyGcal && !isModified) {
         continue;
       }
+
+      const isUpdate = evt.uid_externo && evt.uid_externo.startsWith('gcal_');
+      const gcalId = isUpdate ? evt.uid_externo.substring(5) : undefined;
+      const action = isUpdate ? 'update' : 'insert';
 
       const payload = {
         id: evt.id,
@@ -1267,14 +1559,24 @@ export async function syncLocalEventsToGoogle(userId: string): Promise<{ success
         cidade: evt.cidade,
         status: evt.status,
         origem: evt.origem,
-        observacoes: evt.observacoes
+        observacoes: evt.observacoes,
+        horario_inicio: evt.horario_inicio || null,
+        horario_fim: evt.horario_fim || null,
+        duracao_minutos: evt.duracao_minutos || null,
+        uid_externo: evt.uid_externo || undefined,
       };
 
-      const res = await triggerGoogleCalendarSync(userId, 'insert', payload);
-      if (res?.success && res.googleEventId) {
+      const res = await triggerGoogleCalendarSync(userId, action, payload, gcalId);
+      if (res?.success) {
+        const updateFields: Record<string, any> = {
+          last_synced_at: new Date().toISOString(),
+        };
+        if (res.googleEventId && (!evt.uid_externo || !evt.uid_externo.startsWith('gcal_')) && evt.origem !== 'workflow') {
+          updateFields.uid_externo = `gcal_${res.googleEventId}`;
+        }
         await supabase
           .from('eventos_agenda')
-          .update({ uid_externo: `gcal_${res.googleEventId}` })
+          .update(updateFields)
           .eq('id', evt.id);
         syncedCount++;
       }
@@ -1292,5 +1594,692 @@ export async function syncLocalEventsToGoogle(userId: string): Promise<{ success
       syncedCount: 0,
       message: err.message || 'Erro ao sincronizar eventos locais.'
     };
+  }
+}
+
+export interface MissingConvertedClientEvent {
+  leadId: string;
+  clientName: string;
+  dataEvento: string;
+  tipoEvento: string;
+  cidade: string;
+  horarioInicio: string | null;
+  duracaoMinutos: number | null;
+  hasContract: boolean;
+}
+
+export interface AgendaSyncStatus {
+  isSynced: boolean;
+  hasIntegration: boolean;
+  googleOAuthConnected: boolean;
+  icsConnected: boolean;
+  pendingLocalToGoogle: number;
+  pendingLocalEvents: EventoAgenda[];
+  missingConvertedClientsCount: number;
+  missingConvertedClients: MissingConvertedClientEvent[];
+  missingWorkflowStepsCount: number;
+  duplicateLocalEventsCount: number;
+  syncStale: boolean;
+  lastSyncAt: string | null;
+}
+
+function normalizeIsoDateString(raw?: string | null): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  return null;
+}
+
+/**
+ * Verifica de forma inteligente:
+ * 1) Se há clientes convertidos (com ou sem contrato, ou no fluxo de workflow) sem data inserida na agenda
+ * 2) Se há eventos duplicados (mesmo nome + mesma tag ou tags diferentes na mesma data)
+ * 3) Se a agenda do PriceU$ está sincronizada com o Google Calendar
+ */
+export async function checkAgendaSyncStatus(userId: string): Promise<AgendaSyncStatus> {
+  const defaultStatus: AgendaSyncStatus = {
+    isSynced: false,
+    hasIntegration: false,
+    googleOAuthConnected: false,
+    icsConnected: false,
+    pendingLocalToGoogle: 0,
+    pendingLocalEvents: [],
+    missingConvertedClientsCount: 0,
+    missingConvertedClients: [],
+    missingWorkflowStepsCount: 0,
+    duplicateLocalEventsCount: 0,
+    syncStale: false,
+    lastSyncAt: null,
+  };
+
+  if (!userId) return defaultStatus;
+
+  try {
+    const [profileRes, configRes, todosEventosRes, leadsRes, contractsRes, citiesRes] = await Promise.all([
+      supabase.from('profiles').select('google_auth_data').eq('id', userId).maybeSingle(),
+      supabase
+        .from('configuracao_agenda')
+        .select('calendar_ics_url, last_calendar_sync, bloquear_agenda_workflow')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      supabase
+        .from('eventos_agenda')
+        .select('*')
+        .eq('user_id', userId)
+        .not('status', 'eq', 'cancelado'),
+      supabase
+        .from('leads')
+        .select('id, nome_cliente, data_evento, tipo_evento, cidade_evento, status, workflow, orcamento_detalhe')
+        .eq('user_id', userId),
+      supabase
+        .from('contracts')
+        .select('id, lead_id, status, client_data_json, lead_data_json')
+        .eq('user_id', userId),
+      supabase
+        .from('cidades_ajuste')
+        .select('id, nome')
+        .eq('user_id', userId),
+    ]);
+
+    const googleAuthData = profileRes.data?.google_auth_data;
+    const googleOAuthConnected = !!(googleAuthData && googleAuthData.refresh_token);
+    const icsUrl = configRes.data?.calendar_ics_url?.trim() || '';
+    const icsConnected = icsUrl.length > 0;
+    const hasIntegration = googleOAuthConnected || icsConnected;
+    const lastSyncAt = configRes.data?.last_calendar_sync || null;
+    const bloquearWorkflow = configRes.data?.bloquear_agenda_workflow ?? false;
+
+    const cityMap = new Map<string, string>();
+    for (const c of citiesRes.data || []) {
+      if (c.id && c.nome) cityMap.set(c.id, c.nome);
+    }
+
+    const resolveCity = (rawCity?: string | null) => {
+      if (!rawCity) return '';
+      return cityMap.get(rawCity) || rawCity;
+    };
+
+    const todosEventosAtivos: EventoAgenda[] = todosEventosRes.data || [];
+
+    // 1. Detectar duplicatas locais na mesma data com o mesmo nome canônico (mesma tag ou tags diferentes)
+    const canonicalGroups = new Map<string, EventoAgenda[]>();
+    for (const evt of todosEventosAtivos) {
+      const idInfo = extractCanonicalEventIdentity(evt.cliente_nome, evt.tipo_evento, evt.uid_externo, evt.origem);
+      const groupKey = `${evt.data_evento}::${idInfo.canonicalKey}`;
+      const list = canonicalGroups.get(groupKey) || [];
+      list.push(evt);
+      canonicalGroups.set(groupKey, list);
+    }
+
+    let duplicateLocalEventsCount = 0;
+    for (const [, group] of canonicalGroups.entries()) {
+      if (group.length > 1) {
+        duplicateLocalEventsCount += group.length - 1;
+      }
+    }
+
+    // 2. Checkup de clientes convertidos (com ou sem contrato) e clientes no fluxo de workflow
+    const allContracts = contractsRes.data || [];
+    const contractsByLeadId = new Map<string, any[]>();
+    for (const ct of allContracts) {
+      if (ct.lead_id) {
+        const list = contractsByLeadId.get(ct.lead_id) || [];
+        list.push(ct);
+        contractsByLeadId.set(ct.lead_id, list);
+      }
+    }
+
+    const allLeads = leadsRes.data || [];
+    const missingConvertedClients: MissingConvertedClientEvent[] = [];
+    let missingWorkflowStepsCount = 0;
+
+    for (const lead of allLeads) {
+      const leadContracts = contractsByLeadId.get(lead.id) || [];
+      const hasSignedContract = leadContracts.some((c: any) => c.status === 'signed');
+      const hasAnyContract = leadContracts.length > 0;
+      const wf = Array.isArray(lead.workflow) ? lead.workflow : [];
+      const isConvertedOrInWorkflow =
+        lead.status === 'convertido' ||
+        hasSignedContract ||
+        (wf.length > 0 && lead.status !== 'perdido' && lead.status !== 'abandonado' && lead.status !== 'finalizado');
+
+      if (!isConvertedOrInWorkflow) continue;
+
+      // Coletar data(s) do evento do cliente a partir do lead e/ou contrato
+      const candidateDates = new Set<string>();
+      const leadDate = normalizeIsoDateString(lead.data_evento);
+      if (leadDate) candidateDates.add(leadDate);
+
+      let contractHorario: string | null = null;
+      let contractDuracao: number | null = null;
+
+      for (const ct of leadContracts) {
+        const d1 = normalizeIsoDateString(ct.client_data_json?.data_evento);
+        const d2 = normalizeIsoDateString(ct.lead_data_json?.data_evento);
+        if (d1) candidateDates.add(d1);
+        if (d2) candidateDates.add(d2);
+        if (!contractHorario) {
+          contractHorario = ct.client_data_json?.horario_inicio || ct.lead_data_json?.horario_inicio || null;
+        }
+        if (!contractDuracao) {
+          const rawDur = ct.client_data_json?.duracao_minutos || ct.lead_data_json?.duracao_minutos;
+          if (rawDur) contractDuracao = Number(rawDur) || null;
+        }
+      }
+
+      const horarioLead =
+        (lead.orcamento_detalhe as any)?.horario_inicio ||
+        (lead.orcamento_detalhe as any)?.selectedSlot ||
+        contractHorario ||
+        null;
+      const duracaoLead =
+        Number((lead.orcamento_detalhe as any)?.duracao_minutos) ||
+        contractDuracao ||
+        null;
+
+      const clientName = (lead.nome_cliente || 'Cliente').trim();
+      const tipoEvento = chooseBetterEventTag(lead.tipo_evento, 'Evento');
+      const leadIdentity = extractCanonicalEventIdentity(clientName, tipoEvento, null, 'lead_convertido');
+
+      for (const dt of candidateDates) {
+        // Verifica se já existe na agenda por lead_id + data OU por data + identidade canônica do cliente
+        const existsInAgenda = todosEventosAtivos.some((ev) => {
+          if (ev.origem === 'workflow') return false;
+          if ((ev as any).lead_id === lead.id && ev.data_evento === dt) return true;
+          if (ev.data_evento !== dt) return false;
+          const evId = extractCanonicalEventIdentity(ev.cliente_nome, ev.tipo_evento, ev.uid_externo, ev.origem);
+          return evId.canonicalKey === leadIdentity.canonicalKey;
+        });
+
+        if (!existsInAgenda) {
+          missingConvertedClients.push({
+            leadId: lead.id,
+            clientName: leadIdentity.baseName,
+            dataEvento: dt,
+            tipoEvento,
+            cidade: resolveCity(lead.cidade_evento),
+            horarioInicio: horarioLead,
+            duracaoMinutos: duracaoLead,
+            hasContract: hasAnyContract,
+          });
+        }
+      }
+
+      // Verificar etapas do workflow com data e hora definidas (se bloqueio de workflow estiver ativo)
+      if (bloquearWorkflow && wf.length > 0) {
+        for (const step of wf) {
+          const hasDateTime = step.deadline && step.horario_inicio && step.duracao_minutos;
+          if (hasDateTime && step.status !== 'concluido') {
+            const wfUid = `workflow_${step.id}`;
+            const wfExists = todosEventosAtivos.some((ev) => ev.uid_externo === wfUid);
+            if (!wfExists) {
+              missingWorkflowStepsCount++;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Eventos locais que precisam ser enviados/atualizados no Google Calendar
+    const eventosLocais = todosEventosAtivos.filter((e) => e.origem !== 'ics_sync');
+    const pendingLocalEvents = googleOAuthConnected
+      ? eventosLocais.filter((evt) => {
+          const hasValidSync =
+            (evt.uid_externo && evt.uid_externo.startsWith('gcal_')) ||
+            (evt.origem === 'workflow' && !!evt.last_synced_at);
+          if (!hasValidSync) return true;
+          if (!evt.last_synced_at) return true;
+          if (evt.updated_at) {
+            const updatedAt = new Date(evt.updated_at).getTime();
+            const lastSyncedAt = new Date(evt.last_synced_at).getTime();
+            if (updatedAt > lastSyncedAt + 1000) return true;
+          }
+          return false;
+        })
+      : [];
+
+    // Considera a leitura externa desatualizada se houver integração e nunca sincronizou ou faz mais de 2h
+    const STALE_MS = 2 * 60 * 60 * 1000;
+    const syncStale = hasIntegration
+      ? !lastSyncAt || Date.now() - new Date(lastSyncAt).getTime() > STALE_MS
+      : false;
+
+    const isSynced =
+      hasIntegration &&
+      pendingLocalEvents.length === 0 &&
+      missingConvertedClients.length === 0 &&
+      missingWorkflowStepsCount === 0 &&
+      duplicateLocalEventsCount === 0 &&
+      !syncStale;
+
+    return {
+      isSynced,
+      hasIntegration,
+      googleOAuthConnected,
+      icsConnected,
+      pendingLocalToGoogle: pendingLocalEvents.length,
+      pendingLocalEvents,
+      missingConvertedClientsCount: missingConvertedClients.length,
+      missingConvertedClients,
+      missingWorkflowStepsCount,
+      duplicateLocalEventsCount,
+      syncStale,
+      lastSyncAt,
+    };
+  } catch (err) {
+    console.warn('[checkAgendaSyncStatus] Erro ao verificar status de sincronia:', err);
+    return defaultStatus;
+  }
+}
+
+export interface BidirectionalSyncResult {
+  success: boolean;
+  restoredConvertedEvents: number;
+  deduplicatedEvents: number;
+  pushedToGoogle: number;
+  pulledFromGoogle: number;
+  updatedFromGoogle: number;
+  removedOrphans: number;
+  message: string;
+  errors: string[];
+}
+
+/**
+ * Executa o Checkup Completo + Deduplicação Espelho + Sincronização Bidirecional:
+ * 0A) Verifica todos os clientes convertidos (com ou sem contrato) e workflows e insere na agenda qualquer evento faltante.
+ * 0B) Verifica tags e nomes em eventos_agenda e remove duplicatas (mesmo nome + mesma tag ou tags diferentes na mesma data),
+ *     mantendo apenas 1 cópia limpa no PriceU$ e 1 cópia no Google Calendar.
+ * 1) PriceU$ ➔ Google Calendar (envia eventos locais pendentes/atualizados com horário e tag, sem duplicar).
+ * 2) Google Calendar ➔ PriceU$ (busca eventos do Google via OAuth e/ou iCal .ics, deduplica no Google e mescla no PriceU$).
+ */
+export async function syncBidirectionalAgenda(
+  userId: string,
+  onProgress?: (info: { step: string; current?: number; total?: number }) => void
+): Promise<BidirectionalSyncResult> {
+  const result: BidirectionalSyncResult = {
+    success: false,
+    restoredConvertedEvents: 0,
+    deduplicatedEvents: 0,
+    pushedToGoogle: 0,
+    pulledFromGoogle: 0,
+    updatedFromGoogle: 0,
+    removedOrphans: 0,
+    message: '',
+    errors: [],
+  };
+
+  try {
+    onProgress?.({ step: 'Verificando clientes convertidos, contratos e workflows...' });
+
+    const initialStatus = await checkAgendaSyncStatus(userId);
+
+    // ETAPA 0A: Inserir na agenda eventos faltantes de clientes convertidos (com ou sem contrato) e workflows
+    if (initialStatus.missingConvertedClients.length > 0) {
+      for (const missing of initialStatus.missingConvertedClients) {
+        onProgress?.({ step: `Restaurando evento de cliente convertido: ${missing.clientName}...` });
+        const payload: Partial<EventoAgenda> = {
+          user_id: userId,
+          data_evento: missing.dataEvento,
+          cliente_nome: missing.clientName,
+          tipo_evento: missing.tipoEvento || 'Evento',
+          cidade: missing.cidade || '',
+          status: 'confirmado',
+          origem: 'lead_convertido',
+          observacoes: missing.hasContract
+            ? 'Inserido pelo checkup de cliente convertido (com contrato)'
+            : 'Inserido pelo checkup de cliente convertido',
+          horario_inicio: missing.horarioInicio || null,
+          duracao_minutos: missing.duracaoMinutos || null,
+        };
+        (payload as any).lead_id = missing.leadId;
+
+        const { error: insErr } = await supabase.from('eventos_agenda').insert([payload]);
+        if (!insErr) {
+          result.restoredConvertedEvents++;
+        }
+      }
+    }
+
+    // Sincronizar etapas de workflow pendentes se bloqueio de workflow estiver ativo
+    if (initialStatus.missingWorkflowStepsCount > 0) {
+      const { data: leadsWf } = await supabase
+        .from('leads')
+        .select('id, nome_cliente, status, workflow')
+        .eq('user_id', userId);
+      for (const l of leadsWf || []) {
+        if (Array.isArray(l.workflow) && l.workflow.length > 0 && l.status !== 'perdido' && l.status !== 'abandonado') {
+          await syncWorkflowToCalendar(userId, l.id, l.nome_cliente || 'Cliente', l.workflow);
+        }
+      }
+    }
+
+    // ETAPA 0B: Deduplicar eventos locais (mesmo nome + mesma tag ou tags diferentes na mesma data) e higienizar tags
+    onProgress?.({ step: 'Verificando tags e eliminando duplicidades na agenda...' });
+    const { data: allActiveLocal } = await supabase
+      .from('eventos_agenda')
+      .select('*')
+      .eq('user_id', userId)
+      .not('status', 'eq', 'cancelado');
+
+    // Mapa de leads convertidos para enriquecer tags e lead_id em eventos já existentes
+    const { data: convertedLeadsList } = await supabase
+      .from('leads')
+      .select('id, nome_cliente, data_evento, tipo_evento, status')
+      .eq('user_id', userId)
+      .eq('status', 'convertido');
+
+    const leadByDateAndCanonical = new Map<string, { id: string; tipo_evento?: string; nome_cliente?: string }>();
+    for (const l of convertedLeadsList || []) {
+      const dt = normalizeIsoDateString(l.data_evento);
+      if (dt && l.nome_cliente) {
+        const lid = extractCanonicalEventIdentity(l.nome_cliente, l.tipo_evento, null, 'lead_convertido');
+        leadByDateAndCanonical.set(`${dt}::${lid.canonicalKey}`, l);
+      }
+    }
+
+    const groupsByDateAndCanonical = new Map<string, EventoAgenda[]>();
+    for (const evt of allActiveLocal || []) {
+      const idInfo = extractCanonicalEventIdentity(evt.cliente_nome, evt.tipo_evento, evt.uid_externo, evt.origem);
+      const key = `${evt.data_evento}::${idInfo.canonicalKey}`;
+      const list = groupsByDateAndCanonical.get(key) || [];
+      list.push(evt);
+      groupsByDateAndCanonical.set(key, list);
+    }
+
+    for (const [groupKey, group] of groupsByDateAndCanonical.entries()) {
+      // Ordena para escolher o melhor registro principal ("keeper")
+      group.sort((a, b) => {
+        const score = (e: EventoAgenda) =>
+          ((e as any).lead_id ? 10 : 0) +
+          (e.origem === 'lead_convertido' ? 6 : e.origem !== 'ics_sync' ? 3 : 0) +
+          (e.uid_externo && e.uid_externo.startsWith('gcal_') ? 5 : 0) +
+          (isSpecificEventTag(e.tipo_evento) ? 3 : 0) +
+          (e.horario_inicio ? 2 : 0);
+        return score(b) - score(a);
+      });
+
+      const keeper = group[0];
+      const keeperIdentity = extractCanonicalEventIdentity(
+        keeper.cliente_nome,
+        keeper.tipo_evento,
+        keeper.uid_externo,
+        keeper.origem
+      );
+
+      let mergedBaseName = keeperIdentity.baseName;
+      let mergedTag = keeperIdentity.extractedTag;
+      let mergedLeadId: string | null = (keeper as any).lead_id || null;
+      let mergedGcalUid: string | undefined =
+        keeper.uid_externo && keeper.uid_externo.startsWith('gcal_') ? keeper.uid_externo : undefined;
+      let mergedHorarioInicio = keeper.horario_inicio || null;
+      let mergedHorarioFim = keeper.horario_fim || null;
+      let mergedDuracao = keeper.duracao_minutos || null;
+      let mergedCidade = keeper.cidade || '';
+      let mergedOrigem = keeper.origem;
+
+      const matchedLead = leadByDateAndCanonical.get(groupKey);
+      if (matchedLead) {
+        if (!mergedLeadId) mergedLeadId = matchedLead.id;
+        if (matchedLead.tipo_evento) {
+          mergedTag = chooseBetterEventTag(mergedTag, matchedLead.tipo_evento);
+        }
+        if (mergedOrigem === 'ics_sync') {
+          mergedOrigem = 'lead_convertido';
+        }
+      }
+
+      // Mesclar atributos das cópias duplicadas no keeper e remover as cópias extras
+      for (let i = 1; i < group.length; i++) {
+        const dup = group[i];
+        const dupIdentity = extractCanonicalEventIdentity(dup.cliente_nome, dup.tipo_evento, dup.uid_externo, dup.origem);
+        mergedTag = chooseBetterEventTag(mergedTag, dupIdentity.extractedTag);
+        if (!mergedLeadId && (dup as any).lead_id) mergedLeadId = (dup as any).lead_id;
+        if (!mergedHorarioInicio && dup.horario_inicio) mergedHorarioInicio = dup.horario_inicio;
+        if (!mergedHorarioFim && dup.horario_fim) mergedHorarioFim = dup.horario_fim;
+        if (!mergedDuracao && dup.duracao_minutos) mergedDuracao = dup.duracao_minutos;
+        if (!mergedCidade && dup.cidade) mergedCidade = dup.cidade;
+        if (mergedOrigem === 'ics_sync' && dup.origem && dup.origem !== 'ics_sync') {
+          mergedOrigem = dup.origem;
+        }
+
+        if (dup.uid_externo && dup.uid_externo.startsWith('gcal_')) {
+          if (!mergedGcalUid) {
+            mergedGcalUid = dup.uid_externo;
+          } else if (dup.uid_externo !== mergedGcalUid && initialStatus.googleOAuthConnected) {
+            // Se a duplicata tinha outro ID no Google Calendar, apaga a cópia extra no Google Calendar também!
+            const dupGcalId = dup.uid_externo.substring(5);
+            await triggerGoogleCalendarSync(userId, 'delete', dup, dupGcalId);
+          }
+        }
+
+        await supabase.from('eventos_agenda').delete().eq('id', dup.id);
+        result.deduplicatedEvents++;
+      }
+
+      // Atualizar o keeper se houve fusão de duplicatas ou limpeza de nome/tag/vínculo de lead
+      const needsKeeperUpdate =
+        group.length > 1 ||
+        keeper.cliente_nome !== mergedBaseName ||
+        keeper.tipo_evento !== mergedTag ||
+        (mergedLeadId && (keeper as any).lead_id !== mergedLeadId) ||
+        (mergedGcalUid && keeper.uid_externo !== mergedGcalUid) ||
+        keeper.origem !== mergedOrigem;
+
+      if (needsKeeperUpdate) {
+        const keeperUpdate: Record<string, any> = {
+          cliente_nome: mergedBaseName,
+          tipo_evento: mergedTag,
+          cidade: mergedCidade,
+          horario_inicio: mergedHorarioInicio,
+          horario_fim: mergedHorarioFim,
+          duracao_minutos: mergedDuracao,
+          origem: mergedOrigem,
+        };
+        if (mergedLeadId) keeperUpdate.lead_id = mergedLeadId;
+        if (mergedGcalUid) keeperUpdate.uid_externo = mergedGcalUid;
+
+        await supabase.from('eventos_agenda').update(keeperUpdate).eq('id', keeper.id);
+      }
+    }
+
+    // Revalidar status após o checkup de convertidos e deduplicação local
+    const status = await checkAgendaSyncStatus(userId);
+    if (!status.hasIntegration) {
+      const localParts: string[] = [];
+      if (result.restoredConvertedEvents > 0) {
+        localParts.push(`${result.restoredConvertedEvents} evento(s) de cliente(s) convertido(s) restaurado(s) na agenda`);
+      }
+      if (result.deduplicatedEvents > 0) {
+        localParts.push(`${result.deduplicatedEvents} duplicata(s) removida(s)`);
+      }
+      result.success = localParts.length > 0;
+      result.message =
+        localParts.length > 0
+          ? `Checkup local concluído (${localParts.join(' • ')}). Conecte sua conta Google Calendar na aba Configurações para espelhar com o Google.`
+          : 'Checkup local concluído! Nenhuma conta Google Calendar está vinculada no momento.';
+      return result;
+    }
+
+    // ETAPA 1: PriceU$ -> Google Calendar (via OAuth)
+    if (status.googleOAuthConnected && status.pendingLocalEvents.length > 0) {
+      const total = status.pendingLocalEvents.length;
+      for (let i = 0; i < total; i++) {
+        const evt = status.pendingLocalEvents[i];
+        onProgress?.({
+          step: `Enviando eventos do PriceU$ para o Google (${i + 1}/${total})...`,
+          current: i + 1,
+          total,
+        });
+
+        const isUpdate = evt.uid_externo && evt.uid_externo.startsWith('gcal_');
+        const gcalId = isUpdate ? evt.uid_externo!.substring(5) : undefined;
+        const action = isUpdate ? 'update' : 'insert';
+
+        const payload = {
+          id: evt.id,
+          user_id: evt.user_id,
+          data_evento: evt.data_evento,
+          tipo_evento: evt.tipo_evento,
+          cliente_nome: evt.cliente_nome,
+          cidade: evt.cidade,
+          status: evt.status,
+          origem: evt.origem,
+          observacoes: evt.observacoes,
+          horario_inicio: evt.horario_inicio || null,
+          horario_fim: evt.horario_fim || null,
+          duracao_minutos: evt.duracao_minutos || null,
+          uid_externo: evt.uid_externo || undefined,
+        };
+
+        const res = await triggerGoogleCalendarSync(userId, action, payload, gcalId);
+        if (res?.success) {
+          const updateFields: Record<string, any> = {
+            last_synced_at: new Date().toISOString(),
+          };
+          if (res.googleEventId && (!evt.uid_externo || !evt.uid_externo.startsWith('gcal_')) && evt.origem !== 'workflow') {
+            updateFields.uid_externo = `gcal_${res.googleEventId}`;
+          }
+          await supabase.from('eventos_agenda').update(updateFields).eq('id', evt.id);
+          result.pushedToGoogle++;
+        } else {
+          result.errors.push(`Falha ao enviar "${evt.cliente_nome}" (${evt.data_evento}) ao Google.`);
+        }
+
+        if (total > 1) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+    }
+
+    // ETAPA 2: Google Calendar -> PriceU$ (via OAuth list e/ou iCal .ics) com deduplicação por chave canônica
+    onProgress?.({ step: 'Verificando eventos e duplicidades no Google Calendar...' });
+
+    const externalEventsMap = new Map<
+      string,
+      {
+        data: string;
+        nome: string;
+        tipo?: string;
+        uid_externo?: string;
+        horario_inicio?: string | null;
+        duracao_minutos?: number | null;
+      }
+    >();
+
+    const buildExternalCanonicalKey = (data: string, nome: string, tipo?: string, uid?: string) => {
+      const idInfo = extractCanonicalEventIdentity(nome, tipo, uid, 'ics_sync');
+      return `${data.trim()}::${idInfo.canonicalKey}`;
+    };
+
+    // 2a. Buscar via Google Calendar API OAuth (action: 'list')
+    if (status.googleOAuthConnected) {
+      const listRes = await triggerGoogleCalendarSync(userId, 'list', {});
+      if (listRes?.success) {
+        if (typeof listRes.deduplicatedInGoogle === 'number' && listRes.deduplicatedInGoogle > 0) {
+          result.deduplicatedEvents += listRes.deduplicatedInGoogle;
+        }
+        if (Array.isArray(listRes.events)) {
+          for (const ev of listRes.events) {
+            if (!ev.data || !ev.nome) continue;
+            const key = buildExternalCanonicalKey(ev.data, ev.nome, ev.tipo, ev.uid_externo);
+            externalEventsMap.set(key, {
+              data: ev.data,
+              nome: ev.nome,
+              tipo: ev.tipo || 'evento',
+              uid_externo: ev.uid_externo,
+              horario_inicio: ev.horario_inicio || null,
+              duracao_minutos: ev.duracao_minutos || null,
+            });
+          }
+        }
+      }
+    }
+
+    // 2b. Buscar via link iCal (.ics) se configurado
+    if (status.icsConnected) {
+      const { data: cfg } = await supabase
+        .from('configuracao_agenda')
+        .select('calendar_ics_url')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (cfg?.calendar_ics_url) {
+        const { data: icsData, error: icsErr } = await supabase.functions.invoke('fetch-calendar', {
+          body: { url: cfg.calendar_ics_url },
+        });
+        if (!icsErr && icsData?.text && icsData.text.includes('BEGIN:VCALENDAR')) {
+          const parsedIcs = parseICS(icsData.text);
+          for (const ev of parsedIcs) {
+            if (!ev.data_evento || !ev.cliente_nome) continue;
+            const key = buildExternalCanonicalKey(ev.data_evento, ev.cliente_nome, ev.tipo_evento, ev.uid_externo);
+            if (!externalEventsMap.has(key)) {
+              externalEventsMap.set(key, {
+                data: ev.data_evento,
+                nome: ev.cliente_nome,
+                tipo: ev.tipo_evento || 'evento',
+                uid_externo: ev.uid_externo,
+                horario_inicio: ev.horario_inicio || null,
+                duracao_minutos: ev.duracao_minutos || null,
+              });
+            } else {
+              // Se já existe no mapa, enriquece a tag caso o ICS tenha uma tag mais específica
+              const current = externalEventsMap.get(key)!;
+              current.tipo = chooseBetterEventTag(current.tipo, ev.tipo_evento);
+            }
+          }
+        }
+      }
+    }
+
+    const externalEvents = Array.from(externalEventsMap.values());
+    if (externalEvents.length > 0) {
+      onProgress?.({ step: `Espelhando ${externalEvents.length} evento(s) do Google na agenda...` });
+      const importRes = await importarEventosInteligente(
+        userId,
+        'google-calendar-sync',
+        externalEvents,
+        'mesclar_atualizar'
+      );
+      result.pulledFromGoogle = importRes.eventos_adicionados;
+      result.updatedFromGoogle = importRes.eventos_atualizados;
+      result.removedOrphans = importRes.eventos_removidos;
+      if (importRes.errors.length > 0) {
+        result.errors.push(...importRes.errors);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from('configuracao_agenda')
+      .update({ last_calendar_sync: nowIso })
+      .eq('user_id', userId);
+
+    result.success = true;
+    const parts: string[] = [];
+    if (result.restoredConvertedEvents > 0) {
+      parts.push(`${result.restoredConvertedEvents} cliente(s) convertido(s) inserido(s) na agenda`);
+    }
+    if (result.deduplicatedEvents > 0) {
+      parts.push(`${result.deduplicatedEvents} duplicata(s) unificada(s)`);
+    }
+    if (result.pushedToGoogle > 0) parts.push(`${result.pushedToGoogle} enviado(s) ao Google`);
+    if (result.pulledFromGoogle > 0) parts.push(`${result.pulledFromGoogle} trazido(s) do Google`);
+    if (result.updatedFromGoogle > 0) parts.push(`${result.updatedFromGoogle} atualizado(s)`);
+    if (result.removedOrphans > 0) parts.push(`${result.removedOrphans} removido(s)`);
+
+    result.message =
+      parts.length > 0
+        ? `Checkup e espelhamento concluídos: ${parts.join(' • ')}.`
+        : 'Checkup concluído! Todos os clientes convertidos, tags e eventos estão 100% espelhados entre PriceU$ e Google Calendar (sem duplicatas).';
+
+    return result;
+  } catch (err: any) {
+    console.error('[syncBidirectionalAgenda] Erro:', err);
+    result.errors.push(err.message || 'Erro inesperado na sincronização.');
+    result.message = err.message || 'Erro ao sincronizar agendas.';
+    return result;
   }
 }

@@ -6,6 +6,8 @@ export interface ExtraPhotosCheckoutParams {
   totalAmount: number;
   visitorName?: string;
   visitorEmail?: string;
+  visitorWhatsapp?: string;
+  photoIds?: string[];
 }
 
 export async function createExtraPhotosCheckout(params: ExtraPhotosCheckoutParams): Promise<{ url?: string; error?: string }> {

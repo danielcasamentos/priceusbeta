@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 import { ContractTemplateEditor } from './ContractTemplateEditor';
 import { usePlanLimits } from '../hooks/usePlanLimits';
 import { UpgradeLimitModal } from './UpgradeLimitModal';
-import { FileText, Plus, Edit2, Trash2, Copy } from 'lucide-react';
+import { ContractLibraryModal } from './ContractLibraryModal';
+import { FileText, Plus, Edit2, Trash2, Copy, Sparkles } from 'lucide-react';
 
 interface ContractTemplate {
   id: string;
@@ -24,6 +25,8 @@ export function TemplatesContracts({ userId }: TemplatesContractsProps) {
   const [showEditor, setShowEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | undefined>();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [userNiche, setUserNiche] = useState('');
   const planLimits = usePlanLimits();
 
   const loadTemplates = async () => {
@@ -46,7 +49,41 @@ export function TemplatesContracts({ userId }: TemplatesContractsProps) {
 
   useEffect(() => {
     loadTemplates();
+    supabase
+      .from('profiles')
+      .select('tipo_servico, nome_profissional')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setUserNiche(data.tipo_servico || data.nome_profissional || '');
+        }
+      });
   }, [userId]);
+
+  const handleAcceptLibraryTemplate = async (tpl: { name: string; content_text: string }) => {
+    const { data, error } = await supabase
+      .from('contract_templates')
+      .insert({
+        user_id: userId,
+        name: tpl.name,
+        content_text: tpl.content_text,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('Erro ao salvar modelo da biblioteca:', error);
+      alert('❌ Erro ao salvar modelo de contrato');
+      return;
+    }
+
+    await loadTemplates();
+    if (data) {
+      setEditingTemplate(data);
+      setShowEditor(true);
+    }
+  };
 
   const handleNew = () => {
     setEditingTemplate(undefined);
@@ -124,13 +161,23 @@ export function TemplatesContracts({ userId }: TemplatesContractsProps) {
             Crie e gerencie seus modelos de contrato digital
           </p>
         </div>
-        <button
-          onClick={handleNew}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
-        >
-          <Plus className="w-5 h-5" />
-          Novo Template
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowLibraryModal(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-lg"
+          >
+            <Sparkles className="w-5 h-5" />
+            Biblioteca 10 Contratos (IA)
+          </button>
+          <button
+            onClick={handleNew}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
+          >
+            <Plus className="w-5 h-5" />
+            Novo Template
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -213,6 +260,14 @@ export function TemplatesContracts({ userId }: TemplatesContractsProps) {
           currentLimit={planLimits.contractTemplatesLimit}
           premiumLimit="Ilimitado"
           onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
+
+      {showLibraryModal && (
+        <ContractLibraryModal
+          defaultNiche={userNiche}
+          onClose={() => setShowLibraryModal(false)}
+          onAcceptTemplate={handleAcceptLibraryTemplate}
         />
       )}
     </div>

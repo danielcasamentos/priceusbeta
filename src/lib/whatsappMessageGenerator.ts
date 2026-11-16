@@ -20,6 +20,7 @@ export interface Product {
   permite_multiplas_unidades?: boolean;
   desconto_percentual?: number;
   desconto_ativo?: boolean;
+  obrigatorio?: boolean;
   resumo?: string;
   imagem_url?: string;
   descricao?: string;
@@ -67,6 +68,8 @@ export interface PriceBreakdown {
   };
   descontoCupom: number;
   acrescimoFormaPagamento: number;
+  descontoProgressivo?: number;
+  ajusteDiaSemana?: number;
   total: number;
   valorBase?: number;
   valorUpsell?: number;
@@ -175,9 +178,13 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     upsellText = options.upsellProducts
       .filter((p) => !selectedGiftsIds.has(p.id)) // Excluir brindes já inclusos da lista de upsell gerais
       .map((p) => {
-        const valFinal = p.valor * (1 - (p.desconto_percentual ?? 0) / 100);
+        const desconto = p.desconto_percentual ?? 0;
+        const valFinal = p.valor * (1 - desconto / 100);
         if (template.ocultar_valores_intermediarios) {
           return `• 🎁 ${p.nome}`;
+        }
+        if (desconto > 0) {
+          return `• 🎁 ${p.nome} - ~${formatCurrency(p.valor)}~ *${formatCurrency(valFinal)}* (-${desconto}%)`;
         }
         return `• 🎁 ${p.nome} - ${formatCurrency(valFinal)}`;
       })
@@ -219,6 +226,46 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     if (statusText) eventDateFormatted += ` ${statusText}`;
   }
 
+  // 5b. CALCULAR ECONOMIA TOTAL (descontos de produtos + upsells + cupom + desconto forma pagamento)
+  let productSavings = 0;
+  products
+    .filter((p) => selectedProducts[p.id] && selectedProducts[p.id] > 0)
+    .forEach((p: any) => {
+      const qty = selectedProducts[p.id] || 0;
+      const desc = p.desconto_percentual ?? 0;
+      if (desc > 0) {
+        productSavings += (p.valor * qty * desc) / 100;
+      }
+      if (typeof p._progressiveSavings === 'number' && p._progressiveSavings > 0) {
+        productSavings += p._progressiveSavings;
+      }
+    });
+
+  if (options.upsellProducts && options.upsellProducts.length > 0) {
+    options.upsellProducts.forEach((p) => {
+      const desc = p.desconto_percentual ?? 0;
+      if (desc > 0) {
+        productSavings += (p.valor * desc) / 100;
+      }
+    });
+  }
+
+  const couponSavings = priceBreakdown.descontoCupom || 0;
+  const progressiveSavings = Math.max(0, priceBreakdown.descontoProgressivo || 0);
+  const dayRuleSavings =
+    priceBreakdown.ajusteDiaSemana && priceBreakdown.ajusteDiaSemana < 0
+      ? Math.abs(priceBreakdown.ajusteDiaSemana)
+      : 0;
+  const paymentDiscountSavings =
+    priceBreakdown.acrescimoFormaPagamento < 0 ? Math.abs(priceBreakdown.acrescimoFormaPagamento) : 0;
+  const totalSavings = productSavings + couponSavings + progressiveSavings + dayRuleSavings + paymentDiscountSavings;
+  const originalTotalBeforeDiscounts = priceBreakdown.total + totalSavings;
+
+  const formattedTotalValue =
+    totalSavings > 0.01
+      ? `~${formatCurrency(originalTotalBeforeDiscounts)}~ *${formatCurrency(priceBreakdown.total)}*`
+      : formatCurrency(priceBreakdown.total);
+
   // 6. CRIAR MAPA DE SUBSTITUIÇÕES
   const replacements: Record<string, string> = {
     // Dados do cliente
@@ -236,7 +283,7 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     '{{SERVICES_LIST}}': productsText,
     '{{UPSELL_LIST}}': upsellText,
     '{{SUBTOTAL_VALUE}}': formatCurrency(priceBreakdown.subtotal),
-    '{{TOTAL_VALUE}}': formatCurrency(priceBreakdown.total),
+    '{{TOTAL_VALUE}}': formattedTotalValue,
     '{{BASE_TOTAL_VALUE}}': formatCurrency(priceBreakdown.valorBase ?? priceBreakdown.total),
     '{{UPSELL_TOTAL_VALUE}}': formatCurrency(priceBreakdown.valorUpsell ?? 0),
 
@@ -269,8 +316,10 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
     // Cupom
     '{{COUPON_CODE}}': couponCode || '',
     '{{COUPON_DISCOUNT}}':
-      couponDiscount && couponDiscount > 0
-        ? `-${couponDiscount}% (${formatCurrency(priceBreakdown.descontoCupom)})`
+      couponSavings > 0
+        ? couponDiscount && couponDiscount > 0
+          ? `-${couponDiscount}% (${formatCurrency(couponSavings)})`
+          : `-${formatCurrency(couponSavings)}`
         : '',
 
     // 🔥 DADOS SAZONAIS E GEOGRÁFICOS (aparecem automaticamente)
@@ -309,6 +358,25 @@ export function generateWhatsAppMessage(options: WhatsAppMessageOptions): string
       message += `\n• Opcionais (Upsell): ${formatCurrency(priceBreakdown.valorUpsell)}`;
       message += `\n• *Total Geral:* ${formatCurrency(priceBreakdown.total)}`;
     }
+  }
+
+  // 🔥 Desconto Progressivo e Cupom ativo + Economia Total explícita
+  if (progressiveSavings > 0) {
+    message += `\n\n📊 *Desconto Progressivo aplicado:* -${formatCurrency(progressiveSavings)}`;
+  }
+
+  if ((couponCode || couponSavings > 0) && !message.includes('Cupom') && !message.includes(couponCode || '__NONE__')) {
+    const labelCupom = couponCode ? `*${couponCode}*` : 'Especial';
+    const pctText = couponDiscount && couponDiscount > 0 ? ` (${couponDiscount}%)` : '';
+    if (couponSavings > 0) {
+      message += `\n\n🎟️ *Cupom ${labelCupom} ativo${pctText}:* -${formatCurrency(couponSavings)}`;
+    } else if (couponCode) {
+      message += `\n\n🎟️ *Cupom ativo:* ${labelCupom}${pctText}`;
+    }
+  }
+
+  if (totalSavings > 0.01 && !message.includes('Você economizou')) {
+    message += `\n💸 *Você economizou:* *${formatCurrency(totalSavings)}*`;
   }
 
   // 9. 🔥 ADICIONAR CAMPOS PERSONALIZADOS SE EXISTIREM
@@ -392,9 +460,20 @@ function buildProductsList(
       const quantity = selectedProducts[p.id];
       const showQty = p.permite_multiplas_unidades !== false;
       const qtyText = showQty ? `${quantity}x ` : "";
+      const desconto = p.desconto_percentual ?? 0;
+      const originalTotal = p.valor * quantity;
+      const discountedTotal =
+        typeof p._progressiveTotal === 'number'
+          ? p._progressiveTotal
+          : originalTotal * (1 - desconto / 100);
+      const hasProgSavings = typeof p._progressiveSavings === 'number' && p._progressiveSavings > 0;
       let productLine = hideValues
         ? `• ${qtyText}${p.nome}`
-        : `• ${qtyText}${p.nome} - ${formatCurrency(p.valor)}`;
+        : hasProgSavings
+        ? `• ${qtyText}${p.nome} - ~${formatCurrency(originalTotal)}~ *${formatCurrency(discountedTotal)}* (-${formatCurrency(p._progressiveSavings)})`
+        : desconto > 0
+        ? `• ${qtyText}${p.nome} - ~${formatCurrency(originalTotal)}~ *${formatCurrency(discountedTotal)}* (-${desconto}%)`
+        : `• ${qtyText}${p.nome} - ${formatCurrency(discountedTotal)}`;
       if (p.resumo) {
         productLine += `\n${formatDescriptionForWhatsApp(p.resumo)}`;
       }

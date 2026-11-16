@@ -51,9 +51,14 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
   const [cupomCodigo, setCupomCodigo] = useState((savedOrcamentoDetalhe as any).cupomCodigo || '');
   const [cupomAtivo, setCupomAtivo] = useState(!!(savedOrcamentoDetalhe as any).cupomAtivo);
   const [cupomDesconto, setCupomDesconto] = useState((savedOrcamentoDetalhe as any).cupomDesconto || 0);
+  const [cupomTipoDesconto, setCupomTipoDesconto] = useState<'percentual' | 'valor_fixo'>((savedOrcamentoDetalhe as any).cupomTipoDesconto || 'percentual');
+  const [cupomValorFixo, setCupomValorFixo] = useState((savedOrcamentoDetalhe as any).cupomValorFixo || 0);
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
   const [cupomMensagem, setCupomMensagem] = useState(
     (savedOrcamentoDetalhe as any).cupomAtivo
-      ? `✅ Cupom ativo: ${(savedOrcamentoDetalhe as any).cupomDesconto}% de desconto`
+      ? (savedOrcamentoDetalhe as any).cupomTipoDesconto === 'valor_fixo'
+        ? `✅ Cupom ativo: -${formatCurrency((savedOrcamentoDetalhe as any).cupomValorFixo || 0)} de desconto`
+        : `✅ Cupom ativo: ${(savedOrcamentoDetalhe as any).cupomDesconto}% de desconto`
       : ''
   );
   const [validandoCupom, setValidandoCupom] = useState(false);
@@ -311,6 +316,21 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         if (tplData) {
           setTemplateDetails(tplData);
 
+          // Buscar cupons ativos cadastrados neste template
+          try {
+            const { data: couponsData } = await supabase
+              .from('cupons')
+              .select('*')
+              .eq('template_id', lead.template_id)
+              .eq('ativo', true)
+              .order('created_at', { ascending: false });
+            if (couponsData) {
+              setAvailableCoupons(couponsData);
+            }
+          } catch (cpErr) {
+            console.warn('Aviso ao carregar cupons do template:', cpErr);
+          }
+
           // 1. Buscar produtos de Upsell disponíveis
           const upsellIds = new Set<string>();
           if (Array.isArray(tplData.upsell_produtos_ids)) {
@@ -470,6 +490,8 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     temporadas,
     cupomAtivo,
     cupomDesconto,
+    cupomTipoDesconto,
+    cupomValorFixo,
   ]);
 
   const recalculateValues = () => {
@@ -527,8 +549,12 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     const newAcrescimoFormaPagamento = totalAntesFormaPagamento * acrescimoRatio;
 
     let newDescontoCupom = 0;
-    if (cupomAtivo && cupomDesconto > 0) {
-      newDescontoCupom = (totalAntesFormaPagamento * cupomDesconto) / 100;
+    if (cupomAtivo) {
+      if (cupomTipoDesconto === 'valor_fixo' && cupomValorFixo > 0) {
+        newDescontoCupom = cupomValorFixo;
+      } else if (cupomDesconto > 0) {
+        newDescontoCupom = (totalAntesFormaPagamento * cupomDesconto) / 100;
+      }
     }
 
     const newTotal = totalAntesFormaPagamento + newAcrescimoFormaPagamento - newDescontoCupom;
@@ -555,6 +581,22 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
     });
   };
 
+  const handleSelectAllProducts = () => {
+    const allSelected: Record<string, number> = {};
+    allProducts.forEach((p) => {
+      allSelected[p.id] = selectedProducts[p.id] || 1;
+    });
+    setSelectedProducts(allSelected);
+  };
+
+  const handleDeselectAllProducts = () => {
+    const onlyRequired: Record<string, number> = {};
+    allProducts.forEach((p) => {
+      if (p.obrigatorio) onlyRequired[p.id] = 1;
+    });
+    setSelectedProducts(onlyRequired);
+  };
+
   const handleValidarCupom = async () => {
     if (!cupomCodigo.trim()) {
       setCupomMensagem('Digite um código de cupom');
@@ -579,9 +621,9 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         return;
       }
 
-      // Se tiver data_validade, verifica
-      if (data.data_validade) {
-        const validade = new Date(data.data_validade);
+      // Se tiver validade, verifica
+      if (data.validade) {
+        const validade = new Date(data.validade);
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
         if (validade < hoje) {
@@ -601,8 +643,17 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
       }
 
       setCupomAtivo(true);
-      setCupomDesconto(data.porcentagem || 0);
-      setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+      if (data.tipo_desconto === 'valor_fixo') {
+        setCupomTipoDesconto('valor_fixo');
+        setCupomValorFixo(data.valor_fixo || 0);
+        setCupomDesconto(0);
+        setCupomMensagem(`✅ Cupom aplicado: -${formatCurrency(data.valor_fixo || 0)} de desconto!`);
+      } else {
+        setCupomTipoDesconto('percentual');
+        setCupomDesconto(data.porcentagem || 0);
+        setCupomValorFixo(0);
+        setCupomMensagem(`✅ Cupom aplicado: ${data.porcentagem}% de desconto!`);
+      }
     } catch (err) {
       console.error('Erro ao validar cupom:', err);
       setCupomMensagem('❌ Erro ao validar cupom');
@@ -685,6 +736,8 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
         cupomCodigo: cupomAtivo ? cupomCodigo : null,
         cupomAtivo,
         cupomDesconto,
+        cupomTipoDesconto: cupomAtivo ? cupomTipoDesconto : null,
+        cupomValorFixo: cupomAtivo && cupomTipoDesconto === 'valor_fixo' ? cupomValorFixo : 0,
       } as any;
 
       const updatedLeadData: Partial<Lead> = {
@@ -1044,10 +1097,31 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
             {/* Esquerda: Lista de Produtos */}
             <div className="md:col-span-2 space-y-4">
               <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h4 className="font-semibold text-gray-800 text-sm uppercase tracking-wider mb-3 flex justify-between">
-                  <span>Produtos &amp; Pacotes</span>
-                  <span className="text-gray-400 font-normal">Qtd.</span>
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-gray-800 text-sm uppercase tracking-wider">
+                    Produtos &amp; Pacotes
+                  </h4>
+                  {allProducts.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllProducts}
+                        className="text-xs font-semibold text-blue-600 hover:underline px-2 py-0.5 rounded bg-blue-50 cursor-pointer"
+                      >
+                        Marcar Todos
+                      </button>
+                      <span className="text-gray-300 text-xs">•</span>
+                      <button
+                        type="button"
+                        onClick={handleDeselectAllProducts}
+                        className="text-xs font-semibold text-gray-600 hover:underline px-2 py-0.5 rounded bg-gray-100 cursor-pointer"
+                      >
+                        Desmarcar Todos
+                      </button>
+                      <span className="text-gray-400 font-normal text-xs ml-2">Qtd.</span>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-2">
                   {allProducts.map((p) => {
                     const qty = selectedProducts[p.id] || 0;
@@ -1169,6 +1243,27 @@ export function EditLeadQuoteModal({ lead, savedOrcamentoDetalhe, onClose, onSav
                 <h4 className="font-semibold text-gray-800 text-sm uppercase tracking-wider mb-3">
                   🎫 Cupom de Desconto
                 </h4>
+                {availableCoupons.length > 0 && (
+                  <div className="mb-2">
+                    <select
+                      className="w-full text-sm border-gray-300 rounded-lg bg-gray-50 px-3 py-2 mb-2"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) setCupomCodigo(e.target.value);
+                      }}
+                    >
+                      <option value="">— Selecionar cupom do template —</option>
+                      {availableCoupons.map((c) => (
+                        <option key={c.id} value={c.codigo}>
+                          {c.codigo} — {c.tipo_desconto === 'valor_fixo'
+                            ? `R$ ${Number(c.valor_fixo || 0).toFixed(2)} de desconto`
+                            : `${c.porcentagem}% de desconto`}
+                          {c.descricao ? ` (${c.descricao})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="text"

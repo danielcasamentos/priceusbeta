@@ -51,6 +51,7 @@ export function GalleryProofingCheckoutModal({
         totalAmount: extraDetails.totalPrice,
         visitorName,
         visitorEmail,
+        photoIds: selectedPhotos.map((p) => p.id),
       });
       if (res.url) {
         window.location.href = res.url;

@@ -20,9 +20,12 @@ import {
   rollbackImportacao,
   contarEventosAtivos,
   triggerGoogleCalendarSync,
+  checkAgendaSyncStatus,
+  syncBidirectionalAgenda,
   type EventoAgenda,
   type ConfiguracaoAgenda,
   type HistoricoImportacao,
+  type AgendaSyncStatus,
 } from '../services/availabilityService';
 
 interface AgendaManagerProps {
@@ -55,6 +58,8 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
 
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [syncStepText, setSyncStepText] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<AgendaSyncStatus | null>(null);
   const [integrationTab, setIntegrationTab] = useState<'google' | 'ics-link' | 'upload'>('google');
   const [profile, setProfile] = useState<any | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -159,6 +164,9 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
       const ativos = await contarEventosAtivos(userId);
       setEventosAtivos(ativos);
 
+      const currentSyncStatus = await checkAgendaSyncStatus(userId);
+      setSyncStatus(currentSyncStatus);
+
       if (planLimits.canImportCalendar) {
         const historico = await getHistoricoImportacoes(userId);
         setHistoricoImportacoes(historico);
@@ -207,106 +215,49 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
   const handleForceGoogleSync = async () => {
     if (syncingGoogle) return;
     setSyncingGoogle(true);
-    setSyncProgress({ current: 0, total: 0 });
+    setSyncProgress(null);
+    setSyncStepText('Verificando agendas PriceU$ e Google Calendar...');
     try {
-      // 1. Buscar todos os eventos locais que precisam ser sincronizados
-      const { data: eventos, error } = await supabase
-        .from('eventos_agenda')
-        .select('*')
-        .eq('user_id', userId)
-        .neq('origem', 'ics_sync')
-        .not('status', 'eq', 'cancelado');
-
-      if (error) throw error;
-
-      // Filtrar eventos que precisam de sincronização:
-      // 1. Nunca sincronizados (sem uid_externo ou que não começa com gcal_)
-      // 2. Modificados desde a última sincronização (updated_at > last_synced_at + 1 segundo)
-      const eventosParaSincronizar = (eventos || []).filter((evt) => {
-        if (!evt.uid_externo || !evt.uid_externo.startsWith('gcal_')) {
-          return true;
+      const res = await syncBidirectionalAgenda(userId, (info) => {
+        setSyncStepText(info.step);
+        if (info.current !== undefined && info.total !== undefined) {
+          setSyncProgress({ current: info.current, total: info.total });
         }
-        if (!evt.last_synced_at) {
-          return true;
-        }
-        const updatedAt = new Date(evt.updated_at).getTime();
-        const lastSyncedAt = new Date(evt.last_synced_at).getTime();
-        return updatedAt > lastSyncedAt + 1000;
       });
 
-      if (eventosParaSincronizar.length === 0) {
-        setImportStatus({
-          show: true,
-          type: 'success',
-          message: 'Todos os eventos locais já estão em perfeita sincronia com o Google Calendar.',
-        });
-        setSyncingGoogle(false);
-        setSyncProgress(null);
-        return;
-      }
-
-      setSyncProgress({ current: 0, total: eventosParaSincronizar.length });
-
-      let syncedCount = 0;
-      for (let i = 0; i < eventosParaSincronizar.length; i++) {
-        const evt = eventosParaSincronizar[i];
-        
-        // 2. Determinar ação e id externo
-        const isUpdate = evt.uid_externo && evt.uid_externo.startsWith('gcal_');
-        const gcalId = isUpdate ? evt.uid_externo.substring(5) : undefined;
-        const action = isUpdate ? 'update' : 'insert';
-
-        const payload = {
-          id: evt.id,
-          user_id: evt.user_id,
-          data_evento: evt.data_evento,
-          tipo_evento: evt.tipo_evento,
-          cliente_nome: evt.cliente_nome,
-          cidade: evt.cidade,
-          status: evt.status,
-          origem: evt.origem,
-          observacoes: evt.observacoes
-        };
-
-        const res = await triggerGoogleCalendarSync(userId, action, payload, gcalId);
-        if (res?.success) {
-          const updateFields: any = {
-            last_synced_at: new Date().toISOString()
-          };
-          if (!isUpdate && res.googleEventId) {
-            updateFields.uid_externo = `gcal_${res.googleEventId}`;
-          }
-          await supabase
-            .from('eventos_agenda')
-            .update(updateFields)
-            .eq('id', evt.id);
-          syncedCount++;
-        }
-
-        // Atualizar progresso
-        setSyncProgress({ current: i + 1, total: eventosParaSincronizar.length });
-
-        // Cooldown de 300ms para evitar rate-limits
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-
       await loadData(true);
+
+      const detailLines: string[] = [];
+      if (res.restoredConvertedEvents > 0) {
+        detailLines.push(`Clientes convertidos/contratos inseridos na agenda: ${res.restoredConvertedEvents}`);
+      }
+      if (res.deduplicatedEvents > 0) {
+        detailLines.push(`Eventos duplicados unificados (PriceU$ / Google): ${res.deduplicatedEvents}`);
+      }
+      if (res.pushedToGoogle > 0) detailLines.push(`Enviados do PriceU$ para o Google: ${res.pushedToGoogle}`);
+      if (res.pulledFromGoogle > 0) detailLines.push(`Trazidos do Google para o PriceU$: ${res.pulledFromGoogle}`);
+      if (res.updatedFromGoogle > 0) detailLines.push(`Atualizados a partir do Google: ${res.updatedFromGoogle}`);
+      if (res.removedOrphans > 0) detailLines.push(`Removidos (excluídos no Google): ${res.removedOrphans}`);
+      if (res.errors.length > 0) detailLines.push(...res.errors.slice(0, 3));
+
       setImportStatus({
         show: true,
-        type: 'success',
-        message: `Sincronização concluída! ${syncedCount} evento(s) processado(s) com o Google Calendar.`,
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+        details: detailLines.length > 0 ? detailLines : undefined,
       });
     } catch (err: any) {
       console.error('Erro ao sincronizar manualmente:', err);
       setImportStatus({
         show: true,
         type: 'error',
-        message: 'Falha ao sincronizar com o Google Calendar',
+        message: 'Falha ao verificar e sincronizar agendas',
         details: [err.message || 'Erro desconhecido'],
       });
     } finally {
       setSyncingGoogle(false);
       setSyncProgress(null);
+      setSyncStepText(null);
     }
   };
 
@@ -1109,17 +1060,201 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                 Upgrade para Ilimitado
               </button>
             )}
+            {syncStatus && (
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                  syncStatus.isSynced
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
+                }`}
+              >
+                {syncStatus.isSynced ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                )}
+                <span>
+                  {syncStatus.isSynced
+                    ? 'Agendas Espelhadas (PriceU$ ↔ Google)'
+                    : syncStatus.missingConvertedClientsCount > 0
+                      ? `${syncStatus.missingConvertedClientsCount} cliente(s) convertido(s) fora da agenda`
+                      : syncStatus.duplicateLocalEventsCount > 0
+                        ? `${syncStatus.duplicateLocalEventsCount} evento(s) duplicado(s) detectado(s)`
+                        : !syncStatus.hasIntegration
+                          ? 'Google Calendar não vinculado'
+                          : syncStatus.pendingLocalToGoogle > 0
+                            ? `${syncStatus.pendingLocalToGoogle} evento(s) não vinculado(s) no Google`
+                            : 'Verificação de sincronia pendente'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          disabled={!planLimits.isPremium && eventosAtivos >= 20}
-          className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus className="w-5 h-5" />
-          Novo Evento
-        </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                syncStatus &&
+                !syncStatus.hasIntegration &&
+                syncStatus.missingConvertedClientsCount === 0 &&
+                syncStatus.duplicateLocalEventsCount === 0
+              ) {
+                setActiveTab('config');
+                setIntegrationTab('google');
+              } else {
+                handleForceGoogleSync();
+              }
+            }}
+            disabled={syncingGoogle}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all border ${
+              syncStatus && !syncStatus.isSynced
+                ? 'bg-amber-500/15 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 hover:bg-amber-500/25'
+                : 'bg-blue-600/10 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-600/20'
+            } disabled:opacity-50`}
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingGoogle ? 'animate-spin' : ''}`} />
+            <span>
+              {syncingGoogle
+                ? syncStepText || 'Sincronizando...'
+                : syncStatus &&
+                    !syncStatus.hasIntegration &&
+                    syncStatus.missingConvertedClientsCount === 0 &&
+                    syncStatus.duplicateLocalEventsCount === 0
+                  ? 'Vincular Google Calendar'
+                  : syncStatus &&
+                      syncStatus.pendingLocalToGoogle +
+                        syncStatus.missingConvertedClientsCount +
+                        syncStatus.duplicateLocalEventsCount >
+                        0
+                    ? `Checkup & Sincronizar (${
+                        syncStatus.pendingLocalToGoogle +
+                        syncStatus.missingConvertedClientsCount +
+                        syncStatus.duplicateLocalEventsCount
+                      } pendente${
+                        syncStatus.pendingLocalToGoogle +
+                          syncStatus.missingConvertedClientsCount +
+                          syncStatus.duplicateLocalEventsCount >
+                        1
+                          ? 's'
+                          : ''
+                      })`
+                    : 'Checkup e Espelhar (PriceU$ ↔ Google)'}
+            </span>
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            disabled={!planLimits.isPremium && eventosAtivos >= 20}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-5 h-5" />
+            Novo Evento
+          </button>
+        </div>
       </div>
+
+      {/* Banner Inteligente de Alerta / Resultado de Sincronização */}
+      {syncStatus && !syncStatus.isSynced && !importStatus.show && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200">
+          <div className="flex items-start sm:items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="text-xs sm:text-sm space-y-0.5">
+              {syncStatus.missingConvertedClientsCount > 0 && (
+                <p className="font-medium">
+                  • Identificamos <strong>{syncStatus.missingConvertedClientsCount} cliente(s) convertido(s)</strong> (com ou sem contrato / workflow) cuja data ainda não foi inserida na agenda.
+                </p>
+              )}
+              {syncStatus.duplicateLocalEventsCount > 0 && (
+                <p className="font-medium">
+                  • Detectamos <strong>{syncStatus.duplicateLocalEventsCount} evento(s) duplicado(s)</strong> na mesma data (mesmo nome com tags iguais ou diferentes) para unificar.
+                </p>
+              )}
+              {syncStatus.pendingLocalToGoogle > 0 && (
+                <p className="font-medium">
+                  • Existem <strong>{syncStatus.pendingLocalToGoogle} evento(s)</strong> na agenda do PriceU$ aguardando espelhamento no Google Calendar.
+                </p>
+              )}
+              {!syncStatus.hasIntegration ? (
+                <p className="font-medium">
+                  • Sua agenda ainda não está vinculada ao Google Calendar. Conecte na aba <strong>Configurações</strong> para espelhar nos dois sentidos.
+                </p>
+              ) : (
+                syncStatus.missingConvertedClientsCount === 0 &&
+                syncStatus.duplicateLocalEventsCount === 0 &&
+                syncStatus.pendingLocalToGoogle === 0 && (
+                  <p className="font-medium">
+                    Há uma verificação pendente entre a agenda do sistema e o seu Google Calendar. Clique para espelhar os dois lados.
+                  </p>
+                )
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {(syncStatus.hasIntegration ||
+              syncStatus.missingConvertedClientsCount > 0 ||
+              syncStatus.duplicateLocalEventsCount > 0) && (
+              <button
+                type="button"
+                onClick={handleForceGoogleSync}
+                disabled={syncingGoogle}
+                className="shrink-0 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingGoogle ? 'animate-spin' : ''}`} />
+                {syncingGoogle ? 'Verificando...' : 'Fazer Checkup & Espelhar'}
+              </button>
+            )}
+            {!syncStatus.hasIntegration && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('config');
+                  setIntegrationTab('google');
+                }}
+                className="shrink-0 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all"
+              >
+                Configurar Vínculo
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {importStatus.show && activeTab !== 'config' && (
+        <div
+          className={`p-4 rounded-xl border flex items-start justify-between gap-3 ${
+            importStatus.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+              : importStatus.type === 'error'
+                ? 'bg-red-500/10 border-red-500/30 text-red-800 dark:text-red-200'
+                : 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-200'
+          }`}
+        >
+          <div className="flex items-start gap-2.5 text-xs sm:text-sm">
+            {importStatus.type === 'success' ? (
+              <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="font-semibold">{importStatus.message}</p>
+              {importStatus.details && importStatus.details.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-xs opacity-90">
+                  {importStatus.details.map((d, idx) => (
+                    <li key={idx}>• {d}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setImportStatus({ ...importStatus, show: false })}
+            className="text-xs opacity-70 hover:opacity-100 px-2 py-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-[rgba(255,255,255,.05)] rounded-lg">
         <div className="border-b border-gray-200 dark:border-[rgba(255,255,255,.05)]">
@@ -1606,7 +1741,7 @@ export function AgendaManager({ userId }: AgendaManagerProps) {
                               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white rounded-xl font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                             >
                               <RefreshCw className={`w-4 h-4 ${syncingGoogle ? 'animate-spin' : ''}`} />
-                              {syncingGoogle ? 'Sincronizando...' : 'Sincronizar Agora (Priceus para Google)'}
+                              {syncingGoogle ? (syncStepText || 'Sincronizando...') : 'Verificar e Sincronizar Agora (PriceU$ ↔ Google)'}
                             </button>
 
                             {syncingGoogle && syncProgress && syncProgress.total > 0 && (

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp, Users, Share2, Gift } from 'lucide-react';
+import { ArrowLeft, MessageSquare, DollarSign, MapPin, Ticket, BookOpen, Video, X, Link as LinkIcon, Check, Copy, Palette, Image, Send, Loader2, Calendar, TrendingUp, Users, Share2, Gift, Download } from 'lucide-react';
 import { generateSlug, validateSlugFormat, checkTemplateSlugAvailability } from '../lib/slugUtils';
 import { ProductList } from './ProductList';
 import { PaymentMethodEditor } from './PaymentMethodEditor';
+import { ImportPaymentFromTemplateModal } from './ImportPaymentFromTemplateModal';
 import { WhatsAppTemplateEditor, DEFAULT_WHATSAPP_TEMPLATE } from './WhatsAppTemplateEditor';
 import { SeasonalPricingManager } from './SeasonalPricingManager';
 import { CouponsManager } from './CouponsManager';
@@ -11,6 +12,7 @@ import { TutorialGuide } from './TutorialGuide';
 import { getVideoByTab } from '../config/videoTutorials';
 import { YouTubeEmbed } from './YouTubeEmbed';
 import { TemplateEditorWithThemeSelector } from './TemplateEditorWithThemeSelector';
+import { ConfigDescontoProgressivoTemplate, EscalaoQuantidadeProduto, FaixaPrecoProduto, RegraDescontoGrupo, RegraDiaSemana, RegraPrecoDataProduto } from '../lib/progressivePricing';
 
 
 interface Produto {
@@ -40,6 +42,10 @@ interface Produto {
   brindes_expira_data?: string | null;
   brindes_quantidades?: Record<string, number>;
   quantidade_maxima?: number | null;
+  grupo_desconto?: string | null;
+  faixas_preco?: FaixaPrecoProduto[] | null;
+  escaloes_quantidade?: EscalaoQuantidadeProduto[] | null;
+  regras_preco_data?: RegraPrecoDataProduto[] | null;
 }
 
 interface FormaPagamento {
@@ -114,6 +120,10 @@ interface Template {
   collab_regra_deslocamento?: string;
   collab_valores_manuais?: Record<string, number>;
   exibir_nome_parceiro?: boolean;
+  // Desconto Progressivo & Escolha de Horário
+  regras_desconto_progressivo?: ConfigDescontoProgressivoTemplate | null;
+  permitir_escolha_horario?: boolean;
+  tema_personalizado?: any;
 }
 
 interface TemplateEditorProps {
@@ -147,6 +157,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
   const [userSlug, setUserSlug] = useState('');
+  const [showImportPaymentModal, setShowImportPaymentModal] = useState(false);
 
   // Estados e handler para importação de produto de collab
   const [showImportCollab, setShowImportCollab] = useState(false);
@@ -285,6 +296,7 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
   const [localDescricao, setLocalDescricao] = useState('');
   const [textoBtnSaveStatus, setTextoBtnSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [descricaoSaveStatus, setDescricaoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const progSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadTemplateData();
@@ -332,7 +344,10 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         .eq('template_id', templateId)
         .order('ordem');
 
-      const customObj = templateData?.tema_personalizado || {};
+      const customObj = {
+        ...(templateData?.tema_personalizado || {}),
+        ...(templateData?.collab_valores_manuais || {}),
+      };
       const mergedTemplate = templateData ? {
         ...templateData,
         template_alternativo_ativo: templateData.template_alternativo_ativo ?? customObj.template_alternativo_ativo ?? false,
@@ -340,10 +355,30 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         template_alternativo_titulo: templateData.template_alternativo_titulo ?? customObj.template_alternativo_titulo ?? '',
         template_alternativo_subtitulo: templateData.template_alternativo_subtitulo ?? customObj.template_alternativo_subtitulo ?? '',
         template_alternativo_botao_texto: templateData.template_alternativo_botao_texto ?? customObj.template_alternativo_botao_texto ?? '',
+        regras_desconto_progressivo: templateData.regras_desconto_progressivo ?? customObj.regras_desconto_progressivo ?? {
+          ativo: false,
+          dias_fds_personalizados: [0, 6],
+          incluir_feriados_no_fds: true,
+          regras_grupos: [],
+          regras_dias_semana: [],
+        },
+        permitir_escolha_horario: templateData.permitir_escolha_horario ?? customObj.permitir_escolha_horario ?? false,
       } : null;
 
+      const prodExtrasMap: Record<string, any> = customObj.produtos_extras || {};
+      const mergedProdutos = (produtosData || []).map((p: any) => {
+        const bq = p.brindes_quantidades || {};
+        return {
+          ...p,
+          grupo_desconto: p.grupo_desconto ?? bq._grupo_desconto ?? prodExtrasMap[p.id]?.grupo_desconto ?? null,
+          faixas_preco: p.faixas_preco ?? bq._faixas_preco ?? prodExtrasMap[p.id]?.faixas_preco ?? [],
+          escaloes_quantidade: p.escaloes_quantidade ?? bq._escaloes_quantidade ?? prodExtrasMap[p.id]?.escaloes_quantidade ?? [],
+          regras_preco_data: p.regras_preco_data ?? bq._regras_preco_data ?? prodExtrasMap[p.id]?.regras_preco_data ?? [],
+        };
+      });
+
       setTemplate(mergedTemplate);
-      setProdutos(produtosData || []);
+      setProdutos(mergedProdutos);
       setFormasPagamento(pagamentosData || []);
       setCamposExtras(camposData || []);
       setSlugInput(templateData?.slug_template || '');
@@ -547,6 +582,11 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
       destaque_texto: undefined,
       duracao_minutos: produtoOriginal.duracao_minutos ?? null,
       brindes_vinculados: produtoOriginal.brindes_vinculados || [],
+      quantidade_maxima: produtoOriginal.quantidade_maxima ?? null,
+      grupo_desconto: produtoOriginal.grupo_desconto || null,
+      faixas_preco: produtoOriginal.faixas_preco ? [...produtoOriginal.faixas_preco] : [],
+      escaloes_quantidade: produtoOriginal.escaloes_quantidade ? [...produtoOriginal.escaloes_quantidade] : [],
+      regras_preco_data: produtoOriginal.regras_preco_data ? [...produtoOriginal.regras_preco_data] : [],
     };
 
     const novosProdutos = [...produtos];
@@ -560,10 +600,34 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     setProdutos(produtosReordenados);
   };
 
+  const handleImportProdutos = (importedProducts: any[]) => {
+    setProdutos((prev) => {
+      const startIndex = prev.length;
+      const normalized = importedProducts.map((prod, idx) => ({
+        ...prod,
+        ordem: startIndex + idx,
+      }));
+      return [...prev, ...normalized];
+    });
+  };
+
   const handleSaveProdutos = async () => {
     try {
+      const prodExtrasFallback: Record<string, any> = {
+        ...(template?.collab_valores_manuais?.produtos_extras || template?.tema_personalizado?.produtos_extras || {}),
+      };
+      let needsFallbackSave = false;
+
       for (const produto of produtos) {
-        const produtoData = {
+        const mergedBrindesQtd = {
+          ...(produto.brindes_quantidades || {}),
+          _grupo_desconto: produto.grupo_desconto || null,
+          _faixas_preco: produto.faixas_preco || [],
+          _escaloes_quantidade: produto.escaloes_quantidade || [],
+          _regras_preco_data: produto.regras_preco_data || [],
+        };
+
+        const baseProdutoData: Record<string, any> = {
           template_id: templateId,
           nome: produto.nome,
           resumo: produto.resumo,
@@ -587,16 +651,40 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           brindes_expira_tipo: produto.brindes_expira_tipo || 'dias',
           brindes_expira_dias: produto.brindes_expira_dias ?? 7,
           brindes_expira_data: produto.brindes_expira_data || null,
-          brindes_quantidades: produto.brindes_quantidades || {},
+          brindes_quantidades: mergedBrindesQtd,
           quantidade_maxima: produto.quantidade_maxima ?? null,
         };
 
+        const prodExtraEntry = {
+          grupo_desconto: produto.grupo_desconto || null,
+          faixas_preco: produto.faixas_preco || [],
+          escaloes_quantidade: produto.escaloes_quantidade || [],
+          regras_preco_data: produto.regras_preco_data || [],
+        };
+
         if (produto.id) {
-          await supabase.from('produtos').update(produtoData).eq('id', produto.id);
+          const { error } = await supabase.from('produtos').update(baseProdutoData).eq('id', produto.id);
+          if (error) throw error;
+          prodExtrasFallback[produto.id] = prodExtraEntry;
+          needsFallbackSave = true;
         } else {
-          await supabase.from('produtos').insert(produtoData);
+          const { data: inserted, error } = await supabase.from('produtos').insert(baseProdutoData).select('id').single();
+          if (error) throw error;
+          if (inserted?.id) {
+            prodExtrasFallback[inserted.id] = prodExtraEntry;
+            needsFallbackSave = true;
+          }
         }
       }
+
+      if (needsFallbackSave) {
+        const updatedCollabMeta = {
+          ...(template?.collab_valores_manuais || {}),
+          produtos_extras: prodExtrasFallback,
+        };
+        await supabase.from('templates').update({ collab_valores_manuais: updatedCollabMeta }).eq('id', templateId);
+      }
+
       alert('✅ Produtos salvos com sucesso!');
       loadTemplateData();
     } catch (error) {
@@ -617,6 +705,10 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
         acrescimo: 0,
       },
     ]);
+  };
+
+  const handleImportFormasPagamento = (importedMethods: Omit<FormaPagamento, 'id'>[]) => {
+    setFormasPagamento((prev) => [...prev, ...importedMethods]);
   };
 
   const handleUpdateFormaPagamento = (index: number, field: keyof FormaPagamento, value: any) => {
@@ -768,63 +860,107 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
     }
   };
 
-  const handleUpdateTemplateConfig = async (field: string, value: any) => {
-    setConfigSaveStatus({ saving: true, message: 'Salvando...', type: 'info' });
-    try {
-      const { error } = await supabase
-        .from('templates')
-        .update({ [field]: value })
-        .eq('id', templateId);
+  const handleUpdateTemplateConfig = async (field: string, value: any, debounceMs = 0) => {
+    // Campos salvos diretamente no JSONB 'collab_valores_manuais' para evitar erro PGRST204 no Supabase
+    const jsonBackedFields = new Set([
+      'regras_desconto_progressivo',
+      'permitir_escolha_horario',
+    ]);
 
-      if (error) {
-        // Se a coluna não existir no schema do banco (PGRST204), salvar como fallback no JSON 'tema_personalizado'
-        if ((error as any).code === 'PGRST204') {
-          console.warn(`[TemplateEditor] Coluna '${field}' não encontrada no banco. Salvando no JSON 'tema_personalizado'...`);
-          const currentTemaCustom = template?.tema_personalizado || {};
-          const updatedCustom = {
-            ...currentTemaCustom,
-            [field]: value,
-          };
+    const currentCollabMeta = template?.collab_valores_manuais || {};
+    const updatedCollabMeta = jsonBackedFields.has(field)
+      ? { ...currentCollabMeta, [field]: value }
+      : currentCollabMeta;
+
+    // 1. Atualização OTIMISTA IMEDIATA na tela (0ms de atraso ao digitar ou clicar!)
+    setTemplate(prev => prev ? {
+      ...prev,
+      [field]: value,
+      ...(jsonBackedFields.has(field) ? { collab_valores_manuais: updatedCollabMeta } : {}),
+    } : null);
+
+    const persistToDb = async () => {
+      setConfigSaveStatus({ saving: true, message: 'Salvando...', type: 'info' });
+      try {
+        if (jsonBackedFields.has(field)) {
           const { error: customErr } = await supabase
             .from('templates')
-            .update({ tema_personalizado: updatedCustom })
+            .update({ collab_valores_manuais: updatedCollabMeta })
             .eq('id', templateId);
 
           if (customErr) throw customErr;
-
-          setTemplate(prev => prev ? {
-            ...prev,
-            [field]: value,
-            tema_personalizado: updatedCustom
-          } : null);
 
           setConfigSaveStatus({
             saving: false,
             message: 'Salvo com sucesso!',
             type: 'success',
           });
-          setTimeout(() => setConfigSaveStatus({ saving: false, message: null, type: null }), 3000);
+          setTimeout(() => setConfigSaveStatus({ saving: false, message: null, type: null }), 2500);
           return;
         }
-        throw error;
+
+        const { error } = await supabase
+          .from('templates')
+          .update({ [field]: value })
+          .eq('id', templateId);
+
+        if (error) {
+          if ((error as any).code === 'PGRST204') {
+            const fallbackMeta = {
+              ...currentCollabMeta,
+              [field]: value,
+            };
+            const { error: customErr } = await supabase
+              .from('templates')
+              .update({ collab_valores_manuais: fallbackMeta })
+              .eq('id', templateId);
+
+            if (customErr) throw customErr;
+
+            setTemplate(prev => prev ? {
+              ...prev,
+              [field]: value,
+              collab_valores_manuais: fallbackMeta,
+            } : null);
+
+            setConfigSaveStatus({
+              saving: false,
+              message: 'Salvo com sucesso!',
+              type: 'success',
+            });
+            setTimeout(() => setConfigSaveStatus({ saving: false, message: null, type: null }), 2500);
+            return;
+          }
+          throw error;
+        }
+
+        setConfigSaveStatus({
+          saving: false,
+          message: 'Salvo com sucesso!',
+          type: 'success',
+        });
+      } catch (error) {
+        console.error('Erro ao atualizar configuração:', error);
+        setConfigSaveStatus({
+          saving: false,
+          message: 'Erro ao salvar',
+          type: 'error',
+        });
       }
 
-      setTemplate(prev => prev ? { ...prev, [field]: value } : null);
-      setConfigSaveStatus({
-        saving: false,
-        message: 'Salvo com sucesso!',
-        type: 'success',
-      });
-    } catch (error) {
-      console.error('Erro ao atualizar configuração:', error);
-      setConfigSaveStatus({
-        saving: false,
-        message: 'Erro ao salvar',
-        type: 'error',
-      });
-    }
+      setTimeout(() => setConfigSaveStatus({ saving: false, message: null, type: null }), 2500);
+    };
 
-    setTimeout(() => setConfigSaveStatus({ saving: false, message: null, type: null }), 3000);
+    if (debounceMs > 0) {
+      if (progSaveTimerRef.current) {
+        clearTimeout(progSaveTimerRef.current);
+      }
+      progSaveTimerRef.current = setTimeout(() => {
+        persistToDb();
+      }, debounceMs);
+    } else {
+      await persistToDb();
+    }
   };
 
   const handleSaveWhatsAppTemplate = async () => {
@@ -985,9 +1121,12 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                 onRemove={handleRemoveProduto}
                 onDuplicate={handleDuplicateProduto}
                 onAdd={handleAddProduto}
+                onImportProducts={handleImportProdutos}
                 onSave={handleSaveProdutos}
                 userId={userId}
                 templateId={templateId}
+                templateName={template?.nome_template}
+                templateTitle={template?.titulo_template}
                 onProductSaved={handleProductSaved}
                 upsellProdutosIds={template?.upsell_produtos_ids || []}
                 brindesProducts={effectiveBrindes}
@@ -1002,13 +1141,23 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                   <h3 className="text-lg font-semibold dark:text-white">Formas de Pagamento</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Configure as opções de pagamento</p>
                 </div>
-                <button
-                  onClick={handleAddFormaPagamento}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  Adicionar Forma
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowImportPaymentModal(true)}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Importar de Template
+                  </button>
+                  <button
+                    onClick={handleAddFormaPagamento}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    Adicionar Forma
+                  </button>
+                </div>
               </div>
 
               {formasPagamento.map((forma, index) => (
@@ -1031,7 +1180,35 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                   <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Adicione formas de pagamento para seus clientes
                   </p>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={handleAddFormaPagamento}
+                      className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      Adicionar Forma
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowImportPaymentModal(true)}
+                      className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+                    >
+                      <Download className="w-4 h-4" />
+                      Importar de Template
+                    </button>
+                  </div>
                 </div>
+              )}
+
+              {showImportPaymentModal && (
+                <ImportPaymentFromTemplateModal
+                  userId={userId}
+                  currentTemplateId={templateId}
+                  existingPaymentNames={formasPagamento.map((f) => f.nome).filter(Boolean)}
+                  hasExistingDefault={formasPagamento.some((f) => f.is_default)}
+                  onClose={() => setShowImportPaymentModal(false)}
+                  onImport={handleImportFormasPagamento}
+                />
               )}
 
               {formasPagamento.length > 0 && (
@@ -1155,14 +1332,590 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
           )}
 
           {activeTab === 'precos' && (
-            <SeasonalPricingManager
-              templateId={templateId}
-              userId={userId}
-              sistemaGeograficoAtivo={template?.sistema_geografico_ativo ?? false}
-              sistemaSazonalAtivo={template?.sistema_sazonal_ativo ?? false}
-              onToggleSistemaGeografico={handleToggleSistemaGeografico}
-              onToggleSistemaSazonal={handleToggleSistemaSazonal}
-            />
+            <div className="space-y-8">
+              {/* 📅 Sistema de Preços por Dias da Semana, Feriados & Descontos Progressivos */}
+              <div className="border border-indigo-200 dark:border-indigo-900/40 rounded-xl p-5 bg-indigo-50/40 dark:bg-indigo-950/15 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
+                      📅 Sistema de Preços por Dias da Semana, Feriados &amp; Promoções
+                    </h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      Quando <strong>Ativo</strong>, assim que o cliente escolhe a data no orçamento (ex: 15/01/2027), o template identifica automaticamente se é Dia de Semana ou Fim de Semana/Feriado e aplica os valores correspondentes sem o cliente precisar escolher nada. Desative quando quiser encerrar a campanha!
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {configSaveStatus.message && (
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          configSaveStatus.type === 'success'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                            : configSaveStatus.type === 'error'
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                            : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                        }`}
+                      >
+                        {configSaveStatus.message}
+                      </span>
+                    )}
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={template?.regras_desconto_progressivo?.ativo ?? false}
+                        onChange={(e) => {
+                          const cur = template?.regras_desconto_progressivo || {
+                            ativo: false,
+                            dias_fds_personalizados: [0, 6],
+                            incluir_feriados_no_fds: true,
+                            precos_produtos_fds: {},
+                            regras_grupos: [],
+                            regras_dias_semana: [],
+                          };
+                          handleUpdateTemplateConfig('regras_desconto_progressivo', {
+                            ...cur,
+                            ativo: e.target.checked,
+                          });
+                        }}
+                      />
+                      <div className="w-11 h-6 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <span className="ml-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        {template?.regras_desconto_progressivo?.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {!template?.regras_desconto_progressivo?.ativo && (
+                  <div className="p-3.5 rounded-lg bg-white/80 dark:bg-[#0a1628]/80 border border-indigo-200/60 dark:border-white/10 text-xs text-gray-600 dark:text-gray-300">
+                    💡 Ative a chave acima para configurar valores automáticos de <strong>Dias de Semana vs. Sábado, Domingo e Feriados</strong> para este template (ideal para Black Friday, campanhas de ensaios e tabelas diferenciadas sem precisar cadastrar semana por semana em Sazonalidade).
+                  </div>
+                )}
+
+                {template?.regras_desconto_progressivo?.ativo && (() => {
+                  const progConfig: ConfigDescontoProgressivoTemplate = template.regras_desconto_progressivo || {
+                    ativo: true,
+                    dias_fds_personalizados: [0, 6],
+                    incluir_feriados_no_fds: true,
+                    precos_produtos_fds: {},
+                    regras_grupos: [],
+                    regras_dias_semana: [],
+                  };
+                  const diasFds = progConfig.dias_fds_personalizados ?? [0, 6];
+                  const precosProdutosFds = progConfig.precos_produtos_fds || {};
+                  const gruposExistentes = Array.from(
+                    new Set(produtos.map(p => (p.grupo_desconto || '').trim()).filter(Boolean))
+                  );
+
+                  const updateProgConfig = (patch: Partial<ConfigDescontoProgressivoTemplate>, immediate = false) => {
+                    handleUpdateTemplateConfig(
+                      'regras_desconto_progressivo',
+                      {
+                        ...progConfig,
+                        ...patch,
+                      },
+                      immediate ? 0 : 450
+                    );
+                  };
+
+                  return (
+                    <div className="space-y-5 pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40">
+                      {/* 1. Calendário e Vigência: Quais dias são Fim de Semana / Feriado */}
+                      <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3.5">
+                        <div>
+                          <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                            1. Quais dias aplicam a tabela de Fim de Semana / Feriados?
+                          </h4>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Marque abaixo quais dias da semana usam o valor de Fim de Semana/Feriado (os demais dias usarão o valor de Dias de Semana automaticamente quando o cliente escolher a data):
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {DIAS_SEMANA.map((dia) => {
+                            const selected = diasFds.includes(dia.value);
+                            return (
+                              <button
+                                key={dia.value}
+                                type="button"
+                                onClick={() => {
+                                  const next = selected
+                                    ? diasFds.filter((d) => d !== dia.value)
+                                    : [...diasFds, dia.value];
+                                  updateProgConfig({ dias_fds_personalizados: next });
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                  selected
+                                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                                    : 'bg-gray-50 dark:bg-[#07101f] text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10'
+                                }`}
+                              >
+                                {dia.label}
+                              </button>
+                            );
+                          })}
+                          <label className="flex items-center gap-2 ml-2 text-xs font-semibold text-amber-800 dark:text-amber-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={progConfig.incluir_feriados_no_fds ?? true}
+                              onChange={(e) => updateProgConfig({ incluir_feriados_no_fds: e.target.checked })}
+                              className="w-4 h-4 text-amber-600 rounded"
+                            />
+                            🎉 Incluir Feriados (Nacionais + Agenda) automaticamente
+                          </label>
+                        </div>
+
+                        {/* Período opcional de vigência */}
+                        <div className="pt-2 border-t border-gray-100 dark:border-white/10 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                          <div className="sm:col-span-6">
+                            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                              📆 Período de Datas Válidas (Opcional)
+                            </p>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                              Deixe em branco para valer para <strong>qualquer data escolhida pelo cliente</strong> (ex: 2026, 2027...) sem precisar cadastrar semana por semana, ou limite a um período específico.
+                            </p>
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                              Data Inicial (opcional)
+                            </label>
+                            <input
+                              type="date"
+                              value={progConfig.vigencia_inicio || ''}
+                              onChange={(e) => updateProgConfig({ vigencia_inicio: e.target.value || null })}
+                              className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-gray-50 dark:bg-[#07101f] text-gray-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                              Data Final (opcional)
+                            </label>
+                            <input
+                              type="date"
+                              value={progConfig.vigencia_fim || ''}
+                              onChange={(e) => updateProgConfig({ vigencia_fim: e.target.value || null })}
+                              className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-gray-50 dark:bg-[#07101f] text-gray-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. Tabela Direta de Preços dos Produtos neste Template (Dia de Semana vs. Fim de Semana e Feriados) */}
+                      <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                              2. Valores dos Produtos por Dia (Dias de Semana vs. Fim de Semana / Feriados)
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Defina o valor de cada produto deste template nos dias de semana (ex: Terça a Quinta) e nos dias de Fim de Semana/Feriado. O orçamento trocará os preços sozinho assim que o cliente escolher a data!
+                            </p>
+                          </div>
+                          {produtos.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextMap: Record<string, any> = { ...precosProdutosFds };
+                                produtos.forEach((p) => {
+                                  if (!p.id) return;
+                                  const baseVal = Number(p.valor) || 200;
+                                  nextMap[p.id] = {
+                                    ...(nextMap[p.id] || {}),
+                                    valor_fds: baseVal + 100,
+                                  };
+                                });
+                                updateProgConfig({ precos_produtos_fds: nextMap });
+                              }}
+                              className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 rounded-lg text-xs font-semibold shrink-0 transition-colors"
+                              title="Preenche automaticamente +R$ 100 para Sábado, Domingo e Feriado em todos os produtos"
+                            >
+                              ⚡ Preencher +R$ 100 no FDS/Feriado
+                            </button>
+                          )}
+                        </div>
+
+                        {produtos.filter((p) => Boolean(p.id)).length === 0 ? (
+                          <p className="text-xs text-gray-400 italic">
+                            Salve seus produtos na aba &ldquo;Produtos&rdquo; primeiro para configurar os valores de Fim de Semana/Feriado aqui.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {produtos
+                              .filter((p) => Boolean(p.id))
+                              .map((p) => {
+                                const pid = p.id!;
+                                const fdsEntry = precosProdutosFds[pid] || {};
+                                const valSemana = Number(p.valor) || 0;
+                                const valFds = fdsEntry.valor_fds ?? '';
+
+                                return (
+                                  <div
+                                    key={pid}
+                                    className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center p-3 rounded-lg bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10"
+                                  >
+                                    <div className="sm:col-span-5">
+                                      <div className="text-xs font-bold text-gray-900 dark:text-white">
+                                        {p.nome || 'Produto sem nome'}
+                                      </div>
+                                      <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                                        Unidade: {p.unidade || 'un.'}
+                                        {Array.isArray(p.escaloes_quantidade) && p.escaloes_quantidade.length > 0 && (
+                                          <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-semibold">
+                                            • Com desconto progressivo no &ldquo;+&rdquo;
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="sm:col-span-3">
+                                      <label className="block text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">
+                                        🟢 Dias de Semana (R$)
+                                      </label>
+                                      <div className="px-2.5 py-1.5 rounded border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-[#0a1628]/70 text-xs font-bold text-gray-800 dark:text-gray-200">
+                                        R$ {valSemana.toFixed(2).replace('.', ',')}
+                                      </div>
+                                    </div>
+
+                                    <div className="sm:col-span-4">
+                                      <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-400 mb-0.5">
+                                        🟡 Sáb, Dom ou Feriado (R$)
+                                      </label>
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="10"
+                                          value={valFds}
+                                          onChange={(e) => {
+                                            const raw = e.target.value;
+                                            const parsed = raw === '' ? null : parseFloat(raw) || 0;
+                                            const nextMap = {
+                                              ...precosProdutosFds,
+                                              [pid]: {
+                                                ...fdsEntry,
+                                                valor_fds: parsed,
+                                              },
+                                            };
+                                            updateProgConfig({ precos_produtos_fds: nextMap });
+                                          }}
+                                          placeholder={`Mesmo valor (R$ ${valSemana})`}
+                                          className="w-full px-2.5 py-1.5 border border-amber-300 dark:border-amber-500/30 rounded text-xs font-bold bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                                        />
+                                        {valFds !== '' && valFds !== null && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const nextMap = { ...precosProdutosFds };
+                                              delete nextMap[pid];
+                                              updateProgConfig({ precos_produtos_fds: nextMap });
+                                            }}
+                                            className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                                            title="Voltar para o mesmo valor da semana"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. Desconto Progressivo na escolha de 2+ produtos do mesmo grupo (% ou R$) */}
+                      <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                              3. Desconto Progressivo por Grupo de Produtos (em % ou R$)
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Conceda desconto automático quando o cliente selecionar 2 ou mais produtos do mesmo grupo (ou no orçamento geral usando <code>*</code>).
+                            </p>
+                            {gruposExistentes.length > 0 && (
+                              <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1">
+                                Grupos cadastrados nos seus produtos: <strong>{gruposExistentes.join(', ')}</strong>
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const novaRegra: RegraDescontoGrupo = {
+                                id: `grp-${Date.now()}`,
+                                grupo: gruposExistentes[0] || '*',
+                                min_itens: 2,
+                                tipo_desconto: 'percentual',
+                                valor: 10,
+                              };
+                              updateProgConfig({
+                                regras_grupos: [...(progConfig.regras_grupos || []), novaRegra],
+                              });
+                            }}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shrink-0"
+                          >
+                            + Adicionar Regra de Grupo
+                          </button>
+                        </div>
+
+                        {(progConfig.regras_grupos || []).length === 0 ? (
+                          <p className="text-xs text-gray-400 italic">
+                            Nenhuma regra de grupo configurada. Clique em &ldquo;+ Adicionar Regra de Grupo&rdquo; para criar.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {(progConfig.regras_grupos || []).map((regra, rIdx) => (
+                              <div
+                                key={regra.id || rIdx}
+                                className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 rounded-lg bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10"
+                              >
+                                <div className="sm:col-span-4">
+                                  <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                                    Grupo (* = Qualquer Produto)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={regra.grupo}
+                                    onChange={(e) => {
+                                      const next = [...(progConfig.regras_grupos || [])];
+                                      next[rIdx] = { ...next[rIdx], grupo: e.target.value };
+                                      updateProgConfig({ regras_grupos: next });
+                                    }}
+                                    placeholder="Ex: Ensaios ou *"
+                                    className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                                  />
+                                </div>
+                                <div className="sm:col-span-2">
+                                  <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                                    Mín. Itens
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="2"
+                                    value={regra.min_itens}
+                                    onChange={(e) => {
+                                      const next = [...(progConfig.regras_grupos || [])];
+                                      next[rIdx] = { ...next[rIdx], min_itens: Math.max(1, parseInt(e.target.value, 10) || 2) };
+                                      updateProgConfig({ regras_grupos: next });
+                                    }}
+                                    className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                                  />
+                                </div>
+                                <div className="sm:col-span-3">
+                                  <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                                    Tipo de Desconto
+                                  </label>
+                                  <select
+                                    value={regra.tipo_desconto}
+                                    onChange={(e) => {
+                                      const next = [...(progConfig.regras_grupos || [])];
+                                      next[rIdx] = { ...next[rIdx], tipo_desconto: e.target.value as 'percentual' | 'valor_fixo' };
+                                      updateProgConfig({ regras_grupos: next });
+                                    }}
+                                    className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                                  >
+                                    <option value="percentual">Percentual (%)</option>
+                                    <option value="valor_fixo">Valor Real (R$)</option>
+                                  </select>
+                                </div>
+                                <div className="sm:col-span-2">
+                                  <label className="block text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">
+                                    {regra.tipo_desconto === 'percentual' ? 'Desconto (%)' : 'Desconto (R$)'}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step={regra.tipo_desconto === 'percentual' ? '1' : '10'}
+                                    value={regra.valor}
+                                    onChange={(e) => {
+                                      const next = [...(progConfig.regras_grupos || [])];
+                                      next[rIdx] = { ...next[rIdx], valor: parseFloat(e.target.value) || 0 };
+                                      updateProgConfig({ regras_grupos: next });
+                                    }}
+                                    className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white font-semibold"
+                                  />
+                                </div>
+                                <div className="sm:col-span-1 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = (progConfig.regras_grupos || []).filter((_, i) => i !== rIdx);
+                                      updateProgConfig({ regras_grupos: next });
+                                    }}
+                                    className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded text-xs font-bold"
+                                    title="Remover regra"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. Regras Gerais de Desconto ou Acréscimo por Dias da Semana / Feriado */}
+                      <div className="bg-white dark:bg-[#0a1628] border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                              3. Regras Gerais de Valor por Dias da Semana / Feriados (Opcional)
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Aplique descontos (ex: Terça a Quinta) ou acréscimos (ex: Sábado, Domingo e Feriado) em % ou R$ sobre o orçamento conforme a data escolhida pelo cliente.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const novaRegraDia: RegraDiaSemana = {
+                                id: `day-${Date.now()}`,
+                                nome: 'Desconto Terça a Quinta',
+                                dias_semana: [2, 3, 4],
+                                incluir_feriados: false,
+                                tipo_ajuste: 'desconto_percentual',
+                                valor: 10,
+                              };
+                              updateProgConfig({
+                                regras_dias_semana: [...(progConfig.regras_dias_semana || []), novaRegraDia],
+                              });
+                            }}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shrink-0"
+                          >
+                            + Adicionar Regra por Dia
+                          </button>
+                        </div>
+
+                        {(progConfig.regras_dias_semana || []).length > 0 && (
+                          <div className="space-y-3">
+                            {(progConfig.regras_dias_semana || []).map((dr, dIdx) => (
+                              <div
+                                key={dr.id || dIdx}
+                                className="p-3 rounded-lg bg-gray-50 dark:bg-[#07101f] border border-gray-200 dark:border-white/10 space-y-2.5"
+                              >
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                                  <div className="sm:col-span-5">
+                                    <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                                      Nome da Regra
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={dr.nome}
+                                      onChange={(e) => {
+                                        const next = [...(progConfig.regras_dias_semana || [])];
+                                        next[dIdx] = { ...next[dIdx], nome: e.target.value };
+                                        updateProgConfig({ regras_dias_semana: next });
+                                      }}
+                                      placeholder="Ex: Promoção Terça a Quinta"
+                                      className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                                    />
+                                  </div>
+                                  <div className="sm:col-span-4">
+                                    <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                                      Tipo de Ajuste
+                                    </label>
+                                    <select
+                                      value={dr.tipo_ajuste}
+                                      onChange={(e) => {
+                                        const next = [...(progConfig.regras_dias_semana || [])];
+                                        next[dIdx] = { ...next[dIdx], tipo_ajuste: e.target.value as any };
+                                        updateProgConfig({ regras_dias_semana: next });
+                                      }}
+                                      className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                                    >
+                                      <option value="desconto_percentual">Desconto em %</option>
+                                      <option value="desconto_fixo">Desconto Fixo (R$)</option>
+                                      <option value="acrescimo_percentual">Acréscimo em %</option>
+                                      <option value="acrescimo_fixo">Acréscimo Fixo (R$)</option>
+                                    </select>
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                                      Valor
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={dr.valor}
+                                      onChange={(e) => {
+                                        const next = [...(progConfig.regras_dias_semana || [])];
+                                        next[dIdx] = { ...next[dIdx], valor: parseFloat(e.target.value) || 0 };
+                                        updateProgConfig({ regras_dias_semana: next });
+                                      }}
+                                      className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white font-semibold"
+                                    />
+                                  </div>
+                                  <div className="sm:col-span-1 flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const next = (progConfig.regras_dias_semana || []).filter((_, i) => i !== dIdx);
+                                        updateProgConfig({ regras_dias_semana: next });
+                                      }}
+                                      className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded text-xs font-bold"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 items-center pt-1">
+                                  {DIAS_SEMANA.map((dia) => {
+                                    const active = (dr.dias_semana || []).includes(dia.value);
+                                    return (
+                                      <button
+                                        key={dia.value}
+                                        type="button"
+                                        onClick={() => {
+                                          const cur = dr.dias_semana || [];
+                                          const nextDays = active ? cur.filter((x) => x !== dia.value) : [...cur, dia.value];
+                                          const next = [...(progConfig.regras_dias_semana || [])];
+                                          next[dIdx] = { ...next[dIdx], dias_semana: nextDays };
+                                          updateProgConfig({ regras_dias_semana: next });
+                                        }}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-semibold border transition-all ${
+                                          active
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-white dark:bg-[#0a1628] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-white/10'
+                                        }`}
+                                      >
+                                        {dia.label}
+                                      </button>
+                                    );
+                                  })}
+                                  <label className="flex items-center gap-1.5 ml-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={dr.incluir_feriados ?? false}
+                                      onChange={(e) => {
+                                        const next = [...(progConfig.regras_dias_semana || [])];
+                                        next[dIdx] = { ...next[dIdx], incluir_feriados: e.target.checked };
+                                        updateProgConfig({ regras_dias_semana: next });
+                                      }}
+                                      className="w-3.5 h-3.5 text-indigo-600 rounded"
+                                    />
+                                    Aplicar também em Feriados
+                                  </label>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <SeasonalPricingManager
+                templateId={templateId}
+                userId={userId}
+                sistemaGeograficoAtivo={template?.sistema_geografico_ativo ?? false}
+                sistemaSazonalAtivo={template?.sistema_sazonal_ativo ?? false}
+                onToggleSistemaGeografico={handleToggleSistemaGeografico}
+                onToggleSistemaSazonal={handleToggleSistemaSazonal}
+              />
+            </div>
           )}
 
           {activeTab === 'aparencia' && (
@@ -1917,6 +2670,27 @@ export function TemplateEditor({ templateId, onBack }: TemplateEditorProps) {
                       </div>
                       <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                         Ative isso para orçamentos como álbuns ou produtos físicos onde a data do evento não é necessária. Isso removerá o campo de data do formulário, mesmo que a sua agenda global esteja ativa.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="border border-teal-200 dark:border-teal-900/30 bg-teal-50 dark:bg-teal-900/10 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={template?.permitir_escolha_horario || false}
+                      onChange={(e) =>
+                        handleUpdateTemplateConfig('permitir_escolha_horario', e.target.checked)
+                      }
+                      className="w-5 h-5 text-teal-600 rounded mt-1"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        🕒 Permitir Escolha de Horário na Data do Evento (Consultar Agenda Vinculada)
+                      </div>
+                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                        Quando ativado, ao selecionar uma data no orçamento, o sistema consulta automaticamente os compromissos da sua agenda vinculada e exibe os horários livres (slots) para o cliente escolher o horário da sessão/evento.
                       </div>
                     </div>
                   </label>

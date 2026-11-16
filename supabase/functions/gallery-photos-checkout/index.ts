@@ -36,6 +36,8 @@ serve(async (req) => {
       totalAmount,
       visitorName,
       visitorEmail,
+      visitorWhatsapp,
+      photoIds,
       successUrl,
       cancelUrl
     } = await req.json();
@@ -105,6 +107,8 @@ serve(async (req) => {
         extra_count: String(extraCount),
         visitor_name: visitorName || "Cliente",
         visitor_email: visitorEmail || "",
+        visitor_whatsapp: visitorWhatsapp || "",
+        photo_ids: Array.isArray(photoIds) ? photoIds.join(",").slice(0, 490) : "",
         platform_fee_cents: String(platformFeeCents),
         photographer_share_cents: String(photographerShareCents),
       },

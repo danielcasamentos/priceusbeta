@@ -6,6 +6,7 @@ import { ImageWithFallback } from './ImageWithFallback';
 import { NumberInput } from './ui/NumberInput';
 import { FormattedDescription } from './ui/FormattedDescription';
 import { AIProductDescriptionModal } from './AIProductDescriptionModal';
+import { EscalaoQuantidadeProduto, FaixaPrecoProduto, RegraPrecoDataProduto } from '../lib/progressivePricing';
 
 interface Product {
   id?: string;
@@ -38,6 +39,10 @@ interface Product {
   brindes_expira_data?: string | null;
   brindes_quantidades?: Record<string, number>;
   quantidade_maxima?: number | null;
+  grupo_desconto?: string | null;
+  faixas_preco?: FaixaPrecoProduto[] | null;
+  escaloes_quantidade?: EscalaoQuantidadeProduto[] | null;
+  regras_preco_data?: RegraPrecoDataProduto[] | null;
 }
 
 interface ProductEditorProps {
@@ -84,18 +89,89 @@ export function ProductEditor({
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [imageKey, setImageKey] = useState(Date.now());
+  const [imageKey, setImageKey] = useState(0);
   const [unitType, setUnitType] = useState<'hours' | 'minutes'>(() => {
     if (!product.duracao_minutos) return 'hours';
     return product.duracao_minutos % 60 === 0 ? 'hours' : 'minutes';
   });
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [showAiModal, setShowAiModal] = useState(false);
+  const [progressiveSaveStatus, setProgressiveSaveStatus] = useState<string | null>(null);
 
   const [uploadingSlots, setUploadingSlots] = useState<number[]>([]);
   const [slotProgress, setSlotProgress] = useState<Record<number, number>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Salva escalões de quantidade e grupo de desconto diretamente no banco (brindes_quantidades JSONB)
+   */
+  const persistProgressiveConfig = async (
+    overrides?: {
+      escaloes_quantidade?: EscalaoQuantidadeProduto[];
+      grupo_desconto?: string | null;
+      permite_multiplas_unidades?: boolean;
+      quantidade_maxima?: number | null;
+      valor?: number;
+    },
+    showFeedback = false
+  ) => {
+    const nextEscaloes = overrides?.escaloes_quantidade ?? (product.escaloes_quantidade || []);
+    const nextGrupo = overrides?.grupo_desconto !== undefined ? overrides.grupo_desconto : (product.grupo_desconto || null);
+    const nextMulti = overrides?.permite_multiplas_unidades ?? (product.permite_multiplas_unidades ?? true);
+    const nextMaxQty = overrides?.quantidade_maxima !== undefined ? overrides.quantidade_maxima : (product.quantidade_maxima ?? null);
+    const nextValor = overrides?.valor ?? product.valor;
+
+    const mergedBrindesQtd = {
+      ...(product.brindes_quantidades || {}),
+      _grupo_desconto: nextGrupo || null,
+      _faixas_preco: product.faixas_preco || [],
+      _escaloes_quantidade: nextEscaloes,
+      _regras_preco_data: product.regras_preco_data || [],
+    };
+    onChange('brindes_quantidades', mergedBrindesQtd as any);
+
+    let targetId = product.id;
+    if (!targetId && showFeedback && templateId && product.nome?.trim()) {
+      try {
+        const savedId = await autoSaveProduct();
+        if (savedId) {
+          targetId = savedId;
+          onChange('id', savedId);
+          if (onProductSaved) onProductSaved(savedId);
+        }
+      } catch (e) {
+        console.error('Erro ao criar produto para salvar desconto progressivo:', e);
+      }
+    }
+
+    if (!targetId) return;
+
+    try {
+      if (showFeedback) setProgressiveSaveStatus('Salvando...');
+      const { error: updErr } = await supabase
+        .from('produtos')
+        .update({
+          valor: nextValor,
+          permite_multiplas_unidades: nextMulti,
+          quantidade_maxima: nextMaxQty,
+          brindes_quantidades: mergedBrindesQtd,
+        })
+        .eq('id', targetId);
+
+      if (updErr) throw updErr;
+      if (showFeedback) {
+        setProgressiveSaveStatus('✅ Salvo!');
+        setTimeout(() => setProgressiveSaveStatus(null), 2500);
+      }
+    } catch (err) {
+      console.error('Erro ao salvar desconto progressivo no produto:', err);
+      if (showFeedback) {
+        setProgressiveSaveStatus('❌ Erro ao salvar');
+        setTimeout(() => setProgressiveSaveStatus(null), 3000);
+      }
+    }
+  };
 
   /**
    * Valida se o produto tem os campos obrigatórios preenchidos
@@ -122,6 +198,14 @@ export function ProductEditor({
   const autoSaveProduct = async (): Promise<string | null> => {
     setSaving(true);
     try {
+      const mergedBrindesQtd = {
+        ...(product.brindes_quantidades || {}),
+        _grupo_desconto: product.grupo_desconto || null,
+        _faixas_preco: product.faixas_preco || [],
+        _escaloes_quantidade: product.escaloes_quantidade || [],
+        _regras_preco_data: product.regras_preco_data || [],
+      };
+
       const produtoData = {
         template_id: templateId,
         nome: product.nome,
@@ -130,15 +214,18 @@ export function ProductEditor({
         unidade: product.unidade,
         obrigatorio: product.obrigatorio,
         ordem: product.ordem,
-        mostrar_imagem: false,
+        imagem_url: product.imagem_url || null,
+        mostrar_imagem: product.mostrar_imagem ?? Boolean(product.imagem_url || (product.imagens && product.imagens.length > 0)),
         imagens: product.imagens || [],
         carrossel_automatico: product.carrossel_automatico || false,
         permite_multiplas_unidades: product.permite_multiplas_unidades ?? true,
+        quantidade_maxima: product.quantidade_maxima ?? null,
         desconto_percentual: product.desconto_percentual ?? 0,
         destacar_produto: product.destacar_produto ?? false,
         destaque_texto: product.destaque_texto ?? null,
         duracao_minutos: product.duracao_minutos ?? null,
         keywords_upsell: product.keywords_upsell || null,
+        brindes_quantidades: mergedBrindesQtd,
       };
 
       const { data, error: insertError } = await supabase
@@ -897,7 +984,7 @@ export function ProductEditor({
                     {imgUrl ? (
                       <>
                         <ImageWithFallback
-                          src={imgUrl.includes('?') ? `${imgUrl}&v=${imageKey}` : `${imgUrl}?v=${imageKey}`}
+                          src={imageKey > 0 ? (imgUrl.includes('?') ? `${imgUrl}&v=${imageKey}` : `${imgUrl}?v=${imageKey}`) : imgUrl}
                           alt={`${product.nome} - Foto ${idx + 1}`}
                           className="w-full h-full object-cover select-none"
                           fallbackClassName="w-full h-full"
@@ -1108,6 +1195,270 @@ export function ProductEditor({
               )}
             </span>
           )}
+        </div>
+      </div>
+
+      {/* 📊 Desconto Progressivo no Botão "+" & Regras de Preço por Data/Período */}
+      <div className="border border-indigo-200 dark:border-indigo-900/40 rounded-xl p-4 bg-indigo-50/40 dark:bg-indigo-950/15 space-y-4">
+        <div>
+          <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+            📊 Desconto Progressivo na Escolha do Cliente (&ldquo;+&rdquo;) &amp; Preços por Data
+          </h4>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+            Configure descontos automáticos conforme o cliente clica em <strong>&ldquo;+&rdquo;</strong> para adicionar mais horas/unidades (até o limite máximo), além de regras personalizadas por dias da semana, feriados (integrado à Agenda) ou períodos.
+          </p>
+        </div>
+
+        {/* 1. Desconto Progressivo por Quantidade no Botão "+" (escaloes_quantidade) */}
+        <div className="bg-white dark:bg-[#0a1628] border border-indigo-100 dark:border-white/10 rounded-lg p-3.5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                ➕ 1. Desconto Progressivo ao Clicar no &ldquo;+&rdquo; (Múltiplas Horas / Unidades)
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                Ex: 1 {product.unidade || 'hora'} = <strong>R$ {(product.valor || 200).toFixed(2).replace('.', ',')}</strong> (valor normal). Ao clicar em <strong>&ldquo;+&rdquo;</strong>: 2 {product.unidade || 'horas'} = R$ 300, 3 {product.unidade || 'horas'} = R$ 400 (até o limite de {product.quantidade_maxima ? `${product.quantidade_maxima} un.` : 'unidades do produto'}).
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!(product.permite_multiplas_unidades ?? true)) {
+                    onChange('permite_multiplas_unidades', true);
+                  }
+                  const baseVal = product.valor > 0 ? product.valor : 200;
+                  if (!product.valor || product.valor <= 0) {
+                    onChange('valor', baseVal);
+                  }
+                  const maxQty = product.quantidade_maxima && product.quantidade_maxima >= 2 ? product.quantidade_maxima : 3;
+                  if (!product.quantidade_maxima || product.quantidade_maxima < 2) {
+                    onChange('quantidade_maxima', maxQty);
+                  }
+                  const extraStepPrice = Math.round(baseVal * 0.5);
+                  const generated: EscalaoQuantidadeProduto[] = [];
+                  for (let q = 2; q <= maxQty; q++) {
+                    generated.push({
+                      quantidade: q,
+                      tipo_ajuste: 'valor_total',
+                      valor: baseVal + extraStepPrice * (q - 1),
+                    });
+                  }
+                  onChange('escaloes_quantidade', generated);
+                }}
+                className="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 rounded-lg text-[11px] font-semibold transition-colors"
+                title="Gera automaticamente os degraus de 2x até a Quantidade Máxima (Ex: 1x=200, 2x=300, 3x=400)"
+              >
+                ⚡ Gerar Escalões (Ex: 1x={product.valor || 200}, 2x={(product.valor || 200) * 1.5}, 3x={(product.valor || 200) * 2})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!(product.permite_multiplas_unidades ?? true)) {
+                    onChange('permite_multiplas_unidades', true);
+                  }
+                  const current = Array.isArray(product.escaloes_quantidade) ? product.escaloes_quantidade : [];
+                  const maxExisting = current.reduce((m, s) => Math.max(m, Number(s.quantidade) || 1), 1);
+                  const nextQty = maxExisting + 1;
+                  if (product.quantidade_maxima && nextQty > product.quantidade_maxima) {
+                    onChange('quantidade_maxima', nextQty);
+                  }
+                  const baseVal = product.valor > 0 ? product.valor : 200;
+                  const nextStep: EscalaoQuantidadeProduto = {
+                    quantidade: nextQty,
+                    tipo_ajuste: 'valor_total',
+                    valor: Math.max(0, baseVal * nextQty - Math.round(baseVal * 0.5 * (nextQty - 1))),
+                  };
+                  onChange('escaloes_quantidade', [...current, nextStep]);
+                }}
+                className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition-colors"
+              >
+                + Adicionar Quantidade (+)
+              </button>
+            </div>
+          </div>
+
+          {!(product.permite_multiplas_unidades ?? true) && Array.isArray(product.escaloes_quantidade) && product.escaloes_quantidade.length > 0 && (
+            <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300">
+              <span>⚠️ Para o cliente usar o botão &ldquo;+&rdquo;, ative &ldquo;Permite selecionar múltiplas unidades&rdquo;.</span>
+              <button
+                type="button"
+                onClick={() => onChange('permite_multiplas_unidades', true)}
+                className="px-2 py-0.5 bg-amber-600 text-white rounded font-semibold"
+              >
+                Ativar agora
+              </button>
+            </div>
+          )}
+
+          {/* Linha fixa mostrando 1 unidade = Valor Normal */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#07101f] border border-dashed border-gray-300 dark:border-white/10 text-xs">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">
+              🟢 <strong>1x {product.unidade || 'unidade'}</strong> (Escolha inicial):
+            </span>
+            <span className="font-bold text-gray-900 dark:text-white">
+              R$ {( (product.valor || 0) * (1 - (product.desconto_percentual || 0) / 100) ).toFixed(2).replace('.', ',')} <span className="text-[11px] font-normal text-gray-500">(Valor normal de 1 un.)</span>
+            </span>
+          </div>
+
+          {Array.isArray(product.escaloes_quantidade) && product.escaloes_quantidade.length > 0 && (
+            <div className="space-y-2">
+              {product.escaloes_quantidade.map((step, sIdx) => {
+                const baseUnit = (product.valor || 0) * (1 - (product.desconto_percentual || 0) / 100);
+                const qty = Math.max(2, Number(step.quantidade) || 2);
+                const normalTotal = baseUnit * qty;
+                let finalTotal = normalTotal;
+                if (step.tipo_ajuste === 'valor_total') {
+                  finalTotal = Math.max(0, Number(step.valor) || 0);
+                } else if (step.tipo_ajuste === 'desconto_percentual') {
+                  finalTotal = Math.max(0, normalTotal * (1 - Math.min(100, Math.max(0, Number(step.valor) || 0)) / 100));
+                } else if (step.tipo_ajuste === 'desconto_fixo') {
+                  finalTotal = Math.max(0, normalTotal - Math.max(0, Number(step.valor) || 0));
+                }
+                const saved = Math.max(0, normalTotal - finalTotal);
+
+                return (
+                  <div
+                    key={sIdx}
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-2.5 rounded-lg bg-emerald-50/40 dark:bg-[#07101f] border border-emerald-200/70 dark:border-emerald-900/30"
+                  >
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                        Qtd no &ldquo;+&rdquo;
+                      </label>
+                      <div className="flex items-center">
+                        <input
+                          type="number"
+                          min="2"
+                          max={product.quantidade_maxima || 99}
+                          value={step.quantidade}
+                          onChange={(e) => {
+                            const val = Math.max(2, parseInt(e.target.value, 10) || 2);
+                            const next = [...(product.escaloes_quantidade || [])];
+                            next[sIdx] = { ...next[sIdx], quantidade: val };
+                            onChange('escaloes_quantidade', next);
+                          }}
+                          className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-400 mb-0.5">
+                        Como calcular o valor de {qty}x
+                      </label>
+                      <select
+                        value={step.tipo_ajuste}
+                        onChange={(e) => {
+                          const novoTipo = e.target.value as EscalaoQuantidadeProduto['tipo_ajuste'];
+                          const next = [...(product.escaloes_quantidade || [])];
+                          let novoVal = step.valor;
+                          if (novoTipo === 'valor_total') {
+                            novoVal = Math.round(finalTotal);
+                          } else if (novoTipo === 'desconto_fixo') {
+                            novoVal = Math.round(saved);
+                          } else if (novoTipo === 'desconto_percentual') {
+                            novoVal = normalTotal > 0 ? Math.round((saved / normalTotal) * 100) : 15;
+                          }
+                          next[sIdx] = { ...next[sIdx], tipo_ajuste: novoTipo, valor: novoVal };
+                          onChange('escaloes_quantidade', next);
+                        }}
+                        className="w-full px-2 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white"
+                      >
+                        <option value="valor_total">Valor Total Fechado (R$)</option>
+                        <option value="desconto_percentual">Desconto Progressivo (%)</option>
+                        <option value="desconto_fixo">Desconto em Reais (-R$)</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">
+                        {step.tipo_ajuste === 'valor_total'
+                          ? `Valor Total p/ ${qty}x (R$)`
+                          : step.tipo_ajuste === 'desconto_percentual'
+                          ? 'Desconto (%)'
+                          : 'Desconto (-R$)'}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step={step.tipo_ajuste === 'desconto_percentual' ? '5' : '10'}
+                        value={step.valor ?? 0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          const next = [...(product.escaloes_quantidade || [])];
+                          next[sIdx] = { ...next[sIdx], valor: val };
+                          onChange('escaloes_quantidade', next);
+                        }}
+                        className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-white/10 rounded text-xs bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white font-bold"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 flex flex-col justify-center">
+                      <span className="text-[10px] text-gray-400 line-through">
+                        Normal: R$ {normalTotal.toFixed(0)}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                        Por: R$ {finalTotal.toFixed(0)}
+                      </span>
+                      {saved > 0 && (
+                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-500">
+                          (-R$ {saved.toFixed(0)})
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="sm:col-span-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = (product.escaloes_quantidade || []).filter((_, i) => i !== sIdx);
+                          onChange('escaloes_quantidade', next);
+                        }}
+                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                        title="Remover degrau"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Grupo de Desconto Progressivo (Combos de Produtos Diferentes) */}
+        <div className="bg-white dark:bg-[#0a1628] border border-indigo-100 dark:border-white/10 rounded-lg p-3 space-y-2">
+          <label className="block text-xs font-semibold text-gray-800 dark:text-gray-200">
+            🏷️ 2. Grupo de Produtos (opcional — para desconto ao combinar 2+ produtos diferentes do mesmo grupo)
+          </label>
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {['Ensaios', 'Álbuns', 'Cobertura', 'Extras'].map((sug) => (
+              <button
+                key={sug}
+                type="button"
+                onClick={() => onChange('grupo_desconto', product.grupo_desconto === sug ? '' : sug)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                  product.grupo_desconto === sug
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:border-indigo-400'
+                }`}
+              >
+                {sug}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={product.grupo_desconto || ''}
+            onChange={(e) => onChange('grupo_desconto', e.target.value)}
+            placeholder="Ex: Ensaios, Álbuns (ou deixe em branco)"
+            className="w-full px-3 py-1.5 border border-gray-300 dark:border-white/10 rounded-lg text-xs bg-white dark:bg-[#07101f] text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+          />
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">
+            💡 <strong>Dica:</strong> Os preços diferenciados por <strong>Dias da Semana vs. Fim de Semana / Feriados</strong> (e o botão para Ativar/Desativar a promoção no template) ficam na aba <strong>&ldquo;Preços&rdquo;</strong> deste template!
+          </p>
         </div>
       </div>
 

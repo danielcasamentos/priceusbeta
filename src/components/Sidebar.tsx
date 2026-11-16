@@ -19,6 +19,7 @@ import {
   Bot,
   Images,
   Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePlanLimits } from '../hooks/usePlanLimits';
@@ -74,9 +75,9 @@ export function Sidebar({
             { id: 'leads-finalizados', label: '🏁 Finalizados' },
           ]
         },
+        { id: 'conversas', label: 'Conversas', icon: MessageSquare, section: 'vendas' },
         ...(userEmail?.toLowerCase() === 'odanielfotografo@icloud.com'
           ? [
-              { id: 'whatsapp-ia', label: 'IA de Vendas (WhatsApp)', icon: Bot, section: 'vendas' },
               { id: 'ai-culling', label: 'AI Culling & Seleção', icon: Sparkles, section: 'vendas' },
             ]
           : []),

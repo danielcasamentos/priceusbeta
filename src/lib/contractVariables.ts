@@ -137,8 +137,33 @@ export function replaceContractVariables(
     '{{CIDADE_EVENTO}}': clientData.cidade_evento || leadData.cidade_evento || leadData.cidade || '',
     '{{LOCAL_EVENTO}}': clientData.local_evento || '',
     '{{ENDERECO_EVENTO}}': clientData.endereco_evento || '',
-    '{{HORARIO_INICIO}}': clientData.horario_inicio || '',
-    '{{OBSERVACOES_CLIENTE}}': clientData.observacoes || '',
+    '{{HORARIO_INICIO}}': clientData.horario_inicio || leadData.horario_inicio || leadData.datas_agenda?.[0]?.horario_inicio || '',
+    '{{HORARIO_FIM}}': clientData.horario_fim || leadData.horario_fim || leadData.datas_agenda?.[0]?.horario_fim || '',
+    '{{DATAS_HORARIOS_EVENTO}}': (() => {
+      const lista = Array.isArray(leadData.datas_agenda) ? leadData.datas_agenda : [];
+      if (lista.length > 0) {
+        return lista
+          .map((d: any) => {
+            const dataFmt = d.data ? new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+            const titulo = d.tipo_evento || 'Evento';
+            const horario =
+              d.horario_inicio && d.horario_fim
+                ? `${d.horario_inicio} às ${d.horario_fim}`
+                : d.horario_inicio
+                  ? `a partir das ${d.horario_inicio}`
+                  : '';
+            return [dataFmt, titulo, horario ? `(${horario})` : ''].filter(Boolean).join(' — ');
+          })
+          .join('\n');
+      }
+      const dataEvento = clientData.data_evento || leadData.data_evento;
+      const dataFmt = dataEvento ? new Date(dataEvento + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+      const hIni = clientData.horario_inicio || leadData.horario_inicio || '';
+      const hFim = clientData.horario_fim || leadData.horario_fim || '';
+      const horario = hIni && hFim ? `${hIni} às ${hFim}` : hIni ? `a partir das ${hIni}` : '';
+      return [dataFmt, horario].filter(Boolean).join(' — ');
+    })(),
+    '{{OBSERVACOES_CLIENTE}}': clientData.observacoes || leadData.observacoes || '',
 
     '{{SUBTOTAL}}': ocultarValores ? '' : (() => {
       const subtotal = leadData.subtotal;

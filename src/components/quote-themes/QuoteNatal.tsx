@@ -15,6 +15,8 @@ interface QuoteNatalProps {
   calculateTotal: () => number;
   handleProdutoQuantityChange: (id: string, qty: number) => void;
   handleSubmit: (e: React.FormEvent) => void;
+  handleStartOnlineChat?: (e?: React.MouseEvent | React.FormEvent) => void;
+  isStartingChat?: boolean;
   setFormData: (data: any) => void;
   fieldsValidation: any;
   camposExtras: any[];
@@ -65,7 +67,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
         .nt-prod { transition: border-color .2s, background .2s; }
         .nt-prod.selected { border-color: rgba(245,158,11,.5) !important; background: rgba(245,158,11,.06) !important; }
         .nt-input { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; color: #fff; padding: 12px 16px; width: 100%; font-size: 15px; outline: none; transition: border-color .2s; }
-        .nt-input::placeholder { color: rgba(255,255,255,.35); }
+        .nt-input::placeholder { color: rgba(255,255,255,.55); }
         .nt-input:focus { border-color: rgba(245,158,11,.5); box-shadow: 0 0 0 3px rgba(245,158,11,.1); }
         .nt-qty-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s; }
         .nt-qty-btn:hover:not(:disabled) { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.3); }
@@ -78,7 +80,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18 }}>
           🎄
         </div>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.3)', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
           Proposta Especial de Natal
         </div>
         <div style={{ fontSize: 18 }}>⭐</div>
@@ -119,7 +121,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
             )}
 
             {profile.apresentacao && (
-              <p className="nt-in-2" style={{ fontSize: 15, color: 'rgba(255,255,255,.55)', lineHeight: 1.7, maxWidth: 500, margin: '0 auto 24px' }}>
+              <p className="nt-in-2" style={{ fontSize: 15, color: 'rgba(255,255,255,.8)', lineHeight: 1.7, maxWidth: 500, margin: '0 auto 24px' }}>
                 {profile.apresentacao}
               </p>
             )}
@@ -386,7 +388,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
                               )}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {desconto > 0 && (
-                                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,.3)', textDecoration: 'line-through' }}>{formatCurrency(produto.valor)}</span>
+                                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,.55)', textDecoration: 'line-through' }}>{formatCurrency(produto.valor)}</span>
                                 )}
                                 <span style={{ fontSize: 17, fontWeight: 800, color: '#f59e0b' }}>{formatCurrency(valorFinal)}</span>
                               </div>
@@ -401,7 +403,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
                     {/* Linha inferior: controle de quantidade ou toggle */}
                     {(produto.permite_multiplas_unidades ?? true) ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '10px 14px' }}>
-                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,.45)', fontWeight: 500 }}>
+                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', fontWeight: 500 }}>
                           {isSelected ? `${selectedProdutos[produto.id]}x selecionado${selectedProdutos[produto.id] > 1 ? 's' : ''}` : 'Não selecionado'}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -524,14 +526,27 @@ export function QuoteNatal(props: QuoteNatalProps) {
             <p style={{ fontSize: 'clamp(32px,6vw,52px)', fontWeight: 900, background: 'linear-gradient(135deg,#dc2626,#f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-1px', lineHeight: 1 }}>
               {formatCurrency(calculateTotal())}
             </p>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', marginTop: 8 }}>✨ Reserve agora e garanta suas fotos de Natal!</p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,.65)', marginTop: 8 }}>✨ Reserve agora e garanta suas fotos de Natal!</p>
           </div>
 
-          {/* Submit */}
-          <button type="submit" disabled={!fieldsValidation.canUseWhatsApp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#dc2626,#f59e0b)' : 'rgba(255,255,255,.1)', border: 'none', color: '#fff', padding: '16px 32px', borderRadius: 14, fontSize: 16, fontWeight: 800, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', boxShadow: fieldsValidation.canUseWhatsApp ? '0 4px 24px rgba(220,38,38,.4)' : 'none', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}>
-            {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
-            {template?.texto_botao_envio || '🎄 Enviar Proposta de Natal via WhatsApp'}
-          </button>
+          {/* Submit & Chat */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button type="submit" disabled={!fieldsValidation.canUseWhatsApp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#dc2626,#f59e0b)' : 'rgba(255,255,255,.1)', border: 'none', color: '#fff', padding: '16px 32px', borderRadius: 14, fontSize: 16, fontWeight: 800, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', boxShadow: fieldsValidation.canUseWhatsApp ? '0 4px 24px rgba(220,38,38,.4)' : 'none', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}>
+              {!fieldsValidation.canUseWhatsApp ? <Lock size={20} /> : <Send size={20} />}
+              {template?.texto_botao_envio || '🎄 Enviar Proposta de Natal via WhatsApp'}
+            </button>
+            {props.handleStartOnlineChat && (
+              <button
+                type="button"
+                onClick={props.handleStartOnlineChat}
+                disabled={props.isStartingChat || !fieldsValidation.canUseWhatsApp}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: fieldsValidation.canUseWhatsApp ? 'linear-gradient(135deg,#059669,#10b981)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(16,185,129,.4)', color: '#fff', padding: '14px 28px', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: fieldsValidation.canUseWhatsApp ? 'pointer' : 'not-allowed', transition: 'all .2s', opacity: fieldsValidation.canUseWhatsApp ? 1 : 0.5 }}
+              >
+                <MessageCircle size={18} />
+                {props.isStartingChat ? 'Abrindo Chat...' : '💬 Negociar no Chat PriceU$'}
+              </button>
+            )}
+          </div>
         </form>
       </section>
 
@@ -539,7 +554,7 @@ export function QuoteNatal(props: QuoteNatalProps) {
 
       {!(profile?.status_assinatura === 'active') && (
         <footer style={{ background: '#050202', padding: '28px 24px', borderTop: '1px solid rgba(220,38,38,.08)', textAlign: 'center' }}>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,.25)' }}>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,.5)' }}>
             Powered by <a href="https://priceus.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#f59e0b', fontWeight: 700, textDecoration: 'none' }}>PriceUs</a>
           </p>
         </footer>

@@ -13,6 +13,92 @@ export interface ProductOptimizationResponse {
   suggestions: ProductOptimizationSuggestion[];
 }
 
+export interface SuggestedTemplateProduct {
+  id: string;
+  nome: string;
+  resumo: string;
+  valor: number;
+  unidade: string;
+  obrigatorio: boolean;
+  categoria: 'Pacote Principal' | 'Adicional / Upsell' | 'Entregável';
+  motivo: string;
+}
+
+const GROQ_MODELS = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'llama-3.1-8b-instant',
+  'qwen/qwen3.6-27b',
+];
+
+function getGroqKeys(): string[] {
+  const savedKey1 = typeof window !== 'undefined'
+    ? localStorage.getItem('priceus_ai_api_key_primary') || localStorage.getItem('priceus_ai_api_key') || localStorage.getItem('priceus_groq_api_key')
+    : null;
+  const savedKey2 = typeof window !== 'undefined' ? localStorage.getItem('priceus_ai_api_key_secondary') : null;
+  const savedKey3 = typeof window !== 'undefined' ? localStorage.getItem('priceus_ai_api_key_tertiary') : null;
+
+  return [
+    import.meta.env.VITE_GROQ_API_KEY,
+    savedKey1,
+    savedKey2,
+    savedKey3,
+  ].filter((k): k is string => !!k && k.trim().length > 5 && !k.includes('SUA_CHAVE'));
+}
+
+export async function callGroqJson<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  temperature = 0.6,
+  maxTokens = 1500
+): Promise<T | null> {
+  const groqKeys = getGroqKeys();
+
+  for (const key of groqKeys) {
+    for (const model of GROQ_MODELS) {
+      try {
+        console.log(`[Groq Optimizer] Chamando modelo ${model}...`);
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${key}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            response_format: { type: 'json_object' },
+            temperature,
+            max_tokens: maxTokens,
+          }),
+        });
+
+        if (groqResponse.ok) {
+          const groqData = await groqResponse.json();
+          const content = groqData.choices?.[0]?.message?.content;
+          if (content) {
+            const parsed = extractJsonFromResponse(content) as T;
+            if (parsed) {
+              console.log('[Groq Optimizer] ✅ Resposta gerada com sucesso via Groq:', model);
+              return parsed;
+            }
+          }
+        } else {
+          const errText = await groqResponse.text();
+          console.warn(`[Groq Optimizer] Tentativa no modelo (${model}) retornou status ${groqResponse.status}:`, errText);
+        }
+      } catch (err) {
+        console.warn(`[Groq Optimizer] Falha de rede no modelo (${model}):`, err);
+      }
+    }
+  }
+
+  return null;
+}
+
 function extractJsonFromResponse(raw: string): any {
   if (!raw) return null;
 
@@ -54,18 +140,6 @@ export async function optimizeProductDescription(
   const cleanName = productName?.trim() || 'Serviço Profissional';
   const cleanDesc = currentDescription?.trim() || '';
   const priceStr = price && price > 0 ? `R$ ${price.toLocaleString('pt-BR')}` : '';
-
-  const savedKey1 = typeof window !== 'undefined' ? localStorage.getItem('priceus_ai_api_key_primary') || localStorage.getItem('priceus_ai_api_key') || localStorage.getItem('priceus_groq_api_key') : null;
-  const savedKey2 = typeof window !== 'undefined' ? localStorage.getItem('priceus_ai_api_key_secondary') : null;
-  const savedKey3 = typeof window !== 'undefined' ? localStorage.getItem('priceus_ai_api_key_tertiary') : null;
-
-  // Pool de chaves Groq
-  const groqKeys = [
-    import.meta.env.VITE_GROQ_API_KEY,
-    savedKey1,
-    savedKey2,
-    savedKey3,
-  ].filter((k): k is string => !!k && k.trim().length > 5 && !k.includes('SUA_CHAVE'));
 
   const systemPrompt = `Você é um especialista em neuromarketing, copywriting e estruturação de propostas comerciais de alto padrão para fotógrafos e profissionais de eventos.
 
@@ -131,53 +205,9 @@ ${customInstruction ? `- Instrução Adicional: "${customInstruction}"` : ''}
 Responda em JSON válido com as 3 sugestões reescrevendo o texto acima com fidelidade total aos itens.`;
 
   // 1. Tentar via GROQ com os modelos de alta capacidade e resposta instantânea
-  const groqModels = [
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    'llama-3.1-8b-instant',
-    'qwen/qwen3.6-27b'
-  ];
-
-  for (const key of groqKeys) {
-    for (const model of groqModels) {
-      try {
-        console.log(`[Groq Optimizer] Chamando modelo ${model}...`);
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${key}`
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.6,
-            max_tokens: 1500
-          })
-        });
-
-        if (groqResponse.ok) {
-          const groqData = await groqResponse.json();
-          const content = groqData.choices?.[0]?.message?.content;
-          if (content) {
-            const parsed = extractJsonFromResponse(content) as ProductOptimizationResponse;
-            if (parsed && parsed.suggestions && parsed.suggestions.length > 0) {
-              console.log('[Groq Optimizer] ✅ Resposta gerada com sucesso via Groq:', model);
-              return parsed;
-            }
-          }
-        } else {
-          const errText = await groqResponse.text();
-          console.warn(`[Groq Optimizer] Tentativa no modelo (${model}) retornou status ${groqResponse.status}:`, errText);
-        }
-      } catch (err) {
-        console.warn(`[Groq Optimizer] Falha de rede no modelo (${model}):`, err);
-      }
-    }
+  const parsed = await callGroqJson<ProductOptimizationResponse>(systemPrompt, userPrompt, 0.6, 1500);
+  if (parsed && parsed.suggestions && parsed.suggestions.length > 0) {
+    return parsed;
   }
 
   // 2. Fallback Inteligente baseado em parsing real do texto do usuário
@@ -313,4 +343,182 @@ function generateSmartLocalFallback(
       }
     ]
   };
+}
+
+/**
+ * Sugere uma biblioteca inteligente de produtos/serviços com base no tema do template
+ * e nos produtos já cadastrados, via Groq (com fallback local caso offline).
+ */
+export async function suggestProductsForTemplate(
+  theme: string,
+  existingProductNames: string[] = []
+): Promise<{ source: 'ai' | 'fallback'; products: SuggestedTemplateProduct[] }> {
+  const cleanTheme = theme.trim() || 'Eventos e Serviços Criativos';
+  const existingList = existingProductNames
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  const systemPrompt = `Você é um consultor comercial especialista em precificação, pacotes e upsells para profissionais de eventos, fotografia, vídeo, decoração, buffet e serviços criativos no Brasil.
+
+Sua tarefa é gerar uma BIBLIOTECA DE PRODUTOS INTELIGENTE para o tema de orçamento informado, evitando repetir produtos que o usuário já cadastrou.
+
+Regras:
+1. Gere entre 6 e 7 sugestões complementares e de alta conversão, misturando:
+   - "Pacote Principal" (se ainda não houver um pacote base óbvio)
+   - "Adicional / Upsell" (itens extras de alto valor percebido e margem alta)
+   - "Entregável" (álbuns, galerias, extras pós-evento, horas adicionais)
+2. Formate o campo "resumo" no padrão visual PriceU$:
+   - Use '#' para título curto em caixa alta
+   - Use '✓ ' no início dos itens inclusos
+   - Use '**texto**' para destacar quantidades/prazos
+   - Use '💡 ' para um diferencial
+3. Valores ("valor") devem ser números inteiros realistas em Reais (BRL) para o mercado brasileiro.
+4. Unidades ("unidade") devem ser curtas: "unidade", "hora", "evento", "diária", "pessoa".
+
+RESPONDA EXCLUSIVAMENTE EM JSON:
+{
+  "products": [
+    {
+      "nome": "Nome claro do produto/serviço",
+      "resumo": "# TÍTULO\\n✓ Item 1\\n✓ Item 2\\n💡 Diferencial",
+      "valor": 1500,
+      "unidade": "evento",
+      "obrigatorio": false,
+      "categoria": "Pacote Principal" | "Adicional / Upsell" | "Entregável",
+      "motivo": "Frase curta explicando por que esse item aumenta o ticket médio ou conversão."
+    }
+  ]
+}`;
+
+  const userPrompt = `TEMA DO TEMPLATE: "${cleanTheme}"
+PRODUTOS JÁ EXISTENTES NO TEMPLATE (NÃO REPETIR): ${existingList.length > 0 ? existingList.join(', ') : 'Nenhum ainda'}
+
+Sugira produtos inteligentes e complementares para este template.`;
+
+  const parsed = await callGroqJson<{ products?: any[] }>(systemPrompt, userPrompt, 0.65, 1800);
+  if (parsed?.products && Array.isArray(parsed.products) && parsed.products.length > 0) {
+    const normalized: SuggestedTemplateProduct[] = parsed.products.map((item, idx) => ({
+      id: `ai-${Date.now()}-${idx}`,
+      nome: String(item.nome || `Serviço Sugerido ${idx + 1}`),
+      resumo: String(item.resumo || ''),
+      valor: Number(item.valor) || 0,
+      unidade: String(item.unidade || 'unidade'),
+      obrigatorio: Boolean(item.obrigatorio),
+      categoria:
+        item.categoria === 'Pacote Principal' || item.categoria === 'Entregável'
+          ? item.categoria
+          : 'Adicional / Upsell',
+      motivo: String(item.motivo || 'Complemento estratégico para aumentar o ticket médio.'),
+    }));
+    return { source: 'ai', products: normalized };
+  }
+
+  return {
+    source: 'fallback',
+    products: buildFallbackProductSuggestions(cleanTheme),
+  };
+}
+
+function buildFallbackProductSuggestions(theme: string): SuggestedTemplateProduct[] {
+  const lower = theme.toLowerCase();
+  const isWedding = /casamento|noiva|wedding|pré-wedding|pre wedding|matrim/.test(lower);
+  const isPhotoVideo = /foto|vídeo|video|ensaio|filmagem|fotograf|audiovisual/.test(lower);
+
+  if (isWedding || isPhotoVideo) {
+    return [
+      {
+        id: 'fb-1',
+        nome: 'Cobertura Essencial do Evento',
+        resumo: '# COBERTURA COMPLETA\n✓ Até **8 horas** de cobertura contínua\n✓ Equipe principal dedicada\n✓ Entrega digital em alta resolução\n💡 Prévia em até **48 horas**',
+        valor: 3200,
+        unidade: 'evento',
+        obrigatorio: true,
+        categoria: 'Pacote Principal',
+        motivo: 'Ancora o orçamento com entrega clara e prazo rápido de prévia.',
+      },
+      {
+        id: 'fb-2',
+        nome: 'Hora Adicional de Cobertura',
+        resumo: '# EXTENSÃO DE HORÁRIO\n✓ **1 hora extra** de equipe no local\n✓ Ideal para festa e atrações tardias',
+        valor: 450,
+        unidade: 'hora',
+        obrigatorio: false,
+        categoria: 'Adicional / Upsell',
+        motivo: 'Upsell simples que protege sua margem quando o evento atrasa.',
+      },
+      {
+        id: 'fb-3',
+        nome: 'Segundo Profissional de Apoio',
+        resumo: '# EQUIPE AMPLIADA\n✓ Segundo profissional simultâneo\n✓ Mais ângulos de cerimônia e convidados\n✓ Cobertura paralela de making of',
+        valor: 950,
+        unidade: 'evento',
+        obrigatorio: false,
+        categoria: 'Adicional / Upsell',
+        motivo: 'Aumenta a percepção de segurança e qualidade em momentos simultâneos.',
+      },
+      {
+        id: 'fb-4',
+        nome: 'Álbum Impresso Fine Art 30x30',
+        resumo: '# ÁLBUM DE LUXO\n✓ **40 páginas** em papel fotográfico\n✓ Diagramação personalizada inclusa\n✓ Estojo de proteção exclusivo',
+        valor: 1650,
+        unidade: 'unidade',
+        obrigatorio: false,
+        categoria: 'Entregável',
+        motivo: 'Produto físico de alta margem que valoriza o trabalho entregue.',
+      },
+      {
+        id: 'fb-5',
+        nome: 'Ensaio Pré-Evento Exclusivo',
+        resumo: '# ENSAIO PRÉ-EVENTO\n✓ Sessão externa de **2 horas**\n✓ Galeria online com seleção interativa\n💡 Ótimo para criar conexão antes do grande dia',
+        valor: 1100,
+        unidade: 'evento',
+        obrigatorio: false,
+        categoria: 'Adicional / Upsell',
+        motivo: 'Gera vínculo com o cliente antes do evento e eleva o ticket total.',
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'fb-gen-1',
+      nome: `Pacote Principal — ${theme}`,
+      resumo: `# SERVIÇO PRINCIPAL\n✓ Atendimento completo para **${theme}**\n✓ Planejamento e alinhamento prévio\n✓ Entrega profissional garantida`,
+      valor: 1800,
+      unidade: 'evento',
+      obrigatorio: true,
+      categoria: 'Pacote Principal',
+      motivo: 'Serve como base obrigatória clara para o cliente iniciar o orçamento.',
+    },
+    {
+      id: 'fb-gen-2',
+      nome: 'Hora Extra de Atendimento',
+      resumo: '# HORA ADICIONAL\n✓ **1 hora extra** de dedicação no evento\n✓ Flexibilidade para estender a programação',
+      valor: 350,
+      unidade: 'hora',
+      obrigatorio: false,
+      categoria: 'Adicional / Upsell',
+      motivo: 'Facilita a contratação de horas extras diretamente no orçamento.',
+    },
+    {
+      id: 'fb-gen-3',
+      nome: 'Atendimento Prioritário / Entrega Express',
+      resumo: '# PRIORIDADE TOTAL\n✓ Fila prioritária de produção/entrega\n✓ Suporte dedicado em canal direto\n💡 Ideal para prazos curtos',
+      valor: 490,
+      unidade: 'unidade',
+      obrigatorio: false,
+      categoria: 'Adicional / Upsell',
+      motivo: 'Monetiza urgência sem aumentar seu custo operacional.',
+    },
+    {
+      id: 'fb-gen-4',
+      nome: 'Consultoria & Personalização Sob Medida',
+      resumo: '# PERSONALIZAÇÃO EXCLUSIVA\n✓ Reunião de briefing detalhado\n✓ Adaptação completa ao estilo do cliente',
+      valor: 600,
+      unidade: 'unidade',
+      obrigatorio: false,
+      categoria: 'Entregável',
+      motivo: 'Aumenta o ticket médio oferecendo exclusividade percebida.',
+    },
+  ];
 }

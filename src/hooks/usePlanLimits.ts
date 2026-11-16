@@ -8,6 +8,9 @@ import { isPrivilegedUser } from '../config/privilegedUsers';
 interface PlanLimits {
   isPremium: boolean;
   isPrivileged: boolean;
+  isFreeMarketplaceAccount: boolean;
+  activeAddons: string[];
+  hasAddon: (addonKey: string) => boolean;
   canCreateTemplate: boolean;
   templatesUsed: number;
   templatesLimit: number;
@@ -36,18 +39,28 @@ export function usePlanLimits(): PlanLimits {
   const [eventsCount, setEventsCount] = useState(0);
   const [contractTemplatesCount, setContractTemplatesCount] = useState(0);
   const [contractsSignedCount, setContractsSignedCount] = useState(0);
+  const [activeAddons, setActiveAddons] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Verificar se é usuário privilegiado
   const isPrivileged = isPrivilegedUser(user?.email);
 
-  // Definir se é premium (assinatura ativa, trialing, trial ativo de 30 dias, privilegiado ou em período de teste)
-  const isPremium = isPrivileged || isActive || isTrialing || (trialStatus.status === 'trial' && !trialStatus.isExpired) || trialStatus.status === null || trialStatus.loading;
+  // Definir se é premium (assinatura ativa, trialing, trial ativo de 30 dias ou privilegiado)
+  const isPremium =
+    isPrivileged ||
+    isActive ||
+    isTrialing ||
+    (trialStatus.status === 'trial' && !trialStatus.isExpired);
 
-  // Definir limites baseado no plano (premium = ilimitado)
-  const templatesLimit = isPremium ? Infinity : 1;
+  const isFreeMarketplaceAccount = !isPremium && !trialStatus.loading && !subscriptionLoading;
+
+  const hasAddon = (addonKey: string) =>
+    isPremium || activeAddons.includes(addonKey);
+
+  // Definir limites baseado no plano (templates e produtos são ilimitados)
+  const templatesLimit = Infinity;
   const leadsLimit = isPremium ? 'unlimited' as const : 10;
-  const productsLimit = isPremium ? Infinity : 7;
+  const productsLimit = Infinity;
   const eventsLimit = isPremium ? 'unlimited' as const : 20;
   const canImportCalendar = isPremium;
   const contractTemplatesLimit = isPremium ? Infinity : 3;
@@ -95,11 +108,24 @@ export function usePlanLimits(): PlanLimits {
           .eq('user_id', user.id)
           .eq('status', 'signed');
 
+        // Buscar add-ons ativos do usuário
+        const nowIso = new Date().toISOString();
+        const { data: addonsData } = await supabase
+          .from('user_addons')
+          .select('addon_key, expires_at')
+          .eq('user_id', user.id)
+          .eq('status', 'active');
+
+        const validAddons = (addonsData || [])
+          .filter((row: { addon_key: string; expires_at: string | null }) => !row.expires_at || row.expires_at > nowIso)
+          .map((row: { addon_key: string }) => row.addon_key);
+
         setTemplatesCount(templatesCount || 0);
         setLeadsCount(leadsCount || 0);
         setEventsCount(eventsCount || 0);
         setContractTemplatesCount(contractTemplatesCount || 0);
         setContractsSignedCount(contractsSignedCount || 0);
+        setActiveAddons(validAddons);
       } catch (error) {
         console.error('Error fetching plan limits:', error);
         // Não faz nada no erro, apenas loga. O próximo intervalo tentará novamente.
@@ -111,9 +137,7 @@ export function usePlanLimits(): PlanLimits {
     fetchCounts();
   }, [user]);
 
-  const canCreateTemplate = isPremium
-    ? true
-    : templatesCount < 1;
+  const canCreateTemplate = true;
 
   const canCreateContractTemplate = isPremium
     ? true
@@ -128,6 +152,9 @@ export function usePlanLimits(): PlanLimits {
   return {
     isPremium,
     isPrivileged,
+    isFreeMarketplaceAccount,
+    activeAddons,
+    hasAddon,
     canCreateTemplate,
     templatesUsed: templatesCount,
     templatesLimit,
