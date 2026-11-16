@@ -5,6 +5,7 @@ export interface StripeProduct {
   mode: 'payment' | 'subscription';
   price: number;
   currency: string;
+  adTier?: string;
 }
 
 export const stripeProducts: StripeProduct[] = [
@@ -23,6 +24,33 @@ export const stripeProducts: StripeProduct[] = [
     mode: 'subscription',
     price: 1000.00,
     currency: 'BRL'
+  },
+  {
+    priceId: 'price_ads_basic_placeholder',
+    name: 'Ads Básico — Destaque no Marketplace',
+    description: 'Badge Destaque + posição top 10 nas buscas do marketplace.',
+    mode: 'subscription',
+    price: 97.00,
+    currency: 'BRL',
+    adTier: 'basic',
+  },
+  {
+    priceId: 'price_ads_pro_placeholder',
+    name: 'Ads Pro — Destaque Premium',
+    description: 'Posição garantida top 5 + badge Pro nas buscas.',
+    mode: 'subscription',
+    price: 197.00,
+    currency: 'BRL',
+    adTier: 'pro',
+  },
+  {
+    priceId: 'price_ads_premium_placeholder',
+    name: 'Ads Premium — Topo do Marketplace',
+    description: 'Posição #1 garantida + banner exclusivo na categoria.',
+    mode: 'subscription',
+    price: 397.00,
+    currency: 'BRL',
+    adTier: 'premium',
   },
 ];
 
