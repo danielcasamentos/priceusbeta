@@ -57,14 +57,14 @@ export function usePlanLimits(): PlanLimits {
   const hasAddon = (addonKey: string) =>
     isPremium || activeAddons.includes(addonKey);
 
-  // Definir limites baseado no plano (templates e produtos são ilimitados)
+  // Ecossistema PriceU$: ferramentas de core (templates, produtos, leads, eventos, contratos e agenda) são 100% livres
   const templatesLimit = Infinity;
-  const leadsLimit = isPremium ? 'unlimited' as const : 10;
+  const leadsLimit = 'unlimited' as const;
   const productsLimit = Infinity;
-  const eventsLimit = isPremium ? 'unlimited' as const : 20;
-  const canImportCalendar = isPremium;
-  const contractTemplatesLimit = isPremium ? Infinity : 3;
-  const contractsSignedLimit = isPremium ? Infinity : 10;
+  const eventsLimit = 'unlimited' as const;
+  const canImportCalendar = true;
+  const contractTemplatesLimit = Infinity;
+  const contractsSignedLimit = Infinity;
 
   useEffect(() => {
     if (!user) {
@@ -138,16 +138,9 @@ export function usePlanLimits(): PlanLimits {
   }, [user]);
 
   const canCreateTemplate = true;
-
-  const canCreateContractTemplate = isPremium
-    ? true
-    : contractTemplatesCount < 3;
-
-  const canGenerateContract = isPremium
-    ? true
-    : contractsSignedCount < 10;
-
-  const showUpgradeBanner = !isPremium && !subscriptionLoading;
+  const canCreateContractTemplate = true;
+  const canGenerateContract = true;
+  const showUpgradeBanner = false;
 
   return {
     isPremium,

@@ -98,8 +98,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#fafaf9] text-slate-900 font-sans selection:bg-stone-900 selection:text-white">
       <Helmet>
-        <title>PriceU$ — A Plataforma nº 1 para Casamentos & Eventos de Alto Padrão</title>
-        <meta name="description" content="Sistema de gestão e orçamentos interativos, contratos digitais com assinatura eletrônica e chat de negociação ao vivo para o mercado de casamentos e eventos." />
+        <title>PriceU$ — Marketplace de Casamentos com Preço Aberto & Orçamentos na Hora</title>
+        <meta name="description" content="Veja quanto cada fornecedor de casamento cobra, monte orçamentos interativos na hora e contrate com segurança jurídica. Sem intermediários e com preço aberto." />
       </Helmet>
 
       {/* TOP NAVIGATION CHIQUE */}
@@ -199,48 +199,49 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto text-center relative z-10">
           {/* Badge Luxo */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-800 text-xs font-bold tracking-wide uppercase mb-6 shadow-xs">
-            <Sparkles size={14} className="text-emerald-700" />
-            A Plataforma Oficial do Mercado de Casamentos & Eventos
+            <Sparkles size={14} className="text-rose-600" />
+            O 1º Marketplace de Casamentos com Preço Aberto do Brasil
           </div>
 
           {/* Headline Principal */}
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-slate-900 leading-[1.08] tracking-tight mb-6">
-            Propostas que encantam.<br />
-            <span className="text-stone-800 bg-gradient-to-r from-stone-900 via-stone-800 to-emerald-900 bg-clip-text text-transparent">
-              Contratos assinados na hora.
+            O preço do seu casamento,<br />
+            <span className="text-stone-800 bg-gradient-to-r from-stone-900 via-rose-950 to-rose-700 bg-clip-text text-transparent">
+              sem precisar mandar direct.
             </span>
           </h1>
 
           {/* Subtítulo */}
           <p className="text-lg sm:text-xl text-stone-600 max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-            O PriceU$ une propostas interativas ao vivo, contratos com validade jurídica, agenda blindada e chat de negociação inteligente — conectando os melhores profissionais às noivas e clientes mais exigentes.
+            Veja quanto cada fornecedor cobra, monte o orçamento na hora e contrate quem cabe no seu bolso — com contratos digitais e sem taxas intermediárias sobre o seu evento.
           </p>
 
           {/* Botões de Ação Duplos */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto mb-12">
             <button
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/beta/portal-noiva')}
               className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-stone-900 hover:bg-stone-800 active:scale-98 text-white font-extrabold text-base shadow-xl shadow-stone-900/10 transition-all cursor-pointer"
             >
-              <span>Começar Teste Grátis</span>
+              <Heart size={18} className="fill-rose-500 text-rose-500" />
+              <span>Sou Noiva</span>
               <ArrowRight size={18} />
             </button>
 
             <button
-              onClick={() => navigate('/login?tipo=noiva')}
+              onClick={() => navigate('/login')}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white hover:bg-stone-50 active:scale-98 text-stone-900 border border-stone-300 font-bold text-base shadow-sm transition-all cursor-pointer"
             >
-              <Heart size={18} className="fill-rose-500 text-rose-500" />
-              <span>Espaço da Noiva</span>
+              <Briefcase size={18} className="text-stone-700" />
+              <span>Sou Fornecedor</span>
             </button>
           </div>
 
-          <p className="text-xs text-stone-400 flex items-center justify-center gap-3 font-medium">
-            <span>✓ Teste grátis de 30 dias</span>
+          <p className="text-xs text-stone-500 flex flex-wrap items-center justify-center gap-2 font-medium">
+            <span>✨ Fotógrafos, cerimonialistas, buffets e decoradores com preço aberto</span>
             <span>·</span>
-            <span>✓ Sem cartão de crédito</span>
+            <span>✍️ Contratos digitais com validade jurídica</span>
             <span>·</span>
-            <span>✓ Ativação imediata</span>
+            <span>🔒 Zero taxa sobre o contrato</span>
           </p>
 
           {/* Prova Social em Cards Brancos Refinados */}
@@ -257,6 +258,64 @@ export default function LandingPage() {
                 <div className="text-xs text-stone-500 font-medium mt-0.5">{stat.label}</div>
               </div>
             ))}
+          </div>
+
+          {/* Dores Resolvidas para Noivas e Fornecedores */}
+          <div className="mt-20 pt-16 border-t border-stone-200/80 text-left">
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <span className="text-xs font-bold uppercase tracking-widest text-stone-500 bg-stone-100 px-3 py-1 rounded-full border border-stone-200">
+                Transparência e Respeito
+              </span>
+              <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight mt-3">
+                O fim do desgaste para quem contrata e para quem vende.
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-4xl mx-auto">
+              {/* Coluna Noiva */}
+              <div className="p-7 sm:p-8 rounded-3xl bg-white border border-rose-100/90 shadow-sm hover:shadow-md transition-shadow">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold mb-4">
+                  <Heart size={14} className="fill-rose-500 text-rose-500" /> Para Noivas & Casais
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">O fim da espera e das planilhas confusas</h3>
+                <ul className="space-y-3.5 text-xs sm:text-sm text-stone-600">
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span><strong>Preços abertos na hora:</strong> sem precisar mandar direct e esperar dias por resposta.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span><strong>Compare lado a lado:</strong> abra fornecedores em abas e simule seu fluxo de caixa do casamento.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span><strong>Contratos protegidos:</strong> assine no celular com segurança jurídica e termos claros de entrega.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Coluna Fornecedor */}
+              <div className="p-7 sm:p-8 rounded-3xl bg-white border border-stone-200/90 shadow-sm hover:shadow-md transition-shadow">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 text-stone-800 text-xs font-bold mb-4">
+                  <Briefcase size={14} className="text-stone-700" /> Para Fornecedores & Criativos
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Mais fechamentos, zero taxas abusivas</h3>
+                <ul className="space-y-3.5 text-xs sm:text-sm text-stone-600">
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span><strong>Chega de PDF ignorado:</strong> orçamentos vivos e interativos que fecham 3x mais rápido.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span><strong>Zero taxa de intermediação:</strong> receba 100% do seu dinheiro diretamente nas suas contas.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span><strong>Ads por resultado:</strong> pague quanto quiser para aparecer no topo das buscas da sua região.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </section>
